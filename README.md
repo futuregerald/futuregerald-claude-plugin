@@ -1,6 +1,16 @@
 # futuregerald-claude-plugin
 
-Portable skills, agents, and commands for Claude Code. Includes debugging protocols, TDD workflows, code review, and multi-language project scaffolding.
+A curated collection of skills, agents, and commands for Claude Code. Includes debugging protocols, TDD workflows, code review, and multi-language project scaffolding.
+
+## Attribution
+
+This is a collection of Claude Code skills and agents from various sources:
+
+- **Most skills were created by others** in the Claude Code community
+- **Some were modified** by me to fit my workflow or fix issues
+- **Some were created** by me
+
+**All credit goes to the original skill creators.** I'm sharing this collection to make it easier to set up Claude Code on new machines. If you're a skill author and would like attribution added or your skill removed, please open an issue.
 
 ## Installation
 
@@ -41,7 +51,7 @@ claude --plugin-dir ~/.claude/plugins/futuregerald
 |---------|-------------|
 | `/init-claude-md` | Generate a customized CLAUDE.md for your project based on detected framework/language |
 
-### Skills (34 total)
+### Skills (32 total)
 
 **Core Workflow:**
 | Skill | Description |
@@ -99,7 +109,6 @@ claude --plugin-dir ~/.claude/plugins/futuregerald
 | `agent-browser` | Browser automation with Playwright |
 | `baoyu-article-illustrator` | Article illustration generation |
 | `create-auth-skill` | Auth layer creation |
-| `find-skills` | Skill discovery |
 
 ### Agents (6 total)
 
@@ -169,7 +178,7 @@ futuregerald-claude-plugin/
 ├── commands/                 # User-invokable commands
 │   └── init-claude-md/
 │       └── COMMAND.md
-├── skills/                   # All skills (34 total)
+├── skills/                   # All skills (32 total)
 │   ├── systematic-debugging/
 │   ├── test-driven-development/
 │   └── ...
