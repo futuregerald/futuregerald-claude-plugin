@@ -1,0 +1,9 @@
+{
+  "name": "futuregerald-claude-plugin",
+  "description": "Portable skills, agents, and commands for Claude Code - includes debugging, TDD, code review, and multi-language project scaffolding",
+  "version": "1.0.0",
+  "author": {
+    "name": "futuregerald"
+  },
+  "license": "MIT"
+}
