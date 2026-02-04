@@ -8,28 +8,28 @@ Portable skills, agents, and commands for Claude Code. Includes debugging protoc
 
 ```bash
 # Clone to your preferred location
-git clone https://github.com/futuregerald/claude-skills-plugin.git ~/claude-skills-plugin
+git clone https://github.com/futuregerald/futuregerald-claude-plugin.git ~/futuregerald-claude-plugin
 
 # Symlink to Claude's global directory
-ln -s ~/claude-skills-plugin/skills ~/.claude/skills
-ln -s ~/claude-skills-plugin/agents ~/.claude/agents
-ln -s ~/claude-skills-plugin/commands ~/.claude/commands
+ln -s ~/futuregerald-claude-plugin/skills ~/.claude/skills
+ln -s ~/futuregerald-claude-plugin/agents ~/.claude/agents
+ln -s ~/futuregerald-claude-plugin/commands ~/.claude/commands
 ```
 
 ### Option 2: Plugin Directory Flag
 
 ```bash
 # Clone anywhere
-git clone https://github.com/futuregerald/claude-skills-plugin.git
+git clone https://github.com/futuregerald/futuregerald-claude-plugin.git
 
 # Run Claude with plugin directory
-claude --plugin-dir ./claude-skills-plugin
+claude --plugin-dir ./futuregerald-claude-plugin
 ```
 
 ### Option 3: Direct Clone to Claude Directory
 
 ```bash
-git clone https://github.com/futuregerald/claude-skills-plugin.git ~/.claude/plugins/futuregerald
+git clone https://github.com/futuregerald/futuregerald-claude-plugin.git ~/.claude/plugins/futuregerald
 claude --plugin-dir ~/.claude/plugins/futuregerald
 ```
 
@@ -156,7 +156,7 @@ This detects your framework (AdonisJS, React, Svelte, Go, etc.) and generates a 
 ## Directory Structure
 
 ```
-claude-skills-plugin/
+futuregerald-claude-plugin/
 ├── .claude-plugin/
 │   └── plugin.json           # Plugin manifest
 ├── agents/                   # Subagent definitions
@@ -188,7 +188,7 @@ claude-skills-plugin/
 ## Updating
 
 ```bash
-cd ~/claude-skills-plugin  # or wherever you cloned it
+cd ~/futuregerald-claude-plugin  # or wherever you cloned it
 git pull
 ```
 
