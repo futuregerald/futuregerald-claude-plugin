@@ -1,3 +1,9 @@
+---
+name: turso-best-practices
+description: Turso and libSQL best practices for SQLite-compatible cloud database development with edge distribution, embedded replicas, and vector search.
+tags: [framework, database]
+---
+
 # Turso & libSQL Best Practices
 
 ## Overview

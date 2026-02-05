@@ -1,6 +1,7 @@
 ---
 name: ui-design
 description: Practical UI design principles for developers and non-designers. Use when creating web interfaces, components, dashboards, landing pages, or any visual design work. Covers hierarchy, spacing, typography, color, depth, and polish. Based on Refactoring UI methodology.
+tags: [design, frontend]
 ---
 
 # UI Design Skill

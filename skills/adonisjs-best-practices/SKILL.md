@@ -1,6 +1,7 @@
 ---
 name: adonisjs-best-practices
 description: Use when building AdonisJS v6 applications, implementing features in AdonisJS, or reviewing AdonisJS code. Covers routing, controllers, validation, authentication, database patterns, testing, and error handling.
+tags: [framework, adonisjs]
 ---
 
 # AdonisJS v6 Best Practices

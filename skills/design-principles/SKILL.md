@@ -1,6 +1,7 @@
 ---
 name: design-principles
 description: Enforce a precise, minimal design system inspired by Linear, Notion, and Stripe. Use this skill when building dashboards, admin interfaces, or any UI that needs Jony Ive-level precision - clean, modern, minimalist with taste. Every pixel matters.
+tags: [design]
 ---
 
 # Design Principles

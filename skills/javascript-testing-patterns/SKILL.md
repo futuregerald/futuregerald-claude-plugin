@@ -1,6 +1,7 @@
 ---
 name: javascript-testing-patterns
 description: Comprehensive JavaScript/TypeScript testing patterns for Jest, Vitest, and AdonisJS/Japa. Use when writing tests, reviewing test code, or debugging test failures.
+tags: [testing, javascript]
 ---
 
 # JavaScript Testing Patterns

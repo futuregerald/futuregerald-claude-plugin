@@ -4,7 +4,7 @@ risk_level: HIGH
 description: Expert in SQLite, libSQL, and Turso database development for desktop and web applications with focus on SQL injection prevention, migrations, FTS search, edge deployments, and secure data handling
 version: 2.0.0
 author: JARVIS AI Assistant
-tags: [database, sqlite, libsql, turso, sql, embedded, migrations, fts, security, edge]
+tags: [framework, database]
 model: claude-sonnet-4-5-20250929
 ---
 

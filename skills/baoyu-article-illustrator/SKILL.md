@@ -1,6 +1,7 @@
 ---
 name: baoyu-article-illustrator
 description: Smart article illustration skill. Analyzes article content and generates illustrations at positions requiring visual aids with multiple style options. Use when user asks to "add illustrations to article", "generate images for article", or "illustrate article".
+tags: [tools, illustration]
 ---
 
 # Smart Article Illustration Skill

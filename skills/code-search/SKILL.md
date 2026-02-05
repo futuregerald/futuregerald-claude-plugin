@@ -1,6 +1,7 @@
 ---
 name: code-search
 description: Fast code search agent for finding patterns, understanding features, and exploring the codebase. Use when searching for code, finding usages, or understanding how something works.
+tags: [search]
 model: haiku
 ---
 
