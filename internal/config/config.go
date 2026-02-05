@@ -10,12 +10,10 @@ import (
 // Config represents the .skill-installer.yaml configuration file.
 type Config struct {
 	Target       string   `yaml:"target"`
-	Packs        []string `yaml:"packs"`
 	Tags         []string `yaml:"tags"`
 	Languages    []string `yaml:"languages"`
-	AgentsPath   string   `yaml:"agents_path"`
 	SkipClaudeMD bool     `yaml:"skip_claude_md"`
-	From         string   `yaml:"from"` // Custom source (local path, git URL, or URL)
+	From         string   `yaml:"from"`
 }
 
 // DefaultConfigFiles are the filenames to look for.
