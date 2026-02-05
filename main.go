@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"embed"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -28,7 +29,6 @@ var (
 	languages     []string
 	fromSource    string
 	configFile    string
-	showAll       bool
 	skipAgents    bool
 	skipCommands  bool
 	globalInstall bool
@@ -142,13 +142,11 @@ Configuration can be stored in .skill-installer.yaml`,
 		Long: `List available skills with optional filtering.
 
 Examples:
-  skill-installer list                    # List core skills
-  skill-installer list --all              # List all skills including packs
+  skill-installer list                    # List all skills
   skill-installer list --tag testing      # List skills tagged with 'testing'
   skill-installer list --lang python      # List Python-compatible skills`,
 		RunE: runList,
 	}
-	listCmd.Flags().BoolVar(&showAll, "all", false, "Show all skills including language packs")
 	listCmd.Flags().StringSliceVar(&tags, "tag", nil, "Filter by tags")
 	listCmd.Flags().StringSliceVar(&languages, "lang", nil, "Filter by language")
 
@@ -181,10 +179,188 @@ Examples:
 }
 
 func runInstall(cmd *cobra.Command, args []string) error {
-	// TODO: Full implementation in Task 5
-	fmt.Println("Install command will be fully implemented in the next step.")
-	fmt.Println("Use 'skill-installer list' to see available skills.")
+	reader := bufio.NewReader(os.Stdin)
+
+	// Load config
+	cfg, err := loadConfig()
+	if err != nil {
+		return fmt.Errorf("loading config: %w", err)
+	}
+	applyConfig(cfg)
+
+	// Get target framework
+	target, err := getTarget(reader)
+	if err != nil {
+		return err
+	}
+
+	// Ask about scope (project vs global) for targets that support it
+	scope, err := askScope(reader, target)
+	if err != nil {
+		return err
+	}
+
+	// Determine installation paths based on scope
+	var skillsDest, agentsDest, commandsDest string
+	if scope == "global" {
+		skillsDest = target.GlobalSkillsPath
+		agentsDest = target.GlobalAgentsPath
+	} else {
+		skillsDest = filepath.Join(".", target.SkillsPath)
+		agentsDest = filepath.Join(".", target.AgentsPath)
+		commandsDest = filepath.Join(".", target.CommandsPath)
+	}
+
+	// Ask about config file generation (project-scoped only)
+	updateConfig := false
+	if scope == "project" && target.ConfigPath != "" && !skipClaude {
+		updateConfig, err = askUpdateConfig(reader, target)
+		if err != nil {
+			return err
+		}
+	}
+
+	inst := installer.New(content, installer.Options{
+		Force:  force,
+		DryRun: dryRun,
+	})
+
+	// Install skills
+	fmt.Println("\nInstalling skills...")
+	var results []string
+
+	if fromSource != "" {
+		if strings.HasPrefix(fromSource, "http://") || strings.HasPrefix(fromSource, "https://") {
+			if strings.Contains(fromSource, "github.com") || strings.Contains(fromSource, "gitlab.com") {
+				results, err = inst.InstallFromGit(fromSource, skillsDest)
+			} else {
+				results, err = inst.InstallFromURL(fromSource, skillsDest)
+			}
+		} else {
+			results, err = inst.InstallFromLocal(fromSource, skillsDest)
+		}
+	} else {
+		results, err = inst.InstallSkills(skillsDest, tags, languages)
+	}
+
+	if err != nil {
+		return err
+	}
+	for _, r := range results {
+		fmt.Println(r)
+	}
+
+	// Install agents
+	if !skipAgents && agentsDest != "" {
+		fmt.Println("\nInstalling agents...")
+
+		// Copilot requires *.agent.md naming convention
+		var nameFunc installer.AgentNameFunc
+		if target.Name == "GitHub Copilot" {
+			nameFunc = installer.CopilotAgentName
+		}
+
+		agentResults, err := inst.InstallAgents(agentsDest, nameFunc)
+		if err != nil {
+			return err
+		}
+		for _, r := range agentResults {
+			fmt.Println(r)
+		}
+	}
+
+	// Install commands (if target supports it and project-scoped)
+	if !skipCommands && commandsDest != "" && scope == "project" {
+		fmt.Println("\nInstalling commands...")
+		cmdResults, err := inst.InstallCommands(commandsDest)
+		if err != nil {
+			return err
+		}
+		for _, r := range cmdResults {
+			fmt.Println(r)
+		}
+	}
+
+	// Generate config file
+	if updateConfig {
+		err = generateConfigFile(inst, target)
+		if err != nil {
+			fmt.Printf("Warning: Could not generate %s: %v\n", target.ConfigPath, err)
+		}
+	}
+
+	if dryRun {
+		fmt.Println("\n(dry run - no files were modified)")
+	} else {
+		fmt.Println("\nDone! Skills and agents installed successfully.")
+	}
+
 	return nil
+}
+
+func generateConfigFile(_ *installer.Installer, target Target) error {
+	configPath := filepath.Join(".", target.ConfigPath)
+
+	if dryRun {
+		if fileExists(configPath) {
+			fmt.Printf("WOULD UPDATE: %s\n", configPath)
+		} else {
+			fmt.Printf("WOULD CREATE: %s\n", configPath)
+		}
+		return nil
+	}
+
+	dir := filepath.Dir(configPath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+
+	// Read the base template from embedded FS
+	baseContent, err := fs.ReadFile(content, "templates/CLAUDE-BASE.md")
+	if err != nil {
+		return fmt.Errorf("reading template: %w", err)
+	}
+
+	// For Claude Code, install the full CLAUDE-BASE.md template
+	// For other frameworks, generate a simplified config
+	var configContent []byte
+	switch target.Name {
+	case "Claude Code":
+		configContent = baseContent
+	default:
+		configContent = generateFrameworkConfig(target, baseContent)
+	}
+
+	if fileExists(configPath) {
+		if !force {
+			fmt.Printf("SKIP: %s (already exists, use --force to overwrite)\n", configPath)
+			return nil
+		}
+	}
+
+	if err := os.WriteFile(configPath, configContent, 0644); err != nil {
+		return err
+	}
+	fmt.Printf("CREATED: %s\n", configPath)
+	return nil
+}
+
+func generateFrameworkConfig(target Target, baseContent []byte) []byte {
+	header := fmt.Sprintf("# %s - AI Agent Configuration\n\n", target.Name)
+	header += fmt.Sprintf("Skills are installed in `%s/`\n", target.SkillsPath)
+	if target.AgentsPath != "" {
+		header += fmt.Sprintf("Agents are installed in `%s/`\n", target.AgentsPath)
+	}
+
+	config := string(baseContent)
+	config = strings.ReplaceAll(config, "{{PROJECT_NAME}}", "Project")
+	config = strings.ReplaceAll(config, "{{PROJECT_DESCRIPTION}}", "")
+	config = strings.ReplaceAll(config, "{{KEY_DIRECTORIES}}", "")
+	config = strings.ReplaceAll(config, "{{TEST_COMMAND}}", "npm test")
+	config = strings.ReplaceAll(config, "{{TYPECHECK_COMMAND}}", "npm run typecheck")
+	config = strings.ReplaceAll(config, "{{BUILD_COMMAND}}", "npm run build")
+
+	return []byte(header + "\n---\n\n" + config)
 }
 
 func loadConfig() (*config.Config, error) {
@@ -299,29 +475,15 @@ func askScope(reader *bufio.Reader, target Target) (string, error) {
 	return "project", nil
 }
 
-func titleCase(s string) string {
-	if s == "" {
-		return s
-	}
-	return strings.ToUpper(s[:1]) + s[1:]
-}
-
 func runList(cmd *cobra.Command, args []string) error {
 	inst := installer.New(content, installer.Options{})
 
-	var skills []installer.Skill
-	var err error
-
-	if showAll || len(tags) > 0 || len(languages) > 0 {
-		skills, err = inst.ListAllSkills()
-	} else {
-		skills, err = inst.ListSkills()
-	}
+	skills, err := inst.ListAllSkills()
 	if err != nil {
 		return err
 	}
 
-	// Filter skills
+	// Apply filters
 	var filtered []installer.Skill
 	for _, s := range skills {
 		if len(tags) > 0 {
@@ -330,36 +492,13 @@ func runList(cmd *cobra.Command, args []string) error {
 				for _, st := range s.Tags {
 					if strings.EqualFold(st, t) {
 						tagMatch = true
-						break
 					}
-				}
-				if tagMatch {
-					break
 				}
 			}
 			if !tagMatch {
 				continue
 			}
 		}
-
-		if len(languages) > 0 {
-			langMatch := false
-			for _, l := range languages {
-				for _, sl := range s.Languages {
-					if strings.EqualFold(sl, l) || strings.EqualFold(sl, "any") {
-						langMatch = true
-						break
-					}
-				}
-				if langMatch {
-					break
-				}
-			}
-			if !langMatch {
-				continue
-			}
-		}
-
 		filtered = append(filtered, s)
 	}
 
@@ -368,19 +507,13 @@ func runList(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	fmt.Println("Available skills:")
-	fmt.Println()
-
+	fmt.Printf("Available skills (%d):\n\n", len(filtered))
 	for _, s := range filtered {
 		tagsStr := ""
 		if len(s.Tags) > 0 {
-			tagsStr = " [" + strings.Join(s.Tags[:min(3, len(s.Tags))], ", ")
-			if len(s.Tags) > 3 {
-				tagsStr += ", ..."
-			}
-			tagsStr += "]"
+			tagsStr = " [" + strings.Join(s.Tags, ", ") + "]"
 		}
-		fmt.Printf("  %-20s %-8s %s%s\n", s.Name, "("+s.Model+")", truncate(s.Description, 40), tagsStr)
+		fmt.Printf("  %-35s %s%s\n", s.Name, truncate(s.Description, 45), tagsStr)
 	}
 
 	return nil
@@ -439,9 +572,3 @@ func truncate(s string, max int) string {
 	return s[:max-3] + "..."
 }
 
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
