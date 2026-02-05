@@ -371,36 +371,16 @@ func runList(cmd *cobra.Command, args []string) error {
 	fmt.Println("Available skills:")
 	fmt.Println()
 
-	// Group by pack
-	packSkills := make(map[string][]installer.Skill)
 	for _, s := range filtered {
-		pack := s.Pack
-		if pack == "" {
-			pack = "core"
-		}
-		packSkills[pack] = append(packSkills[pack], s)
-	}
-
-	packOrder := []string{"core", "go", "python", "typescript", "rust"}
-	for _, pack := range packOrder {
-		skills, ok := packSkills[pack]
-		if !ok || len(skills) == 0 {
-			continue
-		}
-
-		fmt.Printf("[%s]\n", pack)
-		for _, s := range skills {
-			tagsStr := ""
-			if len(s.Tags) > 0 {
-				tagsStr = " [" + strings.Join(s.Tags[:min(3, len(s.Tags))], ", ")
-				if len(s.Tags) > 3 {
-					tagsStr += ", ..."
-				}
-				tagsStr += "]"
+		tagsStr := ""
+		if len(s.Tags) > 0 {
+			tagsStr = " [" + strings.Join(s.Tags[:min(3, len(s.Tags))], ", ")
+			if len(s.Tags) > 3 {
+				tagsStr += ", ..."
 			}
-			fmt.Printf("  %-20s %-8s %s%s\n", s.Name, "("+s.Model+")", truncate(s.Description, 40), tagsStr)
+			tagsStr += "]"
 		}
-		fmt.Println()
+		fmt.Printf("  %-20s %-8s %s%s\n", s.Name, "("+s.Model+")", truncate(s.Description, 40), tagsStr)
 	}
 
 	return nil

@@ -3,13 +3,13 @@ package installer
 import (
 	"archive/tar"
 	"compress/gzip"
-	"embed"
 	"fmt"
 	"io"
 	"io/fs"
 	"net/http"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"strings"
 )
@@ -21,9 +21,9 @@ type Skill struct {
 	Model       string
 	Tags        []string
 	Languages   []string
-	Pack        string // Which pack this skill belongs to (empty = core)
-	FilePath    string // Original file path
-	Content     []byte
+	DirPath     string // Directory path within embedded FS (e.g., "skills/systematic-debugging")
+	FilePath    string // SKILL.md path within embedded FS
+	Content     []byte // Content of SKILL.md
 }
 
 // Options configures the installer behavior.
@@ -32,69 +32,144 @@ type Options struct {
 	DryRun bool // Don't actually write files
 }
 
-// Installer handles installing skills and agents.md.
+// AgentNameFunc transforms an agent filename for the target framework.
+// Pass nil to keep original names.
+type AgentNameFunc func(originalName string) string
+
+// Installer handles installing skills, agents, and commands.
 type Installer struct {
-	fs      embed.FS
+	fsys    fs.FS
 	options Options
 }
 
-// New creates a new Installer with the given embedded filesystem and options.
-func New(fs embed.FS, opts Options) *Installer {
+// New creates a new Installer with the given filesystem and options.
+func New(fsys fs.FS, opts Options) *Installer {
 	return &Installer{
-		fs:      fs,
+		fsys:    fsys,
 		options: opts,
 	}
 }
 
-// InstallSkills installs skills to the specified directory, optionally filtered by packs.
-func (i *Installer) InstallSkills(baseDir, skillsPath string, packs []string) ([]string, error) {
-	var results []string
-	skillsDir := filepath.Join(baseDir, skillsPath)
+// discoverSkills walks the skills/ directory finding directories that contain SKILL.md.
+func (i *Installer) discoverSkills() ([]Skill, error) {
+	var skills []Skill
 
-	// Install core skills (in skills/ root)
-	if len(packs) == 0 || contains(packs, "core") {
-		coreResults, err := i.installSkillsFromDir("skills", skillsDir, "")
-		if err != nil {
-			return nil, err
-		}
-		results = append(results, coreResults...)
-	}
-
-	// Install language pack skills
-	packDirs, err := i.fs.ReadDir("skills")
+	entries, err := fs.ReadDir(i.fsys, "skills")
 	if err != nil {
 		return nil, fmt.Errorf("reading skills directory: %w", err)
 	}
 
-	for _, entry := range packDirs {
+	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
 		}
-		packName := entry.Name()
-		if len(packs) > 0 && !contains(packs, packName) {
-			continue
+
+		dirPath := path.Join("skills", entry.Name())
+		skill, ok := i.tryParseSkillDir(dirPath)
+		if ok {
+			skills = append(skills, skill)
+		}
+	}
+
+	return skills, nil
+}
+
+// tryParseSkillDir attempts to parse a skill directory by reading SKILL.md.
+func (i *Installer) tryParseSkillDir(dirPath string) (Skill, bool) {
+	// Try SKILL.md (uppercase first)
+	skillMD := path.Join(dirPath, "SKILL.md")
+	content, err := fs.ReadFile(i.fsys, skillMD)
+	if err != nil {
+		// Try skill.md (lowercase fallback)
+		skillMD = path.Join(dirPath, "skill.md")
+		content, err = fs.ReadFile(i.fsys, skillMD)
+		if err != nil {
+			return Skill{}, false
+		}
+	}
+
+	skill, err := parseSkill(content)
+	if err != nil {
+		// If frontmatter parse fails, use directory name as name
+		skill = Skill{
+			Name:    path.Base(dirPath),
+			Content: content,
+		}
+	}
+	skill.DirPath = dirPath
+	skill.FilePath = skillMD
+
+	if skill.Model == "" {
+		skill.Model = "sonnet"
+	}
+
+	return skill, true
+}
+
+// listDirFiles returns all file paths under a directory in the embedded FS.
+func (i *Installer) listDirFiles(dirPath string) ([]string, error) {
+	var files []string
+	err := fs.WalkDir(i.fsys, dirPath, func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		files = append(files, p)
+		return nil
+	})
+	return files, err
+}
+
+// InstallSkills copies entire skill directories to destDir, optionally filtered by tags/languages.
+func (i *Installer) InstallSkills(destDir string, tags, languages []string) ([]string, error) {
+	var results []string
+
+	skills, err := i.discoverSkills()
+	if err != nil {
+		return nil, err
+	}
+
+	for _, skill := range skills {
+		// Apply tag/language filter if provided
+		if len(tags) > 0 || len(languages) > 0 {
+			if !matchesFilter(skill, tags, languages) {
+				continue
+			}
 		}
 
-		packResults, err := i.installSkillsFromDir(
-			filepath.Join("skills", packName),
-			filepath.Join(skillsDir, packName),
-			packName,
-		)
+		// List all files in this skill's directory
+		files, err := i.listDirFiles(skill.DirPath)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("listing files in %s: %w", skill.DirPath, err)
 		}
-		results = append(results, packResults...)
+
+		for _, file := range files {
+			// Compute relative path from "skills/" prefix
+			relPath := strings.TrimPrefix(file, "skills/")
+			targetPath := filepath.Join(destDir, relPath)
+
+			fileContent, err := fs.ReadFile(i.fsys, file)
+			if err != nil {
+				return nil, fmt.Errorf("reading %s: %w", file, err)
+			}
+
+			result, err := i.writeFile(targetPath, fileContent)
+			if err != nil {
+				return nil, err
+			}
+			results = append(results, result)
+		}
 	}
 
 	return results, nil
 }
 
-func (i *Installer) installSkillsFromDir(srcDir, destDir, pack string) ([]string, error) {
+// InstallAgents copies agent .md files to destDir with optional renaming.
+func (i *Installer) InstallAgents(destDir string, nameFunc AgentNameFunc) ([]string, error) {
 	var results []string
 
-	entries, err := i.fs.ReadDir(srcDir)
+	entries, err := fs.ReadDir(i.fsys, "agents")
 	if err != nil {
-		return nil, fmt.Errorf("reading %s: %w", srcDir, err)
+		return results, nil // No agents directory is not an error
 	}
 
 	for _, entry := range entries {
@@ -102,12 +177,17 @@ func (i *Installer) installSkillsFromDir(srcDir, destDir, pack string) ([]string
 			continue
 		}
 
-		content, err := i.fs.ReadFile(filepath.Join(srcDir, entry.Name()))
+		content, err := fs.ReadFile(i.fsys, path.Join("agents", entry.Name()))
 		if err != nil {
-			return nil, fmt.Errorf("reading %s: %w", entry.Name(), err)
+			return nil, fmt.Errorf("reading agent %s: %w", entry.Name(), err)
 		}
 
-		targetPath := filepath.Join(destDir, entry.Name())
+		destName := entry.Name()
+		if nameFunc != nil {
+			destName = nameFunc(destName)
+		}
+
+		targetPath := filepath.Join(destDir, destName)
 		result, err := i.writeFile(targetPath, content)
 		if err != nil {
 			return nil, err
@@ -118,27 +198,30 @@ func (i *Installer) installSkillsFromDir(srcDir, destDir, pack string) ([]string
 	return results, nil
 }
 
-// InstallSkillsFiltered installs skills matching the given tags and/or languages.
-func (i *Installer) InstallSkillsFiltered(baseDir, skillsPath string, tags, languages []string) ([]string, error) {
-	var results []string
-	skillsDir := filepath.Join(baseDir, skillsPath)
+// CopilotAgentName converts "debugger.md" to "debugger.agent.md".
+func CopilotAgentName(name string) string {
+	return strings.TrimSuffix(name, ".md") + ".agent.md"
+}
 
-	skills, err := i.ListAllSkills()
+// InstallCommands copies command directories to destDir.
+func (i *Installer) InstallCommands(destDir string) ([]string, error) {
+	var results []string
+
+	files, err := i.listDirFiles("commands")
 	if err != nil {
-		return nil, err
+		return results, nil // No commands directory is not an error
 	}
 
-	for _, skill := range skills {
-		if !matchesFilter(skill, tags, languages) {
-			continue
+	for _, file := range files {
+		relPath := strings.TrimPrefix(file, "commands/")
+		targetPath := filepath.Join(destDir, relPath)
+
+		content, err := fs.ReadFile(i.fsys, file)
+		if err != nil {
+			return nil, fmt.Errorf("reading %s: %w", file, err)
 		}
 
-		destPath := filepath.Join(skillsDir, filepath.Base(skill.FilePath))
-		if skill.Pack != "" {
-			destPath = filepath.Join(skillsDir, skill.Pack, filepath.Base(skill.FilePath))
-		}
-
-		result, err := i.writeFile(destPath, skill.Content)
+		result, err := i.writeFile(targetPath, content)
 		if err != nil {
 			return nil, err
 		}
@@ -148,25 +231,31 @@ func (i *Installer) InstallSkillsFiltered(baseDir, skillsPath string, tags, lang
 	return results, nil
 }
 
-// InstallFromLocal installs skills from a local directory.
+// ListSkills returns metadata about all discovered skills.
+func (i *Installer) ListSkills() ([]Skill, error) {
+	return i.discoverSkills()
+}
+
+// ListAllSkills is an alias for ListSkills (kept for backward compat).
+func (i *Installer) ListAllSkills() ([]Skill, error) {
+	return i.discoverSkills()
+}
+
+// InstallFromLocal installs skills from a local directory (copies all files preserving structure).
 func (i *Installer) InstallFromLocal(srcDir, destDir string) ([]string, error) {
 	var results []string
 
-	err := filepath.WalkDir(srcDir, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
+	err := filepath.WalkDir(srcDir, func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
 			return err
 		}
-		if d.IsDir() || !strings.HasSuffix(d.Name(), ".md") {
-			return nil
-		}
 
-		content, err := os.ReadFile(path)
+		content, err := os.ReadFile(p)
 		if err != nil {
-			return fmt.Errorf("reading %s: %w", path, err)
+			return fmt.Errorf("reading %s: %w", p, err)
 		}
 
-		// Preserve directory structure
-		relPath, _ := filepath.Rel(srcDir, path)
+		relPath, _ := filepath.Rel(srcDir, p)
 		targetPath := filepath.Join(destDir, relPath)
 
 		result, err := i.writeFile(targetPath, content)
@@ -182,20 +271,17 @@ func (i *Installer) InstallFromLocal(srcDir, destDir string) ([]string, error) {
 
 // InstallFromGit clones a git repo and installs skills from it.
 func (i *Installer) InstallFromGit(repoURL, destDir string) ([]string, error) {
-	// Create temp directory
 	tmpDir, err := os.MkdirTemp("", "skill-installer-*")
 	if err != nil {
 		return nil, fmt.Errorf("creating temp dir: %w", err)
 	}
 	defer os.RemoveAll(tmpDir)
 
-	// Clone the repo
 	cmd := exec.Command("git", "clone", "--depth", "1", repoURL, tmpDir)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return nil, fmt.Errorf("cloning repo: %s: %w", string(output), err)
 	}
 
-	// Look for skills directory or use root
 	skillsDir := tmpDir
 	if info, err := os.Stat(filepath.Join(tmpDir, "skills")); err == nil && info.IsDir() {
 		skillsDir = filepath.Join(tmpDir, "skills")
@@ -206,7 +292,6 @@ func (i *Installer) InstallFromGit(repoURL, destDir string) ([]string, error) {
 
 // InstallFromURL downloads and extracts a tarball of skills.
 func (i *Installer) InstallFromURL(url, destDir string) ([]string, error) {
-	// Download the file
 	resp, err := http.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("downloading %s: %w", url, err)
@@ -217,14 +302,12 @@ func (i *Installer) InstallFromURL(url, destDir string) ([]string, error) {
 		return nil, fmt.Errorf("downloading %s: status %d", url, resp.StatusCode)
 	}
 
-	// Create temp directory
 	tmpDir, err := os.MkdirTemp("", "skill-installer-*")
 	if err != nil {
 		return nil, fmt.Errorf("creating temp dir: %w", err)
 	}
 	defer os.RemoveAll(tmpDir)
 
-	// Extract tarball
 	if err := extractTarGz(resp.Body, tmpDir); err != nil {
 		return nil, fmt.Errorf("extracting archive: %w", err)
 	}
@@ -251,6 +334,11 @@ func extractTarGz(r io.Reader, destDir string) error {
 
 		target := filepath.Join(destDir, header.Name)
 
+		// Prevent zip-slip: ensure target stays within destDir
+		if !strings.HasPrefix(filepath.Clean(target), filepath.Clean(destDir)+string(os.PathSeparator)) {
+			return fmt.Errorf("illegal path in archive: %s", header.Name)
+		}
+
 		switch header.Typeflag {
 		case tar.TypeDir:
 			if err := os.MkdirAll(target, 0755); err != nil {
@@ -274,195 +362,38 @@ func extractTarGz(r io.Reader, destDir string) error {
 	return nil
 }
 
-// InstallAgentsMD installs agents.md to the specified directory.
-func (i *Installer) InstallAgentsMD(targetDir string) (string, error) {
-	content, err := i.fs.ReadFile("templates/agents.md")
-	if err != nil {
-		return "", fmt.Errorf("reading agents.md template: %w", err)
-	}
-
-	targetPath := filepath.Join(targetDir, "agents.md")
-	return i.writeFile(targetPath, content)
-}
-
-// InstallAgents installs agent files to the specified directory.
-func (i *Installer) InstallAgents(targetDir string) ([]string, error) {
-	var results []string
-
-	entries, err := i.fs.ReadDir("agents")
-	if err != nil {
-		// No agents directory is not an error
-		return results, nil
-	}
-
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".md") {
-			continue
-		}
-
-		content, err := i.fs.ReadFile(filepath.Join("agents", entry.Name()))
-		if err != nil {
-			return nil, fmt.Errorf("reading agent %s: %w", entry.Name(), err)
-		}
-
-		targetPath := filepath.Join(targetDir, entry.Name())
-		result, err := i.writeFile(targetPath, content)
-		if err != nil {
-			return nil, err
-		}
-		results = append(results, result)
-	}
-
-	return results, nil
-}
-
-// ListAgents returns metadata about available agents.
-func (i *Installer) ListAgents() ([]Skill, error) {
-	entries, err := i.fs.ReadDir("agents")
-	if err != nil {
-		// No agents directory is not an error
-		return nil, nil
-	}
-
-	var agents []Skill
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".md") {
-			continue
-		}
-
-		filePath := filepath.Join("agents", entry.Name())
-		content, err := i.fs.ReadFile(filePath)
-		if err != nil {
-			return nil, fmt.Errorf("reading %s: %w", entry.Name(), err)
-		}
-
-		agent, err := parseSkill(content)
-		if err != nil {
-			return nil, fmt.Errorf("parsing %s: %w", entry.Name(), err)
-		}
-		agent.FilePath = filePath
-		agents = append(agents, agent)
-	}
-
-	return agents, nil
-}
-
-func (i *Installer) writeFile(path string, content []byte) (string, error) {
-	exists := fileExists(path)
+func (i *Installer) writeFile(filePath string, content []byte) (string, error) {
+	exists := fileExists(filePath)
 
 	if exists && !i.options.Force {
-		return fmt.Sprintf("SKIP: %s (already exists, use --force to overwrite)", path), nil
+		return fmt.Sprintf("SKIP: %s (already exists, use --force to overwrite)", filePath), nil
 	}
 
 	if i.options.DryRun {
 		if exists {
-			return fmt.Sprintf("WOULD OVERWRITE: %s", path), nil
+			return fmt.Sprintf("WOULD OVERWRITE: %s", filePath), nil
 		}
-		return fmt.Sprintf("WOULD CREATE: %s", path), nil
+		return fmt.Sprintf("WOULD CREATE: %s", filePath), nil
 	}
 
-	dir := filepath.Dir(path)
+	dir := filepath.Dir(filePath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return "", fmt.Errorf("creating directory %s: %w", dir, err)
 	}
 
-	if err := os.WriteFile(path, content, 0644); err != nil {
-		return "", fmt.Errorf("writing %s: %w", path, err)
+	if err := os.WriteFile(filePath, content, 0644); err != nil {
+		return "", fmt.Errorf("writing %s: %w", filePath, err)
 	}
 
 	if exists {
-		return fmt.Sprintf("UPDATED: %s", path), nil
+		return fmt.Sprintf("UPDATED: %s", filePath), nil
 	}
-	return fmt.Sprintf("CREATED: %s", path), nil
+	return fmt.Sprintf("CREATED: %s", filePath), nil
 }
 
-func fileExists(path string) bool {
-	info, err := os.Stat(path)
+func fileExists(filePath string) bool {
+	info, err := os.Stat(filePath)
 	return err == nil && !info.IsDir()
-}
-
-// ListSkills returns metadata about core skills only (for backward compatibility).
-func (i *Installer) ListSkills() ([]Skill, error) {
-	return i.listSkillsFromDir("skills", "")
-}
-
-// ListAllSkills returns metadata about all skills including language packs.
-func (i *Installer) ListAllSkills() ([]Skill, error) {
-	var allSkills []Skill
-
-	// Core skills
-	coreSkills, err := i.listSkillsFromDir("skills", "")
-	if err != nil {
-		return nil, err
-	}
-	allSkills = append(allSkills, coreSkills...)
-
-	// Language pack skills
-	entries, err := i.fs.ReadDir("skills")
-	if err != nil {
-		return nil, err
-	}
-
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		packSkills, err := i.listSkillsFromDir(filepath.Join("skills", entry.Name()), entry.Name())
-		if err != nil {
-			return nil, err
-		}
-		allSkills = append(allSkills, packSkills...)
-	}
-
-	return allSkills, nil
-}
-
-// ListPacks returns available language packs.
-func (i *Installer) ListPacks() ([]string, error) {
-	var packs []string
-
-	entries, err := i.fs.ReadDir("skills")
-	if err != nil {
-		return nil, err
-	}
-
-	for _, entry := range entries {
-		if entry.IsDir() {
-			packs = append(packs, entry.Name())
-		}
-	}
-
-	return packs, nil
-}
-
-func (i *Installer) listSkillsFromDir(dir, pack string) ([]Skill, error) {
-	entries, err := i.fs.ReadDir(dir)
-	if err != nil {
-		return nil, fmt.Errorf("reading %s: %w", dir, err)
-	}
-
-	var skills []Skill
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".md") {
-			continue
-		}
-
-		filePath := filepath.Join(dir, entry.Name())
-		content, err := i.fs.ReadFile(filePath)
-		if err != nil {
-			return nil, fmt.Errorf("reading %s: %w", entry.Name(), err)
-		}
-
-		skill, err := parseSkill(content)
-		if err != nil {
-			return nil, fmt.Errorf("parsing %s: %w", entry.Name(), err)
-		}
-		skill.Pack = pack
-		skill.FilePath = filePath
-		skills = append(skills, skill)
-	}
-
-	return skills, nil
 }
 
 // parseSkill extracts skill metadata from frontmatter.
@@ -491,7 +422,8 @@ func parseSkill(content []byte) (Skill, error) {
 		if strings.HasPrefix(trimmed, "name:") {
 			skill.Name = strings.TrimSpace(strings.TrimPrefix(trimmed, "name:"))
 		} else if strings.HasPrefix(trimmed, "description:") {
-			skill.Description = strings.TrimSpace(strings.TrimPrefix(trimmed, "description:"))
+			val := strings.TrimSpace(strings.TrimPrefix(trimmed, "description:"))
+			skill.Description = val
 		} else if strings.HasPrefix(trimmed, "model:") {
 			skill.Model = strings.TrimSpace(strings.TrimPrefix(trimmed, "model:"))
 		} else if strings.HasPrefix(trimmed, "tags:") {
@@ -499,23 +431,22 @@ func parseSkill(content []byte) (Skill, error) {
 		} else if strings.HasPrefix(trimmed, "languages:") {
 			skill.Languages = parseYAMLList(strings.TrimPrefix(trimmed, "languages:"))
 		}
+		// Ignore unknown fields (allowed-tools, argument-hint, etc.)
 	}
 
 	if skill.Name == "" {
 		return skill, fmt.Errorf("skill missing name in frontmatter")
 	}
-
 	return skill, nil
 }
 
-// parseYAMLList parses a simple YAML list like [a, b, c] or - a format.
+// parseYAMLList parses a simple YAML list like [a, b, c].
 func parseYAMLList(s string) []string {
 	s = strings.TrimSpace(s)
 	if s == "" {
 		return nil
 	}
 
-	// Handle [a, b, c] format
 	if strings.HasPrefix(s, "[") && strings.HasSuffix(s, "]") {
 		s = strings.TrimPrefix(s, "[")
 		s = strings.TrimSuffix(s, "]")
@@ -552,7 +483,6 @@ func matchesFilter(skill Skill, tags, languages []string) bool {
 	}
 
 	if len(languages) > 0 {
-		// "any" matches all
 		if contains(skill.Languages, "any") {
 			return true
 		}
@@ -578,6 +508,20 @@ func contains(slice []string, item string) bool {
 		}
 	}
 	return false
+}
+
+// titleCase capitalizes the first letter of a string.
+func titleCase(s string) string {
+	if s == "" {
+		return s
+	}
+	words := strings.Fields(s)
+	for i, w := range words {
+		if len(w) > 0 {
+			words[i] = strings.ToUpper(w[:1]) + w[1:]
+		}
+	}
+	return strings.Join(words, " ")
 }
 
 // GenerateSkillTemplate creates a new skill file with proper frontmatter.
@@ -620,6 +564,6 @@ You are a specialized agent for %s.
 
 - [Things to avoid]
 `, name, description, model, tagsStr, langsStr,
-		strings.Title(strings.ReplaceAll(name, "-", " ")),
+		titleCase(strings.ReplaceAll(name, "-", " ")),
 		description)
 }
