@@ -1,6 +1,11 @@
 # futuregerald-claude-plugin
 
-A curated collection of skills, agents, and commands for Claude Code. Includes debugging protocols, TDD workflows, code review, and multi-language project scaffolding.
+A curated collection of skills, agents, and commands for AI coding tools. Includes debugging protocols, TDD workflows, code review, multi-language project scaffolding, and a CLI installer that works across Claude Code, GitHub Copilot, Cursor, OpenCode, and VS Code.
+
+This repository works in two ways:
+
+- **As a Claude Code plugin** -- installed via symlink or `--plugin-dir`
+- **As a standalone CLI tool** (`skill-installer`) -- installs skills, agents, and commands for any supported AI coding framework
 
 ## Attribution
 
@@ -14,7 +19,9 @@ This is a collection of Claude Code skills and agents from various sources:
 
 ## Installation
 
-### Option 1: Clone and Symlink (Recommended)
+### As Claude Code Plugin
+
+#### Option 1: Clone and Symlink (Recommended)
 
 ```bash
 # Clone to your preferred location
@@ -26,7 +33,7 @@ ln -s ~/futuregerald-claude-plugin/agents ~/.claude/agents
 ln -s ~/futuregerald-claude-plugin/commands ~/.claude/commands
 ```
 
-### Option 2: Plugin Directory Flag
+#### Option 2: Plugin Directory Flag
 
 ```bash
 # Clone anywhere
@@ -36,12 +43,86 @@ git clone https://github.com/futuregerald/futuregerald-claude-plugin.git
 claude --plugin-dir ./futuregerald-claude-plugin
 ```
 
-### Option 3: Direct Clone to Claude Directory
+#### Option 3: Direct Clone to Claude Directory
 
 ```bash
 git clone https://github.com/futuregerald/futuregerald-claude-plugin.git ~/.claude/plugins/futuregerald
 claude --plugin-dir ~/.claude/plugins/futuregerald
 ```
+
+### Via CLI (`skill-installer`)
+
+The CLI installs skills, agents, and commands for any supported framework -- not just Claude Code.
+
+#### Download from Releases
+
+Download the latest binary from [GitHub Releases](https://github.com/futuregerald/futuregerald-claude-plugin/releases), then run:
+
+```bash
+skill-installer
+```
+
+#### Install with Go
+
+```bash
+go install github.com/futuregerald/futuregerald-claude-plugin@latest
+```
+
+Then run (note: the binary is named after the module):
+
+```bash
+futuregerald-claude-plugin
+```
+
+Or alias it for convenience:
+
+```bash
+alias skill-installer=futuregerald-claude-plugin
+```
+
+## CLI Usage
+
+Running `skill-installer` with no arguments starts an interactive installer that walks you through selecting a target framework, skills, and options.
+
+```bash
+# Interactive mode
+skill-installer
+
+# Install for a specific target (skip prompts)
+skill-installer --target claude --yes
+
+# Dry run (preview what would be installed)
+skill-installer --dry-run
+
+# List all available skills
+skill-installer list
+
+# List skills filtered by tag
+skill-installer list --tag workflow
+
+# Install globally (Claude Code and GitHub Copilot)
+skill-installer --global
+
+# Skip agents or commands
+skill-installer --skip-agents --skip-commands
+
+# Create a new skill
+skill-installer init my-skill --desc "My skill" --tag custom
+
+# Install from a custom source (local path or remote repo)
+skill-installer --from /path/to/skills
+skill-installer --from https://github.com/user/repo
+```
+
+## Supported Frameworks
+
+| Target | Skills Path | Agents Path | Config File | Global Support |
+|--------|------------|-------------|-------------|----------------|
+| Claude Code | `.claude/skills/` | `.claude/agents/` | `CLAUDE.md` | Yes |
+| GitHub Copilot | `.github/skills/` | `.github/*.agent.md` | `.github/copilot-instructions.md` | Yes |
+| Cursor | `.cursor/skills/` | `.cursor/agents/` | `.cursorrules` | No |
+| OpenCode | `.opencode/skills/` | `.opencode/agents/` | - | No |
+| VS Code | `.vscode/claude/skills/` | `.vscode/claude/agents/` | - | No |
 
 ## Contents
 
@@ -58,7 +139,7 @@ claude --plugin-dir ~/.claude/plugins/futuregerald
 |-------|-------------|
 | `using-superpowers` | Skill discovery and usage patterns |
 | `systematic-debugging` | 4-phase debugging protocol (no guessing) |
-| `test-driven-development` | TDD workflow: RED → GREEN → REFACTOR |
+| `test-driven-development` | TDD workflow: RED -> GREEN -> REFACTOR |
 | `writing-plans` | Implementation planning before coding |
 | `executing-plans` | Plan execution with review checkpoints |
 | `brainstorming` | Creative exploration before implementation |
@@ -127,16 +208,19 @@ Used by `/init-claude-md` to generate framework-specific CLAUDE.md files:
 
 | Template | Frameworks |
 |----------|------------|
-| `svelte.md` | Svelte 5 with runes |
-| `react.md` | React with hooks |
+| `adonisjs.md` | AdonisJS v6 |
 | `go.md` | Go projects |
+| `nodejs.md` | Node.js |
+| `php.md` | PHP/Laravel |
+| `python.md` | Python |
+| `react.md` | React with hooks |
 | `ruby.md` | Ruby/Rails |
 | `rust.md` | Rust projects |
-| `php.md` | PHP/Laravel |
+| `svelte.md` | Svelte 5 with runes |
 
-## Usage
+## Usage (Claude Code Plugin)
 
-After installation, skills are available with the namespace prefix:
+After installation as a plugin, skills are available with the namespace prefix:
 
 ```
 /futuregerald-claude-plugin:systematic-debugging
@@ -162,35 +246,47 @@ This detects your framework (AdonisJS, React, Svelte, Go, etc.) and generates a 
 - Language-specific conventions and patterns
 - Appropriate test/typecheck commands
 
+## Configuration
+
+The CLI reads an optional `.skill-installer.yaml` file from the current directory:
+
+```yaml
+target: claude
+tags: [workflow, testing]
+languages: [javascript, python]
+skip_claude_md: false
+from: ""
+```
+
+## Building from Source
+
+```bash
+git clone https://github.com/futuregerald/futuregerald-claude-plugin.git
+cd futuregerald-claude-plugin
+make build    # builds ./skill-installer
+make test     # runs tests
+make install  # installs to /usr/local/bin
+```
+
 ## Directory Structure
 
 ```
 futuregerald-claude-plugin/
 ├── .claude-plugin/
-│   └── plugin.json           # Plugin manifest
-├── agents/                   # Subagent definitions
-│   ├── code-quality-reviewer.md
-│   ├── code-simplifier.md
-│   ├── codebase-searcher.md
-│   ├── debugger.md
-│   ├── implementer.md
-│   └── spec-reviewer.md
-├── commands/                 # User-invokable commands
-│   └── init-claude-md/
-│       └── COMMAND.md
-├── skills/                   # All skills (32 total)
-│   ├── systematic-debugging/
-│   ├── test-driven-development/
-│   └── ...
-├── templates/                # CLAUDE.md templates
-│   ├── CLAUDE-BASE.md
-│   └── languages/
-│       ├── svelte.md
-│       ├── react.md
-│       ├── go.md
-│       ├── ruby.md
-│       ├── rust.md
-│       └── php.md
+│   └── plugin.json
+├── internal/
+│   ├── config/config.go
+│   └── installer/
+│       ├── installer.go
+│       └── installer_test.go
+├── agents/
+├── commands/
+├── skills/
+├── templates/
+├── main.go
+├── go.mod
+├── go.sum
+├── Makefile
 └── README.md
 ```
 
@@ -202,3 +298,5 @@ git pull
 ```
 
 If using symlinks, changes are immediately available. No restart needed.
+
+If using the CLI binary, download the latest release or re-run `go install` to update.
