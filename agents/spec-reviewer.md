@@ -6,6 +6,8 @@ Use this subagent to verify an implementation matches its specification.
 
 **When to use:** After implementer reports completion, BEFORE code quality review
 
+**CRITICAL:** MUST always be dispatched via the `Task` tool as a fresh subagent with NO shared conversation context. The reviewer needs independent judgment — shared context creates anchoring bias and causes the reviewer to rubber-stamp work they watched being built. Never run reviews inline in the main conversation.
+
 ## Dispatch Configuration
 
 ```

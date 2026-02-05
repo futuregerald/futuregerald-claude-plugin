@@ -6,6 +6,8 @@ Use this subagent to review code quality after spec compliance is verified.
 
 **When to use:** ONLY after spec compliance review passes
 
+**CRITICAL:** MUST always be dispatched via the `Task` tool as a fresh subagent with NO shared conversation context. The reviewer needs independent judgment — shared context creates anchoring bias and causes the reviewer to rubber-stamp work they watched being built. Never run reviews inline in the main conversation.
+
 ## Dispatch Configuration
 
 ```
