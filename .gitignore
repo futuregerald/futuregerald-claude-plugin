@@ -1,0 +1,9 @@
+# Go build artifacts
+skill-installer
+*.exe
+
+# Generated archives
+skill-zips/
+
+# OS files
+.DS_Store
