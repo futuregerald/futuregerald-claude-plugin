@@ -56,13 +56,44 @@ The CLI installs skills, agents, and commands for any supported framework -- not
 
 #### Download from Releases
 
-Download the latest binary from [GitHub Releases](https://github.com/futuregerald/futuregerald-claude-plugin/releases), then run:
+Download the latest binary for your platform from [GitHub Releases](https://github.com/futuregerald/futuregerald-claude-plugin/releases):
 
+| Platform | Architecture | Download |
+|----------|--------------|----------|
+| macOS | Apple Silicon (M1/M2/M3) | `skill-installer_*_darwin_arm64.tar.gz` |
+| macOS | Intel | `skill-installer_*_darwin_amd64.tar.gz` |
+| Linux | x64 | `skill-installer_*_linux_amd64.tar.gz` |
+| Linux | ARM64 | `skill-installer_*_linux_arm64.tar.gz` |
+| Windows | x64 | `skill-installer_*_windows_amd64.zip` |
+| Windows | ARM64 | `skill-installer_*_windows_arm64.zip` |
+
+**macOS/Linux:**
 ```bash
+# Download and extract (example for macOS Apple Silicon)
+curl -LO https://github.com/futuregerald/futuregerald-claude-plugin/releases/latest/download/skill-installer_2.0.0_darwin_arm64.tar.gz
+tar -xzf skill-installer_2.0.0_darwin_arm64.tar.gz
+chmod +x skill-installer
+
+# Move to PATH (optional)
+sudo mv skill-installer /usr/local/bin/
+
+# Run
 skill-installer
 ```
 
+**Windows (PowerShell):**
+```powershell
+# Download and extract
+Invoke-WebRequest -Uri "https://github.com/futuregerald/futuregerald-claude-plugin/releases/latest/download/skill-installer_2.0.0_windows_amd64.zip" -OutFile "skill-installer.zip"
+Expand-Archive -Path "skill-installer.zip" -DestinationPath "."
+
+# Run
+.\skill-installer.exe
+```
+
 #### Install with Go
+
+If you have Go installed:
 
 ```bash
 go install github.com/futuregerald/futuregerald-claude-plugin@latest
