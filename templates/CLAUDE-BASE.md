@@ -67,6 +67,42 @@ The only actions that don't require a plan are:
 - Pure documentation updates (README, comments)
 - Reverting a specific commit with `git revert`
 
+**Never skip planning.** "Simple" changes often have hidden complexity.
+
+### Staff Engineer Plan Review Is MANDATORY
+
+**Every plan MUST be reviewed by a staff engineer sub-agent BEFORE implementation begins. No exceptions.**
+
+This is Phase 3 of the Development Lifecycle. You CANNOT proceed to Phase 4 (Implement) without staff engineer approval.
+
+**How to do it:**
+
+```
+Task(subagent_type="superpowers:code-reviewer", prompt="
+  Review this implementation plan for correctness, completeness, and feasibility.
+  Plan file: <path to plan>
+  Verify:
+  - All file paths and line numbers are accurate
+  - Claimed facts about the codebase are correct (grep/read to verify)
+  - No missing edge cases or tasks
+  - Response shapes match actual controller/API patterns
+  - Nothing is already implemented that the plan claims is missing
+")
+```
+
+**Rules:**
+- MUST use `Task` tool (fresh sub-agent with no shared context)
+- NEVER review the plan yourself in the main conversation — you wrote it, you cannot objectively review it
+- If the reviewer finds CRITICAL or IMPORTANT issues: fix the plan, then re-review
+- Only proceed to implementation after the reviewer explicitly approves
+- When using `ExitPlanMode`, the plan MUST already have staff engineer approval
+
+**Red flags you're skipping this:**
+- Calling `ExitPlanMode` without having dispatched a `superpowers:code-reviewer` Task for the plan
+- Thinking "this plan is simple, it doesn't need review"
+- Thinking "I already know it's correct"
+- Reviewing the plan yourself instead of dispatching a sub-agent
+
 ---
 
 ## Pre-Push Workflow (MANDATORY)
