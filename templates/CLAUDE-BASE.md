@@ -144,10 +144,17 @@ Task(subagent_type="superpowers:code-reviewer")
 - If the reviewer finds CRITICAL or IMPORTANT issues: fix them, re-run tests, and re-review
 - Only proceed to commit after the reviewer explicitly approves
 
+**Pre-existing issues found during review:**
+- When a code reviewer flags a "pre-existing" issue in code you're touching, **ALWAYS add it to the todo list and fix it**
+- Pre-existing does NOT mean "someone else's problem" — if you're shipping that code path, you own it
+- Dismissing known-broken functionality as "pre-existing" means shipping a broken feature on purpose
+- The only exception: the pre-existing issue is in completely unrelated code that your changes don't touch
+
 **Red flags you're skipping this:**
 - Committing without having dispatched a `superpowers:code-reviewer` Task
 - Thinking "this is a one-line fix, it doesn't need review"
 - Reviewing the code yourself instead of dispatching a sub-agent
+- Dismissing reviewer findings as "pre-existing" without adding them to the todo list
 
 ---
 
