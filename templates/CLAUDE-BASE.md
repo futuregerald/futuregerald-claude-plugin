@@ -103,6 +103,52 @@ Task(subagent_type="superpowers:code-reviewer", prompt="
 - Thinking "I already know it's correct"
 - Reviewing the plan yourself instead of dispatching a sub-agent
 
+### Code Simplifier Is MANDATORY
+
+**Every code change MUST be run through the code-simplifier agent BEFORE code review. No exceptions.**
+
+This is Phase 6 of the Development Lifecycle. You CANNOT proceed to Phase 7 (Code Review) without running the simplifier.
+
+**How to do it:**
+
+```
+Task(subagent_type="code-simplifier")
+```
+
+**Rules:**
+- MUST run after tests pass (Phase 5) and BEFORE code review (Phase 7)
+- MUST run even for "simple" or single-line changes — the step exists for process discipline
+- Only implement APPROVED simplifications — do not blindly apply all suggestions
+- After applying approved changes, re-run tests to confirm nothing broke
+
+**Red flags you're skipping this:**
+- Jumping from "tests pass" directly to code review or commit
+- Thinking "this change is too small to simplify"
+- Running code review without having dispatched a `code-simplifier` Task first
+
+### Code Review Is MANDATORY
+
+**Every code change MUST be reviewed by a code-reviewer sub-agent BEFORE commit. No exceptions.**
+
+This is Phase 7 of the Development Lifecycle. You CANNOT proceed to Phase 8 (Commit) without reviewer approval.
+
+**How to do it:**
+
+```
+Task(subagent_type="superpowers:code-reviewer")
+```
+
+**Rules:**
+- MUST use `Task` tool (fresh sub-agent with no shared context)
+- NEVER review code yourself in the main conversation — you wrote it, you cannot objectively review it
+- If the reviewer finds CRITICAL or IMPORTANT issues: fix them, re-run tests, and re-review
+- Only proceed to commit after the reviewer explicitly approves
+
+**Red flags you're skipping this:**
+- Committing without having dispatched a `superpowers:code-reviewer` Task
+- Thinking "this is a one-line fix, it doesn't need review"
+- Reviewing the code yourself instead of dispatching a sub-agent
+
 ---
 
 ## Pre-Push Workflow (MANDATORY)
