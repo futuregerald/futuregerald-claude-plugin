@@ -1,7 +1,7 @@
 {
   "name": "futuregerald-claude-plugin",
   "description": "Portable skills, agents, and commands for Claude Code and other AI IDEs - includes a CLI installer for Cursor, Copilot, OpenCode, and VS Code",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "author": {
     "name": "futuregerald"
   },

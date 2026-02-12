@@ -70,8 +70,8 @@ Download the latest binary for your platform from [GitHub Releases](https://gith
 **macOS/Linux:**
 ```bash
 # Download and extract (example for macOS Apple Silicon)
-curl -LO https://github.com/futuregerald/futuregerald-claude-plugin/releases/latest/download/skill-installer_2.0.0_darwin_arm64.tar.gz
-tar -xzf skill-installer_2.0.0_darwin_arm64.tar.gz
+curl -LO https://github.com/futuregerald/futuregerald-claude-plugin/releases/latest/download/skill-installer_3.0.0_darwin_arm64.tar.gz
+tar -xzf skill-installer_3.0.0_darwin_arm64.tar.gz
 chmod +x skill-installer
 
 # Move to PATH (optional)
@@ -84,7 +84,7 @@ skill-installer
 **Windows (PowerShell):**
 ```powershell
 # Download and extract
-Invoke-WebRequest -Uri "https://github.com/futuregerald/futuregerald-claude-plugin/releases/latest/download/skill-installer_2.0.0_windows_amd64.zip" -OutFile "skill-installer.zip"
+Invoke-WebRequest -Uri "https://github.com/futuregerald/futuregerald-claude-plugin/releases/latest/download/skill-installer_3.0.0_windows_amd64.zip" -OutFile "skill-installer.zip"
 Expand-Archive -Path "skill-installer.zip" -DestinationPath "."
 
 # Run
@@ -157,13 +157,20 @@ skill-installer --from https://github.com/user/repo
 
 ## Contents
 
-### Commands
+### Commands (8 total)
 
 | Command | Description |
 |---------|-------------|
 | `/init-claude-md` | Generate a customized CLAUDE.md for your project based on detected framework/language |
+| `/project:init` | Create project board and standard labels (run first) |
+| `/project:create-issue` | Create a GitHub issue with labels |
+| `/project:plan-feature` | Create epic from feature description or PRD |
+| `/project:sync-tasks` | Sync todo list to GitHub issues |
+| `/project:current` | Show project status overview (read-only) |
+| `/project:inbox` | Check for human-created issues (read-only) |
+| `/project:cleanup` | Find and remove stale worktrees (dry-run default) |
 
-### Skills (32 total)
+### Skills (33 total)
 
 **Core Workflow:**
 | Skill | Description |
@@ -174,6 +181,7 @@ skill-installer --from https://github.com/user/repo
 | `writing-plans` | Implementation planning before coding |
 | `executing-plans` | Plan execution with review checkpoints |
 | `brainstorming` | Creative exploration before implementation |
+| `verification-before-completion` | Evidence before assertions — verify before claiming done |
 
 **Code Quality:**
 | Skill | Description |
@@ -312,6 +320,15 @@ futuregerald-claude-plugin/
 │       └── installer_test.go
 ├── agents/
 ├── commands/
+│   ├── init-claude-md/
+│   └── project/
+│       ├── init.md
+│       ├── create-issue.md
+│       ├── plan-feature.md
+│       ├── sync-tasks.md
+│       ├── current.md
+│       ├── inbox.md
+│       └── cleanup.md
 ├── skills/
 ├── templates/
 ├── main.go

@@ -19,7 +19,7 @@ import (
 var content embed.FS
 
 var (
-	version       = "2.0.0"
+	version       = "3.0.0"
 	force         bool
 	dryRun        bool
 	nonInteract   bool
