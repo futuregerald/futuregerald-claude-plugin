@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -351,4 +352,71 @@ func detectProject(dir string) ProjectInfo {
 
 	info.KeyDirectories = detectKeyDirectories(dir)
 	return info
+}
+
+func applyProjectDetection(baseContent []byte, info ProjectInfo, embeddedFS fs.FS) []byte {
+	config := string(baseContent)
+
+	config = strings.ReplaceAll(config, "{{PROJECT_NAME}}", info.Name)
+	config = strings.ReplaceAll(config, "{{PROJECT_DESCRIPTION}}", info.Description)
+	config = strings.ReplaceAll(config, "{{KEY_DIRECTORIES}}", formatKeyDirectories(info.KeyDirectories))
+	config = strings.ReplaceAll(config, "{{TEST_COMMAND}}", info.TestCommand)
+	config = strings.ReplaceAll(config, "{{TYPECHECK_COMMAND}}", info.TypecheckCommand)
+	config = strings.ReplaceAll(config, "{{BUILD_COMMAND}}", info.BuildCommand)
+	config = strings.ReplaceAll(config, "{{FRAMEWORK}}", info.Framework)
+
+	// Insert language-specific template at marker
+	if info.LanguageTemplate != "" {
+		if langContent, err := fs.ReadFile(embeddedFS, "templates/languages/"+info.LanguageTemplate); err == nil {
+			config = strings.ReplaceAll(config, "<!-- LANGUAGE_SPECIFIC -->", string(langContent))
+		}
+	}
+	config = strings.ReplaceAll(config, "<!-- LANGUAGE_SPECIFIC -->", "")
+
+	// Strip remaining unfilled placeholders
+	config = placeholderRe.ReplaceAllString(config, "")
+
+	// Remove empty sections and collapse blank lines
+	config = removeEmptySections(config)
+
+	return []byte(config)
+}
+
+func removeEmptySections(s string) string {
+	lines := strings.Split(s, "\n")
+	var result []string
+	i := 0
+	for i < len(lines) {
+		trimmed := strings.TrimSpace(lines[i])
+		if strings.HasPrefix(trimmed, "## ") {
+			// Look ahead: is the section empty?
+			j := i + 1
+			hasContent := false
+			for j < len(lines) {
+				nextTrimmed := strings.TrimSpace(lines[j])
+				if strings.HasPrefix(nextTrimmed, "## ") || nextTrimmed == "---" {
+					break
+				}
+				if nextTrimmed != "" && nextTrimmed != "```" && nextTrimmed != "```bash" {
+					hasContent = true
+					break
+				}
+				j++
+			}
+			if !hasContent {
+				i = j
+				continue
+			}
+		}
+		result = append(result, lines[i])
+		i++
+	}
+	return collapseBlankLines(strings.Join(result, "\n"))
+}
+
+func collapseBlankLines(s string) string {
+	for strings.Contains(s, "\n\n\n") {
+		s = strings.ReplaceAll(s, "\n\n\n", "\n\n")
+	}
+	return s
 }
