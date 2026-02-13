@@ -376,6 +376,13 @@ func applyProjectDetection(baseContent []byte, info ProjectInfo, embeddedFS fs.F
 	// Strip remaining unfilled placeholders
 	config = placeholderRe.ReplaceAllString(config, "")
 
+	// Clean up empty command artifacts in tables (e.g., "` + ` `" when typecheck is empty)
+	config = regexp.MustCompile("`\\s*\\+\\s*`\\s*`").ReplaceAllString(config, "`")
+
+	// Remove blank lines inside code fences
+	config = regexp.MustCompile("(?m)^(```bash\n)\\s*\n").ReplaceAllString(config, "$1")
+	config = regexp.MustCompile("(?m)\n\\s*\n(```)").ReplaceAllString(config, "\n$1")
+
 	// Remove empty sections and collapse blank lines
 	config = removeEmptySections(config)
 

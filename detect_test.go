@@ -309,6 +309,48 @@ func TestRemoveEmptySections_EmptyCodeFence(t *testing.T) {
 	}
 }
 
+func TestApplyProjectDetection_EmptyTypecheck(t *testing.T) {
+	t.Parallel()
+
+	// Template mimics the real CLAUDE-BASE.md layout with table and code fence
+	baseTemplate := "# {{PROJECT_NAME}}\n\n" +
+		"| 5. TEST | `{{TEST_COMMAND}}` + `{{TYPECHECK_COMMAND}}` | — | Zero failures |\n\n" +
+		"## Quick Reference\n\n" +
+		"```bash\n{{TEST_COMMAND}}\n{{TYPECHECK_COMMAND}}\n```\n\n---\n"
+
+	mockFS := fstest.MapFS{}
+
+	info := ProjectInfo{
+		Name:        "mygoapp",
+		Framework:   "Go",
+		TestCommand: "go test ./...",
+		// TypecheckCommand intentionally empty
+	}
+
+	result := string(applyProjectDetection([]byte(baseTemplate), info, mockFS))
+
+	// Table row should NOT contain empty backtick artifact ("` + ` `")
+	if strings.Contains(result, "+ ` `") {
+		t.Errorf("result still contains empty backtick artifact: %q", result)
+	}
+	// Table should still have test command in backticks
+	if !strings.Contains(result, "`go test ./...`") {
+		t.Errorf("test command backticks missing from table")
+	}
+
+	// Quick Reference code fence should NOT have blank lines
+	if strings.Contains(result, "```bash\n\n") {
+		t.Errorf("code fence has leading blank line")
+	}
+	if strings.Contains(result, "\n\n```") {
+		t.Errorf("code fence has trailing blank line")
+	}
+	// Test command should be present in the code fence
+	if !strings.Contains(result, "```bash\ngo test ./...") {
+		t.Errorf("test command not found in code fence: %q", result)
+	}
+}
+
 func TestApplyProjectDetection(t *testing.T) {
 	t.Parallel()
 

@@ -330,6 +330,15 @@ func runFullInstall(reader *bufio.Reader, inst *installer.Installer, target Targ
 func generateConfigFile(_ *installer.Installer, target Target) error {
 	configPath := filepath.Join(".", target.ConfigPath)
 
+	// Detect project type (safe in dry-run: only reads the filesystem)
+	cwd, _ := os.Getwd()
+	info := detectProject(cwd)
+	fmt.Printf("Detected: %s", info.Framework)
+	if info.Name != "" {
+		fmt.Printf(" (%s)", info.Name)
+	}
+	fmt.Println()
+
 	if dryRun {
 		if fileExists(configPath) {
 			fmt.Printf("WOULD UPDATE: %s\n", configPath)
@@ -349,15 +358,6 @@ func generateConfigFile(_ *installer.Installer, target Target) error {
 	if err != nil {
 		return fmt.Errorf("reading template: %w", err)
 	}
-
-	// Detect project type
-	cwd, _ := os.Getwd()
-	info := detectProject(cwd)
-	fmt.Printf("Detected: %s", info.Framework)
-	if info.Name != "" {
-		fmt.Printf(" (%s)", info.Name)
-	}
-	fmt.Println()
 
 	// For Claude Code, apply project detection directly
 	// For other frameworks, generate a framework-specific config
