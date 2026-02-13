@@ -60,8 +60,11 @@ func extractTOMLString(line string) string {
 		return ""
 	}
 	val := strings.TrimSpace(parts[1])
-	val = strings.Trim(val, "\"")
-	val = strings.Trim(val, "'")
+	if strings.HasPrefix(val, "\"") {
+		val = strings.Trim(val, "\"")
+	} else if strings.HasPrefix(val, "'") {
+		val = strings.Trim(val, "'")
+	}
 	return val
 }
 
@@ -94,8 +97,8 @@ func detectKeyDirectories(dir string) []string {
 	}
 	var found []string
 	for _, name := range candidates {
-		info, err := os.Stat(filepath.Join(dir, name))
-		if err == nil && info.IsDir() {
+		fi, err := os.Stat(filepath.Join(dir, name))
+		if err == nil && fi.IsDir() {
 			found = append(found, name+"/")
 		}
 	}
@@ -218,7 +221,6 @@ func detectRubyProject(dir string) ProjectInfo {
 	content := string(data)
 	if strings.Contains(content, "'rails'") || strings.Contains(content, "\"rails\"") {
 		info.Framework = "Rails"
-		info.TestCommand = "bundle exec rspec"
 		info.BuildCommand = "bundle exec rails assets:precompile"
 	}
 	return info
@@ -264,14 +266,16 @@ func detectNodeProject(dir string) ProjectInfo {
 	}
 
 	info := ProjectInfo{
-		Name:        pkg.Name,
-		Description: pkg.Description,
+		Name:             pkg.Name,
+		Description:      pkg.Description,
+		TestCommand:      "npm test",
+		TypecheckCommand: "npx tsc --noEmit",
+		BuildCommand:     "npm run build",
 	}
 
 	allDeps := mergeMaps(pkg.Dependencies, pkg.DevDependencies)
 
-	// Priority order: most specific first. Next.js MUST come before React
-	// because Next.js projects always have react as a dependency too.
+	// Priority order: most specific first
 	if hasKeyPrefix(allDeps, "@adonisjs/") {
 		info.Framework = "AdonisJS"
 		info.LanguageTemplate = "adonisjs.md"
@@ -281,38 +285,24 @@ func detectNodeProject(dir string) ProjectInfo {
 	} else if _, ok := allDeps["svelte"]; ok {
 		info.Framework = "Svelte"
 		info.LanguageTemplate = "svelte.md"
-		info.TestCommand = "npm test"
 		info.TypecheckCommand = "npx svelte-check"
-		info.BuildCommand = "npm run build"
 	} else if _, ok := allDeps["next"]; ok {
 		info.Framework = "Next.js"
 		info.LanguageTemplate = "react.md"
-		info.TestCommand = "npm test"
-		info.TypecheckCommand = "npx tsc --noEmit"
-		info.BuildCommand = "npm run build"
 	} else if _, ok := allDeps["react"]; ok {
 		info.Framework = "React"
 		info.LanguageTemplate = "react.md"
-		info.TestCommand = "npm test"
-		info.TypecheckCommand = "npx tsc --noEmit"
-		info.BuildCommand = "npm run build"
 	} else if _, ok := allDeps["express"]; ok {
 		info.Framework = "Express"
 		info.LanguageTemplate = "nodejs.md"
-		info.TestCommand = "npm test"
-		info.TypecheckCommand = "npx tsc --noEmit"
-		info.BuildCommand = "npm run build"
 	} else {
 		info.Framework = "Node.js"
 		info.LanguageTemplate = "nodejs.md"
-		info.TestCommand = "npm test"
-		info.TypecheckCommand = "npx tsc --noEmit"
-		info.BuildCommand = "npm run build"
 	}
 
-	// Script overrides may replace framework-specific commands (e.g., AdonisJS "node ace test"
-	// becomes "npm test") which is correct since "npm test" invokes whatever script is defined
-	// in package.json, including the framework-specific command.
+	// Script overrides may replace framework-specific commands (e.g., AdonisJS
+	// "node ace test" becomes "npm test"), which is correct since npm test invokes
+	// whatever script is defined in package.json.
 	return overrideFromScripts(info, pkg.Scripts)
 }
 

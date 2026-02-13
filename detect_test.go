@@ -8,6 +8,13 @@ import (
 	"testing/fstest"
 )
 
+func writeTestFile(t *testing.T, dir, name, content string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestDetectGoProject(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
@@ -15,9 +22,7 @@ func TestDetectGoProject(t *testing.T) {
 
 go 1.21
 `
-	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte(goMod), 0644); err != nil {
-		t.Fatal(err)
-	}
+	writeTestFile(t, dir, "go.mod", goMod)
 
 	info := detectGoProject(dir)
 
@@ -38,98 +43,86 @@ go 1.21
 	}
 }
 
-func TestDetectNodeProject_React(t *testing.T) {
+func TestDetectNodeProject_Frameworks(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
-	pkg := `{
+	tests := []struct {
+		name             string
+		packageJSON      string
+		wantFramework    string
+		wantLangTemplate string
+	}{
+		{
+			name: "React",
+			packageJSON: `{
   "name": "my-react-app",
   "dependencies": {
     "react": "^18.0.0",
     "react-dom": "^18.0.0"
   }
-}`
-	if err := os.WriteFile(filepath.Join(dir, "package.json"), []byte(pkg), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	info := detectNodeProject(dir)
-
-	if info.Framework != "React" {
-		t.Errorf("Framework = %q, want %q", info.Framework, "React")
-	}
-	if info.LanguageTemplate != "react.md" {
-		t.Errorf("LanguageTemplate = %q, want %q", info.LanguageTemplate, "react.md")
-	}
-}
-
-func TestDetectNodeProject_NextJS(t *testing.T) {
-	t.Parallel()
-	dir := t.TempDir()
-	pkg := `{
+}`,
+			wantFramework:    "React",
+			wantLangTemplate: "react.md",
+		},
+		{
+			name: "NextJS",
+			packageJSON: `{
   "name": "my-next-app",
   "dependencies": {
     "next": "^14.0.0",
     "react": "^18.0.0",
     "react-dom": "^18.0.0"
   }
-}`
-	if err := os.WriteFile(filepath.Join(dir, "package.json"), []byte(pkg), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	info := detectNodeProject(dir)
-
-	if info.Framework != "Next.js" {
-		t.Errorf("Framework = %q, want %q (should prefer Next.js over React)", info.Framework, "Next.js")
-	}
-	if info.LanguageTemplate != "react.md" {
-		t.Errorf("LanguageTemplate = %q, want %q", info.LanguageTemplate, "react.md")
-	}
-}
-
-func TestDetectNodeProject_AdonisJS(t *testing.T) {
-	t.Parallel()
-	dir := t.TempDir()
-	pkg := `{
+}`,
+			wantFramework:    "Next.js",
+			wantLangTemplate: "react.md",
+		},
+		{
+			name: "AdonisJS",
+			packageJSON: `{
   "name": "my-adonis-app",
   "dependencies": {
     "@adonisjs/core": "^6.0.0"
   }
-}`
-	if err := os.WriteFile(filepath.Join(dir, "package.json"), []byte(pkg), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	info := detectNodeProject(dir)
-
-	if info.Framework != "AdonisJS" {
-		t.Errorf("Framework = %q, want %q", info.Framework, "AdonisJS")
-	}
-	if info.LanguageTemplate != "adonisjs.md" {
-		t.Errorf("LanguageTemplate = %q, want %q", info.LanguageTemplate, "adonisjs.md")
-	}
-}
-
-func TestDetectNodeProject_Express(t *testing.T) {
-	t.Parallel()
-	dir := t.TempDir()
-	pkg := `{
+}`,
+			wantFramework:    "AdonisJS",
+			wantLangTemplate: "adonisjs.md",
+		},
+		{
+			name: "Express",
+			packageJSON: `{
   "name": "my-express-app",
   "dependencies": {
     "express": "^4.18.0"
   }
-}`
-	if err := os.WriteFile(filepath.Join(dir, "package.json"), []byte(pkg), 0644); err != nil {
-		t.Fatal(err)
+}`,
+			wantFramework:    "Express",
+			wantLangTemplate: "nodejs.md",
+		},
+		{
+			name: "Node.js fallback",
+			packageJSON: `{
+  "name": "my-plain-app",
+  "description": "A plain Node.js app"
+}`,
+			wantFramework:    "Node.js",
+			wantLangTemplate: "nodejs.md",
+		},
 	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			dir := t.TempDir()
+			writeTestFile(t, dir, "package.json", tt.packageJSON)
 
-	info := detectNodeProject(dir)
+			info := detectNodeProject(dir)
 
-	if info.Framework != "Express" {
-		t.Errorf("Framework = %q, want %q", info.Framework, "Express")
-	}
-	if info.LanguageTemplate != "nodejs.md" {
-		t.Errorf("LanguageTemplate = %q, want %q", info.LanguageTemplate, "nodejs.md")
+			if info.Framework != tt.wantFramework {
+				t.Errorf("Framework = %q, want %q", info.Framework, tt.wantFramework)
+			}
+			if info.LanguageTemplate != tt.wantLangTemplate {
+				t.Errorf("LanguageTemplate = %q, want %q", info.LanguageTemplate, tt.wantLangTemplate)
+			}
+		})
 	}
 }
 
@@ -147,9 +140,7 @@ func TestDetectNodeProject_ScriptOverride(t *testing.T) {
     "build": "vite build"
   }
 }`
-	if err := os.WriteFile(filepath.Join(dir, "package.json"), []byte(pkg), 0644); err != nil {
-		t.Fatal(err)
-	}
+	writeTestFile(t, dir, "package.json", pkg)
 
 	info := detectNodeProject(dir)
 
@@ -175,9 +166,7 @@ edition = "2021"
 
 [dependencies]
 `
-	if err := os.WriteFile(filepath.Join(dir, "Cargo.toml"), []byte(cargo), 0644); err != nil {
-		t.Fatal(err)
-	}
+	writeTestFile(t, dir, "Cargo.toml", cargo)
 
 	info := detectRustProject(dir)
 
@@ -206,9 +195,7 @@ description = "A Python library"
 [build-system]
 requires = ["setuptools"]
 `
-	if err := os.WriteFile(filepath.Join(dir, "pyproject.toml"), []byte(pyproject), 0644); err != nil {
-		t.Fatal(err)
-	}
+	writeTestFile(t, dir, "pyproject.toml", pyproject)
 
 	info := detectPythonProject(dir)
 
