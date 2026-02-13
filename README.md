@@ -304,6 +304,17 @@ skill-installer init my-skill --desc "My skill" --tag custom
 # Install from a custom source
 skill-installer --from /path/to/skills
 skill-installer --from https://github.com/user/repo
+
+# Choose installation mode
+skill-installer --mode config-only   # Generate CLAUDE.md only (for existing global installs)
+skill-installer --mode agents-only   # Install agents only
+skill-installer --mode full          # Full installation (default)
+
+# Config-only for a specific target
+skill-installer --mode config-only --target cursor --yes
+
+# Agents-only, globally
+skill-installer --mode agents-only --global --target claude --yes
 ```
 
 ---
