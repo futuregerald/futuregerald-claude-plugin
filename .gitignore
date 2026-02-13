@@ -5,5 +5,8 @@ skill-installer
 # Generated archives
 skill-zips/
 
+# Worktrees
+.worktrees/
+
 # OS files
 .DS_Store
