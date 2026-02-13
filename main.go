@@ -486,6 +486,53 @@ func askScope(reader *bufio.Reader, target Target) (string, error) {
 	return "project", nil
 }
 
+func askInstallMode(reader *bufio.Reader, target Target) (string, error) {
+	// CLI flag takes precedence
+	if installMode != "" {
+		switch installMode {
+		case modeFullInstall, modeConfigOnly, modeAgentsOnly:
+			return installMode, nil
+		default:
+			return "", fmt.Errorf("unknown mode: %s (valid: full, config-only, agents-only)", installMode)
+		}
+	}
+
+	// Non-interactive defaults to full
+	if nonInteract {
+		return modeFullInstall, nil
+	}
+
+	fmt.Println("\nWhat would you like to do?")
+	fmt.Println("  1) Full installation (skills, agents, commands, and config file)")
+	if target.ConfigPath != "" {
+		fmt.Printf("  2) Generate config file only (%s)\n", target.ConfigPath)
+	} else {
+		fmt.Println("  2) Generate config file only (not available for this target)")
+	}
+	fmt.Println("  3) Install agents only")
+	fmt.Print("Enter choice [1]: ")
+
+	input, err := reader.ReadString('\n')
+	if err != nil {
+		return "", err
+	}
+	input = strings.TrimSpace(input)
+
+	switch input {
+	case "", "1":
+		return modeFullInstall, nil
+	case "2":
+		if target.ConfigPath == "" {
+			return "", fmt.Errorf("config file generation is not available for %s", target.Name)
+		}
+		return modeConfigOnly, nil
+	case "3":
+		return modeAgentsOnly, nil
+	default:
+		return "", fmt.Errorf("invalid choice: %s", input)
+	}
+}
+
 func runList(cmd *cobra.Command, args []string) error {
 	inst := installer.New(content, installer.Options{})
 
