@@ -551,6 +551,48 @@ func runConfigOnly(inst *installer.Installer, target Target) error {
 	return nil
 }
 
+func runAgentsOnly(reader *bufio.Reader, inst *installer.Installer, target Target) error {
+	if target.AgentsPath == "" {
+		return fmt.Errorf("agents are not supported for %s", target.Name)
+	}
+
+	scope, err := askScope(reader, target)
+	if err != nil {
+		return err
+	}
+
+	var agentsDest string
+	if scope == "global" {
+		if target.GlobalAgentsPath == "" {
+			return fmt.Errorf("global agents are not supported for %s", target.Name)
+		}
+		agentsDest = target.GlobalAgentsPath
+	} else {
+		agentsDest = filepath.Join(".", target.AgentsPath)
+	}
+
+	fmt.Println("\nInstalling agents...")
+	var nameFunc installer.AgentNameFunc
+	if target.Name == "GitHub Copilot" {
+		nameFunc = installer.CopilotAgentName
+	}
+
+	agentResults, err := inst.InstallAgents(agentsDest, nameFunc)
+	if err != nil {
+		return err
+	}
+	for _, r := range agentResults {
+		fmt.Println(r)
+	}
+
+	if dryRun {
+		fmt.Println("\n(dry run - no files were modified)")
+	} else {
+		fmt.Println("\nDone! Agents installed successfully.")
+	}
+	return nil
+}
+
 func runList(cmd *cobra.Command, args []string) error {
 	inst := installer.New(content, installer.Options{})
 
