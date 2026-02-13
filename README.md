@@ -453,6 +453,7 @@ The CLI reads an optional `.skill-installer.yaml` file from the current director
 
 ```yaml
 target: claude
+mode: full  # full, config-only, or agents-only
 tags: [workflow, testing]
 languages: [javascript, python]
 skip_claude_md: false
