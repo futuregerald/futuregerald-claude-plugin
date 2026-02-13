@@ -533,6 +533,24 @@ func askInstallMode(reader *bufio.Reader, target Target) (string, error) {
 	}
 }
 
+func runConfigOnly(inst *installer.Installer, target Target) error {
+	if target.ConfigPath == "" {
+		return fmt.Errorf("config file generation is not supported for %s", target.Name)
+	}
+
+	fmt.Printf("\nGenerating %s...\n", target.ConfigPath)
+	if err := generateConfigFile(inst, target); err != nil {
+		return fmt.Errorf("could not generate %s: %w", target.ConfigPath, err)
+	}
+
+	if dryRun {
+		fmt.Println("\n(dry run - no files were modified)")
+	} else {
+		fmt.Printf("\nDone! %s generated successfully.\n", target.ConfigPath)
+	}
+	return nil
+}
+
 func runList(cmd *cobra.Command, args []string) error {
 	inst := installer.New(content, installer.Options{})
 
