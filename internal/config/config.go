@@ -14,6 +14,7 @@ type Config struct {
 	Languages    []string `yaml:"languages"`
 	SkipClaudeMD bool     `yaml:"skip_claude_md"`
 	From         string   `yaml:"from"`
+	Mode         string   `yaml:"mode"`
 }
 
 // DefaultConfigFiles are the filenames to look for.
