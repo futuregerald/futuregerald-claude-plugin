@@ -51,14 +51,18 @@ func hasKeyPrefix(m map[string]string, prefix string) bool {
 	return false
 }
 
-// extractTOMLString extracts a string value from a simple TOML `key = "value"` line.
-// Only handles double-quoted values on a single line. Sufficient for name/description fields.
+// extractTOMLString extracts a string value from a simple TOML `key = "value"` or `key = 'value'` line.
+// Handles both double-quoted and single-quoted (literal) TOML strings on a single line.
+// Sufficient for name/description fields.
 func extractTOMLString(line string) string {
 	parts := strings.SplitN(line, "=", 2)
 	if len(parts) != 2 {
 		return ""
 	}
-	return strings.Trim(strings.TrimSpace(parts[1]), "\"")
+	val := strings.TrimSpace(parts[1])
+	val = strings.Trim(val, "\"")
+	val = strings.Trim(val, "'")
+	return val
 }
 
 func formatKeyDirectories(dirs []string) string {
@@ -72,8 +76,13 @@ func formatKeyDirectories(dirs []string) string {
 	return strings.Join(lines, "\n")
 }
 
-// placeholderRe matches {{PLACEHOLDER}} patterns in templates.
-var placeholderRe = regexp.MustCompile(`\{\{[A-Z_]+\}\}`)
+// Package-level compiled regexps used in applyProjectDetection.
+var (
+	placeholderRe          = regexp.MustCompile(`\{\{[A-Z_]+\}\}`)
+	emptyBacktickArtifact  = regexp.MustCompile("`\\s*\\+\\s*`\\s*`")
+	codeFenceLeadingBlank  = regexp.MustCompile("(?m)^(```bash\n)\\s*\n")
+	codeFenceTrailingBlank = regexp.MustCompile("(?m)\n\\s*\n(```)")
+)
 
 func detectKeyDirectories(dir string) []string {
 	candidates := []string{
@@ -150,6 +159,10 @@ func detectRustProject(dir string) ProjectInfo {
 	return info
 }
 
+// detectPythonProject detects Python projects from pyproject.toml or requirements.txt.
+// For requirements.txt-only projects (no pyproject.toml), the defaults are returned as-is
+// (Framework="Python", TestCommand="pytest") since requirements.txt has no name/description
+// fields to extract.
 func detectPythonProject(dir string) ProjectInfo {
 	info := ProjectInfo{
 		Framework:        "Python",
@@ -297,6 +310,9 @@ func detectNodeProject(dir string) ProjectInfo {
 		info.BuildCommand = "npm run build"
 	}
 
+	// Script overrides may replace framework-specific commands (e.g., AdonisJS "node ace test"
+	// becomes "npm test") which is correct since "npm test" invokes whatever script is defined
+	// in package.json, including the framework-specific command.
 	return overrideFromScripts(info, pkg.Scripts)
 }
 
@@ -377,11 +393,11 @@ func applyProjectDetection(baseContent []byte, info ProjectInfo, embeddedFS fs.F
 	config = placeholderRe.ReplaceAllString(config, "")
 
 	// Clean up empty command artifacts in tables (e.g., "` + ` `" when typecheck is empty)
-	config = regexp.MustCompile("`\\s*\\+\\s*`\\s*`").ReplaceAllString(config, "`")
+	config = emptyBacktickArtifact.ReplaceAllString(config, "`")
 
 	// Remove blank lines inside code fences
-	config = regexp.MustCompile("(?m)^(```bash\n)\\s*\n").ReplaceAllString(config, "$1")
-	config = regexp.MustCompile("(?m)\n\\s*\n(```)").ReplaceAllString(config, "\n$1")
+	config = codeFenceLeadingBlank.ReplaceAllString(config, "$1")
+	config = codeFenceTrailingBlank.ReplaceAllString(config, "\n$1")
 
 	// Remove empty sections and collapse blank lines
 	config = removeEmptySections(config)

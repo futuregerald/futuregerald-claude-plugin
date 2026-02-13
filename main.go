@@ -331,13 +331,16 @@ func generateConfigFile(_ *installer.Installer, target Target) error {
 	configPath := filepath.Join(".", target.ConfigPath)
 
 	// Detect project type (safe in dry-run: only reads the filesystem)
-	cwd, _ := os.Getwd()
-	info := detectProject(cwd)
-	fmt.Printf("Detected: %s", info.Framework)
-	if info.Name != "" {
-		fmt.Printf(" (%s)", info.Name)
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("cannot determine working directory: %w", err)
 	}
-	fmt.Println()
+	info := detectProject(cwd)
+	if info.Framework != "" {
+		fmt.Printf("Detected: %s (%s)\n", info.Framework, info.Name)
+	} else {
+		fmt.Printf("Detected: unknown project type (using defaults for %s)\n", info.Name)
+	}
 
 	if dryRun {
 		if fileExists(configPath) {
