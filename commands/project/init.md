@@ -20,16 +20,45 @@ No arguments required. Optional:
 
    If `gh` is not available or not authenticated, tell the user and stop.
 
-2. **Offer to allow-list `gh` commands.** Check if `Bash(gh:*)` is already in `.claude/settings.local.json` under `permissions.allow`. If NOT present, ask the user:
+2. **Set up Claude Code permissions.** Sub-agents working in git worktrees need pre-approved permissions for common commands to avoid excessive permission prompts. Check `.claude/settings.local.json` for existing permissions and offer to add missing ones.
 
-   > "Would you like to auto-allow all `gh` CLI commands? This adds `Bash(gh:*)` to `.claude/settings.local.json` so you won't be prompted for each GitHub operation."
+   Ask the user:
+
+   > "Would you like to set up permissions for autonomous agent workflows? This adds common command permissions to `.claude/settings.local.json` so sub-agents can work without repeated prompts. Permissions include:
+   > - GitHub CLI (`gh`)
+   > - Git operations (`git`)
+   > - Node.js/npm (`node`, `npm`, `npx`)
+   > - Shell utilities (`sed`, `cat`, `cp`, `echo`, `head`, `tail`, `diff`, `grep`, `mkdir`, `pwd`, `for`, `ls`)"
 
    If the user agrees:
-   - Read `.claude/settings.local.json` (create if it doesn't exist)
+   - Read `.claude/settings.local.json` (create if it doesn't exist, start with `{}`)
    - Parse the JSON. If `permissions.allow` array doesn't exist, create it
-   - Add `"Bash(gh:*)"` to the `permissions.allow` array (if not already present)
-   - Write the file back with proper JSON formatting
+   - Add the following permissions to the `permissions.allow` array (skip any already present):
+     ```json
+     [
+       "Bash(gh *)",
+       "Bash(git *)",
+       "Bash(node *)",
+       "Bash(npm *)",
+       "Bash(npx *)",
+       "Bash(sed *)",
+       "Bash(cat *)",
+       "Bash(cp *)",
+       "Bash(echo *)",
+       "Bash(head *)",
+       "Bash(tail *)",
+       "Bash(diff *)",
+       "Bash(grep *)",
+       "Bash(mkdir *)",
+       "Bash(pwd*)",
+       "Bash(for *)",
+       "Bash(ls *)"
+     ]
+     ```
+   - Write the file back with proper JSON formatting (2-space indent)
    - If the user declines, skip this step and continue
+
+   > **Why `.claude/settings.local.json`?** This file is gitignored (user-specific), so each developer sets up permissions on their own machine. The plugin CLI handles this during init so no manual setup is needed.
 
 3. **Check if already initialized:**
 
