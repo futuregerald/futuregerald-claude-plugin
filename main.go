@@ -330,6 +330,18 @@ func runFullInstall(reader *bufio.Reader, inst *installer.Installer, target Targ
 func generateConfigFile(_ *installer.Installer, target Target) error {
 	configPath := filepath.Join(".", target.ConfigPath)
 
+	// Detect project type (safe in dry-run: only reads the filesystem)
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("cannot determine working directory: %w", err)
+	}
+	info := detectProject(cwd)
+	if info.Framework != "" {
+		fmt.Printf("Detected: %s (%s)\n", info.Framework, info.Name)
+	} else {
+		fmt.Printf("Detected: unknown project type (using defaults for %s)\n", info.Name)
+	}
+
 	if dryRun {
 		if fileExists(configPath) {
 			fmt.Printf("WOULD UPDATE: %s\n", configPath)
@@ -350,14 +362,14 @@ func generateConfigFile(_ *installer.Installer, target Target) error {
 		return fmt.Errorf("reading template: %w", err)
 	}
 
-	// For Claude Code, install the full CLAUDE-BASE.md template
-	// For other frameworks, generate a simplified config
+	// For Claude Code, apply project detection directly
+	// For other frameworks, generate a framework-specific config
 	var configContent []byte
 	switch target.Name {
 	case "Claude Code":
-		configContent = baseContent
+		configContent = applyProjectDetection(baseContent, info, content)
 	default:
-		configContent = generateFrameworkConfig(target, baseContent)
+		configContent = generateFrameworkConfig(target, baseContent, info)
 	}
 
 	if fileExists(configPath) {
@@ -374,22 +386,16 @@ func generateConfigFile(_ *installer.Installer, target Target) error {
 	return nil
 }
 
-func generateFrameworkConfig(target Target, baseContent []byte) []byte {
+func generateFrameworkConfig(target Target, baseContent []byte, info ProjectInfo) []byte {
 	header := fmt.Sprintf("# %s - AI Agent Configuration\n\n", target.Name)
 	header += fmt.Sprintf("Skills are installed in `%s/`\n", target.SkillsPath)
 	if target.AgentsPath != "" {
 		header += fmt.Sprintf("Agents are installed in `%s/`\n", target.AgentsPath)
 	}
 
-	config := string(baseContent)
-	config = strings.ReplaceAll(config, "{{PROJECT_NAME}}", "Project")
-	config = strings.ReplaceAll(config, "{{PROJECT_DESCRIPTION}}", "")
-	config = strings.ReplaceAll(config, "{{KEY_DIRECTORIES}}", "")
-	config = strings.ReplaceAll(config, "{{TEST_COMMAND}}", "npm test")
-	config = strings.ReplaceAll(config, "{{TYPECHECK_COMMAND}}", "npm run typecheck")
-	config = strings.ReplaceAll(config, "{{BUILD_COMMAND}}", "npm run build")
+	processed := applyProjectDetection(baseContent, info, content)
 
-	return []byte(header + "\n---\n\n" + config)
+	return []byte(header + "\n---\n\n" + string(processed))
 }
 
 func loadConfig() (*config.Config, error) {
