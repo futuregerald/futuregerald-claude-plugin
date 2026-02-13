@@ -15,6 +15,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const (
+	modeFullInstall = "full"
+	modeConfigOnly  = "config-only"
+	modeAgentsOnly  = "agents-only"
+)
+
 //go:embed all:skills all:agents all:templates all:commands
 var content embed.FS
 
@@ -32,6 +38,7 @@ var (
 	skipAgents    bool
 	skipCommands  bool
 	globalInstall bool
+	installMode   string
 )
 
 // Target represents an installation target (IDE/tool).
@@ -125,6 +132,7 @@ Configuration can be stored in .skill-installer.yaml`,
 	rootCmd.Flags().BoolVar(&skipAgents, "skip-agents", false, "Skip installing agents")
 	rootCmd.Flags().BoolVar(&skipCommands, "skip-commands", false, "Skip installing commands")
 	rootCmd.Flags().BoolVar(&globalInstall, "global", false, "Install to global/user-level directory")
+	rootCmd.Flags().StringVarP(&installMode, "mode", "m", "", "Installation mode: full, config-only, agents-only")
 
 	// Version command
 	versionCmd := &cobra.Command{
@@ -388,6 +396,9 @@ func applyConfig(cfg *config.Config) {
 	}
 	if fromSource == "" && cfg.From != "" {
 		fromSource = cfg.From
+	}
+	if installMode == "" && cfg.Mode != "" {
+		installMode = cfg.Mode
 	}
 }
 
