@@ -202,13 +202,41 @@ func runInstall(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Ask about scope (project vs global) for targets that support it
+	// Ask installation mode
+	mode, err := askInstallMode(reader, target)
+	if err != nil {
+		return err
+	}
+
+	// Validate contradictory flags
+	if mode == modeConfigOnly && skipClaude {
+		return fmt.Errorf("--mode config-only and --skip-claude-md are contradictory")
+	}
+	if mode == modeAgentsOnly && skipAgents {
+		return fmt.Errorf("--mode agents-only and --skip-agents are contradictory")
+	}
+
+	inst := installer.New(content, installer.Options{
+		Force:  force,
+		DryRun: dryRun,
+	})
+
+	switch mode {
+	case modeConfigOnly:
+		return runConfigOnly(inst, target)
+	case modeAgentsOnly:
+		return runAgentsOnly(reader, inst, target)
+	default:
+		return runFullInstall(reader, inst, target)
+	}
+}
+
+func runFullInstall(reader *bufio.Reader, inst *installer.Installer, target Target) error {
 	scope, err := askScope(reader, target)
 	if err != nil {
 		return err
 	}
 
-	// Determine installation paths based on scope
 	var skillsDest, agentsDest, commandsDest string
 	if scope == "global" {
 		skillsDest = target.GlobalSkillsPath
@@ -219,7 +247,6 @@ func runInstall(cmd *cobra.Command, args []string) error {
 		commandsDest = filepath.Join(".", target.CommandsPath)
 	}
 
-	// Ask about config file generation (project-scoped only)
 	updateConfig := false
 	if scope == "project" && target.ConfigPath != "" && !skipClaude {
 		updateConfig, err = askUpdateConfig(reader, target)
@@ -227,11 +254,6 @@ func runInstall(cmd *cobra.Command, args []string) error {
 			return err
 		}
 	}
-
-	inst := installer.New(content, installer.Options{
-		Force:  force,
-		DryRun: dryRun,
-	})
 
 	// Install skills
 	fmt.Println("\nInstalling skills...")
@@ -262,7 +284,6 @@ func runInstall(cmd *cobra.Command, args []string) error {
 	if !skipAgents && agentsDest != "" {
 		fmt.Println("\nInstalling agents...")
 
-		// Copilot requires *.agent.md naming convention
 		var nameFunc installer.AgentNameFunc
 		if target.Name == "GitHub Copilot" {
 			nameFunc = installer.CopilotAgentName
