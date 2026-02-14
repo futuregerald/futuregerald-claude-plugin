@@ -1,39 +1,461 @@
 # futuregerald-claude-plugin
 
-A Claude Code plugin that adds GitHub workflow integration with project management, a curated library of AI coding skills and agents, and a cross-platform CLI installer.
-
-This plugin gives Claude Code a structured development lifecycle: issues are created and tracked on a GitHub project board, work happens in isolated git worktrees on feature branches, and PRs auto-close issues when merged. Slash commands drive the entire workflow from within Claude Code.
+A Claude Code plugin that adds a curated library of AI coding skills and agents, a cross-platform CLI installer, and an optional GitHub workflow integration with project management.
 
 ## Table of Contents
 
-- [Overview](#overview)
-- [GitHub Workflow](#github-workflow)
+- [What This Plugin Does](#what-this-plugin-does)
+  - [CLAUDE.md — Your Project's AI Configuration](#claudemd--your-projects-ai-configuration)
+  - [Skills — Teaching Claude How to Work](#skills--teaching-claude-how-to-work)
+  - [Agents — Specialized Sub-Agents](#agents--specialized-sub-agents)
+  - [Development Workflow — A Structured Lifecycle](#development-workflow--a-structured-lifecycle)
+- [Installation](#installation)
+- [Skills and Agents Reference](#skills-and-agents-reference)
+- [CLI Installer](#cli-installer)
+- [Configuration](#configuration)
+- [Building from Source](#building-from-source)
+- [GitHub Workflow (Optional — Beta)](#github-workflow-optional--beta)
   - [Slash Commands](#slash-commands)
   - [Workflow Lifecycle](#workflow-lifecycle)
   - [Review Modes](#review-modes)
   - [Issue Tracking](#issue-tracking)
   - [Git Worktrees](#git-worktrees)
-- [Skills and Agents](#skills-and-agents)
-- [CLI Installer](#cli-installer)
-- [Installation](#installation)
-- [Configuration](#configuration)
-- [Building from Source](#building-from-source)
 - [Attribution](#attribution)
 
 ---
 
-## Overview
+## What This Plugin Does
 
 This repository works in two ways:
 
 - **As a Claude Code plugin** -- Installed via symlink or `--plugin-dir`. Provides slash commands, skills, and agents directly inside Claude Code sessions.
 - **As a standalone CLI tool** (`skill-installer`) -- Installs skills, agents, and commands for Claude Code, GitHub Copilot, Cursor, OpenCode, and VS Code.
 
-The central value proposition is a structured development lifecycle that connects Claude Code to GitHub. Instead of ad hoc coding, every piece of work flows through a defined process: receive task, plan, review, implement with TDD, simplify, code review, commit, push, and verify CI. The `/project:*` slash commands automate the GitHub side of this process.
+### CLAUDE.md — Your Project's AI Configuration
+
+A `CLAUDE.md` file sits at the root of your project and tells Claude Code how to work in that codebase. It defines:
+
+- **Project name and description** — what the project is
+- **Key directories** — where important code lives (`src/`, `lib/`, `tests/`, etc.)
+- **Commands** — how to test (`go test ./...`), typecheck (`npx tsc --noEmit`), and build
+- **Development lifecycle** — the phases Claude follows: plan, implement with TDD, test, simplify, review, commit
+- **Language-specific rules** — coding conventions, style guides, and best practices for the detected framework
+
+The plugin auto-detects your project type (Go, Node.js/React/Next.js/AdonisJS/Svelte/Express, Rust, Python, Ruby, PHP) and generates a CLAUDE.md with real values filled in — no manual editing of `{{placeholders}}` required.
+
+Generate one with:
+
+```
+/init-claude-md my-project-name
+```
+
+Or via the CLI:
+
+```bash
+skill-installer --mode config-only --target claude --yes
+```
+
+### Skills — Teaching Claude How to Work
+
+Skills are markdown-based instruction sets that give Claude specialized knowledge and workflows. When invoked, Claude follows the skill's process exactly. The plugin includes 33 skills covering:
+
+- **Test-driven development** — RED/GREEN/REFACTOR cycle
+- **Systematic debugging** — 4-phase protocol: root cause analysis, pattern matching, hypothesis testing, implementation
+- **Code review** — requesting and receiving reviews with technical rigor
+- **Planning** — writing and executing implementation plans with review checkpoints
+- **Brainstorming** — creative exploration before jumping to code
+- **Framework expertise** — AdonisJS, React, SQLite/Turso, and more
+
+Skills are invoked by name in Claude Code:
+
+```
+/superpowers:systematic-debugging
+/superpowers:test-driven-development
+/superpowers:brainstorming
+```
+
+### Agents — Specialized Sub-Agents
+
+Agents are dispatched via the `Task` tool to handle focused work with fresh context. The plugin includes 6 agents: code quality reviewer, code simplifier (with Staff Engineer review), codebase searcher, debugger, implementer, and spec reviewer.
+
+### Development Workflow — A Structured Lifecycle
+
+The plugin defines a 10-phase development lifecycle in the generated CLAUDE.md:
+
+```
+ 1. RECEIVE     Understand task, create todo list
+ 2. PLAN        Write implementation plan
+ 3. REVIEW      Staff Engineer sub-agent reviews the plan
+ 4. IMPLEMENT   Write code following TDD
+ 5. TEST        Run tests and type checking
+ 6. SIMPLIFY    Code-simplifier agent analyzes for improvements
+ 7. CODE REVIEW Code-reviewer sub-agent reviews changes
+ 8. COMMIT      Commit to feature branch
+ 9. PUSH + PR   Push and create PR (if gh available)
+10. VERIFY CI   Check CI passes; auto-merge when green
+```
+
+Each phase has a gate — the workflow doesn't advance until the gate passes. This works entirely locally. For teams using GitHub, an optional beta workflow adds issue tracking, worktrees, and autonomous PR review (see [GitHub Workflow](#github-workflow-optional--beta) below).
 
 ---
 
-## GitHub Workflow
+## Installation
+
+### As a Claude Code Plugin
+
+#### Option 1: Clone and Symlink (Recommended)
+
+```bash
+# Clone to your preferred location
+git clone https://github.com/futuregerald/futuregerald-claude-plugin.git ~/futuregerald-claude-plugin
+
+# Symlink to Claude's global directory
+ln -s ~/futuregerald-claude-plugin/skills ~/.claude/skills
+ln -s ~/futuregerald-claude-plugin/agents ~/.claude/agents
+ln -s ~/futuregerald-claude-plugin/commands ~/.claude/commands
+```
+
+#### Option 2: Plugin Directory Flag
+
+```bash
+# Clone anywhere
+git clone https://github.com/futuregerald/futuregerald-claude-plugin.git
+
+# Run Claude with plugin directory
+claude --plugin-dir ./futuregerald-claude-plugin
+```
+
+#### Option 3: Direct Clone to Claude Directory
+
+```bash
+git clone https://github.com/futuregerald/futuregerald-claude-plugin.git ~/.claude/plugins/futuregerald
+claude --plugin-dir ~/.claude/plugins/futuregerald
+```
+
+### Via CLI Binary
+
+Download the latest binary for your platform from [GitHub Releases](https://github.com/futuregerald/futuregerald-claude-plugin/releases):
+
+| Platform | Architecture | Download |
+|----------|--------------|----------|
+| macOS | Apple Silicon (M1/M2/M3) | `skill-installer_*_darwin_arm64.tar.gz` |
+| macOS | Intel | `skill-installer_*_darwin_amd64.tar.gz` |
+| Linux | x64 | `skill-installer_*_linux_amd64.tar.gz` |
+| Linux | ARM64 | `skill-installer_*_linux_arm64.tar.gz` |
+| Windows | x64 | `skill-installer_*_windows_amd64.zip` |
+| Windows | ARM64 | `skill-installer_*_windows_arm64.zip` |
+
+**macOS / Linux:**
+
+```bash
+# Download and extract (example for macOS Apple Silicon)
+curl -LO https://github.com/futuregerald/futuregerald-claude-plugin/releases/latest/download/skill-installer_3.0.0_darwin_arm64.tar.gz
+tar -xzf skill-installer_3.0.0_darwin_arm64.tar.gz
+chmod +x skill-installer
+
+# Move to PATH (optional)
+sudo mv skill-installer /usr/local/bin/
+
+# Run
+skill-installer
+```
+
+**Windows (PowerShell):**
+
+```powershell
+Invoke-WebRequest -Uri "https://github.com/futuregerald/futuregerald-claude-plugin/releases/latest/download/skill-installer_3.0.0_windows_amd64.zip" -OutFile "skill-installer.zip"
+Expand-Archive -Path "skill-installer.zip" -DestinationPath "."
+.\skill-installer.exe
+```
+
+### Via Go Install
+
+```bash
+go install github.com/futuregerald/futuregerald-claude-plugin@latest
+```
+
+The binary is named after the module (`futuregerald-claude-plugin`). Alias it for convenience:
+
+```bash
+alias skill-installer=futuregerald-claude-plugin
+```
+
+### Usage (Plugin Namespace)
+
+After installation as a plugin, skills are available with the namespace prefix:
+
+```
+/futuregerald-claude-plugin:systematic-debugging
+/futuregerald-claude-plugin:brainstorming
+/futuregerald-claude-plugin:test-driven-development
+```
+
+If symlinked to `~/.claude/skills`, use the `superpowers:` prefix:
+
+```
+/superpowers:systematic-debugging
+/superpowers:brainstorming
+```
+
+---
+
+## Skills and Agents Reference
+
+### Skills (33)
+
+**Core Workflow:**
+
+| Skill | Description |
+|-------|-------------|
+| `using-superpowers` | Skill discovery and usage patterns |
+| `systematic-debugging` | 4-phase debugging protocol: root cause, pattern analysis, hypothesis, implementation |
+| `writing-plans` | Implementation planning before coding |
+| `executing-plans` | Plan execution with review checkpoints |
+| `brainstorming` | Creative exploration before implementation |
+| `verification-before-completion` | Evidence-based verification before claiming done |
+
+**Code Quality:**
+
+| Skill | Description |
+|-------|-------------|
+| `code-simplifier` | Code simplification analysis |
+| `requesting-code-review` | Code review requests |
+| `receiving-code-review` | Processing review feedback |
+| `error-handling-patterns` | Error handling across languages |
+
+**Development Workflow:**
+
+| Skill | Description |
+|-------|-------------|
+| `dispatching-parallel-agents` | Parallel task execution |
+| `subagent-driven-development` | Parallel implementation with sub-agents |
+| `using-git-worktrees` | Git worktree isolation |
+| `finishing-a-development-branch` | Branch completion workflow |
+
+**Framework-Specific:**
+
+| Skill | Description |
+|-------|-------------|
+| `adonisjs-best-practices` | AdonisJS v6 patterns and conventions |
+| `better-auth-best-practices` | Better Auth integration |
+| `javascript-testing-patterns` | Jest, Vitest, and Japa testing patterns |
+| `sqlite-database-expert` | SQLite, libSQL, and Turso expertise |
+| `turso-best-practices` | Turso database patterns |
+
+**Design and Frontend:**
+
+| Skill | Description |
+|-------|-------------|
+| `frontend-design` | Production-grade frontend interfaces |
+| `ui-design` | Refactoring UI methodology |
+| `design-principles` | Linear/Notion/Stripe-inspired design |
+
+**Other:**
+
+| Skill | Description |
+|-------|-------------|
+| `api-design-principles` | REST and GraphQL API design |
+| `architecture-decision-records` | ADR documentation |
+| `code-search` | Fast codebase search |
+| `skill-creator` | Creating new skills |
+| `writing-skills` | Skill authoring |
+| `copywriting` | Marketing copy writing |
+| `marketing-psychology` | Mental models for marketing |
+| `programmatic-seo` | Template-based SEO pages at scale |
+| `agent-browser` | Browser automation with Playwright |
+| `baoyu-article-illustrator` | Article illustration generation |
+| `create-auth-skill` | Auth layer creation |
+
+### Agents (6)
+
+Agents are specialized sub-agents dispatched via the Task tool. They run with fresh context and no knowledge of the parent conversation.
+
+| Agent | Description |
+|-------|-------------|
+| `code-quality-reviewer` | Reviews code for quality issues |
+| `code-simplifier` | Analyzes code for simplification, with Staff Engineer review |
+| `codebase-searcher` | Searches and explores codebases |
+| `debugger` | Systematic bug investigation |
+| `implementer` | Implements features from plans |
+| `spec-reviewer` | Reviews specifications and plans |
+
+### Language Templates
+
+Used by `/init-claude-md` and `skill-installer --mode config-only` to generate framework-specific CLAUDE.md files:
+
+| Template | Frameworks |
+|----------|------------|
+| `adonisjs.md` | AdonisJS v6 |
+| `go.md` | Go projects |
+| `nodejs.md` | Node.js |
+| `php.md` | PHP / Laravel |
+| `python.md` | Python |
+| `react.md` | React with hooks |
+| `ruby.md` | Ruby / Rails |
+| `rust.md` | Rust projects |
+| `svelte.md` | Svelte 5 with runes |
+
+---
+
+## CLI Installer
+
+The `skill-installer` binary installs skills, agents, and commands for any supported AI coding framework -- not just Claude Code.
+
+### Supported Frameworks
+
+| Target | Skills Path | Agents Path | Config File | Global Support |
+|--------|-------------|-------------|-------------|----------------|
+| Claude Code | `.claude/skills/` | `.claude/agents/` | `CLAUDE.md` | Yes |
+| GitHub Copilot | `.github/skills/` | `.github/*.agent.md` | `.github/copilot-instructions.md` | Yes |
+| Cursor | `.cursor/skills/` | `.cursor/agents/` | `.cursorrules` | No |
+| OpenCode | `.opencode/skills/` | `.opencode/agents/` | -- | No |
+| VS Code | `.vscode/claude/skills/` | `.vscode/claude/agents/` | -- | No |
+
+### CLI Usage
+
+```bash
+# Interactive mode (walks through framework selection and options)
+skill-installer
+
+# Install for a specific target non-interactively
+skill-installer --target claude --yes
+
+# Dry run (preview what would be installed)
+skill-installer --dry-run
+
+# List all available skills
+skill-installer list
+
+# List skills filtered by tag
+skill-installer list --tag workflow
+
+# Install globally (user-level, available to all projects)
+skill-installer --global
+
+# Skip agents or commands
+skill-installer --skip-agents --skip-commands
+
+# Create a new skill from template
+skill-installer init my-skill --desc "My skill" --tag custom
+
+# Install from a custom source
+skill-installer --from /path/to/skills
+skill-installer --from https://github.com/user/repo
+
+# Choose installation mode
+skill-installer --mode config-only   # Generate CLAUDE.md only (for existing global installs)
+skill-installer --mode agents-only   # Install agents only
+skill-installer --mode full          # Full installation (default)
+
+# Config-only for a specific target
+skill-installer --mode config-only --target cursor --yes
+
+# Agents-only, globally
+skill-installer --mode agents-only --global --target claude --yes
+```
+
+---
+
+## Configuration
+
+The CLI reads an optional `.skill-installer.yaml` file from the current directory:
+
+```yaml
+target: claude
+mode: full  # full, config-only, or agents-only
+tags: [workflow, testing]
+languages: [javascript, python]
+skip_claude_md: false
+from: ""
+```
+
+---
+
+## Building from Source
+
+```bash
+git clone https://github.com/futuregerald/futuregerald-claude-plugin.git
+cd futuregerald-claude-plugin
+make build    # builds ./skill-installer
+make test     # runs tests
+make install  # installs to /usr/local/bin
+```
+
+## Updating
+
+```bash
+cd ~/futuregerald-claude-plugin  # or wherever you cloned it
+git pull
+```
+
+If using symlinks, changes are immediately available. No restart needed.
+
+If using the CLI binary, download the latest release or re-run `go install` to update.
+
+---
+
+## Directory Structure
+
+```
+futuregerald-claude-plugin/
+├── .claude-plugin/
+│   └── plugin.json              # Plugin metadata (name, version, description)
+├── commands/
+│   ├── init-claude-md/
+│   │   └── COMMAND.md           # /init-claude-md command
+│   └── project/
+│       ├── init.md              # /project:init
+│       ├── create-issue.md      # /project:create-issue
+│       ├── plan-feature.md      # /project:plan-feature
+│       ├── sync-tasks.md        # /project:sync-tasks
+│       ├── current.md           # /project:current
+│       ├── inbox.md             # /project:inbox
+│       └── cleanup.md           # /project:cleanup
+├── skills/                      # 33 skill directories, each with SKILL.md
+├── agents/                      # 6 agent markdown files
+├── templates/
+│   ├── CLAUDE-BASE.md           # Base template for generated CLAUDE.md files
+│   └── languages/               # Framework-specific template snippets
+├── internal/                    # Go packages for the CLI installer
+├── main.go                      # CLI entry point
+├── detect.go                    # Project detection heuristics
+├── go.mod
+├── go.sum
+├── Makefile
+└── .goreleaser.yaml             # Release automation config
+```
+
+---
+
+## GitHub Workflow (Optional — Beta)
+
+> **Beta:** The GitHub workflow integration is currently in beta and is highly opinionated. It is **not required** to take advantage of the plugin -- the skills, agents, and CLI installer all work independently without it. While the workflow has many benefits (structured development lifecycle, automated issue tracking, worktree isolation, and CI verification), read thoroughly on how it works before initializing it. By default, it will not work without the [GitHub CLI (`gh`)](https://cli.github.com/) installed and authenticated locally, and you must run `/project:init` to enable it.
+
+**Prerequisites:**
+
+1. The plugin must be [installed](#installation) first
+2. The [GitHub CLI (`gh`)](https://cli.github.com/) must be installed and authenticated (`gh auth login`)
+3. You must run `/project:init` in a Claude Code session to initialize the project
+
+### Setup
+
+Once the plugin is installed and `gh` is authenticated, initialize the GitHub workflow for your repository:
+
+1. **Initialize the project** (creates labels and project board):
+
+   ```
+   /project:init
+   ```
+
+   This is required once per repository before using any command that writes to GitHub.
+
+2. **Start working.** Create issues, plan features, and let the workflow manage the rest:
+
+   ```
+   /project:create-issue "feat: add user authentication"
+   /project:plan-feature "User authentication with email/password and OAuth"
+   /project:current
+   ```
 
 ### Slash Commands
 
@@ -157,363 +579,6 @@ Branch naming follows the pattern `<type>/<short-description>`, matching the iss
 ### Graceful Degradation
 
 All GitHub integration is optional. If the `gh` CLI is not available or not authenticated, the plugin skips all GitHub operations and continues working normally. The development lifecycle (planning, TDD, code review, etc.) functions independently of GitHub. Even without `gh`, the plugin still uses feature branches rather than committing directly to main.
-
----
-
-## Skills and Agents
-
-### Skills (33)
-
-Skills are markdown-based instruction sets that teach Claude Code specific workflows, patterns, and domain knowledge.
-
-**Core Workflow:**
-
-| Skill | Description |
-|-------|-------------|
-| `using-superpowers` | Skill discovery and usage patterns |
-| `systematic-debugging` | 4-phase debugging protocol: root cause, pattern analysis, hypothesis, implementation |
-| `writing-plans` | Implementation planning before coding |
-| `executing-plans` | Plan execution with review checkpoints |
-| `brainstorming` | Creative exploration before implementation |
-| `verification-before-completion` | Evidence-based verification before claiming done |
-
-**Code Quality:**
-
-| Skill | Description |
-|-------|-------------|
-| `code-simplifier` | Code simplification analysis |
-| `requesting-code-review` | Code review requests |
-| `receiving-code-review` | Processing review feedback |
-| `error-handling-patterns` | Error handling across languages |
-
-**Development Workflow:**
-
-| Skill | Description |
-|-------|-------------|
-| `dispatching-parallel-agents` | Parallel task execution |
-| `subagent-driven-development` | Parallel implementation with sub-agents |
-| `using-git-worktrees` | Git worktree isolation |
-| `finishing-a-development-branch` | Branch completion workflow |
-
-**Framework-Specific:**
-
-| Skill | Description |
-|-------|-------------|
-| `adonisjs-best-practices` | AdonisJS v6 patterns and conventions |
-| `better-auth-best-practices` | Better Auth integration |
-| `javascript-testing-patterns` | Jest, Vitest, and Japa testing patterns |
-| `sqlite-database-expert` | SQLite, libSQL, and Turso expertise |
-| `turso-best-practices` | Turso database patterns |
-
-**Design and Frontend:**
-
-| Skill | Description |
-|-------|-------------|
-| `frontend-design` | Production-grade frontend interfaces |
-| `ui-design` | Refactoring UI methodology |
-| `design-principles` | Linear/Notion/Stripe-inspired design |
-
-**Other:**
-
-| Skill | Description |
-|-------|-------------|
-| `api-design-principles` | REST and GraphQL API design |
-| `architecture-decision-records` | ADR documentation |
-| `code-search` | Fast codebase search |
-| `skill-creator` | Creating new skills |
-| `writing-skills` | Skill authoring |
-| `copywriting` | Marketing copy writing |
-| `marketing-psychology` | Mental models for marketing |
-| `programmatic-seo` | Template-based SEO pages at scale |
-| `agent-browser` | Browser automation with Playwright |
-| `baoyu-article-illustrator` | Article illustration generation |
-| `create-auth-skill` | Auth layer creation |
-
-### Agents (6)
-
-Agents are specialized sub-agents dispatched via the Task tool. They run with fresh context and no knowledge of the parent conversation.
-
-| Agent | Description |
-|-------|-------------|
-| `code-quality-reviewer` | Reviews code for quality issues |
-| `code-simplifier` | Analyzes code for simplification, with Staff Engineer review |
-| `codebase-searcher` | Searches and explores codebases |
-| `debugger` | Systematic bug investigation |
-| `implementer` | Implements features from plans |
-| `spec-reviewer` | Reviews specifications and plans |
-
-### Language Templates
-
-Used by `/init-claude-md` to generate framework-specific CLAUDE.md files:
-
-| Template | Frameworks |
-|----------|------------|
-| `adonisjs.md` | AdonisJS v6 |
-| `go.md` | Go projects |
-| `nodejs.md` | Node.js |
-| `php.md` | PHP / Laravel |
-| `python.md` | Python |
-| `react.md` | React with hooks |
-| `ruby.md` | Ruby / Rails |
-| `rust.md` | Rust projects |
-| `svelte.md` | Svelte 5 with runes |
-
----
-
-## CLI Installer
-
-The `skill-installer` binary installs skills, agents, and commands for any supported AI coding framework -- not just Claude Code.
-
-### Supported Frameworks
-
-| Target | Skills Path | Agents Path | Config File | Global Support |
-|--------|-------------|-------------|-------------|----------------|
-| Claude Code | `.claude/skills/` | `.claude/agents/` | `CLAUDE.md` | Yes |
-| GitHub Copilot | `.github/skills/` | `.github/*.agent.md` | `.github/copilot-instructions.md` | Yes |
-| Cursor | `.cursor/skills/` | `.cursor/agents/` | `.cursorrules` | No |
-| OpenCode | `.opencode/skills/` | `.opencode/agents/` | -- | No |
-| VS Code | `.vscode/claude/skills/` | `.vscode/claude/agents/` | -- | No |
-
-### CLI Usage
-
-```bash
-# Interactive mode (walks through framework selection and options)
-skill-installer
-
-# Install for a specific target non-interactively
-skill-installer --target claude --yes
-
-# Dry run (preview what would be installed)
-skill-installer --dry-run
-
-# List all available skills
-skill-installer list
-
-# List skills filtered by tag
-skill-installer list --tag workflow
-
-# Install globally (user-level, available to all projects)
-skill-installer --global
-
-# Skip agents or commands
-skill-installer --skip-agents --skip-commands
-
-# Create a new skill from template
-skill-installer init my-skill --desc "My skill" --tag custom
-
-# Install from a custom source
-skill-installer --from /path/to/skills
-skill-installer --from https://github.com/user/repo
-
-# Choose installation mode
-skill-installer --mode config-only   # Generate CLAUDE.md only (for existing global installs)
-skill-installer --mode agents-only   # Install agents only
-skill-installer --mode full          # Full installation (default)
-
-# Config-only for a specific target
-skill-installer --mode config-only --target cursor --yes
-
-# Agents-only, globally
-skill-installer --mode agents-only --global --target claude --yes
-```
-
----
-
-## Installation
-
-### As a Claude Code Plugin
-
-#### Option 1: Clone and Symlink (Recommended)
-
-```bash
-# Clone to your preferred location
-git clone https://github.com/futuregerald/futuregerald-claude-plugin.git ~/futuregerald-claude-plugin
-
-# Symlink to Claude's global directory
-ln -s ~/futuregerald-claude-plugin/skills ~/.claude/skills
-ln -s ~/futuregerald-claude-plugin/agents ~/.claude/agents
-ln -s ~/futuregerald-claude-plugin/commands ~/.claude/commands
-```
-
-#### Option 2: Plugin Directory Flag
-
-```bash
-# Clone anywhere
-git clone https://github.com/futuregerald/futuregerald-claude-plugin.git
-
-# Run Claude with plugin directory
-claude --plugin-dir ./futuregerald-claude-plugin
-```
-
-#### Option 3: Direct Clone to Claude Directory
-
-```bash
-git clone https://github.com/futuregerald/futuregerald-claude-plugin.git ~/.claude/plugins/futuregerald
-claude --plugin-dir ~/.claude/plugins/futuregerald
-```
-
-### Via CLI Binary
-
-Download the latest binary for your platform from [GitHub Releases](https://github.com/futuregerald/futuregerald-claude-plugin/releases):
-
-| Platform | Architecture | Download |
-|----------|--------------|----------|
-| macOS | Apple Silicon (M1/M2/M3) | `skill-installer_*_darwin_arm64.tar.gz` |
-| macOS | Intel | `skill-installer_*_darwin_amd64.tar.gz` |
-| Linux | x64 | `skill-installer_*_linux_amd64.tar.gz` |
-| Linux | ARM64 | `skill-installer_*_linux_arm64.tar.gz` |
-| Windows | x64 | `skill-installer_*_windows_amd64.zip` |
-| Windows | ARM64 | `skill-installer_*_windows_arm64.zip` |
-
-**macOS / Linux:**
-
-```bash
-# Download and extract (example for macOS Apple Silicon)
-curl -LO https://github.com/futuregerald/futuregerald-claude-plugin/releases/latest/download/skill-installer_3.0.0_darwin_arm64.tar.gz
-tar -xzf skill-installer_3.0.0_darwin_arm64.tar.gz
-chmod +x skill-installer
-
-# Move to PATH (optional)
-sudo mv skill-installer /usr/local/bin/
-
-# Run
-skill-installer
-```
-
-**Windows (PowerShell):**
-
-```powershell
-Invoke-WebRequest -Uri "https://github.com/futuregerald/futuregerald-claude-plugin/releases/latest/download/skill-installer_3.0.0_windows_amd64.zip" -OutFile "skill-installer.zip"
-Expand-Archive -Path "skill-installer.zip" -DestinationPath "."
-.\skill-installer.exe
-```
-
-### Via Go Install
-
-```bash
-go install github.com/futuregerald/futuregerald-claude-plugin@latest
-```
-
-The binary is named after the module (`futuregerald-claude-plugin`). Alias it for convenience:
-
-```bash
-alias skill-installer=futuregerald-claude-plugin
-```
-
-### Setup: Initializing a Project
-
-After installation, set up the GitHub workflow for your repository:
-
-1. **Initialize the project** (creates labels and project board):
-
-   ```
-   /project:init
-   ```
-
-   This is required once per repository before using any command that writes to GitHub.
-
-2. **Generate a CLAUDE.md** (optional, for new projects):
-
-   ```
-   /init-claude-md my-project-name
-   ```
-
-   Detects your framework and generates a customized CLAUDE.md with TDD workflow, debugging protocols, and language-specific conventions.
-
-3. **Start working.** Create issues, plan features, and let the workflow manage the rest:
-
-   ```
-   /project:create-issue "feat: add user authentication"
-   /project:plan-feature "User authentication with email/password and OAuth"
-   /project:current
-   ```
-
-### Usage (Plugin Namespace)
-
-After installation as a plugin, skills are available with the namespace prefix:
-
-```
-/futuregerald-claude-plugin:systematic-debugging
-/futuregerald-claude-plugin:brainstorming
-/futuregerald-claude-plugin:test-driven-development
-```
-
-If symlinked to `~/.claude/skills`, use the `superpowers:` prefix:
-
-```
-/superpowers:systematic-debugging
-/superpowers:brainstorming
-```
-
----
-
-## Configuration
-
-The CLI reads an optional `.skill-installer.yaml` file from the current directory:
-
-```yaml
-target: claude
-mode: full  # full, config-only, or agents-only
-tags: [workflow, testing]
-languages: [javascript, python]
-skip_claude_md: false
-from: ""
-```
-
----
-
-## Building from Source
-
-```bash
-git clone https://github.com/futuregerald/futuregerald-claude-plugin.git
-cd futuregerald-claude-plugin
-make build    # builds ./skill-installer
-make test     # runs tests
-make install  # installs to /usr/local/bin
-```
-
-## Updating
-
-```bash
-cd ~/futuregerald-claude-plugin  # or wherever you cloned it
-git pull
-```
-
-If using symlinks, changes are immediately available. No restart needed.
-
-If using the CLI binary, download the latest release or re-run `go install` to update.
-
----
-
-## Directory Structure
-
-```
-futuregerald-claude-plugin/
-├── .claude-plugin/
-│   └── plugin.json              # Plugin metadata (name, version, description)
-├── commands/
-│   ├── init-claude-md/
-│   │   └── COMMAND.md           # /init-claude-md command
-│   └── project/
-│       ├── init.md              # /project:init
-│       ├── create-issue.md      # /project:create-issue
-│       ├── plan-feature.md      # /project:plan-feature
-│       ├── sync-tasks.md        # /project:sync-tasks
-│       ├── current.md           # /project:current
-│       ├── inbox.md             # /project:inbox
-│       └── cleanup.md           # /project:cleanup
-├── skills/                      # 33 skill directories, each with SKILL.md
-├── agents/                      # 6 agent markdown files
-├── templates/
-│   ├── CLAUDE-BASE.md           # Base template for generated CLAUDE.md files
-│   └── languages/               # Framework-specific template snippets
-├── internal/                    # Go packages for the CLI installer
-├── main.go                      # CLI entry point
-├── go.mod
-├── go.sum
-├── Makefile
-└── .goreleaser.yaml             # Release automation config
-```
 
 ---
 
