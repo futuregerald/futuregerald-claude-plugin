@@ -1,12 +1,9 @@
-# {{PROJECT_NAME}} - Claude Code Configuration
-
-## Project Overview
-
-{{PROJECT_DESCRIPTION}}
+# futuregerald-claude-plugin - Claude Code Configuration
 
 ## Key Directories
 
-{{KEY_DIRECTORIES}}
+- `internal/`
+- `docs/`
 
 ---
 
@@ -20,7 +17,7 @@
 | 2. PLAN | Write implementation plan | `superpowers:writing-plans` | Plan document created |
 | 3. REVIEW PLAN | Staff Engineer reviews plan | `superpowers:code-reviewer` via `Task` | Reviewer approves |
 | 4. IMPLEMENT | Write code following TDD | `superpowers:test-driven-development` | Tests exist and pass |
-| 5. TEST | `{{TEST_COMMAND}}` + `{{TYPECHECK_COMMAND}}` | — | Zero failures |
+| 5. TEST | `go test ./...` | — | Zero failures |
 | 6. SIMPLIFY | `Task(subagent_type="code-simplifier")` | `code-simplifier` agent | Staff review complete |
 | 7. CODE REVIEW | `Task(subagent_type="superpowers:code-reviewer")` | Fresh sub-agent | Reviewer approves |
 | 8. SQL REVIEW | `Task(subagent_type="superpowers:code-reviewer")` with SQL audit prompt | `sql-optimization-patterns` skill + `sql-reviewer` agent | Reviewer approves |
@@ -118,7 +115,6 @@ Sub-agents work in the current working directory on the active feature branch. N
 ### Git Worktrees
 
 When the GitHub workflow is active, every feature branch gets its own worktree for full isolation:
-
 ```bash
 REPO_NAME=$(basename "$(git rev-parse --show-toplevel)")
 mkdir -p "../worktrees/$REPO_NAME"
@@ -189,7 +185,7 @@ After every PR is created, automatically:
 
 ## Emergency Procedures
 
-**CI fails 3+ times:** Stop pushing. Run `{{BUILD_COMMAND}}` locally. If still failing, branch from last good state + cherry-pick. If blocked >30min, ask user.
+**CI fails 3+ times:** Stop pushing. Run `go build ./...` locally. If still failing, branch from last good state + cherry-pick. If blocked >30min, ask user.
 
 **Task blocked:** Document blocker, update task status, ask user with options A/B/C. Never guess.
 
@@ -200,12 +196,67 @@ After every PR is created, automatically:
 - Conventional commit format
 
 ## Quick Reference
-
 ```bash
-{{TEST_COMMAND}}
-{{TYPECHECK_COMMAND}}
+go test ./...
 ```
 
 ---
 
-<!-- LANGUAGE_SPECIFIC -->
+## Go Rules
+
+### Style
+
+- Follow `gofmt` and `go vet` conventions
+- Use short variable names for short scopes
+- Return early to reduce nesting
+- Handle errors explicitly, don't ignore them
+```go
+// Before
+func processItems(items []Item) ([]Result, error) {
+    results := []Result{}
+    for i := 0; i < len(items); i++ {
+        item := items[i]
+        if item.Valid {
+            result, err := process(item)
+            if err != nil {
+                return nil, err
+            }
+            results = append(results, result)
+        }
+    }
+    return results, nil
+}
+
+// After
+func processItems(items []Item) ([]Result, error) {
+    var results []Result
+    for _, item := range items {
+        if !item.Valid {
+            continue
+        }
+        result, err := process(item)
+        if err != nil {
+            return nil, err
+        }
+        results = append(results, result)
+    }
+    return results, nil
+}
+```
+
+### Best Practices
+
+- Use `defer` for cleanup
+- Keep interfaces small (1-3 methods)
+- Accept interfaces, return concrete types
+- Use table-driven tests
+- Prefer composition over inheritance (embedding)
+
+### Testing
+```bash
+go test ./...             # Run all tests
+go test -v ./...          # Verbose
+go test -cover ./...      # With coverage
+go vet ./...              # Static analysis
+```
+

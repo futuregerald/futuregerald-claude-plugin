@@ -57,7 +57,7 @@ skill-installer --mode config-only --target claude --yes
 
 ### Skills — Teaching Claude How to Work
 
-Skills are markdown-based instruction sets that give Claude specialized knowledge and workflows. When invoked, Claude follows the skill's process exactly. The plugin includes 33 skills covering:
+Skills are markdown-based instruction sets that give Claude specialized knowledge and workflows. When invoked, Claude follows the skill's process exactly. The plugin includes 34 skills covering:
 
 - **Test-driven development** — RED/GREEN/REFACTOR cycle
 - **Systematic debugging** — 4-phase protocol: root cause analysis, pattern matching, hypothesis testing, implementation
@@ -76,7 +76,7 @@ Skills are invoked by name in Claude Code:
 
 ### Agents — Specialized Sub-Agents
 
-Agents are dispatched via the `Task` tool to handle focused work with fresh context. The plugin includes 6 agents: code quality reviewer, code simplifier (with Staff Engineer review), codebase searcher, debugger, implementer, and spec reviewer.
+Agents are dispatched via the `Task` tool to handle focused work with fresh context. The plugin includes 7 agents: code quality reviewer, code simplifier (with Staff Engineer review), codebase searcher, debugger, implementer, spec reviewer, and SQL performance reviewer.
 
 ### Development Workflow — A Structured Lifecycle
 
@@ -90,9 +90,10 @@ The plugin defines a 10-phase development lifecycle in the generated CLAUDE.md:
  5. TEST        Run tests and type checking
  6. SIMPLIFY    Code-simplifier agent analyzes for improvements
  7. CODE REVIEW Code-reviewer sub-agent reviews changes
- 8. COMMIT      Commit to feature branch
- 9. PUSH + PR   Push and create PR (if gh available)
-10. VERIFY CI   Check CI passes; auto-merge when green
+ 8. SQL REVIEW  Staff Engineer audits queries for performance, security, defensive coding
+ 9. COMMIT      Commit to feature branch
+10. PUSH + PR   Push and create PR (if gh available)
+11. VERIFY CI   Check CI passes; auto-merge when green
 ```
 
 Each phase has a gate — the workflow doesn't advance until the gate passes. This works entirely locally. For teams using GitHub, an optional beta workflow adds issue tracking, worktrees, and autonomous PR review (see [GitHub Workflow](#github-workflow-optional--beta) below).
@@ -201,7 +202,7 @@ If symlinked to `~/.claude/skills`, use the `superpowers:` prefix:
 
 ## Skills and Agents Reference
 
-### Skills (33)
+### Skills (34)
 
 **Core Workflow:**
 
@@ -241,6 +242,7 @@ If symlinked to `~/.claude/skills`, use the `superpowers:` prefix:
 | `javascript-testing-patterns` | Jest, Vitest, and Japa testing patterns |
 | `sqlite-database-expert` | SQLite, libSQL, and Turso expertise |
 | `turso-best-practices` | Turso database patterns |
+| `sql-optimization-patterns` | SQL query optimization, indexing, EXPLAIN analysis, N+1 elimination |
 
 **Design and Frontend:**
 
@@ -266,7 +268,7 @@ If symlinked to `~/.claude/skills`, use the `superpowers:` prefix:
 | `baoyu-article-illustrator` | Article illustration generation |
 | `create-auth-skill` | Auth layer creation |
 
-### Agents (6)
+### Agents (7)
 
 Agents are specialized sub-agents dispatched via the Task tool. They run with fresh context and no knowledge of the parent conversation.
 
@@ -278,6 +280,7 @@ Agents are specialized sub-agents dispatched via the Task tool. They run with fr
 | `debugger` | Systematic bug investigation |
 | `implementer` | Implements features from plans |
 | `spec-reviewer` | Reviews specifications and plans |
+| `sql-reviewer` | Ruthless SQL performance, security, and defensive coding audit |
 
 ### Language Templates
 
@@ -486,12 +489,13 @@ The full development lifecycle managed by the plugin follows this sequence:
  5. TEST             Run all tests and type checking (must pass)
  6. SIMPLIFY         Code-simplifier agent analyzes for improvements (Staff review)
  7. CODE REVIEW      Code-reviewer sub-agent reviews changes (must approve)
- 8. COMMIT           Commit to the feature branch
- 9. PUSH + PR        Push branch, create PR with "Closes #N" to auto-close the issue
-10. VERIFY CI        Check that CI passes; fix and re-push if it fails
+ 8. SQL REVIEW       Staff Engineer audits queries for performance, security, defensive coding
+ 9. COMMIT           Commit to the feature branch
+10. PUSH + PR        Push branch, create PR with "Closes #N" to auto-close the issue
+11. VERIFY CI        Check that CI passes; fix and re-push if it fails
 ```
 
-Each phase has a verification gate. The workflow does not advance until the gate passes. For example, code review must explicitly approve before a commit is created, and CI must be green before work is considered done.
+Each phase has a verification gate. The workflow does not advance until the gate passes. For example, code review must explicitly approve before SQL review runs, SQL review must approve before a commit is created, and CI must be green before work is considered done.
 
 ### Initialization
 
