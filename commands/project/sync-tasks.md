@@ -22,11 +22,19 @@ Optional arguments:
 
 2. **Check initialization:**
 
+   First, check for a local project file (fast, no API call):
+
+   ```bash
+   cat .claude/project.json 2>/dev/null | grep -q '"initialized": true'
+   ```
+
+   If not found locally, fall back to the label check:
+
    ```bash
    gh label list --json name --jq '.[].name' | grep -q '^claude:initialized$'
    ```
 
-   If the `claude:initialized` label does NOT exist, tell the user: "GitHub project is not initialized. Run `/project:init` first." and stop.
+   If NEITHER check passes, tell the user: "GitHub project is not initialized. Run `/project:init` first." and stop.
 
 3. **Read the current todo list.** Use the `TaskList` tool to get all current tasks (use `TaskGet` for full details on individual tasks).
 

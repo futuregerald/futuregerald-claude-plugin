@@ -510,7 +510,8 @@ This command:
 1. Creates a standard set of labels for issue categorization (feature, bug, refactor, docs, test, chore, epic, task, P0-P3 priorities)
 2. Removes conflicting GitHub default labels (e.g., `enhancement` and `documentation`)
 3. Creates a GitHub Projects board named after the repository
-4. Sets a `claude:initialized` marker label so the plugin knows the project is ready
+4. Sets a `claude:initialized` marker label on GitHub
+5. Writes `.claude/project.json` to the repo for fast, offline-capable initialization checks
 
 Initialization is idempotent. Running it again with `--force` re-syncs labels without duplicating them.
 

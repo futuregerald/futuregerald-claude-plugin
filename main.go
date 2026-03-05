@@ -196,14 +196,14 @@ func runInstall(cmd *cobra.Command, args []string) error {
 	}
 	applyConfig(cfg)
 
-	// Get target framework
-	target, err := getTarget(reader)
+	// Ask installation mode first (so getTarget can adapt prompts)
+	mode, err := askInstallMode(reader)
 	if err != nil {
 		return err
 	}
 
-	// Ask installation mode
-	mode, err := askInstallMode(reader, target)
+	// Get target framework (mode-aware filtering and prompts)
+	target, err := getTarget(reader, mode)
 	if err != nil {
 		return err
 	}
@@ -223,7 +223,7 @@ func runInstall(cmd *cobra.Command, args []string) error {
 
 	switch mode {
 	case modeConfigOnly:
-		return runConfigOnly(inst, target)
+		return runConfigOnly(reader, inst, target)
 	case modeAgentsOnly:
 		return runAgentsOnly(reader, inst, target)
 	default:
@@ -282,19 +282,33 @@ func runFullInstall(reader *bufio.Reader, inst *installer.Installer, target Targ
 
 	// Install agents
 	if !skipAgents && agentsDest != "" {
-		fmt.Println("\nInstalling agents...")
-
-		var nameFunc installer.AgentNameFunc
-		if target.Name == "GitHub Copilot" {
-			nameFunc = installer.CopilotAgentName
-		}
-
-		agentResults, err := inst.InstallAgents(agentsDest, nameFunc)
+		overwrite, err := askOverwriteAgents(reader, agentsDest)
 		if err != nil {
 			return err
 		}
-		for _, r := range agentResults {
-			fmt.Println(r)
+
+		if overwrite {
+			agentInst := inst
+			if !inst.HasForce() {
+				// User confirmed overwrite — use a local installer with Force enabled
+				agentInst = installer.New(content, installer.Options{Force: true, DryRun: dryRun})
+			}
+
+			fmt.Println("\nInstalling agents...")
+			var nameFunc installer.AgentNameFunc
+			if target.Name == "GitHub Copilot" {
+				nameFunc = installer.CopilotAgentName
+			}
+
+			agentResults, err := agentInst.InstallAgents(agentsDest, nameFunc)
+			if err != nil {
+				return err
+			}
+			for _, r := range agentResults {
+				fmt.Println(r)
+			}
+		} else {
+			fmt.Println("\nSkipping agent installation.")
 		}
 	}
 
@@ -312,10 +326,15 @@ func runFullInstall(reader *bufio.Reader, inst *installer.Installer, target Targ
 
 	// Generate config file
 	if updateConfig {
-		err = generateConfigFile(inst, target)
+		err = generateConfigFile(inst, target, reader)
 		if err != nil {
 			fmt.Printf("Warning: Could not generate %s: %v\n", target.ConfigPath, err)
 		}
+	}
+
+	// Ensure .gitignore allows .claude/project.json for project-scoped installs
+	if scope == "project" && !dryRun {
+		ensureGitignoreAllowsProjectJSON(reader)
 	}
 
 	if dryRun {
@@ -327,7 +346,7 @@ func runFullInstall(reader *bufio.Reader, inst *installer.Installer, target Targ
 	return nil
 }
 
-func generateConfigFile(_ *installer.Installer, target Target) error {
+func generateConfigFile(_ *installer.Installer, target Target, reader *bufio.Reader) error {
 	configPath := filepath.Join(".", target.ConfigPath)
 
 	// Detect project type (safe in dry-run: only reads the filesystem)
@@ -373,9 +392,24 @@ func generateConfigFile(_ *installer.Installer, target Target) error {
 	}
 
 	if fileExists(configPath) {
-		if !force {
+		if force {
+			// --force: overwrite without prompting
+		} else if nonInteract {
+			// -y without --force: skip silently
 			fmt.Printf("SKIP: %s (already exists, use --force to overwrite)\n", configPath)
 			return nil
+		} else {
+			// Interactive: ask user
+			fmt.Printf("%s already exists. Overwrite? [y/N]: ", target.ConfigPath)
+			input, err := reader.ReadString('\n')
+			if err != nil {
+				return err
+			}
+			input = strings.TrimSpace(strings.ToLower(input))
+			if input != "y" && input != "yes" {
+				fmt.Printf("SKIP: %s\n", configPath)
+				return nil
+			}
 		}
 	}
 
@@ -429,24 +463,35 @@ func applyConfig(cfg *config.Config) {
 	}
 }
 
-func getTarget(reader *bufio.Reader) (Target, error) {
+func getTarget(reader *bufio.Reader, mode string) (Target, error) {
+	allOptions := []string{"claude", "copilot", "cursor", "opencode", "vscode"}
+
+	// Filter targets by mode
+	options := filterTargetsByMode(allOptions, mode)
+
 	if targetType != "" {
-		if t, ok := targets[targetType]; ok {
-			return t, nil
+		t, ok := targets[targetType]
+		if !ok {
+			return Target{}, fmt.Errorf("unknown target: %s", targetType)
 		}
-		return Target{}, fmt.Errorf("unknown target: %s", targetType)
+		// Validate target supports the requested mode
+		if err := validateTargetForMode(t, mode); err != nil {
+			return Target{}, err
+		}
+		return t, nil
 	}
 
 	if nonInteract {
 		return targets["claude"], nil
 	}
 
-	fmt.Println("Where would you like to install the skills?")
+	// Mode-aware prompt text
+	prompt, pathFunc := modePromptInfo(mode)
+	fmt.Println(prompt)
 	fmt.Println()
-	options := []string{"claude", "copilot", "cursor", "opencode", "vscode"}
 	for i, key := range options {
 		t := targets[key]
-		fmt.Printf("  %d) %s (%s)\n", i+1, t.Name, t.SkillsPath)
+		fmt.Printf("  %d) %s (%s)\n", i+1, t.Name, pathFunc(t))
 	}
 	fmt.Println()
 	fmt.Print("Enter choice [1]: ")
@@ -458,7 +503,7 @@ func getTarget(reader *bufio.Reader) (Target, error) {
 	input = strings.TrimSpace(input)
 
 	if input == "" {
-		return targets["claude"], nil
+		return targets[options[0]], nil
 	}
 
 	choice, err := strconv.Atoi(input)
@@ -467,6 +512,53 @@ func getTarget(reader *bufio.Reader) (Target, error) {
 	}
 
 	return targets[options[choice-1]], nil
+}
+
+// filterTargetsByMode returns only the target keys that support the given mode.
+func filterTargetsByMode(allOptions []string, mode string) []string {
+	var filtered []string
+	for _, key := range allOptions {
+		t := targets[key]
+		switch mode {
+		case modeConfigOnly:
+			if t.ConfigPath == "" {
+				continue
+			}
+		case modeAgentsOnly:
+			if t.AgentsPath == "" {
+				continue
+			}
+		}
+		filtered = append(filtered, key)
+	}
+	return filtered
+}
+
+// validateTargetForMode checks that a target supports the requested mode.
+func validateTargetForMode(t Target, mode string) error {
+	switch mode {
+	case modeConfigOnly:
+		if t.ConfigPath == "" {
+			return fmt.Errorf("config file generation is not supported for %s", t.Name)
+		}
+	case modeAgentsOnly:
+		if t.AgentsPath == "" {
+			return fmt.Errorf("agents are not supported for %s", t.Name)
+		}
+	}
+	return nil
+}
+
+// modePromptInfo returns the prompt text and a function to extract the relevant path for display.
+func modePromptInfo(mode string) (string, func(Target) string) {
+	switch mode {
+	case modeConfigOnly:
+		return "Where would you like to generate the config file?", func(t Target) string { return t.ConfigPath }
+	case modeAgentsOnly:
+		return "Where would you like to install the agents?", func(t Target) string { return t.AgentsPath }
+	default:
+		return "Where would you like to install the skills?", func(t Target) string { return t.SkillsPath }
+	}
 }
 
 func askUpdateConfig(reader *bufio.Reader, target Target) (bool, error) {
@@ -513,7 +605,7 @@ func askScope(reader *bufio.Reader, target Target) (string, error) {
 	return "project", nil
 }
 
-func askInstallMode(reader *bufio.Reader, target Target) (string, error) {
+func askInstallMode(reader *bufio.Reader) (string, error) {
 	// CLI flag takes precedence
 	if installMode != "" {
 		switch installMode {
@@ -531,11 +623,7 @@ func askInstallMode(reader *bufio.Reader, target Target) (string, error) {
 
 	fmt.Println("\nWhat would you like to do?")
 	fmt.Println("  1) Full installation (skills, agents, commands, and config file)")
-	if target.ConfigPath != "" {
-		fmt.Printf("  2) Generate config file only (%s)\n", target.ConfigPath)
-	} else {
-		fmt.Println("  2) Generate config file only (not available for this target)")
-	}
+	fmt.Println("  2) Generate config file only (e.g., CLAUDE.md)")
 	fmt.Println("  3) Install agents only")
 	fmt.Print("Enter choice [1]: ")
 
@@ -549,9 +637,6 @@ func askInstallMode(reader *bufio.Reader, target Target) (string, error) {
 	case "", "1":
 		return modeFullInstall, nil
 	case "2":
-		if target.ConfigPath == "" {
-			return "", fmt.Errorf("config file generation is not available for %s", target.Name)
-		}
 		return modeConfigOnly, nil
 	case "3":
 		return modeAgentsOnly, nil
@@ -560,13 +645,13 @@ func askInstallMode(reader *bufio.Reader, target Target) (string, error) {
 	}
 }
 
-func runConfigOnly(inst *installer.Installer, target Target) error {
+func runConfigOnly(reader *bufio.Reader, inst *installer.Installer, target Target) error {
 	if target.ConfigPath == "" {
 		return fmt.Errorf("config file generation is not supported for %s", target.Name)
 	}
 
 	fmt.Printf("\nGenerating %s...\n", target.ConfigPath)
-	if err := generateConfigFile(inst, target); err != nil {
+	if err := generateConfigFile(inst, target, reader); err != nil {
 		return fmt.Errorf("could not generate %s: %w", target.ConfigPath, err)
 	}
 
@@ -598,26 +683,146 @@ func runAgentsOnly(reader *bufio.Reader, inst *installer.Installer, target Targe
 		agentsDest = filepath.Join(".", target.AgentsPath)
 	}
 
-	fmt.Println("\nInstalling agents...")
-	var nameFunc installer.AgentNameFunc
-	if target.Name == "GitHub Copilot" {
-		nameFunc = installer.CopilotAgentName
-	}
-
-	agentResults, err := inst.InstallAgents(agentsDest, nameFunc)
+	overwrite, err := askOverwriteAgents(reader, agentsDest)
 	if err != nil {
 		return err
 	}
-	for _, r := range agentResults {
-		fmt.Println(r)
+
+	agentInst := inst
+	if overwrite && !inst.HasForce() {
+		// User confirmed overwrite — use a local installer with Force enabled
+		agentInst = installer.New(content, installer.Options{Force: true, DryRun: dryRun})
+	}
+
+	if !overwrite {
+		fmt.Println("\nSkipping agent installation.")
+	} else {
+		fmt.Println("\nInstalling agents...")
+		var nameFunc installer.AgentNameFunc
+		if target.Name == "GitHub Copilot" {
+			nameFunc = installer.CopilotAgentName
+		}
+
+		agentResults, err := agentInst.InstallAgents(agentsDest, nameFunc)
+		if err != nil {
+			return err
+		}
+		for _, r := range agentResults {
+			fmt.Println(r)
+		}
 	}
 
 	if dryRun {
 		fmt.Println("\n(dry run - no files were modified)")
-	} else {
+	} else if overwrite {
 		fmt.Println("\nDone! Agents installed successfully.")
 	}
 	return nil
+}
+
+// askOverwriteAgents checks for existing .md files in the destination and prompts
+// the user for confirmation. Returns true if agents should be installed (with force).
+func askOverwriteAgents(reader *bufio.Reader, agentsDest string) (bool, error) {
+	// Check for existing .md files
+	existing, _ := filepath.Glob(filepath.Join(agentsDest, "*.md"))
+	if len(existing) == 0 {
+		return true, nil
+	}
+
+	if force {
+		return true, nil
+	}
+
+	if nonInteract {
+		return false, nil
+	}
+
+	fmt.Printf("\nExisting agent files found in %s:\n", agentsDest)
+	for _, f := range existing {
+		fmt.Printf("  - %s\n", filepath.Base(f))
+	}
+	fmt.Print("Overwrite existing agent files? [y/N]: ")
+
+	input, err := reader.ReadString('\n')
+	if err != nil {
+		return false, err
+	}
+	input = strings.TrimSpace(strings.ToLower(input))
+	return input == "y" || input == "yes", nil
+}
+
+// ensureGitignoreAllowsProjectJSON checks if .gitignore blocks .claude/project.json
+// and prompts the user to add an exception if needed.
+func ensureGitignoreAllowsProjectJSON(reader *bufio.Reader) {
+	gitignorePath := ".gitignore"
+	data, err := os.ReadFile(gitignorePath)
+	if err != nil {
+		return // no .gitignore, nothing to do
+	}
+
+	content := string(data)
+	lines := strings.Split(content, "\n")
+
+	// Check if .claude/* (or .claude/) is in .gitignore
+	hasCloudeGlob := false
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == ".claude/*" || trimmed == ".claude/" {
+			hasCloudeGlob = true
+			break
+		}
+	}
+	if !hasCloudeGlob {
+		return // .claude/ isn't gitignored, project.json will be tracked by default
+	}
+
+	// Check if exception already exists
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "!.claude/project.json" {
+			return // already allowed
+		}
+	}
+
+	// Prompt user
+	if nonInteract {
+		// In non-interactive mode, just do it
+	} else {
+		fmt.Println("\n.gitignore blocks .claude/* but .claude/project.json needs to be tracked")
+		fmt.Println("for project initialization state to persist across sessions.")
+		fmt.Print("Add !.claude/project.json to .gitignore? [Y/n]: ")
+		input, err := reader.ReadString('\n')
+		if err != nil {
+			return
+		}
+		input = strings.TrimSpace(strings.ToLower(input))
+		if input != "" && input != "y" && input != "yes" {
+			fmt.Println("Skipped. You can add !.claude/project.json to .gitignore manually.")
+			return
+		}
+	}
+
+	// Insert the exception right after the .claude/* or .claude/ line
+	var result []string
+	inserted := false
+	for _, line := range lines {
+		result = append(result, line)
+		trimmed := strings.TrimSpace(line)
+		if !inserted && (trimmed == ".claude/*" || trimmed == ".claude/") {
+			result = append(result, "!.claude/project.json")
+			inserted = true
+		}
+	}
+
+	if !inserted {
+		return // shouldn't happen given hasCloudeGlob check, but be safe
+	}
+
+	if err := os.WriteFile(gitignorePath, []byte(strings.Join(result, "\n")), 0644); err != nil {
+		fmt.Printf("Warning: could not update .gitignore: %v\n", err)
+		return
+	}
+	fmt.Println("UPDATED: .gitignore (added !.claude/project.json)")
 }
 
 func runList(cmd *cobra.Command, args []string) error {

@@ -111,7 +111,7 @@ Sub-agents work in the current working directory on the active feature branch. N
 ### Prerequisites
 
 - **Initialization required** before ANY GitHub write (issues, PRs, labels): run `/project:init`
-- Check: `gh label list --json name --jq '.[].name' | grep -q '^claude:initialized$'`
+- Check: `cat .claude/project.json 2>/dev/null | grep -q '"initialized": true'` (fast, local) or fall back to `gh label list --json name --jq '.[].name' | grep -q '^claude:initialized$'`
 - If not initialized: block GitHub writes, allow local work (branches, commits)
 - **Graceful degradation**: if `gh` unavailable (`gh auth status 2>/dev/null`), skip all GitHub integration and continue normally. Never block work.
 

@@ -50,6 +50,11 @@ func New(fsys fs.FS, opts Options) *Installer {
 	}
 }
 
+// HasForce returns whether the installer has Force enabled.
+func (i *Installer) HasForce() bool {
+	return i.options.Force
+}
+
 // discoverSkills walks the skills/ directory finding directories that contain SKILL.md.
 func (i *Installer) discoverSkills() ([]Skill, error) {
 	var skills []Skill
