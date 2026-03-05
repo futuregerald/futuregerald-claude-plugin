@@ -62,6 +62,18 @@ No arguments required. Optional:
 
 3. **Check if already initialized:**
 
+   First, check for a local project file (fast, no API call):
+
+   ```bash
+   cat .claude/project.json 2>/dev/null | grep -q '"initialized": true'
+   ```
+
+   If the local file exists with `initialized: true` and `--force` was NOT passed, tell the user:
+   "Project is already initialized. Use `/project:init --force` to re-sync labels."
+   and stop.
+
+   If no local file, fall back to the label check for backwards compatibility:
+
    ```bash
    gh label list --json name --jq '.[].name' | grep -q '^claude:initialized$'
    ```
@@ -115,7 +127,48 @@ No arguments required. Optional:
    fi
    ```
 
-7. **Report the result:**
+7. **Write local initialization state:**
+
+   Ensure `.gitignore` allows `.claude/project.json`. If the repo's `.gitignore` has a `.claude/*` pattern (common convention), add an exception so the file is tracked. If `.gitignore` doesn't have `.claude/*`, the file is already tracked by default — no change needed.
+
+   ```bash
+   if [ -f .gitignore ] && grep -q '^\.claude/\*' .gitignore; then
+     if ! grep -q '!\.claude/project\.json' .gitignore; then
+       sed -i '' '/^\.claude\/\*/a\
+!.claude/project.json' .gitignore
+     fi
+   fi
+   ```
+
+   Write the project state file (this runs on both fresh init and `--force` re-init, updating the timestamp):
+
+   ```bash
+   mkdir -p .claude
+   TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+   cat > .claude/project.json << PROJ_EOF
+   {
+     "initialized": true,
+     "initializedAt": "$TIMESTAMP",
+     "version": 1
+   }
+   PROJ_EOF
+   ```
+
+   Stage and commit the changes:
+
+   ```bash
+   git add .gitignore .claude/project.json
+   git commit -m "chore: add project initialization state
+
+   Store initialization state in .claude/project.json for fast,
+   offline-capable init checks.
+
+   Co-Authored-By: Claude <noreply@anthropic.com>"
+   ```
+
+   > **Note:** This is one of the rare cases where the init command creates a commit directly on the current branch. The file must be committed to be useful across sessions and for other developers.
+
+8. **Report the result:**
 
    ```
    ## GitHub Project Initialized
@@ -129,6 +182,10 @@ No arguments required. Optional:
 
    ### Project Board
    - Created/verified: <project-name>
+
+   ### Local State
+   - Written: `.claude/project.json`
+   - Gitignore updated: `.claude/project.json` is now tracked
 
    ### Next Steps
    - Create issues: `/project:create-issue`
