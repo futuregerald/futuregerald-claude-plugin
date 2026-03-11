@@ -3,12 +3,15 @@ package main
 import (
 	"bufio"
 	"embed"
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/futuregerald/futuregerald-claude-plugin/internal/config"
 	"github.com/futuregerald/futuregerald-claude-plugin/internal/installer"
@@ -100,6 +103,13 @@ var targets = map[string]Target{
 		CommandsPath: "",
 		ConfigPath:   "",
 	},
+	"claude-desktop": {
+		Name:         "Claude Desktop (macOS)",
+		SkillsPath:   "",
+		AgentsPath:   "",
+		CommandsPath: "",
+		ConfigPath:   "",
+	},
 }
 
 func main() {
@@ -110,6 +120,7 @@ func main() {
 
 Supported targets:
   - Claude Code (.claude/skills)
+  - Claude Desktop (macOS — Customize > Skills)
   - GitHub Copilot (.github/skills)
   - OpenCode (.opencode/skills)
   - Cursor (.cursor/skills)
@@ -123,7 +134,7 @@ Configuration can be stored in .skill-installer.yaml`,
 	rootCmd.Flags().BoolVarP(&force, "force", "f", false, "Overwrite existing files")
 	rootCmd.Flags().BoolVarP(&dryRun, "dry-run", "n", false, "Show what would be done without making changes")
 	rootCmd.Flags().BoolVarP(&nonInteract, "yes", "y", false, "Non-interactive mode with defaults")
-	rootCmd.Flags().StringVarP(&targetType, "target", "t", "", "Target: claude, copilot, opencode, cursor, vscode")
+	rootCmd.Flags().StringVarP(&targetType, "target", "t", "", "Target: claude, claude-desktop, copilot, opencode, cursor, vscode")
 	rootCmd.Flags().BoolVar(&skipClaude, "skip-claude-md", false, "Skip updating CLAUDE.md")
 	rootCmd.Flags().StringSliceVar(&tags, "tag", nil, "Filter skills by tags")
 	rootCmd.Flags().StringSliceVar(&languages, "lang", nil, "Filter skills by language")
@@ -247,6 +258,18 @@ func runFullInstall(reader *bufio.Reader, inst *installer.Installer, target Targ
 		commandsDest = filepath.Join(".", target.CommandsPath)
 	}
 
+	// Claude Desktop: resolve skills path dynamically
+	if target.Name == "Claude Desktop (macOS)" {
+		desktopDir, err := findClaudeDesktopDir()
+		if err != nil {
+			return err
+		}
+		skillsDest = filepath.Join(desktopDir, "skills")
+		agentsDest = ""    // Desktop doesn't support agents
+		commandsDest = ""  // Desktop doesn't support commands
+		scope = "global"   // force global
+	}
+
 	updateConfig := false
 	if scope == "project" && target.ConfigPath != "" && !skipClaude {
 		updateConfig, err = askUpdateConfig(reader, target)
@@ -278,6 +301,13 @@ func runFullInstall(reader *bufio.Reader, inst *installer.Installer, target Targ
 	}
 	for _, r := range results {
 		fmt.Println(r)
+	}
+
+	// Update Claude Desktop manifest
+	if target.Name == "Claude Desktop (macOS)" {
+		if err := updateDesktopManifest(skillsDest, inst); err != nil {
+			fmt.Printf("Warning: Could not update Claude Desktop manifest: %v\n", err)
+		}
 	}
 
 	// Install agents
@@ -464,7 +494,7 @@ func applyConfig(cfg *config.Config) {
 }
 
 func getTarget(reader *bufio.Reader, mode string) (Target, error) {
-	allOptions := []string{"claude", "copilot", "cursor", "opencode", "vscode"}
+	allOptions := []string{"claude", "claude-desktop", "copilot", "cursor", "opencode", "vscode"}
 
 	// Filter targets by mode
 	options := filterTargetsByMode(allOptions, mode)
@@ -553,11 +583,26 @@ func validateTargetForMode(t Target, mode string) error {
 func modePromptInfo(mode string) (string, func(Target) string) {
 	switch mode {
 	case modeConfigOnly:
-		return "Where would you like to generate the config file?", func(t Target) string { return t.ConfigPath }
+		return "Where would you like to generate the config file?", func(t Target) string {
+			if t.ConfigPath == "" {
+				return "auto-detected"
+			}
+			return t.ConfigPath
+		}
 	case modeAgentsOnly:
-		return "Where would you like to install the agents?", func(t Target) string { return t.AgentsPath }
+		return "Where would you like to install the agents?", func(t Target) string {
+			if t.AgentsPath == "" {
+				return "auto-detected"
+			}
+			return t.AgentsPath
+		}
 	default:
-		return "Where would you like to install the skills?", func(t Target) string { return t.SkillsPath }
+		return "Where would you like to install the skills?", func(t Target) string {
+			if t.SkillsPath == "" {
+				return "auto-detected"
+			}
+			return t.SkillsPath
+		}
 	}
 }
 
@@ -580,6 +625,10 @@ func askUpdateConfig(reader *bufio.Reader, target Target) (bool, error) {
 func askScope(reader *bufio.Reader, target Target) (string, error) {
 	if target.GlobalSkillsPath == "" {
 		return "project", nil
+	}
+	// Claude Desktop is always global (installed to ~/Library/Application Support/Claude/)
+	if target.Name == "Claude Desktop (macOS)" {
+		return "global", nil
 	}
 	if globalInstall {
 		return "global", nil
@@ -907,6 +956,145 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("CREATED: %s\n", filename)
 	fmt.Println("\nEdit the file to customize your skill, then move the directory to your skills location.")
+	return nil
+}
+
+// findClaudeDesktopDir locates the Claude Desktop skills-plugin directory.
+// It walks the UUID-based directory structure to find the manifest.json.
+func findClaudeDesktopDir() (string, error) {
+	if runtime.GOOS != "darwin" {
+		return "", fmt.Errorf("Claude Desktop skills installation is currently only supported on macOS")
+	}
+
+	base := filepath.Join(homeDir(), "Library", "Application Support", "Claude",
+		"local-agent-mode-sessions", "skills-plugin")
+	if _, err := os.Stat(base); err != nil {
+		return "", fmt.Errorf("Claude Desktop skills directory not found at %s\nMake sure Claude Desktop is installed and you've opened Customize > Skills at least once", base)
+	}
+
+	var manifestPath string
+	_ = filepath.WalkDir(base, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || manifestPath != "" {
+			return err
+		}
+		if d.Name() == "manifest.json" {
+			manifestPath = path
+			return filepath.SkipAll
+		}
+		return nil
+	})
+
+	if manifestPath == "" {
+		return "", fmt.Errorf("no manifest.json found under %s\nOpen Claude Desktop > Customize > Skills first to initialize", base)
+	}
+
+	return filepath.Dir(manifestPath), nil
+}
+
+// desktopManifest represents the Claude Desktop skills manifest.json.
+type desktopManifest struct {
+	LastUpdated int64                `json:"lastUpdated"`
+	Skills      []desktopSkillEntry `json:"skills"`
+}
+
+// desktopSkillEntry represents a single skill in the manifest.
+type desktopSkillEntry struct {
+	SkillID     string `json:"skillId"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	CreatorType string `json:"creatorType"`
+	UpdatedAt   string `json:"updatedAt"`
+	Enabled     bool   `json:"enabled"`
+}
+
+// updateDesktopManifest reads the manifest.json, adds/updates entries for installed skills,
+// and writes it back. skillsDir is the path to the skills/ directory.
+func updateDesktopManifest(skillsDir string, inst *installer.Installer) error {
+	manifestPath := filepath.Join(filepath.Dir(skillsDir), "manifest.json")
+
+	data, err := os.ReadFile(manifestPath)
+	if err != nil {
+		return fmt.Errorf("reading manifest: %w", err)
+	}
+
+	var manifest desktopManifest
+	if err := json.Unmarshal(data, &manifest); err != nil {
+		return fmt.Errorf("parsing manifest: %w", err)
+	}
+
+	// Build map of existing skills by name
+	existing := make(map[string]int)
+	for i, s := range manifest.Skills {
+		existing[s.Name] = i
+	}
+
+	// Get skill descriptions from embedded content
+	allSkills, _ := inst.ListAllSkills()
+	descMap := make(map[string]string)
+	for _, s := range allSkills {
+		descMap[s.Name] = s.Description
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	// Walk the skills directory to find installed skills
+	entries, err := os.ReadDir(skillsDir)
+	if err != nil {
+		return fmt.Errorf("reading skills directory: %w", err)
+	}
+
+	updated := 0
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		// Verify it has a SKILL.md
+		if _, err := os.Stat(filepath.Join(skillsDir, name, "SKILL.md")); err != nil {
+			continue
+		}
+
+		desc := descMap[name]
+		if desc == "" {
+			desc = "Skill installed via plugin"
+		}
+
+		if idx, ok := existing[name]; ok {
+			// Update existing entry
+			manifest.Skills[idx].Description = desc
+			manifest.Skills[idx].UpdatedAt = now
+			manifest.Skills[idx].Enabled = true
+		} else {
+			// Add new entry
+			manifest.Skills = append(manifest.Skills, desktopSkillEntry{
+				SkillID:     "skill_user_" + name,
+				Name:        name,
+				Description: desc,
+				CreatorType: "user",
+				UpdatedAt:   now,
+				Enabled:     true,
+			})
+		}
+		updated++
+	}
+
+	manifest.LastUpdated = time.Now().UnixMilli()
+
+	if dryRun {
+		fmt.Printf("WOULD UPDATE: %s (%d skills)\n", manifestPath, updated)
+		return nil
+	}
+
+	out, err := json.MarshalIndent(manifest, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshaling manifest: %w", err)
+	}
+
+	if err := os.WriteFile(manifestPath, out, 0644); err != nil {
+		return fmt.Errorf("writing manifest: %w", err)
+	}
+
+	fmt.Printf("UPDATED: %s (%d skills registered)\n", manifestPath, updated)
 	return nil
 }
 
