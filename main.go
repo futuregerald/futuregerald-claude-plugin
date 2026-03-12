@@ -988,7 +988,7 @@ func findClaudeDesktopDir() (string, error) {
 		return "", fmt.Errorf("no manifest.json found under %s\nOpen Claude Desktop > Customize > Skills first to initialize", base)
 	}
 
-	return filepath.Dir(manifestPath), nil
+	return filepath.Clean(filepath.Dir(manifestPath)), nil
 }
 
 // desktopManifest represents the Claude Desktop skills manifest.json.
@@ -1090,7 +1090,7 @@ func updateDesktopManifest(skillsDir string, inst *installer.Installer) error {
 		return fmt.Errorf("marshaling manifest: %w", err)
 	}
 
-	if err := os.WriteFile(manifestPath, out, 0644); err != nil {
+	if err := os.WriteFile(manifestPath, out, 0600); err != nil {
 		return fmt.Errorf("writing manifest: %w", err)
 	}
 
