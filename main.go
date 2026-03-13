@@ -1,11 +1,18 @@
 package main
 
 import (
+	"archive/tar"
+	"archive/zip"
 	"bufio"
+	"compress/gzip"
+	"crypto/sha256"
 	"embed"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/fs"
+	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -22,6 +29,12 @@ const (
 	modeFullInstall = "full"
 	modeConfigOnly  = "config-only"
 	modeAgentsOnly  = "agents-only"
+)
+
+const (
+	cbMemVersion = "v0.4.10"
+	cbMemRepo    = "DeusData/codebase-memory-mcp"
+	cbMemBinName = "codebase-memory-mcp"
 )
 
 //go:embed all:skills all:agents all:templates all:commands
@@ -365,6 +378,13 @@ func runFullInstall(reader *bufio.Reader, inst *installer.Installer, target Targ
 	// Ensure .gitignore allows .claude/project.json for project-scoped installs
 	if scope == "project" && !dryRun {
 		ensureGitignoreAllowsProjectJSON(reader)
+	}
+
+	// Offer Codebase Memory MCP setup
+	if !dryRun {
+		if err := askCodebaseMemoryMCP(reader); err != nil {
+			fmt.Printf("Warning: Codebase Memory MCP setup skipped: %v\n", err)
+		}
 	}
 
 	if dryRun {
@@ -1108,5 +1128,388 @@ func truncate(s string, max int) string {
 		return s
 	}
 	return s[:max-3] + "..."
+}
+
+func askCodebaseMemoryMCP(reader *bufio.Reader) error {
+	if nonInteract {
+		return nil
+	}
+
+	binName := cbMemBinName
+	if runtime.GOOS == "windows" {
+		binName += ".exe"
+	}
+	binPath := filepath.Join(homeDir(), ".local", "bin", binName)
+
+	// Check if already installed
+	if fileExists(binPath) {
+		fmt.Printf("\nCodebase Memory MCP already installed at %s — skipping.\n", binPath)
+		return nil
+	}
+
+	// Check if already configured in global or local MCP settings
+	if mcpServerConfigured(cbMemBinName) {
+		fmt.Println("\nCodebase Memory MCP server already configured — skipping.")
+		return nil
+	}
+
+	fmt.Print("\nWould you like to install the Codebase Memory MCP server for codebase indexing and search? [Y/n]: ")
+	input, err := reader.ReadString('\n')
+	if err != nil {
+		return err
+	}
+	input = strings.TrimSpace(strings.ToLower(input))
+	if input == "n" || input == "no" {
+		return nil
+	}
+
+	// Ask scope
+	fmt.Println("\nWhere should the MCP server be configured?")
+	fmt.Println("  1) Global — available to all projects (recommended)")
+	fmt.Println("  2) Local — this project only (.mcp.json)")
+	fmt.Print("Enter choice [1]: ")
+	scopeInput, err := reader.ReadString('\n')
+	if err != nil {
+		return err
+	}
+	scopeInput = strings.TrimSpace(scopeInput)
+	isGlobal := scopeInput != "2"
+
+	// Detect platform
+	platform := cbMemPlatform()
+	if platform == "" {
+		return fmt.Errorf("unsupported platform: %s/%s — install manually from https://github.com/%s/releases", runtime.GOOS, runtime.GOARCH, cbMemRepo)
+	}
+
+	ext := "tar.gz"
+	if runtime.GOOS == "windows" {
+		ext = "zip"
+	}
+	archiveName := fmt.Sprintf("codebase-memory-mcp-%s.%s", platform, ext)
+	downloadURL := fmt.Sprintf("https://github.com/%s/releases/download/%s/%s", cbMemRepo, cbMemVersion, archiveName)
+	checksumsURL := fmt.Sprintf("https://github.com/%s/releases/download/%s/checksums.txt", cbMemRepo, cbMemVersion)
+
+	fmt.Printf("\nDownloading codebase-memory-mcp %s (%s)...\n", cbMemVersion, platform)
+
+	// Download checksums
+	checksumsData, err := httpGetBytes(checksumsURL)
+	if err != nil {
+		return fmt.Errorf("downloading checksums: %w", err)
+	}
+
+	// Find expected hash
+	expectedHash := findChecksumForFile(string(checksumsData), archiveName)
+	if expectedHash == "" {
+		return fmt.Errorf("checksum not found for %s in checksums.txt", archiveName)
+	}
+
+	// Download archive to temp directory
+	tmpDir, err := os.MkdirTemp("", "cbmem-*")
+	if err != nil {
+		return fmt.Errorf("creating temp dir: %w", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	archivePath := filepath.Join(tmpDir, archiveName)
+	if err := httpDownloadFile(downloadURL, archivePath); err != nil {
+		return fmt.Errorf("downloading %s: %w", archiveName, err)
+	}
+
+	// Verify checksum
+	actualHash, err := sha256File(archivePath)
+	if err != nil {
+		return fmt.Errorf("computing checksum: %w", err)
+	}
+	if actualHash != expectedHash {
+		return fmt.Errorf("checksum verification failed!\n  expected: %s\n  got:      %s\nThe download may be corrupted. Try again or install manually from https://github.com/%s/releases", expectedHash, actualHash, cbMemRepo)
+	}
+	fmt.Println("Checksum verified.")
+
+	// Extract binary
+	binDir := filepath.Dir(binPath)
+	if err := os.MkdirAll(binDir, 0755); err != nil {
+		return fmt.Errorf("creating %s: %w", binDir, err)
+	}
+
+	if ext == "zip" {
+		err = extractZipBinary(archivePath, binName, binPath)
+	} else {
+		err = extractTarGzBinary(archivePath, binName, binPath)
+	}
+	if err != nil {
+		return fmt.Errorf("extracting binary: %w", err)
+	}
+
+	if err := os.Chmod(binPath, 0755); err != nil {
+		return fmt.Errorf("setting permissions: %w", err)
+	}
+	fmt.Printf("Installed: %s\n", binPath)
+
+	// Configure MCP
+	serverConfig := map[string]interface{}{
+		"type":    "stdio",
+		"command": binPath,
+	}
+
+	if isGlobal {
+		if err := addGlobalMCPServer("codebase-memory-mcp", serverConfig); err != nil {
+			return fmt.Errorf("configuring global MCP: %w", err)
+		}
+		fmt.Println("Configured: ~/.claude/settings.json (global)")
+	} else {
+		if err := addLocalMCPServer("codebase-memory-mcp", serverConfig); err != nil {
+			return fmt.Errorf("configuring local MCP: %w", err)
+		}
+		fmt.Println("Configured: .mcp.json (local)")
+	}
+
+	// Check if ~/.local/bin is on PATH
+	pathDirs := strings.Split(os.Getenv("PATH"), string(os.PathListSeparator))
+	inPath := false
+	for _, d := range pathDirs {
+		if d == binDir {
+			inPath = true
+			break
+		}
+	}
+	if !inPath {
+		fmt.Printf("\nNote: %s is not in your PATH. Add it to use codebase-memory-mcp directly:\n", binDir)
+		fmt.Printf("  export PATH=\"%s:$PATH\"\n", binDir)
+	}
+
+	fmt.Println("\nCodebase Memory MCP installed! Say \"index this project\" in Claude Code to get started.")
+	return nil
+}
+
+func cbMemPlatform() string {
+	goos := runtime.GOOS
+	goarch := runtime.GOARCH
+	switch {
+	case goos == "darwin" && goarch == "arm64":
+		return "darwin-arm64"
+	case goos == "darwin" && goarch == "amd64":
+		return "darwin-amd64"
+	case goos == "linux" && goarch == "amd64":
+		return "linux-amd64"
+	case goos == "linux" && goarch == "arm64":
+		return "linux-arm64"
+	case goos == "windows" && goarch == "amd64":
+		return "windows-amd64"
+	default:
+		return ""
+	}
+}
+
+func mcpServerConfigured(name string) bool {
+	// Check global settings
+	globalPath := filepath.Join(homeDir(), ".claude", "settings.json")
+	if checkMCPConfigFile(globalPath, name) {
+		return true
+	}
+	// Check local .mcp.json
+	return checkMCPConfigFile(".mcp.json", name)
+}
+
+func checkMCPConfigFile(path, serverName string) bool {
+	if !fileExists(path) {
+		return false
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	var cfg map[string]interface{}
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return false
+	}
+	servers, ok := cfg["mcpServers"].(map[string]interface{})
+	if !ok {
+		return false
+	}
+	_, exists := servers[serverName]
+	return exists
+}
+
+func httpGetBytes(url string) ([]byte, error) {
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("HTTP %d from %s", resp.StatusCode, url)
+	}
+	return io.ReadAll(resp.Body)
+}
+
+func httpDownloadFile(url, destPath string) error {
+	resp, err := http.Get(url)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+
+	f, err := os.Create(destPath)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	_, err = io.Copy(f, resp.Body)
+	return err
+}
+
+func sha256File(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+func findChecksumForFile(checksums, filename string) string {
+	for _, line := range strings.Split(checksums, "\n") {
+		parts := strings.Fields(line)
+		if len(parts) == 2 && parts[1] == filename {
+			return parts[0]
+		}
+	}
+	return ""
+}
+
+func extractTarGzBinary(archivePath, binName, destPath string) error {
+	f, err := os.Open(archivePath)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	gz, err := gzip.NewReader(f)
+	if err != nil {
+		return err
+	}
+	defer gz.Close()
+
+	tr := tar.NewReader(gz)
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+
+		if filepath.Base(hdr.Name) == binName && hdr.Typeflag == tar.TypeReg {
+			out, err := os.Create(destPath)
+			if err != nil {
+				return err
+			}
+			_, copyErr := io.Copy(out, io.LimitReader(tr, 100*1024*1024)) // 100MB safety limit
+			out.Close()
+			return copyErr
+		}
+	}
+	return fmt.Errorf("%s not found in archive", binName)
+}
+
+func extractZipBinary(archivePath, binName, destPath string) error {
+	r, err := zip.OpenReader(archivePath)
+	if err != nil {
+		return err
+	}
+	defer r.Close()
+
+	for _, zf := range r.File {
+		if filepath.Base(zf.Name) == binName {
+			rc, err := zf.Open()
+			if err != nil {
+				return err
+			}
+			defer rc.Close()
+
+			out, err := os.Create(destPath)
+			if err != nil {
+				return err
+			}
+			_, copyErr := io.Copy(out, io.LimitReader(rc, 100*1024*1024)) // 100MB safety limit
+			out.Close()
+			return copyErr
+		}
+	}
+	return fmt.Errorf("%s not found in archive", binName)
+}
+
+func addGlobalMCPServer(name string, serverConfig map[string]interface{}) error {
+	settingsPath := filepath.Join(homeDir(), ".claude", "settings.json")
+
+	var settings map[string]interface{}
+	if fileExists(settingsPath) {
+		data, err := os.ReadFile(settingsPath)
+		if err != nil {
+			return fmt.Errorf("reading %s: %w", settingsPath, err)
+		}
+		if err := json.Unmarshal(data, &settings); err != nil {
+			return fmt.Errorf("parsing %s: %w", settingsPath, err)
+		}
+	} else {
+		settings = map[string]interface{}{}
+	}
+
+	servers, ok := settings["mcpServers"].(map[string]interface{})
+	if !ok {
+		servers = map[string]interface{}{}
+	}
+	servers[name] = serverConfig
+	settings["mcpServers"] = servers
+
+	if err := os.MkdirAll(filepath.Dir(settingsPath), 0755); err != nil {
+		return err
+	}
+
+	data, err := json.MarshalIndent(settings, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(settingsPath, append(data, '\n'), 0644)
+}
+
+func addLocalMCPServer(name string, serverConfig map[string]interface{}) error {
+	mcpPath := ".mcp.json"
+
+	var mcpConfig map[string]interface{}
+	if fileExists(mcpPath) {
+		data, err := os.ReadFile(mcpPath)
+		if err != nil {
+			return fmt.Errorf("reading %s: %w", mcpPath, err)
+		}
+		if err := json.Unmarshal(data, &mcpConfig); err != nil {
+			return fmt.Errorf("parsing %s: %w", mcpPath, err)
+		}
+	} else {
+		mcpConfig = map[string]interface{}{}
+	}
+
+	servers, ok := mcpConfig["mcpServers"].(map[string]interface{})
+	if !ok {
+		servers = map[string]interface{}{}
+	}
+	servers[name] = serverConfig
+	mcpConfig["mcpServers"] = servers
+
+	data, err := json.MarshalIndent(mcpConfig, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(mcpPath, append(data, '\n'), 0644)
 }
 
