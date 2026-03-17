@@ -203,6 +203,7 @@ If the codebase-memory-mcp server is configured, use these tools proactively —
 | Bug investigation | `systematic-debugging` |
 | New feature | `superpowers:test-driven-development` (RED→GREEN→REFACTOR) |
 | Database queries/mutations changed | `sql-optimization-patterns` + `sql-reviewer` agent |
+| Creating a pull request | `pull-request-description` — structured summary, background, test plan, rollback plan |
 | About to claim completion | `verification-before-completion` |
 
 ---
