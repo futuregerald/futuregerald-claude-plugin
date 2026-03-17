@@ -203,7 +203,7 @@ If symlinked to `~/.claude/skills`, use the `superpowers:` prefix:
 
 ## Skills and Agents Reference
 
-### Skills (35)
+### Skills (36)
 
 **Core Workflow:**
 
@@ -220,6 +220,7 @@ If symlinked to `~/.claude/skills`, use the `superpowers:` prefix:
 
 | Skill | Description |
 |-------|-------------|
+| `comprehensive-code-review` | Orchestrates 5 parallel sub-agents (code quality, pattern consistency, SQL, security, simplification) into a single prioritized report |
 | `code-simplifier` | Code simplification analysis |
 | `requesting-code-review` | Code review requests |
 | `receiving-code-review` | Processing review feedback |
@@ -270,7 +271,7 @@ If symlinked to `~/.claude/skills`, use the `superpowers:` prefix:
 | `baoyu-article-illustrator` | Article illustration generation |
 | `create-auth-skill` | Auth layer creation |
 
-### Agents (7)
+### Agents (8)
 
 Agents are specialized sub-agents dispatched via the Task tool. They run with fresh context and no knowledge of the parent conversation.
 
@@ -281,6 +282,7 @@ Agents are specialized sub-agents dispatched via the Task tool. They run with fr
 | `codebase-searcher` | Searches and explores codebases |
 | `debugger` | Systematic bug investigation |
 | `implementer` | Implements features from plans |
+| `security-reviewer` | OWASP-aligned security audit: injection, auth, IDOR, SSRF, cryptographic failures, data exposure |
 | `spec-reviewer` | Reviews specifications and plans |
 | `sql-reviewer` | Ruthless SQL performance, security, and defensive coding audit |
 
