@@ -22,11 +22,10 @@
 | 4. IMPLEMENT | Write code following TDD | `superpowers:test-driven-development` | Tests exist and pass |
 | 5. TEST | `{{TEST_COMMAND}}` + `{{TYPECHECK_COMMAND}}` | — | Zero failures |
 | 6. SIMPLIFY | `Task(subagent_type="code-simplifier")` | `code-simplifier` agent | Staff review complete |
-| 7. CODE REVIEW | `Task(subagent_type="superpowers:code-reviewer")` | Fresh sub-agent | Reviewer approves |
-| 8. SQL REVIEW | `Task(subagent_type="superpowers:code-reviewer")` with SQL audit prompt | `sql-optimization-patterns` skill + `sql-reviewer` agent | Reviewer approves |
-| 9. COMMIT | `git commit` | — | Commit created |
-| 10. PUSH | Push feature branch; `gh pr create` with `Closes #N` if `gh` available | — | Branch pushed (PR created if `gh`) |
-| 11. VERIFY CI | If `gh`: `gh run list`, autonomous PR review, auto-merge when green | — | CI green (if applicable) |
+| 7. REVIEW | `comprehensive-code-review` skill — dispatches 5 parallel sub-agents (code quality, pattern consistency, SQL, security, simplification) | Fresh sub-agents | All dimensions approved |
+| 8. COMMIT | `git commit` | — | Commit created |
+| 9. PUSH | Push feature branch; `gh pr create` with `Closes #N` if `gh` available | — | Branch pushed (PR created if `gh`) |
+| 10. VERIFY CI | If `gh`: `gh run list`, autonomous PR review, auto-merge when green | — | CI green (if applicable) |
 
 **Exceptions that skip planning:** pure doc updates, `git revert`.
 
@@ -34,7 +33,7 @@
 
 **All phases are MANDATORY. No exceptions. No skipping "simple" changes.**
 
-- **Phases 3, 6, 7, 8** MUST use `Task` tool (fresh sub-agent, no shared context)
+- **Phases 3, 6, 7** MUST use `Task` tool or `Agent` tool (fresh sub-agents, no shared context)
 - NEVER review your own plan or code — you wrote it, you cannot objectively review it
 - If reviewer finds CRITICAL/IMPORTANT issues: fix, re-run tests, re-review
 - Only proceed after explicit reviewer approval
@@ -49,15 +48,15 @@ Task(subagent_type="superpowers:code-reviewer", prompt="
 ```
 
 **Code simplifier rules:**
-- Run after tests pass (Phase 5), before code review (Phase 7)
+- Run after tests pass (Phase 5), before review (Phase 7)
 - Only implement APPROVED simplifications
 - Re-run tests after applying changes
 
-**SQL review rules:**
-- Run after code review passes (Phase 7), before commit (Phase 9)
-- Dispatch a fresh Staff Engineer sub-agent using the `sql-reviewer` agent template
-- The reviewer audits ALL database queries, mutations, and ORM usage for: **performance**, **security**, and **defensive coding**
-- CRITICAL findings MUST be fixed. Re-run tests after fixes, then re-run SQL review
+**Review rules (Phase 7 — `comprehensive-code-review`):**
+- Invoke the `comprehensive-code-review` skill — it orchestrates all review dimensions in parallel
+- Covers: code quality, pattern consistency, SQL performance, security (OWASP), and simplification
+- SQL sub-agent is automatically dispatched if DB-touching files changed; skipped otherwise
+- CRITICAL findings MUST be fixed before commit. Re-run tests after fixes, then re-review
 - IMPORTANT findings: fix if possible, otherwise open a GitHub issue immediately
 - Max 3 review cycles before escalating to user
 
@@ -183,14 +182,13 @@ If the codebase-memory-mcp server is configured, use these tools proactively —
 | Context | Tool | Purpose |
 |---------|------|---------|
 | Phase 2 (PLAN) | `get_architecture` | Understand affected areas before planning |
-| Phase 7 (CODE REVIEW) | `search_graph`, `trace_call_path` | Verify no callers are broken, check impact radius |
-| Phase 8 (SQL REVIEW) | `trace_call_path` | Find all callers of changed queries |
+| Phase 7 (REVIEW) | `search_graph`, `trace_call_path` | Verify no callers are broken, check impact radius; SQL callers traced by SQL sub-agent |
 | Debugging (`systematic-debugging`) | `trace_call_path`, `search_graph` | Understand call chains and dependencies before guessing |
 | Searching for relationships | `search_graph` | Prefer over text grep when searching for function/class relationships |
 
 **Rules:**
 - During **debugging**, ALWAYS use `trace_call_path` and `search_graph` to understand the call chain and dependencies before proposing fixes. Don't guess — trace.
-- During **code review** (Phase 7), ALWAYS use `search_graph` to check the impact radius of changes and verify no callers are broken.
+- During **review** (Phase 7), ALWAYS use `search_graph` to check the impact radius of changes and verify no callers are broken.
 - During **planning** (Phase 2), use `get_architecture` to understand the affected areas.
 - Use `search_graph` over text grep when searching for function relationships, not just text matches.
 
