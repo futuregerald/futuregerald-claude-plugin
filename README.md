@@ -13,6 +13,7 @@ A Claude Code plugin that adds a curated library of AI coding skills and agents,
 - [Skills and Agents Reference](#skills-and-agents-reference)
 - [CLI Installer](#cli-installer)
 - [Configuration](#configuration)
+- [Codebase Memory MCP (Optional)](#codebase-memory-mcp-optional)
 - [Building from Source](#building-from-source)
 - [GitHub Workflow (Optional — Beta)](#github-workflow-optional--beta)
   - [Slash Commands](#slash-commands)
@@ -358,6 +359,9 @@ skill-installer --mode config-only --target cursor --yes
 
 # Agents-only, globally
 skill-installer --mode agents-only --global --target claude --yes
+
+# Full install includes optional codebase-memory-mcp setup
+skill-installer --mode full --target claude
 ```
 
 ---
@@ -374,6 +378,48 @@ languages: [javascript, python]
 skip_claude_md: false
 from: ""
 ```
+
+---
+
+## Codebase Memory MCP (Optional)
+
+The CLI installer can optionally install [codebase-memory-mcp](https://github.com/DeusData/codebase-memory-mcp), a server that indexes your codebase into a knowledge graph. Once configured, Claude can query function relationships, trace call paths, and understand architecture without reading every file.
+
+### What it provides
+
+| Tool | Purpose |
+|------|---------|
+| `get_architecture` | High-level overview of project structure and components |
+| `search_graph` | Query the knowledge graph for function/class relationships (prefer over text grep) |
+| `trace_call_path` | Trace callers and callees of a function across the codebase |
+| `search_code` | Search code with semantic understanding |
+| `index_repository` | Index or re-index the current repository |
+
+### Installation
+
+During `skill-installer --mode full`, you'll be prompted:
+
+```
+Would you like to install the Codebase Memory MCP server for codebase indexing and search? [Y/n]:
+```
+
+If accepted, the installer:
+1. Downloads the platform-specific binary from GitHub releases
+2. Verifies the SHA-256 checksum
+3. Installs to `~/.local/bin/codebase-memory-mcp`
+4. Configures the MCP server globally (`~/.claude/settings.json`) or locally (`.mcp.json`)
+
+To skip, answer "n" or use `--yes` with `--mode config-only`.
+
+### Usage
+
+After installation, tell Claude to index your project:
+
+```
+index this project
+```
+
+The generated CLAUDE.md template includes rules for when Claude should use the graph tools -- during planning, debugging, and code review phases.
 
 ---
 

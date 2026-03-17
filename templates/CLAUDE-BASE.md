@@ -204,6 +204,7 @@ If the codebase-memory-mcp server is configured, use these tools proactively —
 | New feature | `superpowers:test-driven-development` (RED→GREEN→REFACTOR) |
 | Database queries/mutations changed | `sql-optimization-patterns` + `sql-reviewer` agent |
 | Code review (Phase 7+8), reviewing a PR, or GitHub code review requested | `comprehensive-code-review` — orchestrates parallel sub-agents for code quality, patterns, SQL, security, and simplification |
+| Creating a pull request | `pull-request-description` — structured summary, background, test plan, rollback plan |
 | About to claim completion | `verification-before-completion` |
 
 ---
