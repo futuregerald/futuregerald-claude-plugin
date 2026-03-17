@@ -36,6 +36,8 @@ an attacker — what can be exploited?
 - Base SHA: [commit before changes]
 - Head SHA: [current commit]
 
+Run `git diff {Base SHA}..{Head SHA}` to view all changes before beginning the audit.
+
 ## SECURITY AUDIT CHECKLIST
 
 ### Injection (CRITICAL)
@@ -88,6 +90,23 @@ an attacker — what can be exploited?
 - [ ] **Default credentials**: Default passwords, API keys, or configurations?
 - [ ] **Missing security headers**: CSP, X-Frame-Options, X-Content-Type-Options?
 - [ ] **Dependency vulnerabilities**: Known CVEs in added/updated dependencies?
+
+### SSRF — Server-Side Request Forgery (IMPORTANT)
+
+- [ ] **User-controlled URLs**: Are user-supplied URLs passed to HTTP clients (`Net::HTTP`, `Faraday`,
+      `HTTParty`, `fetch`)? CWE-918
+- [ ] **Domain allowlist**: Are outbound HTTP requests restricted to a known-safe list of domains?
+- [ ] **Internal metadata**: Could a user trigger requests to internal metadata endpoints
+      (AWS `169.254.169.254`, GCP metadata server)?
+
+### Cryptographic Failures (IMPORTANT)
+
+- [ ] **Weak hash algorithms**: MD5 or SHA1 used for security-sensitive data (passwords, tokens)?
+      Should use bcrypt/argon2 for passwords, SHA-256+ for tokens. CWE-327
+- [ ] **Hardcoded secrets**: Encryption keys, salts, IVs, or API tokens hardcoded in source?
+      CWE-798
+- [ ] **`.env` committed**: Secret ENV files committed to version control?
+- [ ] **JWT payload exposure**: Sensitive data in JWT payload without encryption (signed ≠ encrypted)?
 
 ### Logging & Monitoring (MINOR)
 
