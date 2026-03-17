@@ -42,7 +42,7 @@ const (
 var content embed.FS
 
 var (
-	version       = "3.3.0"
+	version       = "3.5.0"
 	force         bool
 	dryRun        bool
 	nonInteract   bool
