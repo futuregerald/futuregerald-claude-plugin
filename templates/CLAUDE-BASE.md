@@ -22,10 +22,11 @@
 | 4. IMPLEMENT | Write code following TDD | `superpowers:test-driven-development` | Tests exist and pass |
 | 5. TEST | `{{TEST_COMMAND}}` + `{{TYPECHECK_COMMAND}}` | — | Zero failures |
 | 6. SIMPLIFY | `Task(subagent_type="code-simplifier")` | `code-simplifier` agent | Staff review complete |
-| 7. REVIEW | `comprehensive-code-review` skill — dispatches 5 parallel sub-agents (code quality, pattern consistency, SQL, security, simplification) | Fresh sub-agents | All CRITICAL + IMPORTANT findings resolved; MINOR findings tracked |
-| 8. COMMIT | `git commit` | — | Commit created |
-| 9. PUSH | Push feature branch; `gh pr create` with `Closes #N` if `gh` available | — | Branch pushed (PR created if `gh`) |
-| 10. VERIFY CI | If `gh`: `gh run list`, autonomous PR review, auto-merge when green | — | CI green (if applicable) |
+| 7. REVIEW | `comprehensive-code-review` skill — dispatches 5 parallel sub-agents (code quality, pattern consistency, SQL, security, simplification) | Fresh sub-agents | Findings documented by severity |
+| 8. FIX FINDINGS | Address all CRITICAL findings; address or explicitly defer IMPORTANT findings (tracking issue + user approval); track MINOR findings | — | All CRITICAL + IMPORTANT resolved; MINOR tracked |
+| 9. COMMIT | `git commit` | — | Commit created |
+| 10. PUSH | Push feature branch; `gh pr create` with `Closes #N` if `gh` available | — | Branch pushed (PR created if `gh`) |
+| 11. VERIFY CI | If `gh`: `gh run list`, autonomous PR review, auto-merge when green | — | CI green (if applicable) |
 
 **Exceptions that skip planning:** pure doc updates, `git revert`.
 
