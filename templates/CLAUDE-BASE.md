@@ -176,6 +176,26 @@ After every PR is created, automatically:
 
 ---
 
+## Codebase Graph (codebase-memory-mcp)
+
+If the codebase-memory-mcp server is configured, use these tools proactively — don't wait to be asked.
+
+| Context | Tool | Purpose |
+|---------|------|---------|
+| Phase 2 (PLAN) | `get_architecture` | Understand affected areas before planning |
+| Phase 7 (CODE REVIEW) | `search_graph`, `trace_call_path` | Verify no callers are broken, check impact radius |
+| Phase 8 (SQL REVIEW) | `trace_call_path` | Find all callers of changed queries |
+| Debugging (`systematic-debugging`) | `trace_call_path`, `search_graph` | Understand call chains and dependencies before guessing |
+| Searching for relationships | `search_graph` | Prefer over text grep when searching for function/class relationships |
+
+**Rules:**
+- During **debugging**, ALWAYS use `trace_call_path` and `search_graph` to understand the call chain and dependencies before proposing fixes. Don't guess — trace.
+- During **code review** (Phase 7), ALWAYS use `search_graph` to check the impact radius of changes and verify no callers are broken.
+- During **planning** (Phase 2), use `get_architecture` to understand the affected areas.
+- Use `search_graph` over text grep when searching for function relationships, not just text matches.
+
+---
+
 ## Mandatory Skills
 
 | Trigger | Skill |
