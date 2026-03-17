@@ -22,7 +22,7 @@
 | 4. IMPLEMENT | Write code following TDD | `superpowers:test-driven-development` | Tests exist and pass |
 | 5. TEST | `{{TEST_COMMAND}}` + `{{TYPECHECK_COMMAND}}` | — | Zero failures |
 | 6. SIMPLIFY | `Task(subagent_type="code-simplifier")` | `code-simplifier` agent | Staff review complete |
-| 7. REVIEW | `comprehensive-code-review` skill — dispatches 5 parallel sub-agents (code quality, pattern consistency, SQL, security, simplification) | Fresh sub-agents | All dimensions approved |
+| 7. REVIEW | `comprehensive-code-review` skill — dispatches 5 parallel sub-agents (code quality, pattern consistency, SQL, security, simplification) | Fresh sub-agents | All CRITICAL + IMPORTANT findings resolved; MINOR findings tracked |
 | 8. COMMIT | `git commit` | — | Commit created |
 | 9. PUSH | Push feature branch; `gh pr create` with `Closes #N` if `gh` available | — | Branch pushed (PR created if `gh`) |
 | 10. VERIFY CI | If `gh`: `gh run list`, autonomous PR review, auto-merge when green | — | CI green (if applicable) |
@@ -56,8 +56,9 @@ Task(subagent_type="superpowers:code-reviewer", prompt="
 - Invoke the `comprehensive-code-review` skill — it orchestrates all review dimensions in parallel
 - Covers: code quality, pattern consistency, SQL performance, security (OWASP), and simplification
 - SQL sub-agent is automatically dispatched if DB-touching files changed; skipped otherwise
-- CRITICAL findings MUST be fixed before commit. Re-run tests after fixes, then re-review
-- IMPORTANT findings: fix if possible, otherwise open a GitHub issue immediately
+- **CRITICAL findings:** MUST be fixed before commit — hard block on Phase 8. Re-run tests and re-review after fixes.
+- **IMPORTANT findings:** MUST be addressed before commit — fix the code, or (if scope-expanding) open a tracking issue AND get explicit user approval to defer. Cannot silently skip.
+- **MINOR findings:** address if straightforward; otherwise open a tracking issue. Do not block commit.
 - Max 3 review cycles before escalating to user
 
 **Pre-existing issues found during review:**
