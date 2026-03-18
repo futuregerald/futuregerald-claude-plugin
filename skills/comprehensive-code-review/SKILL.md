@@ -3,6 +3,7 @@ name: comprehensive-code-review
 description: Use when performing code review on a PR, reviewing code changes before merge, or when a GitHub code review is requested or received - orchestrates parallel sub-agents for code quality, SQL, security, and simplification
 tags: [quality, review, security, sql, code-review, pr, architecture, owasp, defensive-coding]
 model: opus
+author: Gerald Onyango <gerald.onyango@gmail.com>
 ---
 
 # Comprehensive Code Review
@@ -169,7 +170,7 @@ Agent tool:
 
     End with:
     ### Assessment
-    **Verdict:** APPROVED | APPROVED WITH CONDITIONS | CHANGES REQUIRED
+    **Verdict:** APPROVED | CHANGES REQUIRED
     **Summary:** [1-2 sentences]
 ```
 
@@ -263,7 +264,7 @@ Agent tool:
 
     End with:
     ### Assessment
-    **Verdict:** APPROVED | APPROVED WITH CONDITIONS | CHANGES REQUIRED
+    **Verdict:** APPROVED | CHANGES REQUIRED
     **Summary:** [Pattern consistency assessment in 1-2 sentences]
 ```
 
@@ -333,7 +334,7 @@ Agent tool:
 
     End with:
     ### Assessment
-    **Verdict:** APPROVED | APPROVED WITH CONDITIONS | CHANGES REQUIRED
+    **Verdict:** APPROVED | CHANGES REQUIRED
     **Summary:** [Database performance and safety assessment in 1-2 sentences]
 ```
 
@@ -418,8 +419,7 @@ Agent tool:
     ## Verdict Thresholds
 
     - **APPROVED**: No critical or important security findings
-    - **APPROVED WITH CONDITIONS**: Important findings present — each must have a Jira issue opened before this verdict applies
-    - **CHANGES REQUIRED**: Any critical security findings — must be fixed before merge, no exceptions
+    - **CHANGES REQUIRED**: Any critical or important security findings — must be fixed before merge, no exceptions
 
     ## Output Format
 
@@ -433,7 +433,7 @@ Agent tool:
 
     End with:
     ### Assessment
-    **Verdict:** APPROVED | APPROVED WITH CONDITIONS | CHANGES REQUIRED
+    **Verdict:** APPROVED | CHANGES REQUIRED
     **Summary:** [Security posture assessment in 1-2 sentences]
 ```
 
@@ -554,11 +554,11 @@ Mark each as "Approved — implement" or "Deferred — track as follow-up".]
 | Security | {verdict} | {n} | {n} | {n} |
 | Simplification | {verdict} | {n} | {n} | {n} |
 
-**Final Verdict:** {APPROVED | APPROVED WITH CONDITIONS | CHANGES REQUIRED}
+**Final Verdict:** {APPROVED | CHANGES REQUIRED}
 
 **Action Required:**
 - CRITICAL: Must fix before merge ({count} items)
-- IMPORTANT: Should fix, or create Jira ticket ({count} items)
+- IMPORTANT: Must fix before merge ({count} items)
 - MINOR: At author's discretion ({count} items)
 ```
 
