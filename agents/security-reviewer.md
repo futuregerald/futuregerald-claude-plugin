@@ -1,3 +1,7 @@
+---
+author: Gerald Onyango <gerald.onyango@gmail.com>
+---
+
 # Security Reviewer Subagent
 
 Use this subagent to perform a security-focused code audit on changed files.
@@ -131,22 +135,21 @@ For each finding, report:
 ## Assessment
 
 - **CRITICAL findings MUST be fixed before merge.** No exceptions.
-- **IMPORTANT findings SHOULD be fixed.** If not fixed, a Jira issue MUST be opened.
+- **IMPORTANT findings MUST be fixed before merge.** No exceptions.
 - **MINOR findings** are noted but do not block merge.
 
 Final verdict:
 - **APPROVED**: No critical or important security findings
-- **APPROVED WITH CONDITIONS**: Important findings that need Jira issues created
-- **CHANGES REQUIRED**: Critical security findings that must be fixed before merge
+- **CHANGES REQUIRED**: Critical or important security findings that must be fixed before merge
 ```
 
 ## Review Loop
 
-If security review returns critical findings:
+If security review returns critical or important findings:
 
 1. **Critical findings:** Author MUST fix, re-run tests, then re-request security review
-2. **Important findings:** Fix if possible. For any not fixed, create a Jira issue with file paths, line numbers, attack vector, and CWE ID
+2. **Important findings:** Author MUST fix, re-run tests, then re-request security review
 3. **Minor findings:** Note in review but do not block
-4. **Max 3 review cycles.** If critical findings persist after 3 cycles, escalate to user.
+4. **Max 3 review cycles.** If critical or important findings persist after 3 cycles, escalate to user.
 
-After fixes, dispatch another security review to verify critical findings are resolved.
+After fixes, dispatch another security review to verify critical and important findings are resolved.
