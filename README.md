@@ -58,7 +58,7 @@ skill-installer --mode config-only --target claude --yes
 
 ### Skills — Teaching Claude How to Work
 
-Skills are markdown-based instruction sets that give Claude specialized knowledge and workflows. When invoked, Claude follows the skill's process exactly. The plugin includes 34 skills covering:
+Skills are markdown-based instruction sets that give Claude specialized knowledge and workflows. When invoked, Claude follows the skill's process exactly. The plugin includes 35 skills covering:
 
 - **Test-driven development** — RED/GREEN/REFACTOR cycle
 - **Systematic debugging** — 4-phase protocol: root cause analysis, pattern matching, hypothesis testing, implementation
@@ -203,7 +203,7 @@ If symlinked to `~/.claude/skills`, use the `superpowers:` prefix:
 
 ## Skills and Agents Reference
 
-### Skills (36)
+### Skills (37)
 
 **Core Workflow:**
 
@@ -235,6 +235,7 @@ If symlinked to `~/.claude/skills`, use the `superpowers:` prefix:
 | `using-git-worktrees` | Git worktree isolation |
 | `finishing-a-development-branch` | Branch completion workflow |
 | `pull-request-description` | Structured PR descriptions with summary, background, test plan, and rollback plan |
+| `ticket-grooming` | Deep-dive ticket investigation: dispatches sub-agents for codebase analysis, history research, root cause analysis, and risk assessment; posts structured Triaging Notes to Jira or GitHub |
 
 **Framework-Specific:**
 
@@ -463,7 +464,7 @@ futuregerald-claude-plugin/
 │       ├── current.md           # /project:current
 │       ├── inbox.md             # /project:inbox
 │       └── cleanup.md           # /project:cleanup
-├── skills/                      # 33 skill directories, each with SKILL.md
+├── skills/                      # 34 skill directories, each with SKILL.md
 ├── agents/                      # 6 agent markdown files
 ├── templates/
 │   ├── CLAUDE-BASE.md           # Base template for generated CLAUDE.md files
