@@ -210,6 +210,28 @@ If the codebase-memory-mcp server is configured, use these tools proactively —
 
 ---
 
+## Jira Integration (when Atlassian MCP is configured)
+
+### Posting Comments
+
+When posting comments to Jira via `addCommentToJiraIssue`, you **MUST** set `contentFormat: "markdown"`. Write all comment bodies in standard markdown. Omitting `contentFormat` causes the API to default to ADF, which renders markdown as broken plain text.
+
+### acli Fallback
+
+When an operation is not available via the Atlassian MCP server (e.g., deleting comments, bulk edits), use the `acli` CLI instead:
+
+```bash
+# Delete a comment
+acli jira workitem comment delete --key PROJ-1234 --id 12345
+
+# List comments (to find IDs)
+acli jira workitem comment list --key PROJ-1234
+```
+
+Always prefer MCP tools for reads and writes. Use `acli` only when MCP lacks the capability.
+
+---
+
 ## Emergency Procedures
 
 **CI fails 3+ times:** Stop pushing. Run `{{BUILD_COMMAND}}` locally. If still failing, branch from last good state + cherry-pick. If blocked >30min, ask user.
