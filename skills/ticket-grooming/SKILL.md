@@ -40,11 +40,29 @@ Resolution order:
 3. **Key pattern** — `XX-1234` (uppercase letters + hyphen + digits) = Jira, `#1234` = GitHub
 4. **Verbal description** — no ticket exists; investigate and ask user where to post
 
-| System | Read ticket | Search history | Post comment |
-|--------|------------|----------------|--------------|
-| Jira | `getJiraIssue` | `searchJiraIssuesUsingJql` | `addCommentToJiraIssue` |
-| GitHub | `gh issue view` | `gh issue list`, `gh pr list` | `gh issue comment` |
-| Other | Ask user | Best effort | Ask user |
+| System | Read ticket | Search history | Post comment | Delete comment |
+|--------|------------|----------------|--------------|----------------|
+| Jira | `getJiraIssue` | `searchJiraIssuesUsingJql` | `addCommentToJiraIssue` | `acli jira workitem comment delete --key {KEY} --id {ID}` |
+| GitHub | `gh issue view` | `gh issue list`, `gh pr list` | `gh issue comment` | `gh api -X DELETE` |
+| Other | Ask user | Best effort | Ask user | Ask user |
+
+### acli Fallback
+
+When an operation is not available via the Atlassian MCP server (e.g., deleting comments, bulk edits), use the `acli` CLI instead:
+
+```bash
+# Delete a comment
+acli jira workitem comment delete --key DL-1234 --id 12345
+
+# List comments (to find IDs)
+acli jira workitem comment list --key DL-1234
+
+# Other useful acli commands
+acli jira workitem view --key DL-1234
+acli jira workitem edit --key DL-1234 --field "labels=has_notes"
+```
+
+Always prefer MCP tools for reads and writes. Use `acli` only when MCP lacks the capability (deletes, bulk operations, etc.).
 
 ### 3. Resolve GitHub Remote Info
 
@@ -202,16 +220,20 @@ Compile all findings into the output format below. Return the formatted triaging
 | L | 5-15 files, cross-cutting logic, schema migration, multi-repo possible | 3-7 days |
 | XL | 15+ files, architectural change, multi-repo, data migration | 1-2 weeks |
 
-**Format Conversion:**
-- If posting to Jira, convert markdown to Jira wiki markup before posting:
-  - `# H` → `h1. H`, `## H` → `h2. H`, `### H` → `h3. H`
-  - `**bold**` → `*bold*`
-  - `` `code` `` → `{{code}}`
-  - ```` ```lang ```` → `{code:lang}...{code}`
-  - `[text](url)` → `[text|url]`
-  - `- item` → `* item`
-  - `> quote` → `{quote}...{quote}`
-- If posting to GitHub, use markdown as-is
+**Comment Format — CRITICAL:**
+- **Always write triaging notes in standard markdown.** Do NOT convert to Jira wiki markup.
+- When posting to Jira via `addCommentToJiraIssue`, you MUST set `contentFormat: "markdown"`. The Atlassian MCP server accepts markdown and converts it to ADF internally. If you omit `contentFormat`, the API defaults to ADF and your markdown will render as broken plain text.
+- When posting to GitHub, use markdown as-is.
+
+```
+# Correct — Jira posting
+addCommentToJiraIssue(
+  cloudId: "...",
+  issueIdOrKey: "DL-1234",
+  contentFormat: "markdown",    # ← MANDATORY for Jira
+  commentBody: "# Triaging Notes\n..."
+)
+```
 
 **Iteration Tracking:**
 - Check if a previous "Triaging Notes" comment exists on the ticket
@@ -380,6 +402,8 @@ After the staff engineer review sub-agent returns:
 2. **PASS WITH NOTES:** Post the triaging notes as-is. Mention the notes to the user in the conversation summary.
 3. **NEEDS FIXES:** Apply all fixes from the review to the triaging notes automatically, then post the corrected version. Report what was fixed in the conversation summary.
 
+**Posting to Jira — MANDATORY:** When calling `addCommentToJiraIssue`, you MUST pass `contentFormat: "markdown"`. The comment body must be standard markdown (not Jira wiki markup). Omitting `contentFormat` causes the API to default to ADF, which renders markdown as broken plain text.
+
 **After posting (all verdicts):** Add the label `has_notes` to the ticket to indicate it has been groomed. Use `editJiraIssue` (Jira) or `gh issue edit --add-label` (GitHub) to add the label without removing existing labels.
 
 If `--dry-run`: display the final (potentially corrected) triaging notes in the conversation. Ask: "Post to ticket?" If confirmed, post and add the `has_notes` label.
@@ -399,7 +423,9 @@ Grooming 3 tickets...
 | Ticket not found / inaccessible | Fail fast, tell the user |
 | Sub-agent exceeds context budget | Summarize what it has, note "investigation truncated due to complexity" |
 | Comment post fails | Output triaging notes in the conversation so nothing is lost |
-| MCP tools unavailable | Inform user which tools are needed, proceed with what's available |
+| Comment posted with wrong format | Delete the bad comment via `acli jira workitem comment delete --key {KEY} --id {ID}`, then re-post with correct `contentFormat: "markdown"` |
+| MCP tools unavailable | Inform user which tools are needed. For Jira operations not supported by MCP (deleting comments, bulk edits), fall back to `acli` CLI |
+| Need to delete a Jira comment | MCP does not support comment deletion. Use `acli jira workitem comment delete --key {KEY} --id {ID}` |
 | Repo not cloned locally (multi-repo) | Skip that repo, note it in findings, ask user for path |
 | One sub-agent fails in a batch | Others continue; failure reported with partial findings |
 | GitHub remote detection fails | Use relative paths instead of permalinks |
