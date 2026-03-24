@@ -175,9 +175,9 @@ Using all findings from Phases 1-3:
 4. Security implications
 5. Performance implications
 
-### Phase 5: Synthesis & Post
+### Phase 5: Synthesis (DO NOT POST)
 
-Compile all findings into the output format below.
+Compile all findings into the output format below. Return the formatted triaging notes as your final output. DO NOT post the comment — the main conversation handles posting after staff engineer review.
 
 **GitHub Permalinks:**
 - Every file/function/line reference MUST include a GitHub permalink
@@ -288,22 +288,106 @@ _Groomed: {ISO_TIMESTAMP} (iteration {N})_
 ...
 ```
 
-## After Sub-Agent Returns
+## After Investigation Sub-Agent Returns
 
-Back in the main conversation:
+Back in the main conversation, dispatch a **staff engineer review sub-agent** before posting.
 
-1. If `--dry-run`: display the triaging notes in the conversation. Ask: "Post to ticket?" If confirmed, post.
-2. If not dry-run: the sub-agent already posted. Report the result:
-   ```
-   Triaging notes posted to {TICKET_KEY}
-   ```
-3. For multi-ticket batches, report as each completes:
-   ```
-   Grooming 3 tickets...
-     - DL-1234: Triaging notes posted
-     - DL-1235: Triaging notes posted
-     - DL-1236: In progress — Phase 3 (root cause analysis)
-   ```
+### 6. Staff Engineer Review
+
+Dispatch a new sub-agent with **fresh context** (no shared state with the investigation agent). This agent reviews the triaging notes for errors and missed issues.
+
+**Staff Engineer Review Sub-Agent Prompt Template:**
+
+```
+You are a staff engineer reviewing triaging notes for ticket {TICKET_KEY} before they are posted. Your job is to catch errors, missed risks, and deviations from repo patterns. You have fresh context — verify everything independently.
+
+## Triaging Notes to Review
+{FULL_TRIAGING_NOTES_FROM_INVESTIGATION_AGENT}
+
+## Ticket Details
+{FULL_TICKET_DESCRIPTION}
+
+## Pre-Resolved Info
+- GitHub org/repo: {ORG}/{REPO}
+- HEAD SHA: {SHA}
+
+## Review Checklist
+
+For each claim in the triaging notes, verify it against the actual codebase:
+
+### Correctness
+- [ ] Every file path mentioned exists and is correct
+- [ ] Every function/method/class referenced exists at the stated location
+- [ ] Every line number in GitHub permalinks points to the correct code
+- [ ] Schema claims match actual database schema (check db/schema.rb or migrations)
+- [ ] Call path traces are accurate (verify with grep/read, not just the knowledge graph)
+- [ ] Related ticket references are accurate (correct keys, correct statuses)
+- [ ] The root cause / gap analysis is logically sound
+
+### Defensive Coding & Security
+- [ ] If file uploads are involved: validates file types, enforces size limits, sanitizes filenames
+- [ ] If user input is involved: checks for injection (SQL, XSS, command injection)
+- [ ] If authorization is involved: verifies Pundit policies cover the new path
+- [ ] If new API params are added: checks strong parameter whitelisting
+- [ ] Suggested solutions do not introduce N+1 queries
+- [ ] Suggested solutions handle edge cases (nil values, empty arrays, concurrent access)
+- [ ] Cleanup/rollback paths are addressed (e.g., orphaned records on state reversal)
+
+### Pattern Matching
+- [ ] Suggested approach follows existing repo conventions (interactors, concerns, serializers)
+- [ ] Similar completed work is referenced and the pattern is correctly identified
+- [ ] The suggested solution uses the same abstractions as the reference implementation (not a novel approach when a proven one exists)
+- [ ] Test expectations align with existing test patterns (request specs, model specs, interactor specs)
+
+### Estimation
+- [ ] T-shirt size is reasonable given the surface area
+- [ ] Complexity factors are complete (nothing major missing)
+
+## Output Format
+
+Return your review as a structured report:
+
+### Errors Found
+List each error with:
+- **What:** The specific claim that is wrong
+- **Why:** What the actual state is (with evidence — file path, line number, grep result)
+- **Fix:** The corrected text that should replace it in the triaging notes
+
+### Missed Risks
+List any risks or edge cases the investigation missed:
+- **Risk:** Description
+- **Evidence:** How you found it
+- **Addition:** Text to add to the triaging notes
+
+### Pattern Deviations
+List any places the suggested solution deviates from repo conventions:
+- **Deviation:** What was suggested vs what the repo does
+- **Evidence:** Reference to the existing pattern
+- **Fix:** How to correct the suggestion
+
+### Verdict
+- **PASS** — No issues found, safe to post as-is
+- **PASS WITH NOTES** — Minor issues that don't affect correctness (list them for context but no fixes needed)
+- **NEEDS FIXES** — Issues found; provide the corrected triaging notes sections
+```
+
+### 7. Auto-Fix and Post
+
+After the staff engineer review sub-agent returns:
+
+1. **PASS:** Post the triaging notes as-is.
+2. **PASS WITH NOTES:** Post the triaging notes as-is. Mention the notes to the user in the conversation summary.
+3. **NEEDS FIXES:** Apply all fixes from the review to the triaging notes automatically, then post the corrected version. Report what was fixed in the conversation summary.
+
+If `--dry-run`: display the final (potentially corrected) triaging notes in the conversation. Ask: "Post to ticket?" If confirmed, post.
+
+For multi-ticket batches, report as each completes:
+```
+Grooming 3 tickets...
+  - DL-1234: Triaging notes posted (review: PASS)
+  - DL-1235: Triaging notes posted (review: NEEDS FIXES — 2 corrections applied)
+  - DL-1236: In progress — staff engineer review
+```
 
 ## Error Handling
 
@@ -316,6 +400,7 @@ Back in the main conversation:
 | Repo not cloned locally (multi-repo) | Skip that repo, note it in findings, ask user for path |
 | One sub-agent fails in a batch | Others continue; failure reported with partial findings |
 | GitHub remote detection fails | Use relative paths instead of permalinks |
+| Staff engineer review fails | Post the unreviewed notes with a note: "Posted without staff engineer review (review agent failed)" |
 
 ## Verbal Description (No Ticket)
 
@@ -346,6 +431,7 @@ Add to CLAUDE.md to customize behavior:
 |-------|------|-------|
 | `systematic-debugging` | Phase 3 (always for code tickets) | Phases 1-3 only — investigation, not implementation |
 | `dispatching-parallel-agents` | Multi-ticket invocations | Parallel sub-agent dispatch with max 3 concurrency |
+| `code-reviewer` (built-in) | Step 6 — staff engineer review | Correctness, defensive coding, security, pattern matching |
 
 ## Installation
 
