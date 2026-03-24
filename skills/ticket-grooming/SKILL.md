@@ -294,7 +294,7 @@ Back in the main conversation, dispatch a **staff engineer review sub-agent** be
 
 ### 6. Staff Engineer Review
 
-Dispatch a new sub-agent with **fresh context** (no shared state with the investigation agent). This agent reviews the triaging notes for errors and missed issues.
+Dispatch a new sub-agent with **fresh context** using `model: "sonnet"` for faster verification. This agent reviews the triaging notes for errors and missed issues.
 
 **Staff Engineer Review Sub-Agent Prompt Template:**
 
@@ -311,37 +311,38 @@ You are a staff engineer reviewing triaging notes for ticket {TICKET_KEY} before
 - GitHub org/repo: {ORG}/{REPO}
 - HEAD SHA: {SHA}
 
+## Verification Strategy: Graph First, Then Targeted Reads
+
+**Use the codebase knowledge graph as your primary verification tool.** Do NOT re-read every file mentioned in the notes. Instead:
+
+1. `mcp__codebase-memory-mcp__search_graph` — verify entities exist (classes, modules, methods, files)
+2. `mcp__codebase-memory-mcp__get_architecture` — validate component boundaries and patterns
+3. `mcp__codebase-memory-mcp__trace_call_path` — verify call path claims in 1 query instead of reading each file
+4. **Only fall back to Read/Grep** for specific line-number verification or when the graph lacks detail (e.g., config values, schema columns)
+
+**Budget: max 15 tool calls for correctness checks.** The graph should handle most verification in 5-8 queries.
+
 ## Review Checklist
 
-For each claim in the triaging notes, verify it against the actual codebase:
+Focus on high-risk claims. Skip low-risk items (Jira ticket statuses, estimation opinions).
 
-### Correctness
-- [ ] Every file path mentioned exists and is correct
-- [ ] Every function/method/class referenced exists at the stated location
-- [ ] Every line number in GitHub permalinks points to the correct code
-- [ ] Schema claims match actual database schema (check db/schema.rb or migrations)
-- [ ] Call path traces are accurate (verify with grep/read, not just the knowledge graph)
-- [ ] Related ticket references are accurate (correct keys, correct statuses)
+### Correctness (use graph first)
+- [ ] Key file paths and classes exist (batch-verify via search_graph)
+- [ ] Call path traces are accurate (verify via trace_call_path)
+- [ ] Schema claims match actual database schema (one Read of db/schema.rb or db/structure.sql)
 - [ ] The root cause / gap analysis is logically sound
 
-### Defensive Coding & Security
-- [ ] If file uploads are involved: validates file types, enforces size limits, sanitizes filenames
-- [ ] If user input is involved: checks for injection (SQL, XSS, command injection)
+### Defensive Coding & Security (highest priority)
 - [ ] If authorization is involved: verifies Pundit policies cover the new path
 - [ ] If new API params are added: checks strong parameter whitelisting
-- [ ] Suggested solutions do not introduce N+1 queries
 - [ ] Suggested solutions handle edge cases (nil values, empty arrays, concurrent access)
 - [ ] Cleanup/rollback paths are addressed (e.g., orphaned records on state reversal)
+- [ ] Security-sensitive claims are verified with targeted file reads (not just graph)
 
-### Pattern Matching
-- [ ] Suggested approach follows existing repo conventions (interactors, concerns, serializers)
-- [ ] Similar completed work is referenced and the pattern is correctly identified
-- [ ] The suggested solution uses the same abstractions as the reference implementation (not a novel approach when a proven one exists)
-- [ ] Test expectations align with existing test patterns (request specs, model specs, interactor specs)
-
-### Estimation
-- [ ] T-shirt size is reasonable given the surface area
-- [ ] Complexity factors are complete (nothing major missing)
+### Pattern Matching (use get_architecture + graph)
+- [ ] Suggested approach follows existing repo conventions (verify via get_architecture)
+- [ ] The suggested solution uses the same abstractions as the reference implementation
+- [ ] Authorization pattern is correctly identified (controller vs interactor level)
 
 ## Output Format
 
