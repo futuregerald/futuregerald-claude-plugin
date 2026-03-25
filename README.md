@@ -203,7 +203,7 @@ If symlinked to `~/.claude/skills`, use the `superpowers:` prefix:
 
 ## Skills and Agents Reference
 
-### Skills (37)
+### Skills (40)
 
 **Core Workflow:**
 
@@ -236,6 +236,9 @@ If symlinked to `~/.claude/skills`, use the `superpowers:` prefix:
 | `finishing-a-development-branch` | Branch completion workflow |
 | `pull-request-description` | Structured PR descriptions with summary, background, test plan, and rollback plan |
 | `ticket-grooming` | Deep-dive ticket investigation: dispatches sub-agents for codebase analysis, history research, root cause analysis, and risk assessment; posts structured Triaging Notes to Jira or GitHub |
+| `grill-me` | Stress-test a plan or design through relentless questioning until shared understanding is reached |
+| `write-a-prd` | Create a PRD through user interview, codebase exploration, and module design; submits as GitHub Issue or Jira ticket |
+| `improve-codebase-architecture` | Surface architectural friction, propose module-deepening refactors, and create RFC issues; supports GitHub and Jira |
 
 **Framework-Specific:**
 
