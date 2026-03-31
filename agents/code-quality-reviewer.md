@@ -1,3 +1,8 @@
+---
+name: code-quality-reviewer
+description: Reviews code quality for correctness, architecture, defensive coding, and testing. Use after spec compliance is verified.
+---
+
 # Code Quality Reviewer Subagent
 
 Use this subagent to review code quality after spec compliance is verified.
@@ -12,7 +17,7 @@ Use this subagent to review code quality after spec compliance is verified.
 
 ```
 Task tool:
-  subagent_type: superpowers:code-reviewer
+  subagent_type: code-quality-reviewer
   description: "Code quality review for Task N"
 ```
 
@@ -97,7 +102,7 @@ The code reviewer evaluates:
 
 ```typescript
 Task({
-  subagent_type: 'superpowers:code-reviewer',
+  subagent_type: 'code-quality-reviewer',
   description: 'Code quality review for Task 3',
   prompt: `Review the implementation for code quality.
 

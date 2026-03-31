@@ -1,3 +1,8 @@
+---
+name: sql-reviewer
+description: Audits database queries, mutations, and ORM usage for performance, security, and defensive coding. Use after code review passes (Phase 7), before commit (Phase 9).
+---
+
 # SQL Performance Reviewer Subagent
 
 Use this subagent to audit all database queries, mutations, and ORM usage for performance, security, and defensive coding.
@@ -12,7 +17,7 @@ Use this subagent to audit all database queries, mutations, and ORM usage for pe
 
 ```
 Task tool:
-  subagent_type: superpowers:code-reviewer
+  subagent_type: sql-reviewer
   description: "SQL performance review for [feature/PR]"
 ```
 
@@ -138,7 +143,7 @@ Final verdict:
 
 ```typescript
 Task({
-  subagent_type: 'superpowers:code-reviewer',
+  subagent_type: 'sql-reviewer',
   description: 'SQL performance review for journey CRUD',
   prompt: `You are a Staff Engineer specializing in database performance, security,
 and defensive coding. Your job is to ruthlessly audit every database query, mutation,
