@@ -18,10 +18,10 @@ Five review dimensions, each dispatched as a **separate sub-agent**:
 
 | Dimension | Sub-Agent | Focus |
 |-----------|-----------|-------|
-| Code Quality | `superpowers:code-reviewer` | Correctness, architecture, defensive coding, testing |
-| Pattern Consistency | `superpowers:code-reviewer` (Pattern prompt) | Codebase idioms, conventions, existing patterns |
-| SQL Performance | `superpowers:code-reviewer` (SQL prompt) | Query performance, N+1, injection, defensive DB patterns |
-| Security Audit | `superpowers:code-reviewer` (Security prompt) | OWASP Top 10, auth, data exposure, injection, IDOR |
+| Code Quality | `code-quality-reviewer` | Correctness, architecture, defensive coding, testing |
+| Pattern Consistency | `code-quality-reviewer` (Pattern prompt) | Codebase idioms, conventions, existing patterns |
+| SQL Performance | `sql-reviewer` | Query performance, N+1, injection, defensive DB patterns |
+| Security Audit | `security-reviewer` | OWASP Top 10, auth, data exposure, injection, IDOR |
 | Code Simplifier | `code-simplifier` agent | Clarity, reuse, dead code, naming, efficiency |
 
 ## When to Use
@@ -117,7 +117,7 @@ Set `{CODEBASE_CONTEXT}` to whichever of these you ran, or to "Not available —
 
 ```
 Agent tool:
-  subagent_type: "superpowers:code-reviewer"
+  subagent_type: "code-quality-reviewer"
   description: "Code quality review"
   prompt: |
     You are a Staff Engineer performing a code quality review. Think critically
@@ -180,7 +180,7 @@ This sub-agent verifies that new code follows the established patterns, idioms, 
 
 ```
 Agent tool:
-  subagent_type: "superpowers:code-reviewer"
+  subagent_type: "code-quality-reviewer"
   description: "Pattern consistency review"
   prompt: |
     You are a Staff Engineer who deeply understands this codebase. Your job is to
@@ -274,7 +274,7 @@ Agent tool:
 
 ```
 Agent tool:
-  subagent_type: "superpowers:code-reviewer"
+  subagent_type: "sql-reviewer"
   description: "SQL performance review"
   prompt: |
     You are a Staff Engineer specializing in database performance, security,
@@ -342,7 +342,7 @@ Agent tool:
 
 ```
 Agent tool:
-  subagent_type: "superpowers:code-reviewer"
+  subagent_type: "security-reviewer"
   description: "Security audit"
   prompt: |
     You are a Staff Security Engineer performing a security-focused code audit.

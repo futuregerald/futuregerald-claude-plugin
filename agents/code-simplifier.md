@@ -79,7 +79,7 @@ After generating ALL suggestions in Phase 1, you MUST spawn a Staff Engineer sub
 
 ```
 Task tool with:
-- subagent_type: "superpowers:code-reviewer"
+- subagent_type: "code-quality-reviewer"
 - prompt: |
     You are a Staff Software Engineer reviewing code simplification recommendations.
     Your job is to critically evaluate each suggestion - not all "simplifications" are improvements.

@@ -1,4 +1,6 @@
 ---
+name: security-reviewer
+description: Performs security-focused code audit using OWASP Top 10 checklist. Use for security-sensitive code changes (auth, payments, user data, API endpoints, file uploads).
 author: Gerald Onyango <gerald.onyango@gmail.com>
 ---
 
@@ -16,7 +18,7 @@ Use this subagent to perform a security-focused code audit on changed files.
 
 ```
 Agent tool:
-  subagent_type: superpowers:code-reviewer
+  subagent_type: security-reviewer
   description: "Security audit for [feature/PR]"
 ```
 
