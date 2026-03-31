@@ -40,11 +40,29 @@ Resolution order:
 3. **Key pattern** — `XX-1234` (uppercase letters + hyphen + digits) = Jira, `#1234` = GitHub
 4. **Verbal description** — no ticket exists; investigate and ask user where to post
 
-| System | Read ticket | Search history | Post comment |
-|--------|------------|----------------|--------------|
-| Jira | `getJiraIssue` | `searchJiraIssuesUsingJql` | `addCommentToJiraIssue` |
-| GitHub | `gh issue view` | `gh issue list`, `gh pr list` | `gh issue comment` |
-| Other | Ask user | Best effort | Ask user |
+| System | Read ticket | Search history | Post comment | Delete comment |
+|--------|------------|----------------|--------------|----------------|
+| Jira | `getJiraIssue` | `searchJiraIssuesUsingJql` | `addCommentToJiraIssue` | `acli jira workitem comment delete --key {KEY} --id {ID}` |
+| GitHub | `gh issue view` | `gh issue list`, `gh pr list` | `gh issue comment` | `gh api -X DELETE` |
+| Other | Ask user | Best effort | Ask user | Ask user |
+
+### acli Fallback
+
+When an operation is not available via the Atlassian MCP server (e.g., deleting comments, bulk edits), use the `acli` CLI instead:
+
+```bash
+# Delete a comment
+acli jira workitem comment delete --key DL-1234 --id 12345
+
+# List comments (to find IDs)
+acli jira workitem comment list --key DL-1234
+
+# Other useful acli commands
+acli jira workitem view --key DL-1234
+acli jira workitem edit --key DL-1234 --field "labels=has_notes"
+```
+
+Always prefer MCP tools for reads and writes. Use `acli` only when MCP lacks the capability (deletes, bulk operations, etc.).
 
 ### 3. Resolve GitHub Remote Info
 
@@ -175,9 +193,9 @@ Using all findings from Phases 1-3:
 4. Security implications
 5. Performance implications
 
-### Phase 5: Synthesis & Post
+### Phase 5: Synthesis (DO NOT POST)
 
-Compile all findings into the output format below.
+Compile all findings into the output format below. Return the formatted triaging notes as your final output. DO NOT post the comment — the main conversation handles posting after staff engineer review.
 
 **GitHub Permalinks:**
 - Every file/function/line reference MUST include a GitHub permalink
@@ -202,16 +220,20 @@ Compile all findings into the output format below.
 | L | 5-15 files, cross-cutting logic, schema migration, multi-repo possible | 3-7 days |
 | XL | 15+ files, architectural change, multi-repo, data migration | 1-2 weeks |
 
-**Format Conversion:**
-- If posting to Jira, convert markdown to Jira wiki markup before posting:
-  - `# H` → `h1. H`, `## H` → `h2. H`, `### H` → `h3. H`
-  - `**bold**` → `*bold*`
-  - `` `code` `` → `{{code}}`
-  - ```` ```lang ```` → `{code:lang}...{code}`
-  - `[text](url)` → `[text|url]`
-  - `- item` → `* item`
-  - `> quote` → `{quote}...{quote}`
-- If posting to GitHub, use markdown as-is
+**Comment Format — CRITICAL:**
+- **Always write triaging notes in standard markdown.** Do NOT convert to Jira wiki markup.
+- When posting to Jira via `addCommentToJiraIssue`, you MUST set `contentFormat: "markdown"`. The Atlassian MCP server accepts markdown and converts it to ADF internally. If you omit `contentFormat`, the API defaults to ADF and your markdown will render as broken plain text.
+- When posting to GitHub, use markdown as-is.
+
+```
+# Correct — Jira posting
+addCommentToJiraIssue(
+  cloudId: "...",
+  issueIdOrKey: "DL-1234",
+  contentFormat: "markdown",    # ← MANDATORY for Jira
+  commentBody: "# Triaging Notes\n..."
+)
+```
 
 **Iteration Tracking:**
 - Check if a previous "Triaging Notes" comment exists on the ticket
@@ -288,22 +310,111 @@ _Groomed: {ISO_TIMESTAMP} (iteration {N})_
 ...
 ```
 
-## After Sub-Agent Returns
+## After Investigation Sub-Agent Returns
 
-Back in the main conversation:
+Back in the main conversation, dispatch a **staff engineer review sub-agent** before posting.
 
-1. If `--dry-run`: display the triaging notes in the conversation. Ask: "Post to ticket?" If confirmed, post.
-2. If not dry-run: the sub-agent already posted. Report the result:
-   ```
-   Triaging notes posted to {TICKET_KEY}
-   ```
-3. For multi-ticket batches, report as each completes:
-   ```
-   Grooming 3 tickets...
-     - DL-1234: Triaging notes posted
-     - DL-1235: Triaging notes posted
-     - DL-1236: In progress — Phase 3 (root cause analysis)
-   ```
+### 6. Staff Engineer Review
+
+Dispatch a new sub-agent with **fresh context** using `model: "sonnet"` for faster verification. This agent reviews the triaging notes for errors and missed issues.
+
+**Staff Engineer Review Sub-Agent Prompt Template:**
+
+```
+You are a staff engineer reviewing triaging notes for ticket {TICKET_KEY} before they are posted. Your job is to catch errors, missed risks, and deviations from repo patterns. You have fresh context — verify everything independently.
+
+## Triaging Notes to Review
+{FULL_TRIAGING_NOTES_FROM_INVESTIGATION_AGENT}
+
+## Ticket Details
+{FULL_TICKET_DESCRIPTION}
+
+## Pre-Resolved Info
+- GitHub org/repo: {ORG}/{REPO}
+- HEAD SHA: {SHA}
+
+## Verification Strategy: Graph First, Then Targeted Reads
+
+**Use the codebase knowledge graph as your primary verification tool.** Do NOT re-read every file mentioned in the notes. Instead:
+
+1. `mcp__codebase-memory-mcp__search_graph` — verify entities exist (classes, modules, methods, files)
+2. `mcp__codebase-memory-mcp__get_architecture` — validate component boundaries and patterns
+3. `mcp__codebase-memory-mcp__trace_call_path` — verify call path claims in 1 query instead of reading each file
+4. **Only fall back to Read/Grep** for specific line-number verification or when the graph lacks detail (e.g., config values, schema columns)
+
+**Budget: max 15 tool calls for correctness checks.** The graph should handle most verification in 5-8 queries.
+
+## Review Checklist
+
+Focus on high-risk claims. Skip low-risk items (Jira ticket statuses, estimation opinions).
+
+### Correctness (use graph first)
+- [ ] Key file paths and classes exist (batch-verify via search_graph)
+- [ ] Call path traces are accurate (verify via trace_call_path)
+- [ ] Schema claims match actual database schema (one Read of db/schema.rb or db/structure.sql)
+- [ ] The root cause / gap analysis is logically sound
+
+### Defensive Coding & Security (highest priority)
+- [ ] If authorization is involved: verifies Pundit policies cover the new path
+- [ ] If new API params are added: checks strong parameter whitelisting
+- [ ] Suggested solutions handle edge cases (nil values, empty arrays, concurrent access)
+- [ ] Cleanup/rollback paths are addressed (e.g., orphaned records on state reversal)
+- [ ] Security-sensitive claims are verified with targeted file reads (not just graph)
+
+### Pattern Matching (use get_architecture + graph)
+- [ ] Suggested approach follows existing repo conventions (verify via get_architecture)
+- [ ] The suggested solution uses the same abstractions as the reference implementation
+- [ ] Authorization pattern is correctly identified (controller vs interactor level)
+
+## Output Format
+
+Return your review as a structured report:
+
+### Errors Found
+List each error with:
+- **What:** The specific claim that is wrong
+- **Why:** What the actual state is (with evidence — file path, line number, grep result)
+- **Fix:** The corrected text that should replace it in the triaging notes
+
+### Missed Risks
+List any risks or edge cases the investigation missed:
+- **Risk:** Description
+- **Evidence:** How you found it
+- **Addition:** Text to add to the triaging notes
+
+### Pattern Deviations
+List any places the suggested solution deviates from repo conventions:
+- **Deviation:** What was suggested vs what the repo does
+- **Evidence:** Reference to the existing pattern
+- **Fix:** How to correct the suggestion
+
+### Verdict
+- **PASS** — No issues found, safe to post as-is
+- **PASS WITH NOTES** — Minor issues that don't affect correctness (list them for context but no fixes needed)
+- **NEEDS FIXES** — Issues found; provide the corrected triaging notes sections
+```
+
+### 7. Auto-Fix and Post
+
+After the staff engineer review sub-agent returns:
+
+1. **PASS:** Post the triaging notes as-is.
+2. **PASS WITH NOTES:** Post the triaging notes as-is. Mention the notes to the user in the conversation summary.
+3. **NEEDS FIXES:** Apply all fixes from the review to the triaging notes automatically, then post the corrected version. Report what was fixed in the conversation summary.
+
+**Posting to Jira — MANDATORY:** When calling `addCommentToJiraIssue`, you MUST pass `contentFormat: "markdown"`. The comment body must be standard markdown (not Jira wiki markup). Omitting `contentFormat` causes the API to default to ADF, which renders markdown as broken plain text.
+
+**After posting (all verdicts):** Add the label `has_notes` to the ticket to indicate it has been groomed. Use `editJiraIssue` (Jira) or `gh issue edit --add-label` (GitHub) to add the label without removing existing labels.
+
+If `--dry-run`: display the final (potentially corrected) triaging notes in the conversation. Ask: "Post to ticket?" If confirmed, post and add the `has_notes` label.
+
+For multi-ticket batches, report as each completes:
+```
+Grooming 3 tickets...
+  - DL-1234: Triaging notes posted (review: PASS)
+  - DL-1235: Triaging notes posted (review: NEEDS FIXES — 2 corrections applied)
+  - DL-1236: In progress — staff engineer review
+```
 
 ## Error Handling
 
@@ -312,10 +423,13 @@ Back in the main conversation:
 | Ticket not found / inaccessible | Fail fast, tell the user |
 | Sub-agent exceeds context budget | Summarize what it has, note "investigation truncated due to complexity" |
 | Comment post fails | Output triaging notes in the conversation so nothing is lost |
-| MCP tools unavailable | Inform user which tools are needed, proceed with what's available |
+| Comment posted with wrong format | Delete the bad comment via `acli jira workitem comment delete --key {KEY} --id {ID}`, then re-post with correct `contentFormat: "markdown"` |
+| MCP tools unavailable | Inform user which tools are needed. For Jira operations not supported by MCP (deleting comments, bulk edits), fall back to `acli` CLI |
+| Need to delete a Jira comment | MCP does not support comment deletion. Use `acli jira workitem comment delete --key {KEY} --id {ID}` |
 | Repo not cloned locally (multi-repo) | Skip that repo, note it in findings, ask user for path |
 | One sub-agent fails in a batch | Others continue; failure reported with partial findings |
 | GitHub remote detection fails | Use relative paths instead of permalinks |
+| Staff engineer review fails | Post the unreviewed notes with a note: "Posted without staff engineer review (review agent failed)" |
 
 ## Verbal Description (No Ticket)
 
@@ -346,6 +460,7 @@ Add to CLAUDE.md to customize behavior:
 |-------|------|-------|
 | `systematic-debugging` | Phase 3 (always for code tickets) | Phases 1-3 only — investigation, not implementation |
 | `dispatching-parallel-agents` | Multi-ticket invocations | Parallel sub-agent dispatch with max 3 concurrency |
+| `code-reviewer` (built-in) | Step 6 — staff engineer review | Correctness, defensive coding, security, pattern matching |
 
 ## Installation
 

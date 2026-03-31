@@ -96,6 +96,7 @@ Sub-agents work in the current working directory on the active feature branch. N
 
 ### PRs (when `gh` is available)
 
+- **Always use the `pull-request-description` skill when creating or updating a PR.** This is mandatory, no exceptions.
 - Use `Closes #N` (not Fixes/Resolves) in PR body to auto-close issues
 - Include `Refs #N` in commit message bodies
 
@@ -179,6 +180,7 @@ After every PR is created, automatically:
 | Bug investigation | `systematic-debugging` |
 | New feature | `superpowers:test-driven-development` (RED→GREEN→REFACTOR) |
 | Database queries/mutations changed | `sql-optimization-patterns` + `sql-reviewer` agent |
+| Creating or updating a pull request | `pull-request-description` — structured summary, background, test plan, rollback plan. **Mandatory for both new PRs and PR description updates.** |
 | About to claim completion | `verification-before-completion` |
 
 ---
