@@ -1,128 +1,125 @@
 ---
 name: comprehensive-code-review
-description: Use when performing code review on a PR, reviewing code changes before merge, or when a GitHub code review is requested or received - orchestrates parallel sub-agents for code quality, SQL, security, and simplification
+description: Use when performing code review on a PR, reviewing code changes before merge, or when a GitHub code review is requested or received - orchestrates parallel sub-agents for correctness and safety review
 tags: [quality, review, security, sql, code-review, pr, architecture, owasp, defensive-coding]
-model: opus
+model: sonnet
 author: Gerald Onyango <gerald.onyango@gmail.com>
 ---
 
 # Comprehensive Code Review
 
-You are a **Staff Engineer** orchestrating a thorough, multi-dimensional code review. You think critically and logically through problems with an eye towards **defensive coding**. You do NOT review code yourself — you dispatch fresh sub-agents for independent, unbiased analysis across five dimensions, then consolidate their findings into a single prioritized report.
+You are a **Staff Engineer** orchestrating a thorough, multi-dimensional code review. You do NOT review code yourself — you dispatch fresh sub-agents for independent, unbiased analysis, then consolidate their findings into a single prioritized report.
 
-## Overview
-
-**Core principle:** No single reviewer catches everything. Parallel specialized reviewers with independent context produce comprehensive coverage.
-
-Five review dimensions, each dispatched as a **separate sub-agent**:
+Two review dimensions, each dispatched as a **separate sub-agent in parallel**:
 
 | Dimension | Sub-Agent | Focus |
 |-----------|-----------|-------|
-| Code Quality | `code-quality-reviewer` | Correctness, architecture, defensive coding, testing |
-| Pattern Consistency | `code-quality-reviewer` (Pattern prompt) | Codebase idioms, conventions, existing patterns |
-| SQL Performance | `sql-reviewer` | Query performance, N+1, injection, defensive DB patterns |
-| Security Audit | `security-reviewer` | OWASP Top 10, auth, data exposure, injection, IDOR |
-| Code Simplifier | `code-simplifier` agent | Clarity, reuse, dead code, naming, efficiency |
-
-## When to Use
-
-- Phase 7 (CODE REVIEW) of the development lifecycle
-- When reviewing a GitHub PR (own or teammate's)
-- When receiving a code review request
-- Before merging any feature branch
-- When the user says "review this PR", "review these changes", "code review"
+| Correctness | `code-quality-reviewer` | Code quality, architecture, defensive coding, testing, patterns, simplification |
+| Safety | `security-reviewer` | OWASP Top 10, auth, data exposure, injection, IDOR, SQL performance (conditional) |
 
 ## Execution Flow
 
 ```
-1. Gather Context
-   ↓
-2. Dispatch 5 Sub-Agents in PARALLEL
-   (Code Quality, Patterns, SQL*, Security, Simplifier)
-   ↓
-3. Collect All Results
-   ↓
-4. Deduplicate & Merge
-   ↓
-5. Present Unified Report
-   ↓
-Any CRITICAL? → yes → CHANGES REQUIRED
-             → no  → APPROVED (with conditions)
-
-* SQL only dispatched if DB-touching files changed
-* If any sub-agent fails: re-dispatch once, then mark dimension as "Review Incomplete"
+1. Gather Context  ->  2. Dispatch 2 Sub-Agents in PARALLEL  ->  3. Consolidate  ->  4. Present Report
+Any CRITICAL? -> CHANGES REQUIRED | else -> APPROVED (with conditions)
+* SQL section only activated if DB-touching files changed
+* If a sub-agent fails: re-dispatch once, then mark "Review Incomplete"
 ```
 
 ## Phase 1: Gather Context
 
-Before dispatching sub-agents, collect and resolve all placeholders used in sub-agent prompts.
+Before dispatching sub-agents, collect ALL context. The orchestrator gathers the diff once — sub-agents receive it in their prompt and do NOT re-run `git diff`.
 
 ```bash
 # Git context
 BASE_SHA=$(git merge-base origin/main HEAD)
 HEAD_SHA=$(git rev-parse HEAD)
-git diff --stat $BASE_SHA..$HEAD_SHA
-git diff --name-only $BASE_SHA..$HEAD_SHA
-git log --oneline $BASE_SHA..$HEAD_SHA
-
-# For PR reviews: get stable SHAs from PR metadata
-gh pr view {PR_NUMBER} --json baseRefOid,headRefOid,title,body
+DIFF=$(git diff $BASE_SHA..$HEAD_SHA)
+FILE_LIST=$(git diff --name-only $BASE_SHA..$HEAD_SHA)
+COMMITS=$(git log --oneline $BASE_SHA..$HEAD_SHA)
 ```
+
+For PR reviews, also fetch PR metadata using available GitHub tooling (`gh` CLI, GitHub MCP server, or API).
 
 **Collect and populate these values before sub-agent dispatch:**
 
-| Placeholder | Where to find it |
-|-------------|-----------------|
-| `{BASE_SHA}` | `git merge-base origin/main HEAD` or `gh pr view --json baseRefOid` |
-| `{HEAD_SHA}` | `git rev-parse HEAD` or `gh pr view --json headRefOid` |
-| `{DESCRIPTION}` | Summary of what changed (from commits + PR description) |
-| `{PLAN_OR_REQUIREMENTS}` | Jira ticket description, plan doc path, or PR body from `gh pr view`. If none available, use "No plan reference — infer from code and PR description." |
-| `{FILE_LIST}` | `git diff --name-only {BASE_SHA}..{HEAD_SHA}` |
-| `{DATABASE_ENGINE}` | Check `config/database.yml` (Rails), `prisma/schema.prisma`, `knexfile.js`, etc. Default: PostgreSQL if not determinable. |
-| `{ORM}` | Check `Gemfile` for `activerecord`/`sequel`, `package.json` for `prisma`/`knex`/`typeorm`, etc. Default: ActiveRecord if Rails project. |
-| `{PR_URL}` | From `gh pr view --json url` or provided by user |
-| `{CODEBASE_CONTEXT}` | See Codebase Intelligence section below |
+| Placeholder | Source |
+|-------------|--------|
+| `{BASE_SHA}`, `{HEAD_SHA}` | Git merge-base / rev-parse, or PR metadata |
+| `{DIFF}` | `git diff {BASE_SHA}..{HEAD_SHA}` — gathered ONCE by orchestrator |
+| `{DESCRIPTION}` | Summary from commits + PR description |
+| `{FILE_LIST}` | `git diff --name-only` |
+| `{PLAN_OR_REQUIREMENTS}` | See Requirements Resolution below |
+| `{DATABASE_ENGINE}` | `config/database.yml`, `prisma/schema.prisma`, etc. Default: PostgreSQL |
+| `{ORM}` | `Gemfile` (activerecord/sequel), `package.json` (prisma/knex/typeorm). Default: ActiveRecord if Rails |
+| `{PR_URL}` | From PR metadata or provided by user |
+| `{CODEBASE_CONTEXT}` | See Codebase Intelligence below |
+| `{DB_FILES_PRESENT}` | Check if diff contains models, migrations, controllers/services with queries |
 
-**Skip SQL sub-agent if:** No database-touching files changed (no models, migrations, controllers with queries, services with queries). State this explicitly in the report.
+### Requirements Resolution
+
+Gather from **all available sources** (GitHub MCP, `gh` CLI, Atlassian MCP, file reads):
+
+1. **GitHub issue** — linked/referenced issues in PR body (`Closes #N`, `Fixes #N`)
+2. **Jira ticket** — key in branch name or PR body (e.g., `DL-1234`), fetch via `getJiraIssue`
+3. **Plan doc** — if PR body references a plan file, read it
+4. **PR description** — requirements stated in the PR body itself
+
+If no PR exists (local branch), skip 1 and 4. Extract Jira key from branch name. Combine all sources with labels:
+```
+**From Jira DL-1234:** [description and acceptance criteria]
+**From PR description:** [requirements]
+**From plan doc (docs/plan.md):** [contents]
+```
+If sources conflict, include both and note the conflict. **Fallback:** "No external requirements found — infer scope from PR description and commits."
 
 ### Codebase Intelligence
 
-**If `codebase-memory-mcp` is available**, run these before dispatching sub-agents and include results as `{CODEBASE_CONTEXT}`:
+**If `codebase-memory-mcp` available:** `get_architecture`, `trace_call_path`, `search_code`, `search_graph` on affected areas.
 
-```
-mcp__codebase-memory-mcp__get_architecture          # overview of affected areas
-mcp__codebase-memory-mcp__trace_call_path(...)       # callers of changed functions
-mcp__codebase-memory-mcp__search_code(query=...)     # similar existing implementations
-mcp__codebase-memory-mcp__search_graph(query=...)    # impact radius
-```
+**If not available:** Use Grep/Glob to find 3-5 existing examples of patterns in the changed code.
 
-**If `codebase-memory-mcp` is NOT available**, gather equivalent context using Grep and Glob:
-
-```bash
-# Find existing examples of the same patterns
-grep -r "class.*Controller" app/controllers/ | head -5
-grep -r "def call" app/interactors/ | head -5
-grep -r "class.*Serializer" app/serializers/ | head -5
-```
-
-Set `{CODEBASE_CONTEXT}` to whichever of these you ran, or to "Not available — sub-agent should perform its own pattern discovery using Grep and Glob." Never leave it as an unfilled placeholder.
+Set `{CODEBASE_CONTEXT}` to results or "Not available — sub-agent should perform its own pattern discovery using Grep and Glob." Never leave unfilled.
 
 ## Phase 2: Dispatch Sub-Agents (PARALLEL)
 
-**CRITICAL:** All sub-agents MUST be dispatched in parallel using the Agent tool. Do NOT run them sequentially. Each sub-agent gets a fresh context — no shared state.
+**CRITICAL:** Both sub-agents MUST be dispatched in parallel. Each gets a fresh context — no shared state. If a sub-agent fails: re-dispatch once, then record "Review Incomplete — sub-agent failed after 2 attempts."
 
-**If a sub-agent fails or returns a malformed response:** Re-dispatch it once. If it fails again, record that dimension as "Review Incomplete — sub-agent failed after 2 attempts" in the final report and surface this to the user before presenting a final verdict.
+### Shared Output Format (used by BOTH agents)
 
-### Sub-Agent 1: Code Quality Review
+```
+For EACH finding:
+**[CRITICAL/IMPORTANT/MINOR] — [Category] — [Short title]**
+- File: `path/to/file:line_number`
+- Problem: [What's wrong and why it matters]
+- Recommendation: [Specific fix with code snippet if helpful]
+- Impact: [What happens if not fixed]
+
+End with:
+### Assessment
+**Verdict:** APPROVED | CHANGES REQUIRED
+**Summary:** [1-2 sentences]
+```
+
+Security findings additionally include:
+- CWE: [CWE ID, e.g., CWE-89 (SQL Injection)]
+
+Pattern deviation findings additionally include:
+- Current code: [What the changed code does]
+- Existing pattern: [What the codebase does, with example file:line]
+
+### Sub-Agent 1: Correctness Review
 
 ```
 Agent tool:
   subagent_type: "code-quality-reviewer"
-  description: "Code quality review"
+  description: "Correctness review"
   prompt: |
-    You are a Staff Engineer performing a code quality review. Think critically
-    and logically. Focus on defensive coding — what can go wrong, what edge cases
-    are missed, what assumptions are fragile.
+    You are a Staff Engineer performing a correctness review. Think critically.
+    Focus on defensive coding — what can go wrong, what edge cases are missed.
+
+    The PR diff is included below. Do NOT run `git diff` or `gh pr diff`.
+    Use Grep/Glob/Read only for additional context (e.g., finding codebase patterns).
 
     ## What Was Changed
     {DESCRIPTION}
@@ -130,13 +127,17 @@ Agent tool:
     ## Requirements/Plan
     {PLAN_OR_REQUIREMENTS}
 
-    ## Git Range
-    Base: {BASE_SHA}
-    Head: {HEAD_SHA}
+    ## Codebase Context
+    {CODEBASE_CONTEXT}
+    (If empty or "Not available", use Grep/Glob to find 3-5 existing examples of
+    each pattern before comparing.)
 
-    Run: git diff {BASE_SHA}..{HEAD_SHA}
+    ## Diff
+    ```
+    {DIFF}
+    ```
 
-    ## Review Focus
+    ## Section A — Code Quality
 
     **Correctness:**
     - Does the code do what it claims?
@@ -159,206 +160,78 @@ Agent tool:
     - Edge cases covered?
     - Are test assertions meaningful?
 
-    ## Output Format
+    **Scope:**
+    - Compare diff against Requirements/Plan above
+    - Flag changes that modify functionality beyond what the issue describes
+    - Refactors/renames/formatting in touched files are fine — flag only behavioral changes to unrelated code paths
+    - For each out-of-scope change: note file, what it does, why it appears unrelated
+    - If no plan/requirements available, skip this section
+    - IN-SCOPE examples: guard clause for new feature's utility, rename in touched file
+    - OUT-OF-SCOPE examples: unrelated bug fix, new endpoint not in requirements
 
-    For EACH finding:
-    **[CRITICAL/IMPORTANT/MINOR] — [Category] — [Short title]**
+    ## Section B — Pattern Consistency
+
+    1. **Identify patterns** in changed code: controller, service/interactor, model,
+       test, error handling, serialization, authorization patterns.
+    2. **Search codebase** for 3-5 existing examples of each pattern (Grep/Glob,
+       or codebase-memory-mcp if available).
+    3. **Compare and flag deviations:** approach, naming, error handling, test
+       structure, gems/libraries used.
+
+    Flag as:
+    - **IMPORTANT — Pattern Deviation:** Different pattern for same task
+    - **IMPORTANT — Convention Violation:** Naming/structure/organizational convention broken
+    - **MINOR — Idiom Inconsistency:** Less idiomatic approach for language/framework
+
+    NOT a finding: Intentional, documented deviation with explicit comment.
+
+    Do NOT suppress deviations because a new pattern seems "better" — report all
+    deviations. Note if the new approach appears superior, but flag as MINOR.
+    The decision to adopt a new pattern belongs to the human reviewer.
+
+    ## Section C — Simplification
+
+    Analyze changed code for: unnecessary complexity, redundant code, dead code,
+    naming improvements, language-specific best practices.
+
+    For each opportunity:
+    **[APPROVED/DEFERRED] — [Short title]**
     - File: `path/to/file:line_number`
-    - Problem: [What's wrong and why it matters]
-    - Recommendation: [Specific fix with code snippet if helpful]
-    - Impact: [What happens if not fixed]
+    - Current: [What the code does now]
+    - Simplified: [What it should be, with code snippet]
+    - Rationale: [Why simpler or clearer]
 
-    End with:
-    ### Assessment
-    **Verdict:** APPROVED | CHANGES REQUIRED
-    **Summary:** [1-2 sentences]
+    ## Output
+    Use the shared output format. Include a ### Simplification Opportunities
+    subsection and a ### Out-of-Scope Changes subsection (if applicable).
 ```
 
-### Sub-Agent 2: Pattern & Idiom Consistency Review
-
-This sub-agent verifies that new code follows the established patterns, idioms, and conventions of the codebase. It uses codebase-memory-mcp (if available) and direct code search to compare against existing implementations.
+### Sub-Agent 2: Safety Review
 
 ```
 Agent tool:
-  subagent_type: "code-quality-reviewer"
-  description: "Pattern consistency review"
+  subagent_type: "security-reviewer"
+  description: "Safety review"
   prompt: |
-    You are a Staff Engineer who deeply understands this codebase. Your job is to
-    verify that new/changed code follows the established patterns, idioms, and
-    conventions already in use. Inconsistent code creates maintenance burden and
-    confuses future developers.
+    You are a Staff Security Engineer. Find vulnerabilities before production.
+    Think like an attacker — what can be exploited?
+
+    The PR diff is included below. Do NOT run `git diff` or `gh pr diff`.
+    Use Grep/Glob/Read only for additional context.
 
     ## What Was Changed
     {DESCRIPTION}
-
-    ## Git Range
-    Base: {BASE_SHA}
-    Head: {HEAD_SHA}
-
-    Run: git diff {BASE_SHA}..{HEAD_SHA}
-
-    ## Codebase Context
-    {CODEBASE_CONTEXT}
-    (If this is empty or says "Not available", use Grep and Glob yourself to find 3-5 existing
-    examples of each pattern before comparing against the changed code.)
-
-    ## Review Process
-
-    **Step 1: Identify the patterns in the changed code.**
-    For each changed file, identify what patterns are being used:
-    - Controller patterns (thin/fat, before_action usage, response format)
-    - Service/interactor patterns (call conventions, error handling, return types)
-    - Model patterns (validations, scopes, callbacks, associations)
-    - Test patterns (setup, assertion style, shared examples, factories)
-    - Error handling patterns (rescue, raise, error classes)
-    - Serialization patterns (what serializer, what fields exposed)
-    - Authorization patterns (Pundit, before_action, scoping)
-
-    **Step 2: Search for how the codebase already does this.**
-    Use Grep and Glob to find 3-5 existing examples of the same pattern in the
-    codebase. If codebase-memory-mcp is available, also use:
-    - search_code to find similar implementations
-    - search_graph to find related functions/classes
-    - get_architecture to understand the module structure
-
-    **Step 3: Compare and flag deviations.**
-    For each pattern in the changed code, compare against existing examples:
-    - Is the same approach used? (e.g., interactor vs service object vs inline)
-    - Is the same naming convention followed?
-    - Is the same error handling pattern used?
-    - Is the same test structure used?
-    - Are the same gems/libraries used for the same purpose?
-
-    ## What to Flag
-
-    **IMPORTANT — Pattern Deviation:**
-    Code uses a different pattern than the rest of the codebase for the same task.
-    Example: New code uses a plain service class when the codebase uses interactors.
-
-    **IMPORTANT — Convention Violation:**
-    Code breaks a naming, structure, or organizational convention.
-    Example: Test file not in the expected directory, method naming doesn't match.
-
-    **MINOR — Idiom Inconsistency:**
-    Code works but uses a less idiomatic approach for the language/framework.
-    Example: Using `each` + `push` instead of `map`, `if x != nil` instead of `if x`.
-
-    **Not a finding:**
-    Intentional, documented deviation with an explicit comment explaining the reason.
-
-    **Important:** Do NOT decide unilaterally that a new pattern is "strictly better" and
-    suppress the finding. All deviations from established patterns must be reported — you may
-    add a note that the new approach appears superior, but still flag it as MINOR so the
-    orchestrating Staff Engineer can make the judgment call. The decision to adopt a new
-    pattern belongs to the human reviewer, not the sub-agent.
-
-    ## Output Format
-
-    For EACH finding:
-    **[IMPORTANT/MINOR] — Pattern Consistency — [Short title]**
-    - File: `path/to/file:line_number`
-    - Current code: [What the changed code does]
-    - Existing pattern: [What the codebase already does, with example file:line]
-    - Recommendation: [Use the established pattern, with code snippet]
-    - Impact: [Inconsistency cost — maintenance burden, confusion, etc.]
-
-    End with:
-    ### Assessment
-    **Verdict:** APPROVED | CHANGES REQUIRED
-    **Summary:** [Pattern consistency assessment in 1-2 sentences]
-```
-
-### Sub-Agent 3: SQL Performance Review (conditional)
-
-**Only dispatch if database-touching files changed.**
-
-```
-Agent tool:
-  subagent_type: "sql-reviewer"
-  description: "SQL performance review"
-  prompt: |
-    You are a Staff Engineer specializing in database performance, security,
-    and defensive coding. Ruthlessly audit every database query, mutation,
-    and ORM interaction in the changed code.
-
-    First, read the sql-optimization-patterns skill: invoke Skill tool with
-    skill: "sql-optimization-patterns"
 
     ## Database Context
     Database: {DATABASE_ENGINE}
     ORM: {ORM}
 
-    ## What Was Changed
-    {DESCRIPTION}
+    ## Diff
+    ```
+    {DIFF}
+    ```
 
-    ## Files to Review
-    {FILE_LIST}
-
-    ## Git Range
-    Base: {BASE_SHA}
-    Head: {HEAD_SHA}
-
-    Run: git diff {BASE_SHA}..{HEAD_SHA}
-
-    ## Checklist
-
-    ### Performance (CRITICAL)
-    - N+1 queries (check eager loading)
-    - Missing indexes on WHERE/JOIN/ORDER BY columns
-    - SELECT * instead of specific columns
-    - Unbounded queries without LIMIT
-    - Sequential queries that could be batched
-    - Expensive aggregations without indexes
-
-    ### Security (CRITICAL)
-    - SQL injection (parameterized inputs?)
-    - Mass assignment (whitelisted fields only?)
-    - Authorization scoping (queries scoped to authenticated user?)
-    - Sensitive data exposure in responses
-
-    ### Defensive Coding (IMPORTANT)
-    - Error handling on query failures
-    - Transaction boundaries for related writes
-    - Null safety in joins and conditions
-    - Race conditions in concurrent access
-    - Migration rollback safety
-
-    ## Output Format
-
-    For EACH finding:
-    **[CRITICAL/IMPORTANT/MINOR] — [Category] — [Short title]**
-    - File: `path/to/file:line_number`
-    - Problem: [What's wrong]
-    - Recommendation: [Specific fix]
-    - Impact: [What happens if not fixed]
-
-    End with:
-    ### Assessment
-    **Verdict:** APPROVED | CHANGES REQUIRED
-    **Summary:** [Database performance and safety assessment in 1-2 sentences]
-```
-
-### Sub-Agent 4: Security Audit
-
-```
-Agent tool:
-  subagent_type: "security-reviewer"
-  description: "Security audit"
-  prompt: |
-    You are a Staff Security Engineer performing a security-focused code audit.
-    Your job is to find vulnerabilities before they reach production. Think like
-    an attacker — what can be exploited?
-
-    ## What Was Changed
-    {DESCRIPTION}
-
-    ## Git Range
-    Base: {BASE_SHA}
-    Head: {HEAD_SHA}
-
-    Run: git diff {BASE_SHA}..{HEAD_SHA}
-
-    ## Security Checklist (OWASP-aligned)
+    ## Section A — Security (OWASP-aligned)
 
     ### Injection (CRITICAL)
     - SQL injection: string concatenation in queries, unparameterized inputs
@@ -399,16 +272,16 @@ Agent tool:
     - Nested attributes without proper filtering
 
     ### SSRF — Server-Side Request Forgery (IMPORTANT)
-    - User-controlled URLs passed to HTTP clients (Net::HTTP, Faraday, HTTParty, fetch)?
-    - Are outbound requests restricted to an allowlist of domains?
-    - Internal metadata endpoints (AWS 169.254.x.x, cloud metadata) accessible via user-supplied URLs?
+    - User-controlled URLs passed to HTTP clients?
+    - Outbound requests restricted to allowlist of domains?
+    - Internal metadata endpoints accessible via user-supplied URLs?
     - CWE-918
 
     ### Cryptographic Failures (IMPORTANT)
-    - Weak hash algorithms for security-sensitive data? (MD5, SHA1 — use bcrypt/argon2 for passwords, SHA-256+ for tokens)
+    - Weak hash algorithms for security-sensitive data? (MD5, SHA1)
     - Hardcoded encryption keys, salts, or IVs?
     - Secrets in ENV but `.env` files committed to version control?
-    - Sensitive data in JWT payload without encryption (only signing)?
+    - Sensitive data in JWT payload without encryption?
     - CWE-327, CWE-798
 
     ### Logging & Monitoring (MINOR)
@@ -416,185 +289,118 @@ Agent tool:
     - Missing audit trail for sensitive operations
     - Error messages leaking internal details
 
+    ## Section B — SQL & Database Performance (conditional)
+
+    If the diff contains database-touching files (models, migrations, controllers
+    with queries, services with queries), also review below. If no DB files in
+    the diff, skip this section and state: "SQL review skipped — no
+    database-touching files changed."
+
+    First, read the sql-optimization-patterns skill: invoke Skill tool with
+    skill: "sql-optimization-patterns"
+
+    ### Performance (CRITICAL)
+    - N+1 queries (check eager loading)
+    - Missing indexes on WHERE/JOIN/ORDER BY columns
+    - SELECT * instead of specific columns
+    - Unbounded queries without LIMIT
+    - Sequential queries that could be batched
+    - Expensive aggregations without indexes
+
+    ### Security (CRITICAL)
+    - SQL injection (parameterized inputs?)
+    - Mass assignment (whitelisted fields only?)
+    - Authorization scoping (queries scoped to authenticated user?)
+    - Sensitive data exposure in responses
+
+    ### Defensive Coding (IMPORTANT)
+    - Error handling on query failures
+    - Transaction boundaries for related writes
+    - Null safety in joins and conditions
+    - Race conditions in concurrent access
+    - Migration rollback safety
+
     ## Verdict Thresholds
-
     - **APPROVED**: No critical or important security findings
-    - **CHANGES REQUIRED**: Any critical or important security findings — must be fixed before merge, no exceptions
+    - **CHANGES REQUIRED**: Any critical or important finding
 
-    ## Output Format
-
-    For EACH finding:
-    **[CRITICAL/IMPORTANT/MINOR] — [Category] — [Short title]**
-    - File: `path/to/file:line_number`
-    - Problem: [What's wrong — describe the attack vector]
-    - Recommendation: [Specific remediation with code snippet]
-    - Impact: [Severity if exploited — data breach, privilege escalation, etc.]
-    - CWE: [CWE ID, e.g., CWE-89 (SQL Injection), CWE-79 (XSS), CWE-862 (Missing Authorization)]
-
-    End with:
-    ### Assessment
-    **Verdict:** APPROVED | CHANGES REQUIRED
-    **Summary:** [Security posture assessment in 1-2 sentences]
-```
-
-### Sub-Agent 5: Code Simplifier
-
-```
-Agent tool:
-  subagent_type: "code-simplifier"
-  description: "Code simplification review"
-  prompt: |
-    Review the recently modified code for simplification opportunities.
-
-    ## Git Range
-    Base: {BASE_SHA}
-    Head: {HEAD_SHA}
-
-    Focus on files changed in this range:
-    git diff --name-only {BASE_SHA}..{HEAD_SHA}
-
-    Analyze for: unnecessary complexity, redundant code, naming improvements,
-    dead code, and language-specific best practices.
-
-    ## Required Output Format
-
-    After your Phase 1 analysis and Phase 2 Staff Engineer review, present
-    your final report with the following structure for each APPROVED item:
-
-    **[APPROVED/DEFERRED] — [Short title]**
-    - File: `path/to/file:line_number`
-    - Current: [What the code does now]
-    - Simplified: [What it should be, with code snippet]
-    - Rationale: [Why this is simpler or clearer]
-
-    End with:
-    ### Assessment
-    **Verdict:** CHANGES SUGGESTED | NO CHANGES NEEDED
-    **Summary:** [1-2 sentences on overall simplification state of the changed code]
+    ## Output
+    Use the shared output format. Include CWE IDs for security findings.
 ```
 
 ## Phase 3: Consolidate Results
 
-After ALL sub-agents return, merge their findings into a single report.
+After BOTH sub-agents return, merge findings into a single report.
 
 ### Deduplication Rules
 
-Two findings are the **same** if they reference the same `file:line` AND the same root cause (not merely the same file). When merging:
-
-- Note which dimensions caught it: "Caught by: Code Quality, Security"
+Two findings are the **same** if they reference the same `file:line` AND the same root cause. When merging:
+- Note which dimensions caught it: "Caught by: Correctness, Safety"
 - Use the more severe categorization when sub-agents disagree
-- For auth/injection findings: use the Security sub-agent's recommendation
-- For all other findings: use the more specific of the two recommendations
-- Keep findings distinct if they share a file but have different root causes — different dimensions catch different problems
+- For auth/injection: use Safety sub-agent's recommendation
+- For all other overlaps: use the more specific recommendation
+- Keep findings distinct if same file but different root causes
 
 ### Unified Report Format
 
 ```markdown
 # Comprehensive Code Review Report
 
-**PR:** {PR_URL or branch name}
-**Reviewed:** {DATE}
-**Git Range:** {BASE_SHA}..{HEAD_SHA}
-**Files Changed:** {COUNT}
-
----
+**PR:** {PR_URL or branch name} | **Reviewed:** {DATE} | **Range:** {BASE_SHA}..{HEAD_SHA} | **Files:** {COUNT}
 
 ## CRITICAL ({count})
-
 ### 1. [Short title]
-- **File:** `path/to/file:line_number`
-- **Dimension:** {Code Quality | Patterns | SQL | Security | Simplification}
-- **Problem:** [Clear description]
-- **Recommendation:** [Specific fix with code if helpful]
-- **Impact:** [What happens if not fixed]
-
----
-
-## IMPORTANT ({count})
-
-### 1. [Short title]
-- **File:** `path/to/file:line_number`
-- **Dimension:** {Code Quality | Patterns | SQL | Security | Simplification}
+- **File:** `path/to/file:line_number` | **Dimension:** {Correctness | Safety}
 - **Problem:** [Clear description]
 - **Recommendation:** [Specific fix]
 - **Impact:** [What happens if not fixed]
 
----
+## IMPORTANT ({count})
+[Same format as CRITICAL]
 
 ## MINOR ({count})
-
-### 1. [Short title]
-- **File:** `path/to/file:line_number`
-- **Dimension:** {Code Quality | Patterns | SQL | Security | Simplification}
-- **Problem:** [Clear description]
-- **Recommendation:** [Suggestion]
-
----
+[Same format, omit Impact]
 
 ## Simplification Opportunities
+[From Correctness agent Section C. Mark each "Approved — implement" or "Deferred — follow-up".]
 
-[APPROVED items from Code Simplifier — each with file:line, current code, and simplified version.
-Mark each as "Approved — implement" or "Deferred — track as follow-up".]
-
----
+## Out-of-Scope Changes (Advisory)
+[From Correctness agent. Omit if all in scope or no requirements provided.]
 
 ## Strengths
-
-[What was done well across all dimensions — be specific with file:line references]
-
----
+[What was done well — specific file:line references]
 
 ## Overall Assessment
 
 | Dimension | Verdict | Critical | Important | Minor |
 |-----------|---------|----------|-----------|-------|
-| Code Quality | {verdict} | {n} | {n} | {n} |
-| Pattern Consistency | {verdict} | {n} | {n} | {n} |
-| SQL Performance | {verdict or N/A} | {n} | {n} | {n} |
-| Security | {verdict} | {n} | {n} | {n} |
-| Simplification | {verdict} | {n} | {n} | {n} |
+| Correctness | {verdict} | {n} | {n} | {n} |
+| Safety | {verdict} | {n} | {n} | {n} |
 
 **Final Verdict:** {APPROVED | CHANGES REQUIRED}
-
-**Action Required:**
-- CRITICAL: Must fix before merge ({count} items)
-- IMPORTANT: Must fix before merge ({count} items)
-- MINOR: At author's discretion ({count} items)
+**Action Required:** CRITICAL: {n} must fix | IMPORTANT: {n} must fix | MINOR: {n} at discretion
 ```
 
 ## Integration with Workflows
 
 ### As Phase 7 replacement
 
-This skill replaces the standalone Phase 7 (CODE REVIEW) and Phase 8 (SQL REVIEW) in the development lifecycle. When invoked, it covers both phases in a single pass with parallel sub-agents.
+This skill replaces Phase 7 (CODE REVIEW) and Phase 8 (SQL REVIEW) in the development lifecycle. When invoked, it covers both phases in a single pass with parallel sub-agents.
 
-### For GitHub PR reviews
+### For PR reviews
 
 When reviewing a teammate's PR or responding to "review this PR":
-
-1. Get stable SHAs: `gh pr view {PR_NUMBER} --json baseRefOid,headRefOid,title,body,url`
-2. Use returned `baseRefOid` as `BASE_SHA` and `headRefOid` as `HEAD_SHA`
-3. Get diff for context: `gh pr diff {PR_NUMBER}` or `git diff {BASE_SHA}..{HEAD_SHA}`
-4. Dispatch sub-agents with populated placeholders
-5. Post the consolidated report as a PR comment (if user requests): `gh pr comment {PR_NUMBER} --body "..."`
+1. Fetch PR metadata (base SHA, head SHA, title, body, URL) using available GitHub tooling
+2. Gather the diff once: `git diff {BASE_SHA}..{HEAD_SHA}`
+3. Dispatch sub-agents with populated placeholders (diff included in prompt)
+4. Post the consolidated report as a PR comment if the user requests it
 
 ### For receiving code review
 
-When you receive review feedback on your own PR, use `receiving-code-review` skill instead — that skill handles how to respond to feedback.
+When you receive review feedback on your own PR, use `receiving-code-review` skill instead.
 
 ## Rules
 
-**NEVER:**
-- Review code yourself — always dispatch sub-agents
-- Skip the security audit — every change has a security surface
-- Run sub-agents sequentially when they can run in parallel
-- Mark everything as CRITICAL — use severity accurately
-- Give a passing verdict when CRITICAL issues exist
+**NEVER:** Review code yourself (dispatch sub-agents) | Skip the safety audit | Run sub-agents sequentially | Mark everything CRITICAL | Pass verdict with CRITICAL issues
 
-**ALWAYS:**
-- Dispatch ALL applicable sub-agents in a single parallel call
-- Include file:line references for every finding
-- Provide actionable recommendations (not just "fix this")
-- State explicitly if SQL review was skipped (no DB changes) and why
-- Deduplicate findings across dimensions
-- Present the unified report, not raw sub-agent outputs
+**ALWAYS:** Dispatch BOTH sub-agents in a single parallel call | Include file:line for every finding | Provide actionable recommendations | State if SQL review was skipped and why | Deduplicate across dimensions | Present unified report, not raw sub-agent output
