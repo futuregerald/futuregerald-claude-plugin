@@ -8,6 +8,8 @@ author: Gerald Onyango <gerald.onyango@gmail.com>
 
 # Comprehensive Code Review
 
+> **Why these rules exist:** This skill was tightened after a false-positive CRITICAL finding on cobalthq/cobalt-pentest-api#7557. A sub-agent pattern-matched a controller that checked `result.some_field` without first checking `result.success?`, fabricated a failure scenario ("if `destroy!` raises..."), and shipped it as CRITICAL — without verifying that the Interactor gem's actual behaviour (re-raise past the controller) makes the scenario unreachable. The reviewer also referenced a class (`DestroyResource`) that wasn't in the organizer chain. Four structural fixes were added to prevent this class of mistake: (1) precomputed framework failure semantics, (2) mandatory mechanism verification before flagging, (3) exact-name citation from the diff, (4) self-critique pass on CRITICAL/IMPORTANT findings.
+
 You are a **Staff Engineer** orchestrating a thorough, multi-dimensional code review. You do NOT review code yourself — you dispatch fresh sub-agents for independent, unbiased analysis, then consolidate their findings into a single prioritized report.
 
 Two review dimensions, each dispatched as a **separate sub-agent in parallel**:
@@ -57,6 +59,7 @@ For PR reviews, also fetch PR metadata using available GitHub tooling (`gh` CLI,
 | `{SCHEMA_CONTEXT}` | See Schema Context below (safety sub-agent only) |
 | `{DATABASE_ENGINE}` | `config/database.yml`, `prisma/schema.prisma`, etc. Default: PostgreSQL |
 | `{ORM}` | `Gemfile` (activerecord/sequel), `package.json` (prisma/knex/typeorm). Default: ActiveRecord if Rails |
+| `{FAILURE_SEMANTICS_CONTEXT}` | See Failure Semantics Context below — required whenever control-flow-sensitive files changed |
 
 ### Requirements Resolution
 
@@ -140,6 +143,37 @@ Set `{CODEBASE_CONTEXT}` to the **raw output** of these commands, labelled by se
 <grep output>
 ```
 
+### Failure Semantics Context
+
+**Required whenever the diff touches controllers, interactors/organizers, services, or any error-handling path.** Sub-agents cannot reliably flag "if X fails, Y happens" findings without knowing how failures actually propagate in THIS codebase. Precompute it here so no sub-agent has to guess.
+
+Extract and include verbatim in `{FAILURE_SEMANTICS_CONTEXT}`:
+
+**Rails + Interactor codebases:**
+
+```bash
+# ApplicationInteractor / ApplicationOrganizer — any custom rescue or exception conversion?
+find app components -name "application_interactor.rb" -o -name "application_organizer.rb" 2>/dev/null \
+  | xargs -I{} sh -c 'echo "### {}"; cat {}; echo'
+
+# BaseController / ApplicationController rescue handlers (exceptions → responses)
+grep -rn "rescue_from\b" app/controllers components/*/app/controllers 2>/dev/null | head -20
+```
+
+Then append a one-line framework summary, e.g.:
+
+> **Interactor gem behaviour:** `context.fail!` sets `context.failure?` and is rescued as `Interactor::Failure`. Uncaught exceptions trigger `context.rollback!` and are then **re-raised** — they propagate past the organizer and out of the controller action unless a `rescue_from` catches them.
+
+**Adapt for other frameworks:**
+- **Node/Express:** error middleware chain, `next(err)` vs `throw`, async error handling
+- **Go:** error-return convention, wrapped errors, `panic`/`recover`
+- **Python/FastAPI/Django:** exception handlers, middleware, `@exception_handler`
+- **Java/Spring:** `@ControllerAdvice`, checked vs unchecked exceptions
+
+The goal is identical: the reviewer must know what "failure" actually looks like at the control-flow boundary **before** they can claim a failure produces a particular symptom.
+
+Set `{FAILURE_SEMANTICS_CONTEXT}` to the raw output plus the framework summary. If the diff is purely doc/config/test with no control-flow concerns: `"(skipped — no control-flow-sensitive files changed)"`.
+
 ## Phase 2: Dispatch Sub-Agents (PARALLEL)
 
 **CRITICAL:** Both sub-agents MUST be dispatched in parallel. Each gets a fresh context — no shared state. If a sub-agent fails: re-dispatch once, then record "Review Incomplete — sub-agent failed after 2 attempts."
@@ -154,12 +188,18 @@ For EACH finding:
 - Recommendation: [Specific fix with code snippet if helpful]
 - Suggestion: [If simple one-line fix, include exact corrected line prefixed with SUGGESTION:]
 - Impact: [What happens if not fixed]
+- Counterargument considered: [For CRITICAL/IMPORTANT only — see Self-Critique Pass in the sub-agent prompts]
 
 End with:
 ### Assessment
 **Verdict:** APPROVED | CHANGES REQUIRED
 **Summary:** [1-2 sentences]
 ```
+
+**Naming accuracy (MANDATORY for every finding):**
+- Class, method, constant, and file names in findings MUST match the diff **verbatim**. Do NOT substitute a similar name you remember from elsewhere in the codebase or from a pattern you have seen before.
+- If a finding references a class or method that is NOT in the diff, you MUST cite the `file:line` where you found it.
+- Findings that name a class that does not exist in the diff AND is not cited from a specific file are automatically invalid and must be dropped before submission.
 
 Security findings additionally include:
 - CWE: [CWE ID, e.g., CWE-89 (SQL Injection)]
@@ -187,6 +227,15 @@ Agent tool:
 
     ## Requirements/Plan
     {PLAN_OR_REQUIREMENTS}
+
+    ## Failure Semantics Context
+
+    **This is the authoritative reference for how failures propagate in this
+    codebase.** Use it whenever your finding depends on a failure mode
+    ("if X fails, Y happens"). Do NOT reason about framework behaviour from
+    memory — consult this context.
+
+    {FAILURE_SEMANTICS_CONTEXT}
 
     ## Diff
     ```diff
@@ -222,6 +271,32 @@ Agent tool:
     ---
 
     ## Section A — Code Quality
+
+    **Verify the Mechanism (MANDATORY for CRITICAL/IMPORTANT correctness findings)**
+
+    Before flagging any CRITICAL or IMPORTANT finding whose impact depends on a
+    failure mode — "if X fails, Y happens", "if nil, Z", "if the DB constraint
+    trips", "on race condition", etc. — you MUST trace and cite:
+
+    1. **Where the failure is signaled** — exact `file:line` and exact
+       mechanism: `raise SomeError`, `context.fail!`, `return false`, `nil`,
+       `throw`, etc.
+    2. **How the failure propagates** — exact `file:line` where it is caught,
+       re-raised, converted, or ignored. Consult
+       `{FAILURE_SEMANTICS_CONTEXT}` — that is the authoritative reference for
+       what the framework does with exceptions and failure calls in this codebase.
+    3. **Why the claimed symptom actually occurs** — a concrete step-by-step
+       trace from (1) to the observable symptom.
+
+    If you cannot cite (1), (2), and (3) from the diff and provided context,
+    use Read/Grep to verify before flagging. If you still cannot verify, DO NOT
+    flag as CRITICAL or IMPORTANT. Downgrade to MINOR and frame as "verify
+    that..." rather than asserting a bug.
+
+    This rule exists because generic templates like "controller checks a field
+    without checking success" can match code that is actually safe because its
+    failure path raises rather than setting the field. Verify the actual failure
+    path in THIS codebase — do not reason from template.
 
     **Correctness:**
     - Does the code do what it claims?
@@ -287,6 +362,30 @@ Agent tool:
     - Simplified: [What it should be, with code snippet]
     - Rationale: [Why simpler or clearer]
 
+    ## Self-Critique Pass (MANDATORY before finalizing CRITICAL/IMPORTANT findings)
+
+    For EACH finding at CRITICAL or IMPORTANT severity, write one sentence
+    answering:
+
+    > **"What is the strongest argument that this is NOT a bug?"**
+
+    Consider:
+    - Does the framework handle this case implicitly? (Check `{FAILURE_SEMANTICS_CONTEXT}`.)
+    - Is there a default value, early return, or invariant that makes the
+      claimed failure unreachable?
+    - Does the call-site's actual usage contradict the abstract pattern concern?
+    - Are you reasoning from a template ("controllers should always X") rather
+      than from this specific diff?
+    - Did you verify class/method names against the diff verbatim?
+
+    If the counterargument holds up under the verified mechanism, DROP the
+    finding or downgrade to MINOR/advisory.
+
+    Include the counterargument in the finding body under a
+    `**Counterargument considered:**` line. If you dropped a finding after
+    self-critique, note it briefly in a `### Self-Critique Drops` section at
+    the end so the orchestrator can see your reasoning.
+
     ## Output
     Use the shared output format. Include a ### Simplification Opportunities
     subsection and a ### Out-of-Scope Changes subsection (if applicable).
@@ -312,6 +411,15 @@ Agent tool:
     ## Database Context
     Database: {DATABASE_ENGINE}
     ORM: {ORM}
+
+    ## Failure Semantics Context
+
+    **This is the authoritative reference for how failures propagate in this
+    codebase.** Use it whenever a security finding depends on a failure mode
+    (e.g., "if authorization check fails, Y happens"). Do NOT reason from
+    framework memory.
+
+    {FAILURE_SEMANTICS_CONTEXT}
 
     ## Diff
     ```diff
@@ -446,6 +554,41 @@ Agent tool:
     ## Verdict Thresholds
     - **APPROVED**: No critical or important security findings
     - **CHANGES REQUIRED**: Any critical or important finding
+
+    ## Verify the Mechanism (MANDATORY for CRITICAL/IMPORTANT security findings)
+
+    Security findings often depend on a failure mode: "if auth fails,
+    unauthorized access happens", "if validation is bypassed, injection
+    succeeds", "if rescue swallows the error, the denial is silent", etc.
+    Before flagging CRITICAL or IMPORTANT, cite:
+
+    1. **Where the failure/bypass is signaled** — exact `file:line` and mechanism
+    2. **How it propagates** — exact `file:line` where it is caught, re-raised,
+       converted, or ignored. Consult `{FAILURE_SEMANTICS_CONTEXT}`.
+    3. **Why the claimed exploit actually works** — a concrete trace
+
+    If you cannot verify all three, downgrade severity and frame as "verify that...".
+
+    ## Self-Critique Pass (MANDATORY before finalizing CRITICAL/IMPORTANT findings)
+
+    For EACH finding at CRITICAL or IMPORTANT severity, write one sentence
+    answering:
+
+    > **"What is the strongest argument this is NOT exploitable / NOT a vulnerability?"**
+
+    Consider:
+    - Is there an upstream filter, Pundit policy, before_action, or framework
+      guard that blocks the claimed exploit path?
+    - Does the framework's default handling make the bypass unreachable?
+      (Check `{FAILURE_SEMANTICS_CONTEXT}`.)
+    - Is the attacker model you're assuming actually reachable given the auth
+      context in the diff?
+    - Are you reasoning from an OWASP template rather than from this specific
+      diff? Did you verify class/method names against the diff verbatim?
+
+    If the counterargument holds, DROP the finding or downgrade to MINOR/advisory.
+    Include `**Counterargument considered:**` in the finding body. Note drops in
+    a `### Self-Critique Drops` section at the end.
 
     ## Output
     Use the shared output format. Include CWE IDs for security findings.
