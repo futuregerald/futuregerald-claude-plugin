@@ -277,6 +277,37 @@ Compile all findings into the output format below. Return the formatted triaging
 | L | 5-15 files, cross-cutting logic, schema migration, multi-repo possible | 3-7 days |
 | XL | 15+ files, architectural change, multi-repo, data migration | 1-2 weeks |
 
+**Priority Assignment (P1-P3):**
+
+Determine priority using two axes from your investigation findings:
+
+- **Severity** — What is the impact?
+  - Security vulnerability or data loss
+  - Customer-facing workflow broken
+  - Customer-facing degraded (not broken)
+  - Internal workflow / developer experience
+  - Cosmetic / nice-to-have
+
+- **Urgency** — How pressing is it?
+  - No workaround / blocking someone
+  - Workaround exists / not blocking
+
+Matrix:
+
+| Severity | No workaround / Blocking | Workaround exists / Not blocking |
+|----------|--------------------------|----------------------------------|
+| Security vuln or data loss | **P1** | **P1** |
+| Customer workflow broken | **P1** | **P2** |
+| Customer-facing degraded | **P2** | **P3** |
+| Internal workflow / DX | **P2** | **P3** |
+| Cosmetic / nice-to-have | **P3** | **P3** |
+
+- **P1** = Fix now, interrupt current work
+- **P2** = Fix this sprint
+- **P3** = Backlog
+
+Include the matched severity row, urgency column, and resulting priority with a one-sentence justification in the triaging notes.
+
 **Comment Format — CRITICAL:**
 - **Always write triaging notes in standard markdown.** Do NOT convert to Jira wiki markup.
 - When posting to Jira via `addCommentToJiraIssue`, you MUST set `contentFormat: "markdown"`. The Atlassian MCP server accepts markdown and converts it to ADF internally. If you omit `contentFormat`, the API defaults to ADF and your markdown will render as broken plain text.
@@ -339,6 +370,11 @@ One-paragraph summary: what the issue is, what's affected, and the recommended p
 - **Complexity factors:** What drives the estimate up or down
 - **Similar past work:** Links to comparable completed tickets (if found)
 
+## Priority
+- **Severity:** [Security vuln/data loss | Customer workflow broken | Customer-facing degraded | Internal/DX | Cosmetic]
+- **Urgency:** [No workaround/blocking | Workaround exists/not blocking]
+- **Priority: P{N}** — [One-sentence justification referencing the severity and urgency factors]
+
 ## Suggested Solutions
 - **Option A (recommended):** Brief description and why
 - **Option B:** Alternative approach with trade-offs
@@ -362,6 +398,11 @@ _Groomed: {ISO_TIMESTAMP} (iteration {N})_
 - **Size:** T-shirt size with rationale
 - **Time:** Estimated duration for 1 engineer
 - **Confidence:** Low / Medium / High
+
+## Priority
+- **Severity:** [Security vuln/data loss | Customer workflow broken | Customer-facing degraded | Internal/DX | Cosmetic]
+- **Urgency:** [No workaround/blocking | Workaround exists/not blocking]
+- **Priority: P{N}** — [One-sentence justification]
 
 ## Suggested Approach
 ...
@@ -433,6 +474,12 @@ Focus on high-risk claims. Skip low-risk items (Jira ticket statuses, estimation
 - [ ] Cleanup/rollback paths are addressed (e.g., orphaned records on state reversal)
 - [ ] Security-sensitive claims are verified with targeted file reads (not just graph)
 
+### Priority Assignment
+- [ ] Priority section exists with severity, urgency, and P1/P2/P3 rating
+- [ ] Severity classification matches the investigation findings (e.g., security issue correctly mapped to "Security vuln/data loss", not downgraded)
+- [ ] Urgency classification is justified (workaround existence verified, not assumed)
+- [ ] Priority level matches the matrix (severity x urgency → correct P value)
+
 ### Pattern Matching (use get_architecture + graph)
 - [ ] Suggested approach follows existing repo conventions (verify via get_architecture)
 - [ ] The suggested solution uses the same abstractions as the reference implementation
@@ -476,7 +523,9 @@ After the staff engineer review sub-agent returns:
 
 **Posting to Jira — MANDATORY:** When calling `addCommentToJiraIssue`, you MUST pass `contentFormat: "markdown"`. The comment body must be standard markdown (not Jira wiki markup). Omitting `contentFormat` causes the API to default to ADF, which renders markdown as broken plain text.
 
-**After posting (all verdicts):** Add the label `has_notes` to the ticket to indicate it has been groomed. Use `editJiraIssue` (Jira) or `gh issue edit --add-label` (GitHub) to add the label without removing existing labels.
+**After posting (all verdicts):**
+1. Add the label `has_notes` to the ticket to indicate it has been groomed. Use `editJiraIssue` (Jira) or `gh issue edit --add-label` (GitHub) to add the label without removing existing labels.
+2. Set the priority field on the ticket based on the Priority section in the triaging notes. Use `editJiraIssue` with the `priority` field (Jira) or add a `priority:P{N}` label (GitHub).
 
 If `--dry-run`: display the final (potentially corrected) triaging notes in the conversation. Ask: "Post to ticket?" If confirmed, post and add the `has_notes` label.
 
