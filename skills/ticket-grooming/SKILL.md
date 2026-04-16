@@ -14,7 +14,7 @@ Deeply investigate one or more tickets by dispatching isolated sub-agents, then 
 ## Inputs
 
 Extract from the user's message:
-- **Ticket key(s) or URL(s)** (e.g., `DL-1234`, `https://zombie.atlassian.net/browse/DL-1234`, `#42`)
+- **Ticket key(s) or URL(s)** (e.g., `PROJ-1234`, `https://yoursite.atlassian.net/browse/PROJ-1234`, `#42`)
 - OR a **verbal description** of the issue
 - **Flags:**
   - `--dry-run` (preview without posting)
@@ -84,7 +84,16 @@ git branch -r --contains HEAD  # if empty, use latest remote SHA
 # Fallback: if detection fails, use relative paths instead of permalinks
 ```
 
-### 4. Read Tickets and Detect Shared Context (Multi-Ticket Only)
+### 4. Multi-Repo Backend Investigation
+
+If the `Repos` config in CLAUDE.md lists multiple backend repos, **always include all of them** in the investigation for any ticket that touches backend code (models, services, serializers, controllers, API endpoints, database, jobs, etc.):
+
+- Resolve GitHub remote info (org/repo, HEAD SHA) for **each** backend repo during pre-flight step 3.
+- Pass all repos to the sub-agent as `Additional repos`.
+- The sub-agent must search and index all repos during Phase 1 (Codebase Investigation).
+- If a ticket is clearly frontend-only (React, CSS, UI components), skip this step.
+
+### 5. Read Tickets and Detect Shared Context (Multi-Ticket Only)
 
 When grooming 2+ tickets:
 1. Read all tickets
@@ -94,7 +103,7 @@ When grooming 2+ tickets:
    - Pass to each sub-agent as pre-built context
 3. If no overlap → dispatch independently
 
-### 5. Dispatch Sub-Agents
+### 6. Dispatch Sub-Agents
 
 - **1 sub-agent per ticket** (two-level architecture only — sub-agents do NOT spawn their own sub-agents)
 - **Max 3 concurrent.** Queue additional tickets as slots free up.
@@ -124,7 +133,7 @@ You are investigating ticket {TICKET_KEY} for grooming. Your job is INVESTIGATIO
 
 ## Investigation Accuracy Rules (apply to ALL phases)
 
-These rules prevent speculative, template-driven findings that mislead implementation decisions. They were added after a false-positive code-review finding on cobalthq/cobalt-pentest-api#7557 exposed the same failure mode in investigation work: pattern-matching on abstract shapes and fabricating claims without verifying the mechanism.
+These rules prevent speculative, template-driven findings that mislead implementation decisions. They were added after a false-positive code-review finding exposed the same failure mode in investigation work: pattern-matching on abstract shapes and fabricating claims without verifying the mechanism.
 
 ### Rule 1 — Exact-Name Citation
 
@@ -558,14 +567,14 @@ Add to CLAUDE.md to customize behavior:
 ```markdown
 ### Ticket Grooming
 - Default ticket system: jira
-- Jira site: zombie.atlassian.net
-- GitHub org: cobalt-io
+- Jira site: yoursite.atlassian.net
+- GitHub org: your-org
 - dry-run: false
 - grooming-mode: short  # short (default) | full (--full flag overrides this)
 - Repos:
-  - cobalt-pentest-api: ~/Documents/dev/cobalt-pentest-api
-  - cobalt-admin-api: ~/Documents/dev/cobalt-admin-api
-  - cobalt-web: ~/Documents/dev/cobalt-web
+  - backend-api: ~/Documents/dev/backend-api
+  - admin-api: ~/Documents/dev/admin-api
+  - frontend-web: ~/Documents/dev/frontend-web
 ```
 
 ## Skills Referenced
