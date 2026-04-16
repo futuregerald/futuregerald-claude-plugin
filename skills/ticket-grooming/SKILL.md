@@ -14,7 +14,7 @@ Deeply investigate one or more tickets by dispatching isolated sub-agents, then 
 ## Inputs
 
 Extract from the user's message:
-- **Ticket key(s) or URL(s)** (e.g., `PROJ-1234`, `https://yoursite.atlassian.net/browse/PROJ-1234`, `#42`)
+- **Ticket key(s) or URL(s)** (e.g., `DL-1234`, `https://zombie.atlassian.net/browse/DL-1234`, `#42`)
 - OR a **verbal description** of the issue
 - **Flags:**
   - `--dry-run` (preview without posting)
@@ -66,7 +66,9 @@ acli jira workitem view --key DL-1234
 acli jira workitem edit --key DL-1234 --field "labels=has_notes"
 ```
 
-Always prefer MCP tools for reads and writes. Use `acli` only when MCP lacks the capability (deletes, bulk operations, etc.).
+Always prefer MCP tools for reads and writes. Use `acli` when MCP lacks the capability (deletes, comment updates, bulk operations).
+
+**CRITICAL — acli content formatting:** When posting or updating comment content via acli, NEVER use `--body` or `--body-file` with markdown — these post plain/unformatted text. Always use `--body-adf` with a properly constructed ADF JSON file for formatted content. For simple text-only comments (no formatting needed), `--body` is fine.
 
 ### 3. Resolve GitHub Remote Info
 
@@ -84,14 +86,16 @@ git branch -r --contains HEAD  # if empty, use latest remote SHA
 # Fallback: if detection fails, use relative paths instead of permalinks
 ```
 
-### 4. Multi-Repo Backend Investigation
+### 4. Multi-Repo Investigation (if applicable)
 
-If the `Repos` config in CLAUDE.md lists multiple backend repos, **always include all of them** in the investigation for any ticket that touches backend code (models, services, serializers, controllers, API endpoints, database, jobs, etc.):
+If the project spans multiple repositories (e.g., separate API repos, frontend + backend, microservices), check CLAUDE.md for a `Repos:` config section listing them.
 
-- Resolve GitHub remote info (org/repo, HEAD SHA) for **each** backend repo during pre-flight step 3.
+- Resolve GitHub remote info (org/repo, HEAD SHA) for **each** relevant repo during pre-flight step 3.
 - Pass all repos to the sub-agent as `Additional repos`.
-- The sub-agent must search and index all repos during Phase 1 (Codebase Investigation).
-- If a ticket is clearly frontend-only (React, CSS, UI components), skip this step.
+- The sub-agent must search and index each repo during Phase 1 (Codebase Investigation).
+- If a ticket is clearly scoped to a single repo, skip this step.
+
+**Migration context:** If repos are mid-migration (code moving from one repo to another), note in triaging notes which repo the fix should target and which contains legacy copies.
 
 ### 5. Read Tickets and Detect Shared Context (Multi-Ticket Only)
 
@@ -133,7 +137,7 @@ You are investigating ticket {TICKET_KEY} for grooming. Your job is INVESTIGATIO
 
 ## Investigation Accuracy Rules (apply to ALL phases)
 
-These rules prevent speculative, template-driven findings that mislead implementation decisions. They were added after a false-positive code-review finding exposed the same failure mode in investigation work: pattern-matching on abstract shapes and fabricating claims without verifying the mechanism.
+These rules prevent speculative, template-driven findings that mislead implementation decisions. They were added after a false-positive code-review finding on cobalthq/cobalt-pentest-api#7557 exposed the same failure mode in investigation work: pattern-matching on abstract shapes and fabricating claims without verifying the mechanism.
 
 ### Rule 1 — Exact-Name Citation
 
@@ -183,6 +187,24 @@ Every claim in the output falls into one of two categories:
 - **Speculative** — inferred from ticket text, names, or history; not confirmed by reading code
 
 Label speculative claims clearly (`[speculative]` or LOW confidence). Human reviewers must be able to tell at a glance which claims they can trust without re-verifying.
+
+### Rule 5 — Focus on the Actual Reported Problem
+
+Before writing synthesis, re-read the ticket title and description. Ask:
+
+> **"Do my root cause, findings, and suggested fix address the SPECIFIC problem/question/bug/request the reporter described?"**
+
+This rule was added after an investigation of DL-1871 ("wrong tag being SET on tester profiles") spent multiple iterations analyzing the display filter (serializer) instead of the write path (proficiency pipeline). The display filter was related code, but the reporter's actual complaint was about data being written incorrectly.
+
+Common failure modes:
+- Investigating a **read** path when the ticket reports a **write** problem (or vice versa)
+- Focusing on a **symptom** (how data displays) instead of the **cause** (how data is stored)
+- Investigating an **adjacent** system that handles similar data but isn't the one described
+- Letting the first interesting finding dominate the investigation even when it doesn't match the reported issue
+
+If your findings don't directly address the ticket's stated problem, either:
+1. Pivot the investigation to the correct path before synthesis
+2. Or clearly flag that your findings address a related-but-different issue and the actual reported problem needs further investigation
 
 ---
 
@@ -268,7 +290,12 @@ Using all findings from Phases 1-3:
 
 Compile all findings into the output format below. Return the formatted triaging notes as your final output. DO NOT post the comment — the main conversation handles posting after staff engineer review.
 
-**Output mode:** If `Output mode` is `short`, use the **Output Format — Code Tickets (Short)** template. The full investigation still informs your suggestions, estimation, and risk assessment — you just compress the output. If `Output mode` is `full`, use the **Output Format — Code Tickets (Full)** template. If `process-docs`, always use the process-docs template regardless of mode (it's already short).
+**MANDATORY — Apply Rule 5 (Focus on Actual Problem)** before writing any output. Re-read the ticket title and description. Verify that your root cause, findings, and suggested fix address the SPECIFIC problem the reporter described. If they don't, pivot the investigation before proceeding.
+
+**Output mode:** Always produce the **full investigation output** internally. Then:
+- If `Output mode` is `short` (default): format using **Output Format — Code Tickets (Short)** template, which includes a collapsed `<details>` section containing the full investigation. The short sections are visible by default; the full investigation is expandable.
+- If `Output mode` is `full`: use the **Output Format — Code Tickets (Full)** template (no collapsed section needed — everything is visible).
+- If `process-docs`: always use the process-docs template regardless of mode (it's already short).
 
 **GitHub Permalinks:**
 - Every file/function/line reference MUST include a GitHub permalink
@@ -339,6 +366,48 @@ One-paragraph summary: what the issue is, what's affected, and the recommended p
 - Bulleted per repo. Name the new classes/files and the reuse targets. No Option B / Option C unless a real trade-off exists worth debating.
 
 @{PM or reporter} — {open questions, if any}
+
+---
+
+<details>
+<summary>Full Investigation Details (click to expand)</summary>
+
+## Investigation
+
+### Codebase Findings
+- Relevant files, models, and functions (with GitHub permalinks)
+- Database schemas/migrations involved
+- Call path traces (entry point → affected code)
+- Code snippets only when necessary for clarity
+- Cross-repo findings noted with repo name prefix
+
+### Historical Context
+- Related tickets (with links)
+- Related PRs/commits (with links)
+- Past decisions or conversations that inform this issue
+
+### Root Cause Analysis
+- Hypothesis 1 (confidence: high/medium/low): description with evidence
+- Hypothesis 2 (confidence: ...): description with evidence
+- Counterargument considered for each hypothesis
+- Reproduction steps (if applicable)
+
+### Risk Details
+- Full risk analysis with edge cases
+- Dependencies and blast radius (including cross-repo impact)
+- Security/performance implications
+
+### Priority
+- **Severity:** [Security vuln/data loss | Customer workflow broken | Customer-facing degraded | Internal/DX | Cosmetic]
+- **Urgency:** [No workaround/blocking | Workaround exists/not blocking]
+- **Priority: P{N}** — [One-sentence justification]
+
+### Suggested Solutions (Full)
+- **Option A (recommended):** Full description and rationale
+- **Option B:** Alternative approach with trade-offs
+- **Breadcrumbs:** Key files, functions, and call paths to start from (with GitHub permalinks per repo)
+
+</details>
 ```
 
 ## Output Format — Code Tickets (Full)
@@ -455,7 +524,7 @@ You are a staff engineer reviewing triaging notes for ticket {TICKET_KEY} before
 
 Focus on high-risk claims. Skip low-risk items (Jira ticket statuses, estimation opinions).
 
-**Enforce the Investigation Accuracy Rules** from the investigation agent's prompt. The investigation agent was told to follow Rules 1–4 (exact-name citation, verify-the-mechanism, self-critique, label verified vs speculative). Your job here is to catch violations.
+**Enforce the Investigation Accuracy Rules** from the investigation agent's prompt. The investigation agent was told to follow Rules 1–5 (exact-name citation, verify-the-mechanism, self-critique, label verified vs speculative, focus on actual problem). Your job here is to catch violations.
 
 ### Rule 1 enforcement — Exact-Name Citation
 - [ ] Every class, method, module, file, and column named in the notes EXISTS in the codebase (batch-verify via `search_graph` or `search_code`)
@@ -469,6 +538,13 @@ Focus on high-risk claims. Skip low-risk items (Jira ticket statuses, estimation
 ### Rule 3 enforcement — Self-Critique
 - [ ] Each high/medium-confidence hypothesis includes a `**Counterargument considered:**` line
 - [ ] The counterargument is substantive (not boilerplate like "this might not be the root cause")
+
+### Rule 5 enforcement — Focus on Actual Reported Problem
+- [ ] Re-read the ticket title and description independently
+- [ ] Verify that the root cause hypothesis addresses the SPECIFIC problem the reporter described (not an adjacent or related issue)
+- [ ] Verify that the suggested fix would resolve the reporter's stated complaint
+- [ ] If findings address a read path but the ticket reports a write problem (or vice versa), flag as misaligned
+- [ ] If the investigation focused on a symptom (display) rather than the cause (storage/logic), flag as misaligned
 
 ### Correctness (use graph first)
 - [ ] Key file paths and classes exist (batch-verify via search_graph)
@@ -524,7 +600,11 @@ After the staff engineer review sub-agent returns:
 2. **PASS WITH NOTES:** Post the triaging notes as-is. Mention the notes to the user in the conversation summary.
 3. **NEEDS FIXES:** Apply all fixes from the review to the triaging notes automatically, then post the corrected version. Report what was fixed in the conversation summary.
 
-**Posting to Jira — MANDATORY:** When calling `addCommentToJiraIssue`, you MUST pass `contentFormat: "markdown"`. The comment body must be standard markdown (not Jira wiki markup). Omitting `contentFormat` causes the API to default to ADF, which renders markdown as broken plain text.
+**Posting to Jira — MANDATORY:**
+- **MCP** (`addCommentToJiraIssue`): MUST pass `contentFormat: "markdown"`. Omitting it defaults to ADF and renders markdown as broken plain text.
+- **acli** (`workitem comment create/update`): MUST use `--body-adf` with a properly constructed ADF JSON file. Do NOT use `--body` or `--body-file` for markdown content — these post plain text that renders unformatted.
+- **Preferred for new comments:** MCP with `contentFormat: "markdown"` (simplest — handles conversion automatically).
+- **Preferred for updating comments:** acli with `--body-adf`, or delete via acli + re-post via MCP.
 
 **After posting (all verdicts):** Add the label `has_notes` to the ticket to indicate it has been groomed. Use `editJiraIssue` (Jira) or `gh issue edit --add-label` (GitHub) to add the label without removing existing labels.
 
@@ -567,14 +647,13 @@ Add to CLAUDE.md to customize behavior:
 ```markdown
 ### Ticket Grooming
 - Default ticket system: jira
-- Jira site: yoursite.atlassian.net
+- Jira site: your-site.atlassian.net
 - GitHub org: your-org
 - dry-run: false
 - grooming-mode: short  # short (default) | full (--full flag overrides this)
 - Repos:
-  - backend-api: ~/Documents/dev/backend-api
-  - admin-api: ~/Documents/dev/admin-api
-  - frontend-web: ~/Documents/dev/frontend-web
+  - my-api: ~/dev/my-api
+  - my-web: ~/dev/my-web
 ```
 
 ## Skills Referenced
