@@ -1,6 +1,6 @@
 ---
 name: ticket-grooming
-description: "Deeply investigate and groom tickets by dispatching sub-agents for codebase investigation, history research, root cause analysis, and risk assessment. Use when the user says 'groom', 'triage', or asks to investigate a ticket. Posts structured 'Triaging Notes' as a comment on the ticket. Works with Jira, GitHub Issues, or any ticketing system."
+description: "Deeply investigate and groom tickets by dispatching sub-agents for codebase investigation, history research, root cause analysis, and risk assessment. Use when the user says 'groom', 'triage', or asks to investigate a ticket. Posts structured 'Triaging Notes' as a comment on the ticket. Default output is short-form (TLDR, key findings, risks, estimation, recommended approach). Use --full for the complete report. Works with Jira, GitHub Issues, or any ticketing system."
 tags: [workflow, project-management, debugging]
 model: opus
 ---
@@ -16,7 +16,11 @@ Deeply investigate one or more tickets by dispatching isolated sub-agents, then 
 Extract from the user's message:
 - **Ticket key(s) or URL(s)** (e.g., `DL-1234`, `https://zombie.atlassian.net/browse/DL-1234`, `#42`)
 - OR a **verbal description** of the issue
-- **Flags:** `--dry-run` (preview without posting)
+- **Flags:**
+  - `--dry-run` (preview without posting)
+  - `--full` (post the full-form report with codebase findings, historical context, root cause analysis, and breadcrumbs)
+- **Mode resolution:** `--full` flag > `grooming-mode` config in CLAUDE.md > default (`short`)
+- **Default is short.** The short format posts: TLDR (with root cause + confidence), Key Findings (2-3 bullets max), Risks (medium+ only), Estimation, Recommended Approach, @mentions. The full investigation still runs internally — short only changes what is surfaced in the posted comment.
 
 ## Pre-Flight (Main Conversation)
 
@@ -111,6 +115,7 @@ You are investigating ticket {TICKET_KEY} for grooming. Your job is INVESTIGATIO
 - Ticket system: {jira|github|other}
 - GitHub org/repo: {ORG}/{REPO}
 - HEAD SHA: {SHA}
+- Output mode: {short|full}
 - Additional repos (if multi-repo): {REPO_LIST_WITH_PATHS}
 {IF_SHARED_CONTEXT}
 ## Shared Codebase Context (pre-built)
@@ -254,6 +259,8 @@ Using all findings from Phases 1-3:
 
 Compile all findings into the output format below. Return the formatted triaging notes as your final output. DO NOT post the comment — the main conversation handles posting after staff engineer review.
 
+**Output mode:** If `Output mode` is `short`, use the **Output Format — Code Tickets (Short)** template. The full investigation still informs your suggestions, estimation, and risk assessment — you just compress the output. If `Output mode` is `full`, use the **Output Format — Code Tickets (Full)** template. If `process-docs`, always use the process-docs template regardless of mode (it's already short).
+
 **GitHub Permalinks:**
 - Every file/function/line reference MUST include a GitHub permalink
 - Format: `https://github.com/{ORG}/{REPO}/blob/{SHA}/{PATH}#L{LINE}`
@@ -298,7 +305,36 @@ addCommentToJiraIssue(
 - If no: header is `_Groomed: {ISO_TIMESTAMP} (iteration 1)_`
 - Do NOT edit or delete previous comments
 
-## Output Format — Code Tickets
+## Output Format — Code Tickets (Short) — DEFAULT
+
+Use this template when output mode is `short` (the default). All investigation phases still run — this only changes what is surfaced in the posted comment.
+
+```
+# Triaging Notes
+_Groomed: {ISO_TIMESTAMP} (iteration {N})_
+
+## TLDR
+One-paragraph summary: what the issue is, what's affected, and the recommended path forward. Fold in the root cause with a confidence level (e.g., "Root cause (confidence: HIGH):") and the key technical mechanism so readers understand the "why" without needing a separate codebase findings section.
+
+## Key Findings
+- 2-3 bullets max. Include ONLY when there is a specific query, code snippet, or mechanism that makes the root cause concrete. Each bullet: the load-bearing fact with a GitHub permalink. No prose expansion.
+- Omit this section entirely if the TLDR already captures the mechanism sufficiently.
+
+## Risks
+- Medium, high, and critical risks only. One line each. Omit low risks entirely.
+
+## Estimation
+- One line: **Size: {T-shirt}** | {days} | Confidence: {level} | Recommend **{N} SP**. Second line for complexity drivers if needed.
+
+## Recommended Approach
+- Bulleted per repo. Name the new classes/files and the reuse targets. No Option B / Option C unless a real trade-off exists worth debating.
+
+@{PM or reporter} — {open questions, if any}
+```
+
+## Output Format — Code Tickets (Full)
+
+Use this template when `--full` flag is passed or `grooming-mode: full` is configured.
 
 ```
 # Triaging Notes
@@ -338,6 +374,11 @@ One-paragraph summary: what the issue is, what's affected, and the recommended p
 - **Confidence:** Low / Medium / High
 - **Complexity factors:** What drives the estimate up or down
 - **Similar past work:** Links to comparable completed tickets (if found)
+
+## Priority
+- **Severity:** [Security vuln/data loss | Customer workflow broken | Customer-facing degraded | Internal/DX | Cosmetic]
+- **Urgency:** [No workaround/blocking | Workaround exists/not blocking]
+- **Priority: P{N}** — [One-sentence justification referencing the severity and urgency factors]
 
 ## Suggested Solutions
 - **Option A (recommended):** Brief description and why
@@ -520,6 +561,7 @@ Add to CLAUDE.md to customize behavior:
 - Jira site: zombie.atlassian.net
 - GitHub org: cobalt-io
 - dry-run: false
+- grooming-mode: short  # short (default) | full (--full flag overrides this)
 - Repos:
   - cobalt-pentest-api: ~/Documents/dev/cobalt-pentest-api
   - cobalt-admin-api: ~/Documents/dev/cobalt-admin-api
