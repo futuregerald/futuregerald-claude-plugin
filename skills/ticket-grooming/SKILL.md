@@ -1,6 +1,6 @@
 ---
 name: ticket-grooming
-description: "Deeply investigate and groom tickets by dispatching sub-agents for codebase investigation, history research, root cause analysis, and risk assessment. Use when the user says 'groom', 'triage', or asks to investigate a ticket. Posts structured 'Triaging Notes' as a comment on the ticket. Default output is short-form (TLDR, key findings, risks, estimation, recommended approach). Use --full for the complete report. Works with Jira, GitHub Issues, or any ticketing system."
+description: "Deeply investigate and groom tickets by dispatching sub-agents for codebase investigation, history research, root cause analysis, and risk assessment. Use when the user says 'groom', 'triage', or asks to investigate a ticket. Posts structured 'Triaging Notes' as a comment on the ticket. Default output is short-form (TLDR, key findings, risks, estimation, recommended approach) with full investigation collapsed in an ADF expand node. Use --full for the complete report. Always searches both cobalt-pentest-api and cobalt-admin-api for backend tickets. Works with Jira, GitHub Issues, or any ticketing system."
 tags: [workflow, project-management, debugging]
 model: opus
 ---
@@ -20,14 +20,15 @@ Extract from the user's message:
   - `--dry-run` (preview without posting)
   - `--full` (post the full-form report with codebase findings, historical context, root cause analysis, and breadcrumbs)
 - **Mode resolution:** `--full` flag > `grooming-mode` config in CLAUDE.md > default (`short`)
-- **Default is short.** The short format posts: TLDR (with root cause + confidence), Key Findings (2-3 bullets max), Risks (medium+ only), Estimation, Recommended Approach, @mentions. The full investigation still runs internally — short only changes what is surfaced in the posted comment.
+- **Default is short.** The short format posts: TLDR (with root cause + confidence), Key Findings (2-3 bullets max), Risks (high/critical only), Estimation, Recommended Approach, @mentions — plus the full investigation collapsed inside an ADF `expand` node so readers can optionally expand it. The full investigation always runs internally — short only changes what is visible by default in the posted comment.
 
 ## Pre-Flight (Main Conversation)
 
 Before dispatching any sub-agents, the main conversation MUST complete these steps:
 
-### 1. Ensure Codebase Index is Current
+### 1. Ensure Codebase Index is Current (if available)
 
+If `codebase-memory-mcp` is available:
 ```
 Call mcp__codebase-memory-mcp__index_status
 If stale → call mcp__codebase-memory-mcp__index_repository (once)
@@ -35,6 +36,8 @@ For multi-repo → check/index each repo
 ```
 
 Sub-agents use `index_status` to verify. They do NOT re-index.
+
+If `codebase-memory-mcp` is NOT available: skip this step. Sub-agents will use Grep/Glob/Read for codebase investigation instead.
 
 ### 2. Detect Ticket System
 
@@ -68,7 +71,7 @@ acli jira workitem edit --key DL-1234 --field "labels=has_notes"
 
 Always prefer MCP tools for reads and writes. Use `acli` when MCP lacks the capability (deletes, comment updates, bulk operations).
 
-**CRITICAL — acli content formatting:** When posting or updating comment content via acli, NEVER use `--body` or `--body-file` with markdown — these post plain/unformatted text. Always use `--body-adf` with a properly constructed ADF JSON file for formatted content. For simple text-only comments (no formatting needed), `--body` is fine.
+**CRITICAL — acli content formatting:** `--body` and `--body-file` accept both plain text and ADF JSON. To post formatted content via acli, write ADF JSON to a file and pass it with `--body-file`. If you pass markdown text via `--body` or `--body-file`, it renders as unformatted plain text — acli does NOT convert markdown to ADF. For simple text-only comments (no formatting needed), `--body` with plain text is fine.
 
 ### 3. Resolve GitHub Remote Info
 
@@ -86,16 +89,24 @@ git branch -r --contains HEAD  # if empty, use latest remote SHA
 # Fallback: if detection fails, use relative paths instead of permalinks
 ```
 
-### 4. Multi-Repo Investigation (if applicable)
+### 4. Backend Issues: Resolve Both API Repos
 
-If the project spans multiple repositories (e.g., separate API repos, frontend + backend, microservices), check CLAUDE.md for a `Repos:` config section listing them.
+For any ticket that touches backend code (models, interactors, serializers, controllers, API endpoints, database, jobs, etc.), **always include both API repos** in the investigation:
 
-- Resolve GitHub remote info (org/repo, HEAD SHA) for **each** relevant repo during pre-flight step 3.
-- Pass all repos to the sub-agent as `Additional repos`.
-- The sub-agent must search and index each repo during Phase 1 (Codebase Investigation).
-- If a ticket is clearly scoped to a single repo, skip this step.
+| Repo | Path | GitHub |
+|------|------|--------|
+| `cobalt-pentest-api` | `~/Documents/dev/cobalt-pentest-api` | `cobalthq/cobalt-pentest-api` |
+| `cobalt-admin-api` | `~/Documents/dev/cobalt-admin-api` | `cobalthq/cobalt-admin-api` |
 
-**Migration context:** If repos are mid-migration (code moving from one repo to another), note in triaging notes which repo the fix should target and which contains legacy copies.
+- Resolve GitHub remote info (org/repo, HEAD SHA) for **both** repos during pre-flight step 3.
+- Pass both repos to the sub-agent as `Additional repos`.
+- The sub-agent must search and index both repos during Phase 1 (Codebase Investigation).
+- If a ticket is clearly frontend-only (React, CSS, UI components), skip this step.
+
+**Migration context:** `cobalt-admin-api` is mid-migration into `cobalt-pentest-api` (under `components/admin/`). When both repos contain the same code (serializers, interactors, models, config):
+- **Search both** to understand the full picture and find root causes.
+- **Fix only in `cobalt-pentest-api`** — admin-api copies are legacy and will be removed when migration completes.
+- Note in triaging notes which repo the fix should target and why the other is skipped.
 
 ### 5. Read Tickets and Detect Shared Context (Multi-Ticket Only)
 
@@ -212,27 +223,52 @@ If your findings don't directly address the ticket's stated problem, either:
 
 Run these phases sequentially. After each phase, write a brief summary of findings (key facts, file paths, hypotheses) and carry ONLY the summary forward — not the raw tool output. Apply the Investigation Accuracy Rules above to every phase.
 
-### Phase 0: Classification
+### Phase 0: Classification & Ticket Comprehension
 
-Read the ticket and classify it:
+**Understand the ticket before investigating the codebase.** This prevents "throwing AI at the problem" — jumping into code research before understanding what the reporter is actually asking.
+
+**Step 1 — Read and classify:**
 - `code-bug` — a defect in existing code
 - `code-feature` — new functionality to build
 - `tech-debt` — refactoring or cleanup
 - `process-docs` — non-code work (documentation, process, meetings)
 - `ambiguous` — unclear, treat as code-related
 
+**Step 2 — Summarize the reported problem in one sentence.** What is the reporter saying is wrong, missing, or needed? Use their words, not your interpretation.
+
+**Step 3 — Identify the affected path type:**
+- **Write path** — data is being stored/updated incorrectly
+- **Read path** — data is being displayed/returned incorrectly
+- **Both** — data is stored wrong AND displayed wrong
+- **Unknown** — ticket doesn't make it clear; flag as an open question
+
+**Step 4 — List open questions.** What is unclear or ambiguous about the ticket? What assumptions would you need to make to investigate? These go into the triaging notes under @mentions.
+
+**Step 5 — Gate check:** If the ticket is too ambiguous to investigate productively (no clear symptom, no reproduction steps, no affected area), note this and recommend clarification from the reporter before proceeding. Do NOT fabricate specificity — investigate what's actually described.
+
 If `process-docs`: skip Phases 1 and 3, produce simplified output (see Output Format below).
 
 ### Phase 1: Codebase Investigation
 
-**Context budget: max 15 files deep-read, max 3-hop call path traces.**
+**Context budget: max 15 files deep-read, max 3-hop call path traces (per repo).**
 
+**If `codebase-memory-mcp` is available** (preferred — faster, structural understanding):
 1. Check codebase index is current: `mcp__codebase-memory-mcp__index_status`
 2. Search the knowledge graph for entities related to the ticket: `mcp__codebase-memory-mcp__search_graph`
 3. Trace call paths for affected code (max 3 hops): `mcp__codebase-memory-mcp__trace_call_path`
 4. Check database schemas and migrations relevant to the issue
 5. Map the surface area: files, functions, models affected
-6. For multi-repo tickets: repeat across each relevant repo (budget applies per repo)
+
+**If `codebase-memory-mcp` is NOT available** (fallback):
+1. Use Grep to search for class names, method names, and keywords from the ticket
+2. Use Glob to find relevant files by pattern (e.g., `**/models/**`, `**/interactors/**`)
+3. Use Read to examine the most relevant files and trace call paths manually
+4. Check database schemas (`db/schema.rb` or `db/structure.sql`) and recent migrations
+5. Map the surface area: files, functions, models affected
+
+**Multi-repo rules (apply to both paths):**
+6. **For backend tickets: ALWAYS search both `cobalt-pentest-api` AND `cobalt-admin-api`** (paths provided in Pre-Resolved Info). `cobalt-admin-api` is mid-migration into `cobalt-pentest-api` (under `components/admin/`), so code may exist in both. Search both to understand the full picture. Budget applies per repo.
+7. For other multi-repo tickets: repeat across each relevant repo listed in Pre-Resolved Info
 
 **SUMMARIZE findings before proceeding.** Carry forward: affected files (with line numbers), key functions, schema details, call path summary.
 
@@ -293,7 +329,7 @@ Compile all findings into the output format below. Return the formatted triaging
 **MANDATORY — Apply Rule 5 (Focus on Actual Problem)** before writing any output. Re-read the ticket title and description. Verify that your root cause, findings, and suggested fix address the SPECIFIC problem the reporter described. If they don't, pivot the investigation before proceeding.
 
 **Output mode:** Always produce the **full investigation output** internally. Then:
-- If `Output mode` is `short` (default): format using **Output Format — Code Tickets (Short)** template, which includes a collapsed `<details>` section containing the full investigation. The short sections are visible by default; the full investigation is expandable.
+- If `Output mode` is `short` (default): format using **Output Format — Code Tickets (Short)** template. The short sections are visible by default. The full investigation is included inside an ADF `expand` node so readers can choose to expand it. The sub-agent returns TWO blocks: (1) the short markdown sections, and (2) the full investigation markdown sections (clearly separated). The main conversation handles combining them into the final ADF-with-expand format for posting.
 - If `Output mode` is `full`: use the **Output Format — Code Tickets (Full)** template (no collapsed section needed — everything is visible).
 - If `process-docs`: always use the process-docs template regardless of mode (it's already short).
 
@@ -321,19 +357,11 @@ Compile all findings into the output format below. Return the formatted triaging
 | XL | 15+ files, architectural change, multi-repo, data migration | 1-2 weeks |
 
 **Comment Format — CRITICAL:**
-- **Always write triaging notes in standard markdown.** Do NOT convert to Jira wiki markup.
-- When posting to Jira via `addCommentToJiraIssue`, you MUST set `contentFormat: "markdown"`. The Atlassian MCP server accepts markdown and converts it to ADF internally. If you omit `contentFormat`, the API defaults to ADF and your markdown will render as broken plain text.
-- When posting to GitHub, use markdown as-is.
-
-```
-# Correct — Jira posting
-addCommentToJiraIssue(
-  cloudId: "...",
-  issueIdOrKey: "DL-1234",
-  contentFormat: "markdown",    # ← MANDATORY for Jira
-  commentBody: "# Triaging Notes\n..."
-)
-```
+- **Full mode and process-docs:** Write in standard markdown. Post to Jira with `contentFormat: "markdown"` — the MCP server converts to ADF internally.
+- **Short mode:** Requires raw ADF JSON to create the `expand` node. Markdown-to-ADF conversion CANNOT produce expand nodes — there is no markdown equivalent. You MUST construct ADF JSON and post with `contentFormat: "adf"`. See **"Posting to Jira"** in the posting section below. **There is no shortcut — posting short mode as markdown is a bug.**
+- When posting to GitHub: use markdown as-is (all modes).
+- Do NOT use Jira wiki markup in any mode.
+- Omitting `contentFormat` defaults to ADF — passing markdown text without the flag renders as broken plain text.
 
 **Iteration Tracking:**
 - Check if a previous "Triaging Notes" comment exists on the ticket
@@ -344,6 +372,10 @@ addCommentToJiraIssue(
 ## Output Format — Code Tickets (Short) — DEFAULT
 
 Use this template when output mode is `short` (the default). All investigation phases still run — this only changes what is surfaced in the posted comment.
+
+The sub-agent returns TWO clearly separated blocks:
+
+### Block 1 — Short Sections (visible by default)
 
 ```
 # Triaging Notes
@@ -357,7 +389,7 @@ One-paragraph summary: what the issue is, what's affected, and the recommended p
 - Omit this section entirely if the TLDR already captures the mechanism sufficiently.
 
 ## Risks
-- Medium, high, and critical risks only. One line each. Omit low risks entirely.
+- High and critical risks only. One line each. Omit low and medium risks.
 
 ## Estimation
 - One line: **Size: {T-shirt}** | {days} | Confidence: {level} | Recommend **{N} SP**. Second line for complexity drivers if needed.
@@ -366,12 +398,15 @@ One-paragraph summary: what the issue is, what's affected, and the recommended p
 - Bulleted per repo. Name the new classes/files and the reuse targets. No Option B / Option C unless a real trade-off exists worth debating.
 
 @{PM or reporter} — {open questions, if any}
+```
 
----
+### Block 2 — Full Investigation (collapsed by default)
 
-<details>
-<summary>Full Investigation Details (click to expand)</summary>
+This block is posted inside an ADF `expand` node so readers can choose to expand it. The sub-agent returns this as plain markdown — the main conversation converts it to ADF nodes and wraps it in an expand node before posting.
 
+**ADF-friendly formatting rules for Block 2:** Use only these markdown elements (they convert cleanly to ADF nodes): headings (##, ###), paragraphs, bullet lists (single-level preferred), **bold**, _italic_, `inline code`, [links](url), and code blocks. **Avoid tables** — use bullet lists instead. **Avoid nested lists deeper than 2 levels.** This constraint exists because the main conversation must manually convert Block 2 markdown to ADF JSON — simpler formatting means more reliable conversion.
+
+```
 ## Investigation
 
 ### Codebase Findings
@@ -406,8 +441,6 @@ One-paragraph summary: what the issue is, what's affected, and the recommended p
 - **Option A (recommended):** Full description and rationale
 - **Option B:** Alternative approach with trade-offs
 - **Breadcrumbs:** Key files, functions, and call paths to start from (with GitHub permalinks per repo)
-
-</details>
 ```
 
 ## Output Format — Code Tickets (Full)
@@ -526,6 +559,23 @@ Focus on high-risk claims. Skip low-risk items (Jira ticket statuses, estimation
 
 **Enforce the Investigation Accuracy Rules** from the investigation agent's prompt. The investigation agent was told to follow Rules 1–5 (exact-name citation, verify-the-mechanism, self-critique, label verified vs speculative, focus on actual problem). Your job here is to catch violations.
 
+### FIRST CHECK — Is this note actually about the reported problem? (Rule 5)
+
+**This is the highest-priority check. Do this BEFORE anything else.** This rule was added after DL-1871 where three iterations of triaging notes investigated the wrong code path (read/display instead of write/storage) because no one checked whether the findings matched the ticket's actual complaint.
+
+1. Re-read the ticket title and description independently — do NOT rely on the investigation agent's summary
+2. In one sentence, state what the reporter is actually asking about
+3. In one sentence, state what the triaging notes' root cause and suggested fix address
+4. **Do (2) and (3) match?** If not, the note is about the wrong problem — verdict is **NEEDS FIXES** regardless of how well-researched it is
+
+Specific misalignment patterns to catch:
+- [ ] Findings address a **read** path but the ticket reports a **write** problem (or vice versa)
+- [ ] Investigation focused on a **symptom** (how data displays) rather than the **cause** (how data is stored/computed)
+- [ ] Root cause is about an **adjacent** system that handles similar data but isn't the one described in the ticket
+- [ ] Suggested fix would not resolve the reporter's stated complaint even if implemented correctly
+
+**If misaligned:** flag as NEEDS FIXES with a clear note: "The triaging notes investigate [X] but the ticket is about [Y]. The investigation needs to be redirected to [specific area]."
+
 ### Rule 1 enforcement — Exact-Name Citation
 - [ ] Every class, method, module, file, and column named in the notes EXISTS in the codebase (batch-verify via `search_graph` or `search_code`)
 - [ ] If any named entity cannot be found, it is a violation — flag and reject
@@ -538,13 +588,6 @@ Focus on high-risk claims. Skip low-risk items (Jira ticket statuses, estimation
 ### Rule 3 enforcement — Self-Critique
 - [ ] Each high/medium-confidence hypothesis includes a `**Counterargument considered:**` line
 - [ ] The counterargument is substantive (not boilerplate like "this might not be the root cause")
-
-### Rule 5 enforcement — Focus on Actual Reported Problem
-- [ ] Re-read the ticket title and description independently
-- [ ] Verify that the root cause hypothesis addresses the SPECIFIC problem the reporter described (not an adjacent or related issue)
-- [ ] Verify that the suggested fix would resolve the reporter's stated complaint
-- [ ] If findings address a read path but the ticket reports a write problem (or vice versa), flag as misaligned
-- [ ] If the investigation focused on a symptom (display) rather than the cause (storage/logic), flag as misaligned
 
 ### Correctness (use graph first)
 - [ ] Key file paths and classes exist (batch-verify via search_graph)
@@ -601,10 +644,81 @@ After the staff engineer review sub-agent returns:
 3. **NEEDS FIXES:** Apply all fixes from the review to the triaging notes automatically, then post the corrected version. Report what was fixed in the conversation summary.
 
 **Posting to Jira — MANDATORY:**
-- **MCP** (`addCommentToJiraIssue`): MUST pass `contentFormat: "markdown"`. Omitting it defaults to ADF and renders markdown as broken plain text.
-- **acli** (`workitem comment create/update`): MUST use `--body-adf` with a properly constructed ADF JSON file. Do NOT use `--body` or `--body-file` for markdown content — these post plain text that renders unformatted.
-- **Preferred for new comments:** MCP with `contentFormat: "markdown"` (simplest — handles conversion automatically).
-- **Preferred for updating comments:** acli with `--body-adf`, or delete via acli + re-post via MCP.
+
+**Full mode (no expand):** Post via MCP with `contentFormat: "markdown"` — the MCP server handles conversion.
+
+**Short mode — MUST construct ADF JSON with expand node:**
+
+Markdown cannot express collapsible sections. Posting short-mode notes with `contentFormat: "markdown"` renders the full investigation as flat, visible content — **this defeats the purpose of short mode and is a bug.** There is no shortcut and no escape hatch. You MUST construct ADF JSON.
+
+**Step 1 — Convert Block 1 and Block 2 from markdown to ADF nodes.**
+
+ADF node conversion reference:
+
+| Markdown | ADF node |
+|----------|----------|
+| `# H1` | `{"type":"heading","attrs":{"level":1},"content":[{"type":"text","text":"H1"}]}` |
+| `## H2` / `### H3` | Same pattern, `"level":2` or `"level":3` |
+| Paragraph text | `{"type":"paragraph","content":[{"type":"text","text":"..."}]}` |
+| `**bold**` | `{"type":"text","text":"bold","marks":[{"type":"strong"}]}` |
+| `_italic_` | `{"type":"text","text":"italic","marks":[{"type":"em"}]}` |
+| `[text](url)` | `{"type":"text","text":"text","marks":[{"type":"link","attrs":{"href":"url"}}]}` |
+| `` `code` `` | `{"type":"text","text":"code","marks":[{"type":"code"}]}` |
+| `- item` | `{"type":"bulletList","content":[{"type":"listItem","content":[{"type":"paragraph","content":[...]}]}]}` |
+| `---` | `{"type":"rule"}` |
+| Code block | `{"type":"codeBlock","attrs":{"language":"..."},"content":[{"type":"text","text":"..."}]}` |
+| `@mention` | `{"type":"mention","attrs":{"id":"account-id","text":"@Name"}}` |
+
+Key ADF rules:
+- Every text node must be inside a block node (paragraph, heading, listItem). Never put text directly in `doc.content` or `expand.content`.
+- Mixed formatting in a paragraph = multiple text nodes: `"content":[{"type":"text","text":"Normal "},{"type":"text","text":"bold","marks":[{"type":"strong"}]}]`
+- `bulletList` > `listItem` > paragraph > text nodes. Multiple `listItem` nodes in one `bulletList`.
+- Marks can combine: `"marks":[{"type":"strong"},{"type":"link","attrs":{"href":"..."}}]`
+- Tables: `table` > `tableRow` > `tableHeader`/`tableCell` > paragraph > text. If complex, simplify to bullet lists.
+
+**Step 2 — Assemble the ADF document:**
+
+```json
+{
+  "version": 1,
+  "type": "doc",
+  "content": [
+    // Block 1 ADF nodes (headings, paragraphs, bulletLists for TLDR, Key Findings, etc.)
+    {"type": "rule"},
+    {
+      "type": "expand",
+      "attrs": {
+        "title": "Full Investigation Details (click to expand)"
+      },
+      "content": [
+        // Block 2 ADF nodes (headings, paragraphs, bulletLists for Codebase Findings, etc.)
+      ]
+    }
+  ]
+}
+```
+
+**Step 3 — Post via MCP:**
+
+```
+addCommentToJiraIssue(
+  cloudId: "...",
+  issueIdOrKey: "{TICKET_KEY}",
+  contentFormat: "adf",
+  commentBody: "{the ADF JSON document as a string}"
+)
+```
+
+**Step 4 — If MCP fails**, fall back to acli:
+```bash
+cat > /tmp/triaging-notes-adf.json << 'ADFJSON'
+{ ...the ADF JSON document... }
+ADFJSON
+
+acli jira workitem comment create --key {TICKET_KEY} --body-file /tmp/triaging-notes-adf.json
+```
+
+**Validation before posting:** The `doc` node must have `"version": 1`. The `expand` node must have `attrs.title` as a string. All `content` arrays must contain only block-level nodes (paragraph, heading, bulletList, codeBlock, rule, table — NOT text or mention directly).
 
 **After posting (all verdicts):** Add the label `has_notes` to the ticket to indicate it has been groomed. Use `editJiraIssue` (Jira) or `gh issue edit --add-label` (GitHub) to add the label without removing existing labels.
 
@@ -647,13 +761,14 @@ Add to CLAUDE.md to customize behavior:
 ```markdown
 ### Ticket Grooming
 - Default ticket system: jira
-- Jira site: your-site.atlassian.net
-- GitHub org: your-org
+- Jira site: zombie.atlassian.net
+- GitHub org: cobalt-io
 - dry-run: false
 - grooming-mode: short  # short (default) | full (--full flag overrides this)
 - Repos:
-  - my-api: ~/dev/my-api
-  - my-web: ~/dev/my-web
+  - cobalt-pentest-api: ~/Documents/dev/cobalt-pentest-api
+  - cobalt-admin-api: ~/Documents/dev/cobalt-admin-api
+  - cobalt-web: ~/Documents/dev/cobalt-web
 ```
 
 ## Skills Referenced
