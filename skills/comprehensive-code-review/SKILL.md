@@ -78,11 +78,31 @@ If sources conflict, include both and note the conflict. **Fallback:** "No exter
 
 ### Codebase Intelligence
 
-**If `codebase-memory-mcp` available:** `get_architecture`, `trace_call_path`, `search_code`, `search_graph` on affected areas.
+**Use the `future-code-search` model routing rules to delegate search work to cheaper models.** The orchestrator should NOT run raw grep/glob searches itself. Instead:
 
-**If not available:** Use Grep/Glob to find 3-5 existing examples of patterns in the changed code.
+1. **Dispatch a Sonnet exploration agent** for multi-step codebase context gathering:
 
-Set `{CODEBASE_CONTEXT}` to results or "Not available — sub-agent should perform its own pattern discovery using Grep and Glob." Never leave unfilled.
+```
+Agent({
+  model: "sonnet",
+  subagent_type: "Explore",
+  prompt: "I'm reviewing a PR that changes these files: {FILE_LIST}.
+  I need codebase context for a code review. For each changed file, find:
+  1. Similar patterns in the codebase (interactors, policies, serializers, controllers)
+  2. Existing callbacks on changed models
+  3. Related factories in spec/factories/
+  4. If codebase-memory-mcp is available, use get_architecture and trace_call_path on affected areas.
+  5. Otherwise, run 3-5 targeted grep searches.
+
+  Report findings as labeled sections with file paths and line numbers."
+})
+```
+
+2. **Dispatch a Haiku agent** for simple lookups (finding specific files, checking if a method exists).
+
+3. **Parallelize independent searches** — dispatch multiple agents in a single message.
+
+Set `{CODEBASE_CONTEXT}` to the **combined output** from these agents. Never leave unfilled.
 
 ### Failure Semantics Context
 
