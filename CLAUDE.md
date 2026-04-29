@@ -181,7 +181,27 @@ After every PR is created, automatically:
 | New feature | `superpowers:test-driven-development` (RED→GREEN→REFACTOR) |
 | Database queries/mutations changed | `sql-optimization-patterns` + `sql-reviewer` agent |
 | Creating or updating a pull request | `pull-request-description` — structured summary, background, test plan, rollback plan. **Mandatory for both new PRs and PR description updates.** |
+| Codebase search or exploration | `future-code-search` — delegates search to Haiku/Sonnet sub-agents, keeps Opus as orchestrator. **Invoke before any Agent(Explore), Grep, or multi-file Read.** |
 | About to claim completion | `verification-before-completion` |
+
+---
+
+## Prism Session Memory (Mandatory)
+
+**Prism is the persistent memory layer across sessions. These rules are mandatory — no exceptions.**
+
+### Session Start
+- **Always call `session_load_context`** at the start of every session to recover prior work state. Use `standard` level by default, `deep` if resuming complex work.
+
+### Session End
+- **Always call `session_save_ledger`** before the conversation ends if any meaningful work was done (code changes, decisions, debugging, planning, reviews). Include: what was done, key decisions, files changed, and any open questions.
+- **Always call `session_save_handoff`** when a task is paused, blocked, or the conversation is wrapping up with unfinished work. This lets the next session pick up seamlessly.
+
+### After Significant Learnings
+- **Call `session_save_experience`** after resolving non-trivial bugs, discovering important patterns, or making architectural decisions worth preserving.
+
+### What Counts as "Meaningful Work"
+Any session involving: code changes, debugging, architecture discussions, planning, ticket grooming, PR reviews, or decisions that affect future work. Casual Q&A or simple lookups do not require saving.
 
 ---
 
