@@ -394,7 +394,11 @@ _Groomed: {ISO_TIMESTAMP} (iteration {N})_
 - **Time:** Estimated duration for 1 engineer
 - **Confidence:** Low / Medium / High
 
+## Priority
+- **Severity:** [Security vuln/data loss | Customer workflow broken | Customer-facing degraded | Internal/DX | Cosmetic]
+- **Urgency:** [No workaround/blocking | Workaround exists/not blocking]
+- **Priority: P{N}** — [One-sentence justification]
+
 ## Suggested Approach
 ...
-```
 ```

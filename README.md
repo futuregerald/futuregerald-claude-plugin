@@ -256,6 +256,9 @@ If symlinked to `~/.claude/skills`, use the `superpowers:` prefix:
 | Skill | Description |
 |-------|-------------|
 | `frontend-design` | Production-grade frontend interfaces |
+=======
+| `huashu-design` | HTML-native prototypes, slides, animations, and design artifacts |
+| `impeccable` | Frontend design, UX review, and UI polish |
 
 **Other:**
 
