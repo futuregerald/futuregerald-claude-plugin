@@ -20,8 +20,13 @@ Rules and templates for clear, actionable tickets. Dual audience: readable by PM
 ### Initiative
 
 ```markdown
-## Why this initiative?
-{1-2 paragraphs: business driver, what happens if we don't do this}
+## Overview
+{2-3 sentences: what this initiative is, at a glance. A new reader
+should understand the initiative after reading this paragraph alone.}
+
+## Why does this matter?
+{1-2 paragraphs: business driver, customer impact, strategic value.
+What happens if we don't do this? What opportunity do we miss?}
 
 ## Key results
 {Numbered list: measurable outcomes that define success}
@@ -36,7 +41,12 @@ Rules and templates for clear, actionable tickets. Dual audience: readable by PM
 {List of child epics with links and one-line descriptions}
 
 ## Dependencies
-{Cross-team or external dependencies with links}
+{Cross-team, cross-domain, or external dependencies with links.
+What must be true or done before this initiative can succeed?}
+
+## Blockers
+{Current blockers preventing progress. If none, omit this section.
+For each: what's blocked, who/what is blocking, and suggested resolution.}
 
 ## Timeline
 {Key milestones or deadlines, if known}
@@ -64,7 +74,12 @@ Use arrows for state flows, code formatting for technical terms.}
 ## Part N: ...
 
 ## Dependencies
-{Links to parent initiative, blocking/blocked tickets, related PRs}
+{Links to parent initiative, blocking/blocked tickets, related PRs.
+What must exist or be completed before this epic can proceed?}
+
+## Blockers
+{Current blockers preventing progress. If none, omit this section.
+For each: what's blocked, who/what is blocking, and suggested resolution.}
 
 ## Related context
 {Links to Confluence docs, ADRs, prior art PRs, Datadog dashboards}
