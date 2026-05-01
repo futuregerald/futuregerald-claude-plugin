@@ -16,7 +16,9 @@ Deeply investigate one or more tickets by dispatching isolated sub-agents, then 
 Extract from the user's message:
 - **Ticket key(s) or URL(s)** (e.g., `DL-1234`, `https://zombie.atlassian.net/browse/DL-1234`, `#42`)
 - OR a **verbal description** of the issue
-- **Flags:** `--dry-run` (preview without posting), `--full` (post full-form report)
+- **Flags:**
+  - `--dry-run` (preview without posting)
+  - `--full` (post the full-form report with codebase findings, historical context, root cause analysis, and breadcrumbs)
 - **Mode resolution:** `--full` flag > `grooming-mode` config in CLAUDE.md > default (`short`)
 - **Default is short.** Short posts: TLDR (with root cause + confidence), Key Findings (2-3 bullets max), Risks (high/critical only), Estimation, Recommended Approach, @mentions -- plus the full investigation collapsed inside an ADF `expand` node.
 
