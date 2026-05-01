@@ -22,6 +22,15 @@ Agent tool:
     ## Requirements/Plan
     {PLAN_OR_REQUIREMENTS}
 
+    ## Failure Semantics Context
+
+    **This is the authoritative reference for how failures propagate in this
+    codebase.** Use it whenever your finding depends on a failure mode
+    ("if X fails, Y happens"). Do NOT reason about framework behaviour from
+    memory — consult this context.
+
+    {FAILURE_SEMANTICS_CONTEXT}
+
     ## Diff
     ```diff
     {DIFF}
@@ -56,6 +65,32 @@ Agent tool:
     ---
 
     ## Section A — Code Quality
+
+    **Verify the Mechanism (MANDATORY for CRITICAL/IMPORTANT correctness findings)**
+
+    Before flagging any CRITICAL or IMPORTANT finding whose impact depends on a
+    failure mode — "if X fails, Y happens", "if nil, Z", "if the DB constraint
+    trips", "on race condition", etc. — you MUST trace and cite:
+
+    1. **Where the failure is signaled** — exact `file:line` and exact
+       mechanism: `raise SomeError`, `context.fail!`, `return false`, `nil`,
+       `throw`, etc.
+    2. **How the failure propagates** — exact `file:line` where it is caught,
+       re-raised, converted, or ignored. Consult
+       `{FAILURE_SEMANTICS_CONTEXT}` — that is the authoritative reference for
+       what the framework does with exceptions and failure calls in this codebase.
+    3. **Why the claimed symptom actually occurs** — a concrete step-by-step
+       trace from (1) to the observable symptom.
+
+    If you cannot cite (1), (2), and (3) from the diff and provided context,
+    use Read/Grep to verify before flagging. If you still cannot verify, DO NOT
+    flag as CRITICAL or IMPORTANT. Downgrade to MINOR and frame as "verify
+    that..." rather than asserting a bug.
+
+    This rule exists because generic templates like "controller checks a field
+    without checking success" can match code that is actually safe because its
+    failure path raises rather than setting the field. Verify the actual failure
+    path in THIS codebase — do not reason from template.
 
     **Correctness:**
     - Does the code do what it claims?
@@ -120,6 +155,30 @@ Agent tool:
     - Current: [What the code does now]
     - Simplified: [What it should be, with code snippet]
     - Rationale: [Why simpler or clearer]
+
+    ## Self-Critique Pass (MANDATORY before finalizing CRITICAL/IMPORTANT findings)
+
+    For EACH finding at CRITICAL or IMPORTANT severity, write one sentence
+    answering:
+
+    > **"What is the strongest argument that this is NOT a bug?"**
+
+    Consider:
+    - Does the framework handle this case implicitly? (Check `{FAILURE_SEMANTICS_CONTEXT}`.)
+    - Is there a default value, early return, or invariant that makes the
+      claimed failure unreachable?
+    - Does the call-site's actual usage contradict the abstract pattern concern?
+    - Are you reasoning from a template ("controllers should always X") rather
+      than from this specific diff?
+    - Did you verify class/method names against the diff verbatim?
+
+    If the counterargument holds up under the verified mechanism, DROP the
+    finding or downgrade to MINOR/advisory.
+
+    Include the counterargument in the finding body under a
+    `**Counterargument considered:**` line. If you dropped a finding after
+    self-critique, note it briefly in a `### Self-Critique Drops` section at
+    the end so the orchestrator can see your reasoning.
 
     ## Output
     Use the shared output format. Include a ### Simplification Opportunities

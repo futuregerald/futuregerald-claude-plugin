@@ -23,6 +23,15 @@ Agent tool:
     Database: {DATABASE_ENGINE}
     ORM: {ORM}
 
+    ## Failure Semantics Context
+
+    **This is the authoritative reference for how failures propagate in this
+    codebase.** Use it whenever a security finding depends on a failure mode
+    (e.g., "if authorization check fails, Y happens"). Do NOT reason from
+    framework memory.
+
+    {FAILURE_SEMANTICS_CONTEXT}
+
     ## Diff
     ```diff
     {DIFF}
@@ -156,6 +165,41 @@ Agent tool:
     ## Verdict Thresholds
     - **APPROVED**: No critical or important security findings
     - **CHANGES REQUIRED**: Any critical or important finding
+
+    ## Verify the Mechanism (MANDATORY for CRITICAL/IMPORTANT security findings)
+
+    Security findings often depend on a failure mode: "if auth fails,
+    unauthorized access happens", "if validation is bypassed, injection
+    succeeds", "if rescue swallows the error, the denial is silent", etc.
+    Before flagging CRITICAL or IMPORTANT, cite:
+
+    1. **Where the failure/bypass is signaled** — exact `file:line` and mechanism
+    2. **How it propagates** — exact `file:line` where it is caught, re-raised,
+       converted, or ignored. Consult `{FAILURE_SEMANTICS_CONTEXT}`.
+    3. **Why the claimed exploit actually works** — a concrete trace
+
+    If you cannot verify all three, downgrade severity and frame as "verify that...".
+
+    ## Self-Critique Pass (MANDATORY before finalizing CRITICAL/IMPORTANT findings)
+
+    For EACH finding at CRITICAL or IMPORTANT severity, write one sentence
+    answering:
+
+    > **"What is the strongest argument this is NOT exploitable / NOT a vulnerability?"**
+
+    Consider:
+    - Is there an upstream filter, Pundit policy, before_action, or framework
+      guard that blocks the claimed exploit path?
+    - Does the framework's default handling make the bypass unreachable?
+      (Check `{FAILURE_SEMANTICS_CONTEXT}`.)
+    - Is the attacker model you're assuming actually reachable given the auth
+      context in the diff?
+    - Are you reasoning from an OWASP template rather than from this specific
+      diff? Did you verify class/method names against the diff verbatim?
+
+    If the counterargument holds, DROP the finding or downgrade to MINOR/advisory.
+    Include `**Counterargument considered:**` in the finding body. Note drops in
+    a `### Self-Critique Drops` section at the end.
 
     ## Output
     Use the shared output format. Include CWE IDs for security findings.
