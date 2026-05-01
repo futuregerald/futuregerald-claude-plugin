@@ -80,6 +80,12 @@ Specific misalignment patterns to catch:
 - [ ] The suggested solution uses the same abstractions as the reference implementation
 - [ ] Authorization pattern is correctly identified (controller vs interactor level)
 
+### Priority Assignment
+- [ ] Priority section exists with severity, urgency, and P1/P2/P3 rating
+- [ ] Severity classification matches the investigation findings (e.g., security issue correctly mapped to "Security vuln/data loss", not downgraded)
+- [ ] Urgency classification is justified (workaround existence verified, not assumed)
+- [ ] Priority level matches the matrix (severity x urgency -> correct P value)
+
 ## Output Format
 
 Return your review as a structured report:

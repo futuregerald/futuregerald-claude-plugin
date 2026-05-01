@@ -80,7 +80,7 @@ When grooming 2+ tickets: read all, check for overlapping components/files. If o
 
 Dispatch each sub-agent with the Agent tool using the full template in **[references/investigation-prompt.md](references/investigation-prompt.md)**. Replace all `{placeholders}` with actual values resolved during pre-flight.
 
-The investigation prompt includes: Investigation Accuracy Rules (5 rules), Pipeline phases 0-5 (Classification, Codebase Investigation, History Research, Root Cause Analysis, Risk Assessment, Synthesis), Output Format templates (short and full), GitHub Permalink rules, and the Estimation table.
+The investigation prompt includes: Investigation Accuracy Rules (5 rules), Pipeline phases 0-5 (Classification, Codebase Investigation, History Research, Root Cause Analysis, Risk Assessment, Synthesis), Output Format templates (short and full), GitHub Permalink rules, Estimation table, and the P1-P3 Priority Matrix (severity x urgency decision grid).
 
 ## After Investigation Sub-Agent Returns
 
@@ -109,7 +109,9 @@ After the staff engineer review returns:
 - If no: `_Groomed: {ISO_TIMESTAMP} (iteration 1)_`
 - Do NOT edit or delete previous comments.
 
-**After posting (all verdicts):** Add `has_notes` label to the ticket via `editJiraIssue` (Jira) or `gh issue edit --add-label` (GitHub).
+**After posting (all verdicts):**
+1. Add the label `has_notes` to the ticket to indicate it has been groomed. Use `editJiraIssue` (Jira) or `gh issue edit --add-label` (GitHub) to add the label without removing existing labels.
+2. Set the priority field on the ticket based on the Priority section in the triaging notes. Use `editJiraIssue` with the `priority` field (Jira) or add a `priority:P{N}` label (GitHub).
 
 **`--dry-run`:** Display final notes in conversation. Ask "Post to ticket?" If confirmed, post and add label.
 
@@ -172,7 +174,7 @@ Add to CLAUDE.md to customize behavior:
 
 | File | Contents |
 |------|----------|
-| [references/investigation-prompt.md](references/investigation-prompt.md) | Full sub-agent investigation prompt template (Accuracy Rules 1-5, Pipeline phases 0-5, Output Format templates, Estimation table) |
+| [references/investigation-prompt.md](references/investigation-prompt.md) | Full sub-agent investigation prompt template (Accuracy Rules 1-5, Pipeline phases 0-5, Output Format templates, Estimation table, P1-P3 Priority Matrix) |
 | [references/staff-review-prompt.md](references/staff-review-prompt.md) | Staff engineer review sub-agent prompt template (verification strategy, review checklist, verdict format) |
 | [references/adf-posting.md](references/adf-posting.md) | ADF expand node reference and posting details (JSON examples, acli commands, two-part posting shortcut) |
 
