@@ -233,14 +233,14 @@ Compile all findings into the output format below. Return the formatted triaging
 
 Determine priority using two axes from your investigation findings:
 
-- **Severity** — What is the impact?
+- **Severity** -- What is the impact?
   - Security vulnerability or data loss
   - Customer-facing workflow broken
   - Customer-facing degraded (not broken)
   - Internal workflow / developer experience
   - Cosmetic / nice-to-have
 
-- **Urgency** — How pressing is it?
+- **Urgency** -- How pressing is it?
   - No workaround / blocking someone
   - Workaround exists / not blocking
 
@@ -424,6 +424,11 @@ _Groomed: {ISO_TIMESTAMP} (iteration {N})_
 - **Size:** T-shirt size with rationale
 - **Time:** Estimated duration for 1 engineer
 - **Confidence:** Low / Medium / High
+
+## Priority
+- **Severity:** [Security vuln/data loss | Customer workflow broken | Customer-facing degraded | Internal/DX | Cosmetic]
+- **Urgency:** [No workaround/blocking | Workaround exists/not blocking]
+- **Priority: P{N}** — [One-sentence justification]
 
 ## Suggested Approach
 ...

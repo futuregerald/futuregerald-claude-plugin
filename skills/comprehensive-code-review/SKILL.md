@@ -57,6 +57,7 @@ For PR reviews, also fetch PR metadata using available GitHub tooling (`gh` CLI,
 | `{SCHEMA_CONTEXT}` | See Schema Context below (safety sub-agent only) |
 | `{DATABASE_ENGINE}` | `config/database.yml`, `prisma/schema.prisma`, etc. Default: PostgreSQL |
 | `{ORM}` | `Gemfile` (activerecord/sequel), `package.json` (prisma/knex/typeorm). Default: ActiveRecord if Rails |
+| `{FAILURE_SEMANTICS_CONTEXT}` | See Failure Semantics Context below — required whenever control-flow-sensitive files changed |
 | `{FRAMEWORK_CONTEXT}` | See Framework Detection below |
 
 ### Framework Detection
@@ -198,6 +199,25 @@ grep -A 40 'create_table "<table>"' db/schema.rb
 ```
 
 Include the raw `create_table` blocks verbatim in `{SCHEMA_CONTEXT}`. If no DB files in diff: set `{SCHEMA_CONTEXT}` to `"(skipped — no database-touching files changed)"`.
+
+### Failure Semantics Context
+
+**Required whenever the diff touches control-flow-sensitive files** (interactors, controllers, service objects, jobs, middleware). This context tells sub-agents how failures actually propagate in the codebase so they can verify findings against real behavior instead of guessing.
+
+Gather by running these searches (adapt to the project's framework):
+
+```bash
+# 1. Interactor failure patterns — how do interactors signal failure?
+grep -rn "context\.fail\|raise\|fail!" app/interactors/ --include="*.rb" | head -10
+
+# 2. Base interactor behavior — what does the base class do on failure?
+cat app/interactors/application_interactor.rb 2>/dev/null || echo "(no base interactor)"
+
+# 3. Controller failure handling — how do controllers handle interactor failures?
+grep -rn "success?\|failure?\|rescue\|render.*error\|render.*status" app/controllers/ --include="*.rb" | head -10
+```
+
+Set `{FAILURE_SEMANTICS_CONTEXT}` to the raw output of these searches. If the diff does not touch control-flow-sensitive files, set it to `"(skipped — no control-flow-sensitive files changed)"`.
 
 ### Codebase Intelligence
 

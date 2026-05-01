@@ -130,6 +130,17 @@ Agent tool:
     2. Compare against the examples in {CODEBASE_CONTEXT}.
     3. Flag deviations.
 
+    **Structured Logging (Ruby/Rails repos):**
+    First, read the cobalt-structured-logging skill: invoke Skill tool with
+    skill: "cobalt-structured-logging"
+
+    Check all new/modified code paths for structured logging compliance:
+    - New interactors, jobs, services, and rescue blocks MUST have structured logging
+    - Log calls must use the two-argument form: `Rails.logger.info('event_name', key: value)`
+    - Flag string-interpolated logs as IMPORTANT — Pattern Deviation
+    - Flag missing logging on business decisions, error recovery, and job lifecycle as MINOR
+    - Verify error rescues include `error_class:` and `error_message:` fields
+
     Only run additional Grep/Glob searches if the provided context doesn't
     cover a specific pattern you need to evaluate.
 
