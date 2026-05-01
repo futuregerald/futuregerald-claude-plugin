@@ -123,10 +123,12 @@ Agent tool:
     - Sensitive data in JWT payload without encryption?
     - CWE-327, CWE-798
 
-    ### Logging & Monitoring (MINOR)
+    ### Logging & Monitoring (IMPORTANT)
     - Security events not logged (failed auth, permission denied)
     - Missing audit trail for sensitive operations
     - Error messages leaking internal details
+    - New code paths missing structured logging (see cobalt-structured-logging skill)
+    - String-interpolated logs instead of structured keyword arguments
 
     ## Section B — SQL & Database Performance (conditional)
 
