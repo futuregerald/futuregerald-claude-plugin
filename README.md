@@ -203,7 +203,7 @@ If symlinked to `~/.claude/skills`, use the `superpowers:` prefix:
 
 ## Skills and Agents Reference
 
-### Skills (40)
+### Skills (41)
 
 **Core Workflow:**
 
@@ -256,9 +256,9 @@ If symlinked to `~/.claude/skills`, use the `superpowers:` prefix:
 | Skill | Description |
 |-------|-------------|
 | `frontend-design` | Production-grade frontend interfaces |
-=======
 | `huashu-design` | HTML-native prototypes, slides, animations, and design artifacts |
 | `impeccable` | Frontend design, UX review, and UI polish |
+| `ui-implementer` | Pixel-perfect UI from Figma/screenshots with multi-framework support (React, Vue, Svelte 5) and design validation loop |
 
 **Other:**
 
