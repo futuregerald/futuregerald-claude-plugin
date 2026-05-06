@@ -1,13 +1,13 @@
 ---
 name: ticket-grooming
-description: "Deeply investigate and groom tickets by dispatching sub-agents for codebase investigation, history research, root cause analysis, and risk assessment. Use when the user says 'groom', 'triage', or asks to investigate a ticket. Posts structured 'Triaging Notes' as a comment on the ticket. Default output is short-form (TLDR, key findings, risks, estimation, recommended approach) with full investigation collapsed in an ADF expand node. Use --full for the complete report. Always searches both cobalt-pentest-api and cobalt-admin-api for backend tickets. Works with Jira, GitHub Issues, or any ticketing system."
+description: "Investigate and groom tickets by dispatching sub-agents for codebase research, history, root cause analysis, and risk assessment. Posts structured Triaging Notes as a comment. Default is short-form (TLDR, key findings, risks, estimation, approach) with full investigation collapsed. Use --full for the complete report. Works with Jira, GitHub Issues, or any ticketing system."
 tags: [workflow, project-management, debugging]
 model: opus
 ---
 
 # Ticket Grooming
 
-Deeply investigate one or more tickets by dispatching isolated sub-agents, then post structured "Triaging Notes" as a comment on the ticket.
+Investigate one or more tickets, then post structured "Triaging Notes" as a comment. Notes are written for two audiences: PMs who need to understand the issue and prioritize it, and engineers who need to know where to start.
 
 **Announce at start:** "Using ticket-grooming to investigate [ticket(s)]."
 
@@ -17,179 +17,142 @@ Extract from the user's message:
 - **Ticket key(s) or URL(s)** (e.g., `DL-1234`, `https://zombie.atlassian.net/browse/DL-1234`, `#42`)
 - OR a **verbal description** of the issue
 - **Flags:**
-  - `--dry-run` (preview without posting)
-  - `--full` (post the full-form report with codebase findings, historical context, root cause analysis, and breadcrumbs)
-- **Mode resolution:** `--full` flag > `grooming-mode` config in CLAUDE.md > default (`short`)
-- **Default is short.** Short posts: TLDR (with root cause + confidence), Key Findings (2-3 bullets max), Risks (high/critical only), Estimation, Recommended Approach, @mentions -- plus the full investigation collapsed inside an ADF `expand` node.
+  - `--dry-run` — preview without posting
+  - `--full` — post the full report (no collapsed section)
+- **Mode:** `--full` flag > `grooming-mode` in CLAUDE.md > default (`short`)
 
-## Pre-Flight (Main Conversation)
+## Depth Calibration
 
-Before dispatching any sub-agents, complete these steps:
+Not every ticket needs the full pipeline. Match investigation depth to the ticket's complexity.
 
-### 1. Ensure Codebase Index is Current
+| Signal | What to run | Staff review? |
+|--------|-------------|---------------|
+| **Cosmetic** (label, copy, UI text) | Phases 0, 1 (shallow), 5. Skip root cause and risk assessment. | No |
+| **Standard bug or feature** | Full pipeline (phases 0-5) | Yes |
+| **Security / data integrity** | Full pipeline + security checklist in staff review | Yes |
 
-If `codebase-memory-mcp` is available: call `index_status`, re-index if stale. For multi-repo, check each repo. Sub-agents verify via `index_status` but do NOT re-index.
+**How to detect:** Classify during Phase 0 (understand the ticket). If the ticket is clearly cosmetic — no logic change, no data change, no authorization change — use the shallow path. When in doubt, use the full pipeline.
 
-If `codebase-memory-mcp` is NOT available: skip. Sub-agents use Grep/Glob/Read instead.
+## Pre-Flight
 
-### 2. Detect Ticket System
+Before dispatching sub-agents:
 
-Resolution order:
-1. **Config override** -- check CLAUDE.md for `### Ticket Grooming` section
-2. **URL pattern** -- `*.atlassian.net` = Jira, `github.com/*/issues/*` = GitHub
-3. **Key pattern** -- `XX-1234` = Jira, `#1234` = GitHub
-4. **Verbal description** -- no ticket exists; investigate and ask user where to post
+### 1. Check codebase index
 
-| System | Read | Search | Post | Delete |
-|--------|------|--------|------|--------|
-| Jira | `getJiraIssue` | `searchJiraIssuesUsingJql` | `addCommentToJiraIssue` | `acli jira workitem comment delete` |
-| GitHub | `gh issue view` | `gh issue list`, `gh pr list` | `gh issue comment` | `gh api -X DELETE` |
-| Other | Ask user | Best effort | Ask user | Ask user |
+If `codebase-memory-mcp` is available: call `index_status`, re-index if stale. Sub-agents verify via `index_status` but do NOT re-index.
 
-**acli fallback:** When MCP lacks a capability (deleting comments, bulk edits), use `acli` CLI. Always prefer MCP for reads/writes. `acli --body-file` accepts ADF JSON only -- it does NOT convert markdown.
+### 2. Detect ticket system
 
-### 3. Resolve GitHub Remote Info
+Resolution order: CLAUDE.md config > URL pattern (`*.atlassian.net` = Jira, `github.com` = GitHub) > key pattern (`XX-1234` = Jira, `#1234` = GitHub) > ask user.
 
-For each repo: extract org/repo from `git remote get-url origin`, get HEAD SHA via `git rev-parse HEAD`, verify it is pushed. Fallback: use relative paths instead of permalinks.
+| System | Read | Search | Post |
+|--------|------|--------|------|
+| Jira | `getJiraIssue` | `searchJiraIssuesUsingJql` | `addCommentToJiraIssue` |
+| GitHub | `gh issue view` | `gh issue list`, `gh pr list` | `gh issue comment` |
 
-### 4. Backend Issues: Resolve Both API Repos
+**acli fallback:** Use `acli` CLI when MCP lacks a capability (deleting comments, bulk edits). `acli --body-file` accepts ADF JSON only.
 
-For backend tickets, **always include both repos:**
+### 3. Resolve GitHub remote info
+
+For each repo: extract org/repo from `git remote get-url origin`, get HEAD SHA via `git rev-parse HEAD`, verify pushed. Fallback: relative paths instead of permalinks.
+
+### 4. Backend tickets: resolve both API repos
 
 | Repo | Path | GitHub |
 |------|------|--------|
 | `cobalt-pentest-api` | `~/Documents/dev/cobalt-pentest-api` | `cobalthq/cobalt-pentest-api` |
 | `cobalt-admin-api` | `~/Documents/dev/cobalt-admin-api` | `cobalthq/cobalt-admin-api` |
 
-Resolve GitHub info for both during pre-flight. Pass both to the sub-agent.
+`cobalt-admin-api` is mid-migration into `cobalt-pentest-api` (under `components/admin/`). Search both, fix only in `cobalt-pentest-api`. Skip for frontend-only tickets.
 
-**Migration context:** `cobalt-admin-api` is mid-migration into `cobalt-pentest-api` (under `components/admin/`). Search both to understand the full picture, but **fix only in `cobalt-pentest-api`**. Note which repo the fix targets and why.
+### 5. Multi-ticket: detect shared context
 
-Skip for clearly frontend-only tickets.
+When grooming 2+ tickets: read all, check for overlapping components. If overlap found, run shared investigation once and pass as context. Otherwise dispatch independently.
 
-### 5. Read Tickets and Detect Shared Context (Multi-Ticket Only)
+### 6. Dispatch sub-agents
 
-When grooming 2+ tickets: read all, check for overlapping components/files. If overlap found, run shared codebase investigation once and pass as pre-built context. Otherwise dispatch independently.
+- 1 sub-agent per ticket (two-level only — sub-agents don't spawn their own)
+- Max 3 concurrent. Queue additional as slots free.
+- Each gets fresh context — no shared state between tickets.
 
-### 6. Dispatch Sub-Agents
+## Investigation
 
-- **1 sub-agent per ticket** (two-level only -- sub-agents do NOT spawn their own)
-- **Max 3 concurrent.** Queue additional as slots free.
-- Each sub-agent gets fresh context -- no shared state between tickets.
-- Each is fully independent -- failure in one does not affect others.
+Dispatch each sub-agent using the template in **[references/investigation-prompt.md](references/investigation-prompt.md)**. The prompt assembles content from these reference files:
 
-## Sub-Agent Prompt Template
+| File | What it covers |
+|------|---------------|
+| [accuracy-rules.md](references/accuracy-rules.md) | 7 rules for grounding findings in actual code (no hallucinating names, verify mechanisms, challenge hypotheses, label verified vs speculative, stay on the reporter's problem, respect framework behavior, leave verification trails) |
+| [pipeline.md](references/pipeline.md) | Investigation phases: understand the ticket, investigate the code, check history, find root cause, assess risks, write notes |
+| [output-templates.md](references/output-templates.md) | Writing style rules (PM-readable, plain language, technical terms in context) and templates for short, full, and non-code tickets |
+| [estimation-priority.md](references/estimation-priority.md) | T-shirt sizing table and P1-P3 priority matrix |
 
-Dispatch each sub-agent with the Agent tool using the full template in **[references/investigation-prompt.md](references/investigation-prompt.md)**. Replace all `{placeholders}` with actual values resolved during pre-flight.
+## Staff Engineer Review
 
-The investigation prompt includes: Investigation Accuracy Rules (5 rules), Pipeline phases 0-5 (Classification, Codebase Investigation, History Research, Root Cause Analysis, Risk Assessment, Synthesis), Output Format templates (short and full), GitHub Permalink rules, Estimation table, and the P1-P3 Priority Matrix (severity x urgency decision grid).
+After the investigation sub-agent returns, dispatch a review sub-agent using **[references/staff-review-prompt.md](references/staff-review-prompt.md)** with `model: "sonnet"`.
 
-## After Investigation Sub-Agent Returns
+The review checks:
+- Is the note about the reporter's actual problem? (highest priority)
+- Are all named entities verified in the codebase?
+- Are hypotheses backed by evidence with counterarguments?
+- Are visible sections PM-readable? (no unexplained jargon, plain language)
+- Correctness, security, and pattern adherence
 
-Back in the main conversation, dispatch a **staff engineer review sub-agent** before posting. Use the full template in **[references/staff-review-prompt.md](references/staff-review-prompt.md)** with `model: "sonnet"`.
+**Skip staff review only for cosmetic tickets** (per depth calibration above).
 
-The review covers: Rule 5 alignment check (is the note about the right problem?), Rule 1-3 enforcement, correctness verification, defensive coding/security, and pattern matching.
+## Post the Notes
 
-## Auto-Fix and Post
+After staff review:
 
-After the staff engineer review returns:
+| Verdict | Action |
+|---------|--------|
+| **PASS** | Post as-is |
+| **PASS WITH NOTES** | Post as-is, mention notes to user |
+| **NEEDS FIXES** | Apply fixes, post corrected version, report what changed |
 
-1. **PASS:** Post as-is.
-2. **PASS WITH NOTES:** Post as-is. Mention notes to user in conversation summary.
-3. **NEEDS FIXES:** Apply all fixes automatically, then post corrected version. Report what was fixed.
+**Posting rules:** See [output-templates.md](references/output-templates.md) for full posting and iteration tracking details.
+- **Jira (full mode):** Set `contentFormat: "markdown"` on `addCommentToJiraIssue`. Omitting it breaks rendering.
+- **Jira (short mode):** MUST use ADF JSON — markdown cannot produce the expand node. Construct the full ADF document (visible sections + expand node), write to `/tmp/triaging-notes-{TICKET_KEY}.json`, post via `acli --body-file`. See [adf-posting.md](references/adf-posting.md) for the exact procedure and skeleton template. NEVER use HTML `<details>` tags — Jira does not render them.
+- **GitHub:** Post markdown directly.
 
-**Posting rules:**
-- Always write triaging notes in **standard markdown** (not Jira wiki markup).
-- **Jira via MCP:** Set `contentFormat: "markdown"` on `addCommentToJiraIssue`. Omitting it defaults to ADF and breaks rendering.
-- **Short mode with expand:** Requires ADF JSON for the `expand` node. See **[references/adf-posting.md](references/adf-posting.md)** for the full ADF reference and two-part posting shortcut.
-- **Full mode:** Use MCP with `contentFormat: "markdown"` directly.
-- **GitHub:** Use markdown as-is.
+**After posting:**
+1. Add `has_notes` label to the ticket
+2. Set priority field based on the Priority section in the notes
 
-**Iteration tracking:**
-- Check if a previous "Triaging Notes" comment exists on the ticket.
-- If yes: `_Groomed: {ISO_TIMESTAMP} (iteration N -- supersedes iteration N-1)_`
-- If no: `_Groomed: {ISO_TIMESTAMP} (iteration 1)_`
-- Do NOT edit or delete previous comments.
+**`--dry-run`:** Show notes in conversation. Ask "Post to ticket?" before posting.
 
-**After posting (all verdicts):**
-1. Add the label `has_notes` to the ticket to indicate it has been groomed. Use `editJiraIssue` (Jira) or `gh issue edit --add-label` (GitHub) to add the label without removing existing labels.
-2. Set the priority field on the ticket based on the Priority section in the triaging notes. Use `editJiraIssue` with the `priority` field (Jira) or add a `priority:P{N}` label (GitHub).
-
-**`--dry-run`:** Display final notes in conversation. Ask "Post to ticket?" If confirmed, post and add label.
-
-**Multi-ticket batch reporting:**
+**Multi-ticket progress:**
 ```
 Grooming 3 tickets...
-  - DL-1234: Triaging notes posted (review: PASS)
-  - DL-1235: Triaging notes posted (review: NEEDS FIXES -- 2 corrections applied)
-  - DL-1236: In progress -- staff engineer review
+  - DL-1234: Posted (review: PASS)
+  - DL-1235: Posted (review: NEEDS FIXES -- 2 corrections applied)
+  - DL-1236: In progress -- staff review
 ```
 
-## Verbal Description (No Ticket)
+## No Ticket? No Problem.
 
-When the user describes an issue without a ticket key:
-1. Run the full investigation pipeline.
-2. Present findings in conversation (not posted).
-3. Ask: "Should I create a ticket with these triaging notes?" (respect project rules about ticket creation).
-
-## Error Handling
-
-| Failure | Behavior |
-|---------|----------|
-| Ticket not found / inaccessible | Fail fast, tell the user |
-| Sub-agent exceeds context budget | Summarize what it has, note "investigation truncated due to complexity" |
-| Comment post fails | Output triaging notes in conversation so nothing is lost |
-| Comment posted with wrong format | Delete via `acli jira workitem comment delete --key {KEY} --id {ID}`, re-post with `contentFormat: "markdown"` |
-| MCP tools unavailable | Inform user which tools are needed; fall back to `acli` for unsupported ops |
-| Need to delete a Jira comment | Use `acli jira workitem comment delete --key {KEY} --id {ID}` |
-| Repo not cloned locally | Skip that repo, note in findings, ask user for path |
-| One sub-agent fails in a batch | Others continue; failure reported with partial findings |
-| GitHub remote detection fails | Use relative paths instead of permalinks |
-| Staff engineer review fails | Post unreviewed notes with disclaimer |
-
-## Configuration
-
-Add to CLAUDE.md to customize behavior:
-
-```markdown
-### Ticket Grooming
-- Default ticket system: jira
-- Jira site: zombie.atlassian.net
-- GitHub org: cobalt-io
-- dry-run: false
-- grooming-mode: short  # short (default) | full (--full flag overrides this)
-- Repos:
-  - cobalt-pentest-api: ~/Documents/dev/cobalt-pentest-api
-  - cobalt-admin-api: ~/Documents/dev/cobalt-admin-api
-  - cobalt-web: ~/Documents/dev/cobalt-web
-```
-
-## Skills Referenced
-
-| Skill | When | Scope |
-|-------|------|-------|
-| `systematic-debugging` | Phase 3 (always for code tickets) | Phases 1-3 only -- investigation, not implementation |
-| `dispatching-parallel-agents` | Multi-ticket invocations | Parallel sub-agent dispatch with max 3 concurrency |
-| `code-reviewer` (built-in) | Step 6 -- staff engineer review | Correctness, defensive coding, security, pattern matching |
+When the user describes an issue verbally (no ticket key):
+1. Run the investigation pipeline (default to standard depth unless the description is clearly cosmetic)
+2. Present findings in conversation
+3. Ask: "Should I create a ticket with these notes?" (respect project rules about ticket creation)
 
 ## Reference Files
 
 | File | Contents |
 |------|----------|
-| [references/investigation-prompt.md](references/investigation-prompt.md) | Full sub-agent investigation prompt template (Accuracy Rules 1-5, Pipeline phases 0-5, Output Format templates, Estimation table, P1-P3 Priority Matrix) |
-| [references/staff-review-prompt.md](references/staff-review-prompt.md) | Staff engineer review sub-agent prompt template (verification strategy, review checklist, verdict format) |
-| [references/adf-posting.md](references/adf-posting.md) | ADF expand node reference and posting details (JSON examples, acli commands, two-part posting shortcut) |
+| [investigation-prompt.md](references/investigation-prompt.md) | Sub-agent prompt template with placeholder assembly |
+| [accuracy-rules.md](references/accuracy-rules.md) | 7 investigation accuracy rules |
+| [pipeline.md](references/pipeline.md) | Investigation phases 0-5 |
+| [output-templates.md](references/output-templates.md) | Writing style rules and output templates (short, full, non-code) |
+| [estimation-priority.md](references/estimation-priority.md) | T-shirt estimation table and P1-P3 priority matrix |
+| [staff-review-prompt.md](references/staff-review-prompt.md) | Staff engineer review prompt and checklist |
+| [adf-posting.md](references/adf-posting.md) | ADF expand node reference and posting details |
+| [error-handling.md](references/error-handling.md) | What to do when things fail |
+| [framework-detection.md](references/framework-detection.md) | Framework detection logic and per-framework investigation rules |
+| [configuration.md](references/configuration.md) | CLAUDE.md configuration options |
 
-## Installation
+## Skills Referenced
 
-### User-level (personal, works across all projects)
-```
-~/.claude/skills/ticket-grooming/SKILL.md
-```
-
-### Project-level (shared with team via repo)
-```
-.claude/skills/ticket-grooming/SKILL.md
-```
-
-Project-level overrides user-level if both exist.
+| Skill | When |
+|-------|------|
+| `systematic-debugging` | Root cause analysis (phases 1-3 only, no implementation) |
+| `dispatching-parallel-agents` | Multi-ticket invocations (max 3 concurrent) |
