@@ -77,6 +77,7 @@ Before presenting, verify:
 - [ ] Acceptance criteria are non-redundant and testable
 - [ ] Unresolved questions explicit with numbered list
 - [ ] Spike tickets drafted for unknowns neither user nor investigation could resolve
+- [ ] No section overlap: stories/tasks must NOT have an "In scope" section (that content belongs in "Desired behavior" + "Technical approach"). Use "Out of scope" for guardrails only.
 
 ### Phase 6: Output
 

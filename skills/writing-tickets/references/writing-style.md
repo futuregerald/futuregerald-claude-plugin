@@ -14,6 +14,7 @@ Rules and templates for clear, actionable tickets. Dual audience: readable by PM
 8. **Unresolved questions explicit.** Separate numbered section. Each question must be specific enough that someone could answer it without re-reading the whole ticket.
 9. **Key results defined.** Every ticket must state the end state clearly. What does the system look like when this is done?
 10. **200-300 words per section max.** If a section is longer, break it into sub-sections.
+11. **No "In scope" on stories/tasks.** Stories and tasks already have "Desired behavior" (observable outcomes) and "Technical approach" (implementation details). Adding an "In scope" section duplicates both. Use "Out of scope" for guardrails, but never "In scope" -- that content belongs in the existing sections. Only initiatives use "Scope" (they lack a technical approach section).
 
 ## Section Templates
 
@@ -104,7 +105,11 @@ For each: what's blocked, who/what is blocking, and suggested resolution.}
 {What happens today. Be specific -- reference actual code paths.}
 
 ## Desired behavior
-{What should happen after this change. Use arrows for flows.}
+{What should happen after this change. Use arrows for flows.
+Include guardrails: what must NOT change (e.g., "auto-staffing unaffected").}
+
+## Out of scope
+{Explicit list of adjacent work we are NOT doing. Omit if obvious.}
 
 ## Technical approach
 {How to implement. Reference specific files, methods, models.
