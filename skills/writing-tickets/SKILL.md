@@ -79,6 +79,16 @@ Before presenting, verify:
 - [ ] Spike tickets drafted for unknowns neither user nor investigation could resolve
 - [ ] No section overlap: stories/tasks must NOT have an "In scope" section (that content belongs in "Desired behavior" + "Technical approach"). Use "Out of scope" for guardrails only.
 
+**Brevity checks (initiatives and epics):**
+- [ ] No "Current State" / "How it works today" section — that's docs or child stories
+- [ ] No completed/done tickets listed in the description — they're history
+- [ ] No multi-option analyses for already-decided questions — state the decision only
+- [ ] No per-workstream acceptance criteria in initiatives — those go in child epics
+- [ ] No user stories in initiatives/epics — those go in child tickets
+- [ ] Decisions from comments/conversations surfaced in "Key decisions" section
+- [ ] "Open questions" contains only genuinely unresolved questions (answered ones moved to Key decisions)
+- [ ] 2-minute rule: a PM or engineer skimming this for the first time can understand problem, scope, decisions, and open questions in under 2 minutes
+
 ### Phase 6: Output
 
 **Default:** Present the draft in conversation. Ask: "Want me to create/update this in Jira?"
