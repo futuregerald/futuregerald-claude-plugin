@@ -37,14 +37,6 @@ public String processUser(User user) {
     if (!user.isActive()) return "inactive";
     return user.getName().toUpperCase();
 }
-
-// Or with Optional
-public String processUser(Optional<User> user) {
-    return user
-        .filter(User::isActive)
-        .map(u -> u.getName().toUpperCase())
-        .orElse(user.isPresent() ? "inactive" : "unknown");
-}
 ```
 
 ---
