@@ -59,7 +59,7 @@ This is the exact structure to follow. The visible summary uses bold labels (no 
     {
       "type": "paragraph",
       "content": [
-        { "type": "text", "text": "Groomed: {ISO_DATE} (iteration {N})", "marks": [{ "type": "em" }] }
+        { "type": "text", "text": "Groomed: {ISO_TIMESTAMP} (iteration {N})", "marks": [{ "type": "em" }] }
       ]
     },
 
@@ -117,10 +117,10 @@ This is the exact structure to follow. The visible summary uses bold labels (no 
       ]
     },
 
-    // -- @mention / open questions (omit if no questions) --
+    // -- @mention / open questions (omit entire paragraph if no questions) --
     {
       "type": "paragraph",
-      "content": [{ "type": "text", "text": "@{PM} — {open questions}" }]
+      "content": [{ "type": "text", "text": "@{PM or reporter} — {open questions}" }]
     },
 
     // -- Divider before expand --
@@ -157,6 +157,24 @@ This is the exact structure to follow. The visible summary uses bold labels (no 
         {
           "type": "paragraph",
           "content": [{ "type": "text", "text": "{hypotheses with evidence, counterarguments...}" }]
+        },
+        {
+          "type": "heading",
+          "attrs": { "level": 3 },
+          "content": [{ "type": "text", "text": "Risk details" }]
+        },
+        {
+          "type": "paragraph",
+          "content": [{ "type": "text", "text": "{full risk analysis, blast radius, security/performance...}" }]
+        },
+        {
+          "type": "heading",
+          "attrs": { "level": 3 },
+          "content": [{ "type": "text", "text": "Priority" }]
+        },
+        {
+          "type": "paragraph",
+          "content": [{ "type": "text", "text": "{Severity · Urgency · P{N} with justification}" }]
         },
         {
           "type": "heading",

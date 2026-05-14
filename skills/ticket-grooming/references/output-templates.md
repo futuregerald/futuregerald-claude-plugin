@@ -55,7 +55,8 @@ Priority: P{N} — {one sentence}
 - No markdown headers (`##`) — use bold labels instead. Keeps it compact.
 - No "Key Findings" section — fold anything important into root cause or fix.
 - No GitHub permalinks in the visible summary — those go in the details.
-- No code snippets in the visible summary.
+- No code blocks in the visible summary. Inline `code` marks for model/method names are fine.
+- "Fix" field: if 1 item, use a single sentence. If 2-3 items, use a `bulletList` in the ADF (see adf-posting.md).
 - Total visible summary should be **under 15 lines** when rendered.
 
 ### Block 2 — Full investigation details (collapsed)
