@@ -24,80 +24,65 @@ Grooming notes serve two audiences: PMs who need to understand what's wrong and 
 
 ## Template: Code Tickets (Short) — DEFAULT
 
-The sub-agent returns TWO clearly separated blocks. The short sections are visible by default. The full investigation goes inside an ADF `expand` node so readers can choose to expand it.
+The visible portion should read like a Slack message from a senior engineer — conversational, direct, no section bloat. Reserve all technical evidence for the collapsed details section.
 
-### Block 1 — Visible sections
+The sub-agent returns TWO clearly separated blocks:
 
-```
-# Triaging Notes
-_Groomed: {ISO_TIMESTAMP} (iteration {N})_
+### Block 1 — Visible summary
 
-## TLDR
-One paragraph: what the issue is (in plain language), what's affected, and the recommended path forward. Fold in the root cause with a confidence level (e.g., "Root cause (HIGH):") and the key mechanism so readers understand the "why" without needing a separate section. A PM should be able to read this paragraph and understand the issue.
-
-## Key Findings
-- 2-3 bullets max. Include ONLY when there is a specific query, code snippet, or mechanism that makes the root cause concrete. Each bullet: the load-bearing fact with a GitHub permalink. No prose expansion.
-- Omit this section entirely if the TLDR already captures the mechanism.
-
-## Risks
-- High and critical risks only. One line each. Omit low and medium risks.
-- Explain the risk in terms of user/business impact, not just technical terms.
-
-## Estimation
-- One line: **Size: {T-shirt}** | {days} | Confidence: {level} | Recommend **{N} SP**.
-- Second line for complexity drivers if needed.
-
-## Recommended approach
-- Bulleted per repo. Name the new classes/files and the reuse targets.
-- No Option B / Option C unless a real trade-off exists worth debating.
-- Brief enough that a PM can follow the direction; detailed enough that an engineer can start.
-
-## Priority
-- **P{N}** -- {One-sentence justification}
-
-@{PM or reporter} -- {open questions, if any}
-```
-
-### Block 2 — Full investigation (collapsed by default)
-
-This block goes inside an ADF `expand` node. Engineers opt in by clicking to expand. More technical detail is fine here.
+Write in plain language. A PM should understand the problem, the fix, and the risk without expanding the details section.
 
 ```
-## Investigation
+Triaging Notes
+Groomed: {ISO_TIMESTAMP} (iteration {N})
 
-### What we found in the code
+What's happening: 1-2 sentences in plain English. What's broken or missing, and who it affects. No jargon.
+
+Root cause: 1-2 sentences explaining WHY. Name the specific mechanism but keep it accessible. Include confidence (high/medium/low).
+
+Fix: 1-3 bullets. What to do, in which repo, touching which area. Name files/classes only if essential. No Option B unless there's a real trade-off.
+
+Estimate: {S/M/L/XL} · {days} · {N} SP · Confidence: {level}
+
+Risks: Only high/critical. One line each. Omit if none.
+
+Priority: P{N} — {one sentence}
+
+@{PM or reporter} — {open questions, if any. Omit if no questions.}
+```
+
+**Rules for the visible summary:**
+- No markdown headers (`##`) — use bold labels instead. Keeps it compact.
+- No "Key Findings" section — fold anything important into root cause or fix.
+- No GitHub permalinks in the visible summary — those go in the details.
+- No code snippets in the visible summary.
+- Total visible summary should be **under 15 lines** when rendered.
+
+### Block 2 — Full investigation details (collapsed)
+
+Goes inside an ADF `expand` node. Engineers opt in by clicking to expand. Technical depth is expected here — use markdown headers, permalinks, and code snippets as needed.
+
+```
+## Codebase findings
 - Relevant files, models, and functions (with GitHub permalinks)
 - Database schemas/migrations involved
 - Call path traces (entry point --> affected code)
-- Code snippets only when necessary for clarity
-- Cross-repo findings noted with repo name prefix
 
-### History
-- Related tickets (with links)
-- Related PRs/commits (with links)
-- Past decisions or conversations that inform this issue
+## History
+- Related tickets and PRs (with links)
 
-### Root cause analysis
-- Hypothesis 1 (confidence: high/medium/low): description with evidence
-  - Counterargument considered: ...
-- Hypothesis 2 (confidence: ...): description with evidence
-  - Counterargument considered: ...
-- Reproduction steps (if applicable)
+## Root cause analysis (full)
+- Each hypothesis with evidence, permalink, mechanism trace
+- Counterarguments considered
 
-### Risk details
-- Full risk analysis with edge cases
-- Dependencies and blast radius (including cross-repo impact)
-- Security/performance implications
+## Risk details
+- Full risk analysis, blast radius, security/performance
 
-### Priority
-- **Severity:** {row from matrix}
-- **Urgency:** {column from matrix}
-- **Priority: P{N}** -- {One-sentence justification}
+## Priority
+- Severity · Urgency · P{N} with justification
 
-### Suggested solutions (full)
-- **Option A (recommended):** Full description and rationale
-- **Option B:** Alternative approach with trade-offs
-- **Breadcrumbs:** Key files, functions, and call paths to start from (with GitHub permalinks per repo)
+## Breadcrumbs
+- Key files, functions, and call paths to start from (with GitHub permalinks per repo)
 ```
 
 ---
