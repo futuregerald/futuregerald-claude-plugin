@@ -42,7 +42,9 @@ acli jira workitem comment create --key {TICKET_KEY} --body-file /tmp/triaging-n
 
 ### ADF Skeleton
 
-This is the exact structure to follow. The visible sections (TLDR through Priority) are standard ADF nodes. The investigation goes inside a single `expand` node at the end.
+This is the exact structure to follow. The visible summary uses bold labels (no headers) to stay compact. The investigation goes inside a single `expand` node at the end.
+
+**IMPORTANT:** JSON does not support comments. The `// --` lines below are for documentation only — remove them when constructing the actual JSON.
 
 ```json
 {
@@ -57,118 +59,68 @@ This is the exact structure to follow. The visible sections (TLDR through Priori
     {
       "type": "paragraph",
       "content": [
-        { "type": "text", "text": "Groomed: {ISO_DATE} (iteration {N})", "marks": [{ "type": "em" }] }
+        { "type": "text", "text": "Groomed: {ISO_TIMESTAMP} (iteration {N})", "marks": [{ "type": "em" }] }
       ]
     },
 
-    // -- TLDR --
-    {
-      "type": "heading",
-      "attrs": { "level": 2 },
-      "content": [{ "type": "text", "text": "TLDR" }]
-    },
+    // -- What's happening --
     {
       "type": "paragraph",
       "content": [
-        { "type": "text", "text": "{TLDR paragraph text. Use inline marks for code/bold/links as needed.}" }
+        { "type": "text", "text": "What's happening: ", "marks": [{ "type": "strong" }] },
+        { "type": "text", "text": "{1-2 sentences. Plain English. What's broken and who it affects.}" }
       ]
     },
 
-    // -- Key Findings --
+    // -- Root cause --
     {
-      "type": "heading",
-      "attrs": { "level": 2 },
-      "content": [{ "type": "text", "text": "Key Findings" }]
-    },
-    {
-      "type": "bulletList",
+      "type": "paragraph",
       "content": [
-        {
-          "type": "listItem",
-          "content": [{
-            "type": "paragraph",
-            "content": [{ "type": "text", "text": "{finding}" }]
-          }]
-        }
+        { "type": "text", "text": "Root cause: ", "marks": [{ "type": "strong" }] },
+        { "type": "text", "text": "{1-2 sentences. WHY it happens. Confidence: high/medium/low.}" }
       ]
     },
 
-    // -- Risks --
+    // -- Fix --
     {
-      "type": "heading",
-      "attrs": { "level": 2 },
-      "content": [{ "type": "text", "text": "Risks" }]
-    },
-    {
-      "type": "bulletList",
+      "type": "paragraph",
       "content": [
-        {
-          "type": "listItem",
-          "content": [{
-            "type": "paragraph",
-            "content": [{ "type": "text", "text": "{risk}" }]
-          }]
-        }
+        { "type": "text", "text": "Fix: ", "marks": [{ "type": "strong" }] },
+        { "type": "text", "text": "{What to do, which repo, which area. 1-3 short sentences.}" }
       ]
     },
 
-    // -- Estimation --
+    // -- Estimate --
     {
-      "type": "heading",
-      "attrs": { "level": 2 },
-      "content": [{ "type": "text", "text": "Estimation" }]
-    },
-    {
-      "type": "bulletList",
-      "content": [{
-        "type": "listItem",
-        "content": [{
-          "type": "paragraph",
-          "content": [{ "type": "text", "text": "{estimation line}" }]
-        }]
-      }]
+      "type": "paragraph",
+      "content": [
+        { "type": "text", "text": "Estimate: ", "marks": [{ "type": "strong" }] },
+        { "type": "text", "text": "{S/M/L/XL} · {days} · {N} SP · Confidence: {level}" }
+      ]
     },
 
-    // -- Recommended approach --
+    // -- Risks (omit entire paragraph if no high/critical risks) --
     {
-      "type": "heading",
-      "attrs": { "level": 2 },
-      "content": [{ "type": "text", "text": "Recommended approach" }]
-    },
-    {
-      "type": "bulletList",
+      "type": "paragraph",
       "content": [
-        {
-          "type": "listItem",
-          "content": [{
-            "type": "paragraph",
-            "content": [{ "type": "text", "text": "{approach}" }]
-          }]
-        }
+        { "type": "text", "text": "Risks: ", "marks": [{ "type": "strong" }] },
+        { "type": "text", "text": "{High/critical risks only. One line each.}" }
       ]
     },
 
     // -- Priority --
     {
-      "type": "heading",
-      "attrs": { "level": 2 },
-      "content": [{ "type": "text", "text": "Priority" }]
-    },
-    {
-      "type": "bulletList",
-      "content": [{
-        "type": "listItem",
-        "content": [{
-          "type": "paragraph",
-          "content": [{ "type": "text", "text": "{priority}" }]
-        }]
-      }]
+      "type": "paragraph",
+      "content": [
+        { "type": "text", "text": "Priority: ", "marks": [{ "type": "strong" }] },
+        { "type": "text", "text": "P{N} — {one sentence justification}" }
+      ]
     },
 
-    // -- @mention / open questions --
+    // -- @mention / open questions (omit entire paragraph if no questions) --
     {
       "type": "paragraph",
-      "content": [{ "type": "text", "text": "{@PM -- open questions}" }]
+      "content": [{ "type": "text", "text": "@{PM or reporter} — {open questions}" }]
     },
 
     // -- Divider before expand --
@@ -177,20 +129,62 @@ This is the exact structure to follow. The visible sections (TLDR through Priori
     // -- Collapsed investigation (THE EXPAND NODE) --
     {
       "type": "expand",
-      "attrs": { "title": "Full Investigation Details (click to expand)" },
+      "attrs": { "title": "Full Investigation Details" },
       "content": [
-        // Headings, paragraphs, lists — same ADF nodes, just inside the expand.
-        // Use heading level 3 for sections inside the expand.
         {
           "type": "heading",
           "attrs": { "level": 3 },
-          "content": [{ "type": "text", "text": "What we found in the code" }]
+          "content": [{ "type": "text", "text": "Codebase findings" }]
         },
         {
           "type": "paragraph",
-          "content": [{ "type": "text", "text": "{investigation content...}" }]
+          "content": [{ "type": "text", "text": "{files, models, call paths with GitHub permalinks...}" }]
+        },
+        {
+          "type": "heading",
+          "attrs": { "level": 3 },
+          "content": [{ "type": "text", "text": "History" }]
+        },
+        {
+          "type": "paragraph",
+          "content": [{ "type": "text", "text": "{related tickets and PRs with links...}" }]
+        },
+        {
+          "type": "heading",
+          "attrs": { "level": 3 },
+          "content": [{ "type": "text", "text": "Root cause analysis (full)" }]
+        },
+        {
+          "type": "paragraph",
+          "content": [{ "type": "text", "text": "{hypotheses with evidence, counterarguments...}" }]
+        },
+        {
+          "type": "heading",
+          "attrs": { "level": 3 },
+          "content": [{ "type": "text", "text": "Risk details" }]
+        },
+        {
+          "type": "paragraph",
+          "content": [{ "type": "text", "text": "{full risk analysis, blast radius, security/performance...}" }]
+        },
+        {
+          "type": "heading",
+          "attrs": { "level": 3 },
+          "content": [{ "type": "text", "text": "Priority" }]
+        },
+        {
+          "type": "paragraph",
+          "content": [{ "type": "text", "text": "{Severity · Urgency · P{N} with justification}" }]
+        },
+        {
+          "type": "heading",
+          "attrs": { "level": 3 },
+          "content": [{ "type": "text", "text": "Breadcrumbs" }]
+        },
+        {
+          "type": "paragraph",
+          "content": [{ "type": "text", "text": "{key files and call paths to start from...}" }]
         }
-        // ... more sections: History, Root cause analysis, Risk details, Suggested solutions
       ]
     }
   ]

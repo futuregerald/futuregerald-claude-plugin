@@ -12,7 +12,7 @@ Rules and templates for clear, actionable tickets. Dual audience: readable by PM
 6. **Consolidated acceptance criteria.** No redundant ACs. Merge overlapping ones. Each AC must be independently testable.
 7. **Situate in hierarchy.** Always link parent (initiative/epic), sibling tickets, and dependencies. Show where this work fits.
 8. **Unresolved questions explicit.** Separate numbered section. Each question must be specific enough that someone could answer it without re-reading the whole ticket.
-9. **Key results defined.** Every ticket must state the end state clearly. What does the system look like when this is done?
+9. **End state defined.** Every ticket must state what success looks like. For stories/epics, use a "Key results" section. For initiatives, embed this in the scope -- each deliverable line should make the end state clear.
 10. **200-300 words per section max.** If a section is longer, break it into sub-sections.
 11. **No "In scope" on stories/tasks.** Stories and tasks already have "Desired behavior" (observable outcomes) and "Technical approach" (implementation details). Adding an "In scope" section duplicates both. Use "Out of scope" for guardrails, but never "In scope" -- that content belongs in the existing sections. Only initiatives use "Scope" (they lack a technical approach section).
 
