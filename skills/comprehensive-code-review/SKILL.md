@@ -54,7 +54,6 @@ For PR reviews, also fetch PR metadata via `gh` CLI or GitHub API.
 | `{ORM}` | Default: ActiveRecord if Rails. Check `Gemfile` or `package.json` |
 | `{FAILURE_SEMANTICS_CONTEXT}` | See Failure Semantics below — required for control-flow files |
 | `{FRAMEWORK_CONTEXT}` | See [references/framework-rules.md](references/framework-rules.md) |
-| `{TEAM_REVIEW_BRIEF}` | See Team Review Brief below (cobalt repos only) |
 
 ### Framework Detection
 
@@ -102,14 +101,6 @@ If not applicable: `"(skipped — no control-flow-sensitive files changed)"`.
 ### Codebase Intelligence
 
 Read [references/codebase-intelligence.md](references/codebase-intelligence.md) for agent dispatch patterns. Populate `{CODEBASE_CONTEXT}` with actual search output, never instructions to search.
-
-### Team Review Brief (Cobalt Repos Only)
-
-**When reviewing cobalt repos** (cobalthq/*), build a Team Review Brief from the review-style-analyzer database. Read [references/team-review-brief.md](references/team-review-brief.md) for gathering steps.
-
-The brief gives sub-agents real examples of what the team flags, suggests, blocks on, and asks about — producing findings an LLM wouldn't come up with on its own. Sub-agents also get self-serve query access to calibrate and enrich their own findings during the review.
-
-**Graceful failure:** If the analyzer binary or DB is missing, log the unavailability in the review report header (`Note: Team review brief unavailable — analyzer not found at <path>`), set `{TEAM_REVIEW_BRIEF}` to `"(skipped — analyzer not available)"`, and proceed with the review normally. Never fail the review because the analyzer is missing.
 
 ## Phase 2: Dispatch Sub-Agents (PARALLEL)
 
