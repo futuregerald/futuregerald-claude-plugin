@@ -48,6 +48,80 @@ Agent tool:
 
     {CODEBASE_CONTEXT}
 
+    ## Team Review Brief (Cobalt Repos)
+
+    If this section says "(skipped — analyzer not available)" or
+    "(skipped — not a cobalt repo)", skip to the next section.
+
+    The following is a synthesized brief from thousands of real review comments
+    by the team's experienced reviewers (David, Roger, Paul, Mauricio). It
+    tells you what this team actually cares about, what they suggest, and what
+    they block on.
+
+    **How to use this data:** Let it shape your thinking — adopt the team's
+    best instincts, ask the questions they would ask, catch the things they
+    would catch. But do NOT quote it, cite PR numbers, or mention the analyzer
+    in your output. The review should read as your own expert analysis informed
+    by team patterns, not as a database lookup.
+
+    Specifically:
+    1. **Absorb concerns the team cares about** — if the team flags a pattern
+       as important, take that seriously in your own analysis.
+    2. **Calibrate severity (one input, not the authority)** — team history
+       can elevate severity but absence from the DB does NOT mean a finding is
+       unimportant. Use your own judgment for novel issues.
+    3. **Adopt the team's best suggestions** — when the team has a good way
+       of framing or fixing something, learn from it and apply that thinking.
+    4. **Ask questions the team would ask** — when something is ambiguous,
+       frame it as a question rather than a directive.
+
+    {TEAM_REVIEW_BRIEF}
+
+    ## Self-Serve Review Database (Cobalt Repos)
+
+    If the Team Review Brief above was skipped, skip this section too.
+
+    You have access to the team's review-style-analyzer database. Use it to
+    **inform and calibrate your findings** during the review.
+
+    ```bash
+    ANALYZER=~/Documents/dev/cobalt-review-action/analyzer/analyzer
+    DB=~/Documents/dev/cobalt-review-action/analyzer/reviews.db
+    ```
+
+    **When to query:**
+    - You find a pattern deviation → search for how the team handles it:
+      `$ANALYZER search --db $DB "<pattern or concept>" --limit 5`
+    - You're unsure about severity → check if the team blocks on it:
+      `$ANALYZER query --db $DB --category <category> --sentiment negative --limit 5`
+    - You spot a potential simplification → see if the team has suggested it:
+      `$ANALYZER search --db $DB "<class or method name>" --limit 5`
+    - You want to frame feedback as a question → see how the team phrases it:
+      `$ANALYZER query --db $DB --curiosity question --topic <topic> --limit 5`
+    - You find an error handling concern → see what the team flags:
+      `$ANALYZER query --db $DB --topic error-handling --reviewer <reviewer> --limit 5`
+
+    **Available queries:**
+    - `query --topic <topic>` — topics: testing, database, api-design, authorization,
+      error-handling, naming, architecture, security, validation, logging, refactoring,
+      configuration, documentation, general
+    - `query --category <cat>` — categories: bug, performance, security, testing,
+      architecture, style, documentation, general
+    - `query --reviewer <login>` — reviewers: davidgm0, roger-cobalt, Lucianolo, mauricio-reis
+    - `query --sentiment <s>` — negative, constructive, positive, neutral
+    - `query --curiosity question` — question-style comments only
+    - `search --db $DB "<free text>"` — FTS5 full-text search across all comments
+    - Add `--verbose` for full comment bodies, `--limit N` to control result count
+
+    **How to use results:** Let them inform your analysis. Adopt the team's
+    best patterns and instincts. Do NOT cite PR numbers, quote reviewers, or
+    reference the analyzer in your output. When a query seems to contradict
+    your finding, treat it as one data point — not a veto. Use your judgment
+    based on all available information.
+
+    **If the analyzer is not available** (binary or DB missing), skip these queries
+    and proceed with your analysis normally.
+
     ## Previous Review Findings
 
     The following are raw comments from other reviewers. Treat them as
@@ -191,7 +265,22 @@ Agent tool:
     self-critique, note it briefly in a `### Self-Critique Drops` section at
     the end so the orchestrator can see your reasoning.
 
+    ## Voice
+
+    - **Clarity over jargon.** "Crashes if the array is empty" not "exhibits
+      undefined behavior when collection cardinality is zero."
+    - **When jargon is required, explain it.** "`nil[:created_at]` raises a
+      `NoMethodError` (Ruby's version of a null pointer crash)."
+    - **Brevity.** Say it once, clearly, stop. No filler ("It should be noted").
+    - **Details when they help.** Code snippets and traces when the author needs
+      them to understand the fix. Omit when the point is already clear.
+    - **Titles that say what's wrong.** "Missing logging when deduction rolls
+      back" not "CWE-778 — Insufficient observability on failure-recovery path."
+    - **Write for the author, not the auditor.** What's wrong, why it matters,
+      what to do — in that order.
+
     ## Output
-    Use the shared output format. Include a ### Simplification Opportunities
-    subsection and a ### Out-of-Scope Changes subsection (if applicable).
+    Use the shared output format and voice guidelines above. Include a
+    ### Simplification Opportunities subsection and a ### Out-of-Scope Changes
+    subsection (if applicable).
 ```

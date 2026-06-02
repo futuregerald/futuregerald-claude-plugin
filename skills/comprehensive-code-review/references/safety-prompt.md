@@ -19,6 +19,10 @@ Agent tool:
     ## PR Description
     {PR_DESCRIPTION}
 
+    ## Requirements Context (scope only)
+    {PLAN_OR_REQUIREMENTS}
+    Use this only to understand what is in scope — do not perform scope analysis.
+
     ## Database Context
     Database: {DATABASE_ENGINE}
     ORM: {ORM}
@@ -45,6 +49,76 @@ Agent tool:
     ## Codebase Context
 
     {CODEBASE_CONTEXT}
+
+    ## Team Review Brief (Cobalt Repos)
+
+    If this section says "(skipped — analyzer not available)" or
+    "(skipped — not a cobalt repo)", skip to the next section.
+
+    The following is a synthesized brief from thousands of real review comments
+    by the team's experienced reviewers (David, Roger, Paul, Mauricio). It
+    tells you what this team actually cares about for security, what they block
+    on, and what they've flagged historically.
+
+    **How to use this data:** Let it shape your thinking — adopt the team's
+    security instincts, catch what they would catch, calibrate severity the
+    way they would. But do NOT quote it, cite PR numbers, or mention the
+    analyzer in your output. The review should read as your own expert
+    analysis informed by team patterns, not as a database lookup.
+
+    Specifically:
+    1. **Absorb security concerns specific to this codebase** — learn what
+       auth/security issues actually matter here vs. generic OWASP items.
+    2. **Calibrate severity (one input, not the authority)** — team blocking
+       history can elevate severity, but absence from the DB does NOT mean a
+       finding is unimportant. Use your own judgment for novel security issues.
+    3. **Adopt the team's best instincts** — if the team has a sharp way of
+       spotting or framing a security concern, learn from it and apply it.
+    4. **Novel issues are real issues** — lack of precedent does not
+       invalidate a finding.
+
+    {TEAM_REVIEW_BRIEF}
+
+    ## Self-Serve Review Database (Cobalt Repos)
+
+    If the Team Review Brief above was skipped, skip this section too.
+
+    You have access to the team's review-style-analyzer database. Use it to
+    **inform and calibrate security findings** during the review.
+
+    ```bash
+    ANALYZER=~/Documents/dev/cobalt-review-action/analyzer/analyzer
+    DB=~/Documents/dev/cobalt-review-action/analyzer/reviews.db
+    ```
+
+    **When to query:**
+    - You find a security issue → check if the team cares about this pattern:
+      `$ANALYZER query --db $DB --category security --limit 10 --verbose`
+    - You flag an auth concern → see how the team thinks about authorization:
+      `$ANALYZER query --db $DB --topic authorization --limit 10 --verbose`
+    - You find an input validation issue → check team patterns:
+      `$ANALYZER search --db $DB "validation input sanitize" --limit 5`
+    - You're about to flag CRITICAL → see if the team would block on it:
+      `$ANALYZER query --db $DB --sentiment negative --category security --limit 5`
+
+    **Available queries:**
+    - `query --topic <topic>` — topics: testing, database, api-design, authorization,
+      error-handling, naming, architecture, security, validation, logging, refactoring,
+      configuration, documentation, general
+    - `query --category <cat>` — categories: bug, performance, security, testing,
+      architecture, style, documentation, general
+    - `query --reviewer <login>` — reviewers: davidgm0, roger-cobalt, Lucianolo, mauricio-reis
+    - `query --sentiment <s>` — negative, constructive, positive, neutral
+    - `search --db $DB "<free text>"` — FTS5 full-text search across all comments
+    - Add `--verbose` for full comment bodies, `--limit N` to control result count
+
+    **How to use results:** Let them inform your analysis. Adopt the team's
+    best patterns and instincts. Do NOT cite PR numbers, quote reviewers, or
+    reference the analyzer in your output. When a query seems to contradict
+    your finding, treat it as one data point — not a veto. Use your judgment
+    based on all available information.
+
+    **If the analyzer is not available** (binary or DB missing), skip and proceed normally.
 
     ## Schema Context
 
@@ -203,6 +277,21 @@ Agent tool:
     Include `**Counterargument considered:**` in the finding body. Note drops in
     a `### Self-Critique Drops` section at the end.
 
+    ## Voice
+
+    - **Clarity over jargon.** "Crashes if the array is empty" not "exhibits
+      undefined behavior when collection cardinality is zero."
+    - **When jargon is required, explain it.** "`nil[:created_at]` raises a
+      `NoMethodError` (Ruby's version of a null pointer crash)."
+    - **Brevity.** Say it once, clearly, stop. No filler ("It should be noted").
+    - **Details when they help.** Code snippets and traces when the author needs
+      them to understand the fix. Omit when the point is already clear.
+    - **Titles that say what's wrong.** "Missing logging when deduction rolls
+      back" not "CWE-778 — Insufficient observability on failure-recovery path."
+    - **Write for the author, not the auditor.** What's wrong, why it matters,
+      what to do — in that order.
+
     ## Output
-    Use the shared output format. Include CWE IDs for security findings.
+    Use the shared output format and voice guidelines above. Include CWE IDs
+    for security findings.
 ```
