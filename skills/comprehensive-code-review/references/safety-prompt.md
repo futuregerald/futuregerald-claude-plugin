@@ -19,6 +19,10 @@ Agent tool:
     ## PR Description
     {PR_DESCRIPTION}
 
+    ## Requirements Context (scope only)
+    {PLAN_OR_REQUIREMENTS}
+    Use this only to understand what is in scope — do not perform scope analysis.
+
     ## Database Context
     Database: {DATABASE_ENGINE}
     ORM: {ORM}
@@ -203,6 +207,21 @@ Agent tool:
     Include `**Counterargument considered:**` in the finding body. Note drops in
     a `### Self-Critique Drops` section at the end.
 
+    ## Voice
+
+    - **Clarity over jargon.** "Crashes if the array is empty" not "exhibits
+      undefined behavior when collection cardinality is zero."
+    - **When jargon is required, explain it.** "`nil[:created_at]` raises a
+      `NoMethodError` (Ruby's version of a null pointer crash)."
+    - **Brevity.** Say it once, clearly, stop. No filler ("It should be noted").
+    - **Details when they help.** Code snippets and traces when the author needs
+      them to understand the fix. Omit when the point is already clear.
+    - **Titles that say what's wrong.** "Missing logging when deduction rolls
+      back" not "CWE-778 — Insufficient observability on failure-recovery path."
+    - **Write for the author, not the auditor.** What's wrong, why it matters,
+      what to do — in that order.
+
     ## Output
-    Use the shared output format. Include CWE IDs for security findings.
+    Use the shared output format and voice guidelines above. Include CWE IDs
+    for security findings.
 ```

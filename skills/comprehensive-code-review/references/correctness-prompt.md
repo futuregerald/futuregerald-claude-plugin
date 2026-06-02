@@ -191,7 +191,22 @@ Agent tool:
     self-critique, note it briefly in a `### Self-Critique Drops` section at
     the end so the orchestrator can see your reasoning.
 
+    ## Voice
+
+    - **Clarity over jargon.** "Crashes if the array is empty" not "exhibits
+      undefined behavior when collection cardinality is zero."
+    - **When jargon is required, explain it.** "`nil[:created_at]` raises a
+      `NoMethodError` (Ruby's version of a null pointer crash)."
+    - **Brevity.** Say it once, clearly, stop. No filler ("It should be noted").
+    - **Details when they help.** Code snippets and traces when the author needs
+      them to understand the fix. Omit when the point is already clear.
+    - **Titles that say what's wrong.** "Missing logging when deduction rolls
+      back" not "CWE-778 — Insufficient observability on failure-recovery path."
+    - **Write for the author, not the auditor.** What's wrong, why it matters,
+      what to do — in that order.
+
     ## Output
-    Use the shared output format. Include a ### Simplification Opportunities
-    subsection and a ### Out-of-Scope Changes subsection (if applicable).
+    Use the shared output format and voice guidelines above. Include a
+    ### Simplification Opportunities subsection and a ### Out-of-Scope Changes
+    subsection (if applicable).
 ```
