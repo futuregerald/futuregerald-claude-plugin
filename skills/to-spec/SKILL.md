@@ -5,7 +5,13 @@ description: Turn the current conversation into a spec and publish it to the pro
 
 This skill takes the current conversation context and codebase understanding and produces a spec (you may know this document as a PRD). Do NOT interview the user — just synthesize what you already know.
 
-The issue tracker and triage label vocabulary should have been provided to you — run `/setup-matt-pocock-skills` if not.
+## Tracker
+
+**Default: local markdown in the project's `docs/` directory.** Unless the user explicitly says otherwise, write the spec as a markdown file at `docs/<feature-slug>/spec.md` in the current project — do not touch any external tracker. Record triage state as a `Status:` line near the top (here, `Status: ready-for-agent`).
+
+**Overrides — only when the user explicitly names one in this request:**
+- **jira** → create the issue in Jira via the Atlassian MCP (ask before writing; use the repo's default project), applying the `ready-for-agent` label.
+- **gh** → create the issue via the `gh` CLI in the repo's GitHub Issues, applying the `ready-for-agent` label.
 
 ## Process
 
@@ -15,7 +21,7 @@ The issue tracker and triage label vocabulary should have been provided to you �
 
 Check with the user that these seams match their expectations.
 
-3. Write the spec using the template below, then publish it to the project issue tracker. Apply the `ready-for-agent` triage label - no need for additional triage.
+3. Write the spec using the template below, then publish it per the **Tracker** section above. Record `ready-for-agent` as its status - no need for additional triage.
 
 <spec-template>
 

@@ -21,7 +21,17 @@ The map is a single issue on this repo's issue tracker, labelled `wayfinder:map`
 
 The map is an **index**, not a store. It lists the decisions made and points at the tickets that hold their detail; a decision lives in exactly one place — its ticket — so the map never restates it, only gists it and links.
 
-**Where the map, its child tickets, blocking, and frontier queries physically live is tracker-specific.** The issue tracker should have been provided to you — run `/setup-matt-pocock-skills` if not. Consult the tracker doc's "Wayfinding operations" section for how _this_ repo expresses them. If no tracker has been provided, default to the local-markdown tracker.
+**Where the map, its child tickets, blocking, and frontier queries physically live is tracker-specific — resolved as follows.**
+
+**Default: local markdown in the project's `docs/` directory.** Unless the user explicitly says otherwise, the map and its tickets are files under `docs/<effort-slug>/`:
+
+- **Map**: `docs/<effort-slug>/map.md` — the Notes / Decisions-so-far / Fog body.
+- **Child ticket**: `docs/<effort-slug>/issues/NN-<slug>.md`, numbered from `01`, with the question in the body. A `Type:` line records the ticket type (`research`/`prototype`/`grilling`/`task`); a `Status:` line records `claimed`/`resolved`.
+- **Blocking**: a `Blocked by: NN, NN` line near the top. A ticket is unblocked when every file it lists is `resolved`.
+- **Frontier**: scan `docs/<effort-slug>/issues/` for files that are open, unblocked, and unclaimed; lowest number wins.
+- **Claim**: set `Status: claimed` and save before any work. **Resolve**: append the answer under an `## Answer` heading, set `Status: resolved`, then append a context pointer (gist + link) to the map's Decisions-so-far in `map.md`.
+
+**Overrides — only when the user explicitly names one in this request:** **jira** (Atlassian MCP) or **gh** (`gh` CLI) — create the map as a `wayfinder:map`-labelled issue with one child issue per ticket, using the tracker's native blocking relationship; ask before writing.
 
 ### The map body
 
