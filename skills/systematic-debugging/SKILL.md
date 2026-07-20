@@ -1,6 +1,6 @@
 ---
 name: systematic-debugging
-description: Use when encountering any bug, test failure, or unexpected behavior, before proposing fixes
+description: Use when encountering any bug, test failure, performance regression, or unexpected behavior, before proposing fixes
 tags: [workflow, debugging]
 ---
 
@@ -61,11 +61,11 @@ You MUST complete each phase before proceeding to the next.
    - Read stack traces completely
    - Note line numbers, file paths, error codes
 
-2. **Reproduce Consistently**
-   - Can you trigger it reliably?
-   - What are the exact steps?
-   - Does it happen every time?
-   - If not reproducible → gather more data, don't guess
+2. **Build a Red-Capable Feedback Loop** *(do this before theorizing — it is the heart of Phase 1)*
+   - Construct one command that drives the bug's code path and asserts the user's **exact** symptom, so it goes **red** on this bug and **green** once fixed — not "runs without erroring"
+   - Make it fast and deterministic; for flaky bugs, raise the reproduction rate (loop 100×, add stress, narrow timing) until it's debuggable
+   - Once it's red, **minimise** the repro to the smallest scenario that still fails — cut inputs/callers/config one at a time until every remaining element is load-bearing
+   - No red-capable loop yet? **Do not hypothesise.** See `references/feedback-loops.md` for the construction menu, tightening, non-deterministic bugs, and performance regressions
 
 3. **Check Recent Changes**
    - What changed that could cause this?
@@ -113,6 +113,8 @@ You MUST complete each phase before proceeding to the next.
 
    **This reveals:** Which layer fails (secrets → workflow ✓, workflow → build ✗)
 
+   **Tag every diagnostic log** with a unique prefix (e.g. `[DEBUG-a4f2]`) so removing them later is a single grep — untagged logs get left behind.
+
 5. **Trace Data Flow**
 
    **WHEN error is deep in call stack:**
@@ -152,10 +154,11 @@ You MUST complete each phase before proceeding to the next.
 
 **Scientific method:**
 
-1. **Form Single Hypothesis**
-   - State clearly: "I think X is the root cause because Y"
-   - Write it down
-   - Be specific, not vague
+1. **Form 3–5 Ranked, Falsifiable Hypotheses**
+   - Generate several *before* testing any — a single hypothesis anchors on the first plausible idea
+   - Each must make a prediction: "If X is the cause, changing Y makes the bug disappear / changing Z makes it worse." No prediction = a vibe; sharpen or discard it
+   - Rank by likelihood; test the cheapest-to-falsify first
+   - Show the ranked list to your human partner before deep testing — they often re-rank instantly ("we just deployed #3"). Don't block on it if they're AFK
 
 2. **Test Minimally**
    - Make the SMALLEST possible change to test hypothesis
@@ -164,7 +167,7 @@ You MUST complete each phase before proceeding to the next.
 
 3. **Verify Before Continuing**
    - Did it work? Yes → Phase 4
-   - Didn't work? Form NEW hypothesis
+   - Didn't work? Move to the next ranked hypothesis (regenerate the list only when it's exhausted)
    - DON'T add more fixes on top
 
 4. **When You Don't Know**
@@ -178,11 +181,12 @@ You MUST complete each phase before proceeding to the next.
 **Fix the root cause, not the symptom:**
 
 1. **Create Failing Test Case**
-   - Simplest possible reproduction
+   - Simplest possible reproduction (your minimised repro from Phase 1)
    - Automated test if possible
    - One-off test script if no framework
    - MUST have before fixing
    - Use the `superpowers:test-driven-development` skill for writing proper failing tests
+   - Write it at a **correct seam** — one that exercises the real bug pattern at the call site. If the only available seam is too shallow to replicate what triggered the bug, that absence is itself a finding: note it and flag for architecture review (Phase 4.5) rather than settling for a test that gives false confidence
 
 2. **Implement Single Fix**
    - Address the root cause identified
@@ -287,6 +291,7 @@ If systematic investigation reveals issue is truly environmental, timing-depende
 
 These techniques are part of systematic debugging and available in `references/`:
 
+- **`references/feedback-loops.md`** - Build a tight, red-capable reproduction loop (the heart of Phase 1): construction menu, tightening, non-deterministic bugs, performance regressions, minimising the repro. Includes the `scripts/hitl-loop.template.sh` human-in-the-loop harness
 - **`references/root-cause-tracing.md`** - Trace bugs backward through call stack to find original trigger
 - **`references/defense-in-depth.md`** - Add validation at multiple layers after finding root cause
 - **`references/condition-based-waiting.md`** - Replace arbitrary timeouts with condition polling
