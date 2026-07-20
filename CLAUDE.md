@@ -182,7 +182,19 @@ After every PR is created, automatically:
 | Database queries/mutations changed | `sql-optimization-patterns` + `sql-reviewer` agent |
 | Creating or updating a pull request | `pull-request-description` — structured summary, background, test plan, rollback plan. **Mandatory for both new PRs and PR description updates.** |
 | Codebase search or exploration | `future-code-search` — delegates search to Haiku/Sonnet sub-agents, keeps Opus as orchestrator. **Invoke before any Agent(Explore), Grep, or multi-file Read.** |
-| About to claim completion | `verification-before-completion` |
+
+---
+
+## Verification Before Completion (Always On)
+
+Evidence before claims. Never state that something is done, fixed, passing, or working without having run the check in THIS turn and read its output.
+- Before any success/completion claim: (1) identify the command that proves it, (2) run it fresh and complete, (3) read full output + exit code, (4) then claim, with the evidence.
+- Don't trust a sub-agent's "success" — verify via the diff/output yourself.
+- STOP-and-verify red flags: "should work", "probably", "looks correct", or "Great!/Done!" before running anything; committing or opening a PR without a green check.
+
+## Use Your Skills
+
+Before acting on a task, check whether an installed skill applies and use it — don't reinvent a workflow a skill already encodes.
 
 ---
 

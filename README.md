@@ -58,21 +58,21 @@ skill-installer --mode config-only --target claude --yes
 
 ### Skills — Teaching Claude How to Work
 
-Skills are markdown-based instruction sets that give Claude specialized knowledge and workflows. When invoked, Claude follows the skill's process exactly. The plugin includes 35 skills covering:
+Skills are markdown-based instruction sets that give Claude specialized knowledge and workflows. When invoked, Claude follows the skill's process exactly. The plugin includes 48 skills covering:
 
 - **Test-driven development** — RED/GREEN/REFACTOR cycle
-- **Systematic debugging** — 4-phase protocol: root cause analysis, pattern matching, hypothesis testing, implementation
-- **Code review** — requesting and receiving reviews with technical rigor
-- **Planning** — writing and executing implementation plans with review checkpoints
-- **Brainstorming** — creative exploration before jumping to code
-- **Framework expertise** — AdonisJS, React, SQLite/Turso, and more
+- **Systematic debugging** — root-cause-first protocol with feedback-loop construction
+- **Planning & specs** — plans, PRDs, specs, and tracer-bullet tickets, with review checkpoints
+- **Code review & quality** — parallel-agent review, simplification, and skill review
+- **Architecture & modeling** — deep-module design, domain models, and ADRs
+- **Delivery & EM workflows** — PR descriptions, ticket grooming, team pulse, Datadog dashboards
 
 Skills are invoked by name in Claude Code:
 
 ```
-/superpowers:systematic-debugging
-/superpowers:test-driven-development
-/superpowers:brainstorming
+/futuregerald-claude-plugin:systematic-debugging
+/futuregerald-claude-plugin:test-driven-development
+/futuregerald-claude-plugin:brainstorming
 ```
 
 ### Agents — Specialized Sub-Agents
@@ -192,89 +192,106 @@ After installation as a plugin, skills are available with the namespace prefix:
 /futuregerald-claude-plugin:test-driven-development
 ```
 
-If symlinked to `~/.claude/skills`, use the `superpowers:` prefix:
+If symlinked to `~/.claude/skills` (installed as personal skills), invoke them by plain name — no prefix:
 
 ```
-/superpowers:systematic-debugging
-/superpowers:brainstorming
+/systematic-debugging
+/brainstorming
 ```
 
 ---
 
 ## Skills and Agents Reference
 
-### Skills (41)
+### Skills (48)
 
-**Core Workflow:**
-
-| Skill | Description |
-|-------|-------------|
-| `using-superpowers` | Skill discovery and usage patterns |
-| `systematic-debugging` | 4-phase debugging protocol: root cause, pattern analysis, hypothesis, implementation |
-| `writing-plans` | Implementation planning before coding |
-| `executing-plans` | Plan execution with review checkpoints |
-| `brainstorming` | Creative exploration before implementation |
-| `verification-before-completion` | Evidence-based verification before claiming done |
-
-**Code Quality:**
+**Planning & Specs:**
 
 | Skill | Description |
 |-------|-------------|
-| `comprehensive-code-review` | Orchestrates 5 parallel sub-agents (code quality, pattern consistency, SQL, security, simplification) into a single prioritized report |
-| `code-simplifier` | Code simplification analysis |
-| `requesting-code-review` | Code review requests |
-| `receiving-code-review` | Processing review feedback |
-| `error-handling-patterns` | Error handling across languages |
+| `brainstorming` | Explore intent, requirements, and design before implementation |
+| `writing-plans` | Turn a spec into a bite-sized, TDD-driven implementation plan |
+| `executing-plans` | Execute a written plan with review checkpoints |
+| `subagent-driven-development` | Execute independent plan tasks via fresh sub-agents |
+| `dispatching-parallel-agents` | Run 2+ independent tasks concurrently |
+| `implement` | Implement a piece of work from a spec or set of tickets |
+| `write-a-prd` | Create a PRD via interview + codebase exploration; file as an issue |
+| `writing-tickets` | Write epics, stories, initiatives, and spike tickets |
+| `to-spec` | Synthesize the conversation into a spec, published to your tracker |
+| `to-tickets` | Break a plan/spec into tracer-bullet tickets with blocking edges |
+| `wayfinder` | Plan work too big for one session as a map of decision tickets |
+| `research` | Investigate a question against primary sources; capture as Markdown |
+| `grill-me` | Relentless interview to sharpen a plan or design |
+| `grilling` | Stress-test a plan, decision, or idea through relentless questioning |
+| `grill-with-docs` | Grilling that also produces ADRs and a glossary as it goes |
 
-**Development Workflow:**
-
-| Skill | Description |
-|-------|-------------|
-| `dispatching-parallel-agents` | Parallel task execution |
-| `subagent-driven-development` | Parallel implementation with sub-agents |
-| `using-git-worktrees` | Git worktree isolation |
-| `finishing-a-development-branch` | Branch completion workflow |
-| `pull-request-description` | Structured PR descriptions with summary, background, test plan, and rollback plan |
-| `ticket-grooming` | Deep-dive ticket investigation: dispatches sub-agents for codebase analysis, history research, root cause analysis, and risk assessment; posts structured Triaging Notes to Jira or GitHub |
-| `grill-me` | Stress-test a plan or design through relentless questioning until shared understanding is reached |
-| `write-a-prd` | Create a PRD through user interview, codebase exploration, and module design; submits as GitHub Issue or Jira ticket |
-| `improve-codebase-architecture` | Surface architectural friction, propose module-deepening refactors, and create RFC issues; supports GitHub and Jira |
-
-**Framework-Specific:**
+**Debugging & Code Quality:**
 
 | Skill | Description |
 |-------|-------------|
-| `adonisjs-best-practices` | AdonisJS v6 patterns and conventions |
-| `better-auth-best-practices` | Better Auth integration |
-| `javascript-testing-patterns` | Jest, Vitest, and Japa testing patterns |
-| `sqlite-database-expert` | SQLite, libSQL, and Turso expertise |
-| `turso-best-practices` | Turso database patterns |
-| `sql-optimization-patterns` | SQL query optimization, indexing, EXPLAIN analysis, N+1 elimination |
+| `systematic-debugging` | Root-cause-first debugging with tight feedback-loop construction |
+| `test-driven-development` | RED → GREEN → REFACTOR discipline |
+| `comprehensive-code-review` | Parallel sub-agent review (correctness + safety) into one report |
+| `code-simplifier` | Simplify recently changed code, with Staff Engineer review |
+| `requesting-code-review` | Request review before merge to verify requirements are met |
+| `skill-reviewer` | Review skills for quality, size, and progressive disclosure |
+| `resolving-merge-conflicts` | Resolve an in-progress git merge/rebase conflict |
 
-**Design and Frontend:**
+**Architecture & Modeling:**
 
 | Skill | Description |
 |-------|-------------|
-| `frontend-design` | Production-grade frontend interfaces |
-| `huashu-design` | HTML-native prototypes, slides, animations, and design artifacts |
+| `codebase-design` | Shared vocabulary for designing deep, testable modules |
+| `domain-modeling` | Build and sharpen a project's domain model and ubiquitous language |
+| `architecture-decision-records` | Write and maintain ADRs |
+| `improve-codebase-architecture` | Find module-deepening opportunities; visual report, then grill |
+
+**Delivery & Dev Workflow:**
+
+| Skill | Description |
+|-------|-------------|
+| `using-git-worktrees` | Isolated git worktrees for feature work |
+| `pull-request-description` | Structured PR summary, background, test plan, and rollback plan |
+| `ticket-grooming` | Investigate and groom tickets; post structured triage notes |
+| `future-code-search` | Route codebase search to cheaper models; Opus orchestrates |
+| `graphify` | Build and maintain a knowledge graph of any input |
+| `handoff` | Compact the conversation into a handoff doc for the next session |
+| `teach` | Teach a new skill or concept within the workspace |
+| `skill-creator` | Guide for creating effective skills |
+
+**Frontend & Design:**
+
+| Skill | Description |
+|-------|-------------|
+| `frontend-design` | Distinctive, production-grade frontend interfaces |
 | `impeccable` | Frontend design, UX review, and UI polish |
-| `ui-implementer` | Pixel-perfect UI from Figma/screenshots with multi-framework support (React, Vue, Svelte 5) and design validation loop |
+| `huashu-design` | HTML-native prototypes, slides, animations, and design artifacts |
+| `prototype` | Build a throwaway prototype to answer a design question |
 
-**Other:**
+**Content & Media:**
 
 | Skill | Description |
 |-------|-------------|
-| `api-design-principles` | REST and GraphQL API design |
-| `architecture-decision-records` | ADR documentation |
-| `code-search` | Fast codebase search |
-| `skill-creator` | Creating new skills |
-| `writing-skills` | Skill authoring |
-| `copywriting` | Marketing copy writing |
-| `marketing-psychology` | Mental models for marketing |
-| `programmatic-seo` | Template-based SEO pages at scale |
+| `nano-banana` | Image generation and editing |
+| `copywriting` | Marketing copy for landing, pricing, and feature pages |
+| `marketing-psychology` | Mental models and behavioral science for marketing |
+
+**Testing & Data:**
+
+| Skill | Description |
+|-------|-------------|
+| `javascript-testing-patterns` | Jest, Vitest, and Japa testing patterns |
+| `sql-optimization-patterns` | Query optimization, indexing, EXPLAIN, N+1 elimination |
+
+**Automation & EM/Observability:**
+
+| Skill | Description |
+|-------|-------------|
 | `agent-browser` | Browser automation with Playwright |
-| `baoyu-article-illustrator` | Article illustration generation |
-| `create-auth-skill` | Auth layer creation |
+| `datadog-dashboards` | Build and review Datadog dashboards that actually render the data |
+| `cobalt-structured-logging` | SemanticLogger + Datadog structured logging for Ruby |
+| `team-pulse` | Engineering-manager team status reports |
+| `meeting-debrief` | Strategic meeting analysis from Krisp transcripts |
 
 ### Agents (8)
 
