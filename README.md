@@ -77,7 +77,7 @@ Skills are invoked by name in Claude Code:
 
 ### Agents — Specialized Sub-Agents
 
-Agents are dispatched via the `Task` tool to handle focused work with fresh context. The plugin includes 7 agents: code quality reviewer, code simplifier (with Staff Engineer review), codebase searcher, debugger, implementer, spec reviewer, and SQL performance reviewer.
+Agents are dispatched via the `Task` tool to handle focused work with fresh context. The plugin includes 9 agents: code quality reviewer, code simplifier (with Staff Engineer review), codebase searcher, context finder (index/memory-aware read-only search), debugger, implementer, security reviewer, spec reviewer, and SQL performance reviewer.
 
 ### Development Workflow — A Structured Lifecycle
 
@@ -293,7 +293,7 @@ If symlinked to `~/.claude/skills` (installed as personal skills), invoke them b
 | `team-pulse` | Engineering-manager team status reports |
 | `meeting-debrief` | Strategic meeting analysis from Krisp transcripts |
 
-### Agents (8)
+### Agents (9)
 
 Agents are specialized sub-agents dispatched via the Task tool. They run with fresh context and no knowledge of the parent conversation.
 
@@ -302,6 +302,7 @@ Agents are specialized sub-agents dispatched via the Task tool. They run with fr
 | `code-quality-reviewer` | Reviews code for quality issues |
 | `code-simplifier` | Analyzes code for simplification, with Staff Engineer review |
 | `codebase-searcher` | Searches and explores codebases |
+| `context-finder` | Read-only, index/memory-aware search: knowledge graph → code index → session memory → grep last; returns synthesized findings with `file:line` (runs on Sonnet) |
 | `debugger` | Systematic bug investigation |
 | `implementer` | Implements features from plans |
 | `security-reviewer` | OWASP-aligned security audit: injection, auth, IDOR, SSRF, cryptographic failures, data exposure |
