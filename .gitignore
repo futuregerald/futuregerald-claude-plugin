@@ -10,3 +10,7 @@ skill-zips/
 
 # OS files
 .DS_Store
+
+# Python caches (skill scripts)
+__pycache__/
+*.pyc

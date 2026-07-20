@@ -14,13 +14,13 @@
 | Phase | Action | Skill/Tool | Gate |
 |-------|--------|------------|------|
 | 1. RECEIVE | Understand task, create todo list | `TaskCreate` | Todo list exists |
-| 2. PLAN | Write implementation plan | `superpowers:writing-plans` | Plan document created |
-| 3. REVIEW PLAN | Staff Engineer reviews plan | `superpowers:code-reviewer` via `Task` | Reviewer approves |
-| 4. IMPLEMENT | Write code following TDD | `superpowers:test-driven-development` | Tests exist and pass |
+| 2. PLAN | Write implementation plan | `writing-plans` | Plan document created |
+| 3. REVIEW PLAN | Staff Engineer reviews plan | `code-quality-reviewer` via `Task` | Reviewer approves |
+| 4. IMPLEMENT | Write code following TDD | `test-driven-development` | Tests exist and pass |
 | 5. TEST | `go test ./...` | — | Zero failures |
 | 6. SIMPLIFY | `Task(subagent_type="code-simplifier")` | `code-simplifier` agent | Staff review complete |
-| 7. CODE REVIEW | `Task(subagent_type="superpowers:code-reviewer")` | Fresh sub-agent | Reviewer approves |
-| 8. SQL REVIEW | `Task(subagent_type="superpowers:code-reviewer")` with SQL audit prompt | `sql-optimization-patterns` skill + `sql-reviewer` agent | Reviewer approves |
+| 7. CODE REVIEW | `Task(subagent_type="code-quality-reviewer")` | Fresh sub-agent | Reviewer approves |
+| 8. SQL REVIEW | `Task(subagent_type="code-quality-reviewer")` with SQL audit prompt | `sql-optimization-patterns` skill + `sql-reviewer` agent | Reviewer approves |
 | 9. COMMIT | `git commit` | — | Commit created |
 | 10. PUSH | Push feature branch; `gh pr create` with `Closes #N` if `gh` available | — | Branch pushed (PR created if `gh`) |
 | 11. VERIFY CI | If `gh`: `gh run list`, autonomous PR review, auto-merge when green | — | CI green (if applicable) |
@@ -39,7 +39,7 @@
 
 **Plan review prompt template:**
 ```
-Task(subagent_type="superpowers:code-reviewer", prompt="
+Task(subagent_type="code-quality-reviewer", prompt="
   Review this plan: <path>. Verify: file paths accurate, codebase facts correct,
   no missing edge cases, response shapes match actual patterns, nothing already implemented.
 ")
@@ -82,8 +82,8 @@ Task(subagent_type="superpowers:code-reviewer", prompt="
 **The orchestrating agent NEVER writes code.** It coordinates:
 - Branch management, plan management, task dispatch, and (optionally) PR creation
 - Every implementation task gets a fresh sub-agent pointed at the feature branch
-- Use `superpowers:subagent-driven-development` (preferred) or `superpowers:executing-plans`
-- Independent tasks can run in parallel via `superpowers:dispatching-parallel-agents`
+- Use `subagent-driven-development` (preferred) or `executing-plans`
+- Independent tasks can run in parallel via `dispatching-parallel-agents`
 
 **How it works (without worktrees):**
 
@@ -141,7 +141,7 @@ git worktree remove "../worktrees/$REPO_NAME/<branch>"
 
 After every PR is created, automatically:
 
-1. Dispatch `superpowers:code-reviewer` via `Task` to review `gh pr diff`
+1. Dispatch `code-quality-reviewer` via `Task` to review `gh pr diff`
 2. Post feedback on the GitHub PR via `gh pr review` (approve or request-changes)
 3. If issues found: dispatch fresh sub-agents to fix → push → re-review (max 3 cycles)
 4. Wait for CI: `gh pr checks <pr-number> --watch` (fix failures via sub-agent, max 3 attempts)
@@ -178,11 +178,23 @@ After every PR is created, automatically:
 | Trigger | Skill |
 |---------|-------|
 | Bug investigation | `systematic-debugging` |
-| New feature | `superpowers:test-driven-development` (RED→GREEN→REFACTOR) |
+| New feature | `test-driven-development` (RED→GREEN→REFACTOR) |
 | Database queries/mutations changed | `sql-optimization-patterns` + `sql-reviewer` agent |
 | Creating or updating a pull request | `pull-request-description` — structured summary, background, test plan, rollback plan. **Mandatory for both new PRs and PR description updates.** |
 | Codebase search or exploration | `future-code-search` — delegates search to Haiku/Sonnet sub-agents, keeps Opus as orchestrator. **Invoke before any Agent(Explore), Grep, or multi-file Read.** |
-| About to claim completion | `verification-before-completion` |
+
+---
+
+## Verification Before Completion (Always On)
+
+Evidence before claims. Never state that something is done, fixed, passing, or working without having run the check in THIS turn and read its output.
+- Before any success/completion claim: (1) identify the command that proves it, (2) run it fresh and complete, (3) read full output + exit code, (4) then claim, with the evidence.
+- Don't trust a sub-agent's "success" — verify via the diff/output yourself.
+- STOP-and-verify red flags: "should work", "probably", "looks correct", or "Great!/Done!" before running anything; committing or opening a PR without a green check.
+
+## Use Your Skills
+
+Before acting on a task, check whether an installed skill applies and use it — don't reinvent a workflow a skill already encodes.
 
 ---
 
