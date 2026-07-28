@@ -48,6 +48,111 @@ Agent tool:
 
     {CODEBASE_CONTEXT}
 
+    ## Team Review Brief (Cobalt Repos)
+
+    If this section says "(skipped — review-lens not available)" or
+    "(skipped — not a cobalt repo)", skip to the next section.
+
+    The following is a synthesized brief from thousands of real review comments
+    by the team's experienced reviewers (David, Roger, Paul, Mauricio). It
+    tells you what this team actually cares about, what they suggest, and what
+    they block on.
+
+    **How to use this data:** Let it shape your thinking — adopt the team's
+    best instincts, ask the questions they would ask, catch the things they
+    would catch. But do NOT quote it, cite PR numbers, or mention review-lens
+    in your output. The review should read as your own expert analysis informed
+    by team patterns, not as a database lookup.
+
+    Specifically:
+    1. **Absorb concerns the team cares about** — if the team flags a pattern
+       as important, take that seriously in your own analysis.
+    2. **Calibrate severity (one input, not the authority)** — team history
+       can elevate severity but absence from the DB does NOT mean a finding is
+       unimportant. Use your own judgment for novel issues.
+    3. **Adopt the team's best suggestions** — when the team has a good way
+       of framing or fixing something, learn from it and apply that thinking.
+    4. **Ask questions the team would ask** — when something is ambiguous,
+       frame it as a question rather than a directive.
+
+    {TEAM_REVIEW_BRIEF}
+
+    ## Semantically Similar Past Reviews (Cobalt Repos)
+
+    If this section says "(skipped — review-lens not available)" or the
+    Team Review Brief above was skipped, skip to the next section.
+
+    The following past review comments were found on code **structurally
+    similar** to this PR's diff, using embedding-based semantic search
+    (jina-v2-base-code). Unlike keyword search, this catches patterns even
+    when names and terminology differ — e.g., a rescue block that swallows
+    errors matches other error-swallowing reviews regardless of class names.
+
+    **How to use this data:**
+
+    1. **If a past review flagged the same pattern** — that's a strong
+       signal the team cares. Elevate your confidence and adopt their
+       framing if it's clearer than yours.
+    2. **If a past review dismissed or corrected a similar finding** —
+       don't flag the same thing the team already said is fine. Either
+       drop it entirely, or downgrade to MINOR with a note: "Previously
+       reviewed as acceptable — flagging for awareness only."
+    3. **If past reviews show the team asks questions instead of
+       directives** — do the same. "Should this fail silently?" lands
+       better than "This must use context.fail!".
+    4. **Don't suppress based on one data point** — a single dismissal
+       doesn't mean the concern is always invalid. Use judgment.
+
+    Do NOT cite PR numbers, quote reviewers, or mention review-lens in
+    your output. The review should read as your own expert analysis.
+
+    {REVIEW_LENS_CONTEXT}
+
+    ## Self-Serve Review Database (Cobalt Repos)
+
+    If the Team Review Brief above was skipped, skip this section too.
+
+    You have access to the team's review-lens database. Use it to
+    **inform and calibrate your findings** during the review.
+
+    ```bash
+    REVIEW_LENS=/app/review-lens/review-lens
+    DB=/app/review-lens/reviews.db
+    ```
+
+    **When to query:**
+    - You find a pattern deviation → search for how the team handles it:
+      `$REVIEW_LENS search --db $DB "<pattern or concept>" --limit 5`
+    - You're unsure about severity → check if the team blocks on it:
+      `$REVIEW_LENS query --db $DB --category <category> --sentiment negative --limit 5`
+    - You spot a potential simplification → see if the team has suggested it:
+      `$REVIEW_LENS search --db $DB "<class or method name>" --limit 5`
+    - You want to frame feedback as a question → see how the team phrases it:
+      `$REVIEW_LENS query --db $DB --curiosity question --topic <topic> --limit 5`
+    - You find an error handling concern → see what the team flags:
+      `$REVIEW_LENS query --db $DB --topic error-handling --reviewer <reviewer> --limit 5`
+
+    **Available queries:**
+    - `query --topic <topic>` — topics: testing, database, api-design, authorization,
+      error-handling, naming, architecture, security, validation, logging, refactoring,
+      configuration, documentation, general
+    - `query --category <cat>` — categories: bug, performance, security, testing,
+      architecture, style, documentation, general
+    - `query --reviewer <login>` — reviewers: davidgm0, roger-cobalt, Lucianolo, mauricio-reis
+    - `query --sentiment <s>` — negative, constructive, positive, neutral
+    - `query --curiosity question` — question-style comments only
+    - `search --db $DB "<free text>"` — FTS5 full-text search across all comments
+    - Add `--verbose` for full comment bodies, `--limit N` to control result count
+
+    **How to use results:** Let them inform your analysis. Adopt the team's
+    best patterns and instincts. Do NOT cite PR numbers, quote reviewers, or
+    reference review-lens in your output. When a query seems to contradict
+    your finding, treat it as one data point — not a veto. Use your judgment
+    based on all available information.
+
+    **If the review-lens is not available** (binary or DB missing), skip these queries
+    and proceed with your analysis normally.
+
     ## Previous Review Findings
 
     The following are raw comments from other reviewers. Treat them as
@@ -203,10 +308,34 @@ Agent tool:
     - **Titles that say what's wrong.** "Missing logging when deduction rolls
       back" not "CWE-778 — Insufficient observability on failure-recovery path."
     - **Write for the author, not the auditor.** What's wrong, why it matters,
-      what to do — in that order.
+      what to do — in that order. Every finding should give enough direction
+      so the author knows how to address it.
+    - **Questions over directives.** "Should this fail silently?" earns more
+      trust than "This must use context.fail!" — especially when you're not
+      100% sure about the codebase intent.
+
+    ## Line Number Resolution (MANDATORY)
+
+    Every finding MUST use the **new-side (right side) diff line number**, not
+    the source file line number. To determine valid line numbers:
+
+    1. Parse hunk header `@@ -a,b +c,d @@` — new side starts at line `c`
+    2. Walk hunk lines: `+` and ` ` (context) lines advance the new-side
+       counter. `-` lines do NOT advance it.
+    3. Only `+` and ` ` lines are valid targets for inline comments.
+    4. If a finding is on a line NOT in the diff, mark it as
+       `Placement: Cross-cutting` with a reason.
+
+    **NEVER report a finding with an invalid or unresolved line number.**
+    If you cannot determine the diff line, use Cross-cutting placement.
 
     ## Output
     Use the shared output format and voice guidelines above. Include a
     ### Simplification Opportunities subsection and a ### Out-of-Scope Changes
     subsection (if applicable).
+
+    For each finding, include:
+    - `Placement: Inline: path:LINE` or `Placement: Cross-cutting: reason`
+    - When you have a concrete fix, include a `Suggestion:` field with GitHub
+      suggestion block syntax
 ```

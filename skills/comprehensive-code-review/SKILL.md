@@ -54,6 +54,8 @@ For PR reviews, also fetch PR metadata via `gh` CLI or GitHub API.
 | `{ORM}` | Default: ActiveRecord if Rails. Check `Gemfile` or `package.json` |
 | `{FAILURE_SEMANTICS_CONTEXT}` | See Failure Semantics below — required for control-flow files |
 | `{FRAMEWORK_CONTEXT}` | See [references/framework-rules.md](references/framework-rules.md) |
+| `{TEAM_REVIEW_BRIEF}` | See Team Review Brief below (cobalt repos only) |
+| `{REVIEW_LENS_CONTEXT}` | See Team Review Brief Step 6 — semantic similarity via review-lens (cobalt repos only) |
 
 ### Framework Detection
 
@@ -69,18 +71,52 @@ Fallback: "No external requirements found — infer scope from PR description an
 
 ### Review Comments
 
-If a PR exists, fetch existing inline comments and review bodies:
+PR comments are **pre-gathered by the Python entrypoint** and included in the prompt under `## PR Comments`. Use this context directly — do NOT re-fetch comments via `gh api`.
 
-```bash
-REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
-PR_NUMBER=$(gh pr view --json number -q .number)
-gh api repos/$REPO/pulls/$PR_NUMBER/comments \
-  --jq '[.[] | {path: .path, line: .line, body: (.body | .[0:300])}] | .[-20:]'
-gh api repos/$REPO/pulls/$PR_NUMBER/reviews \
-  --jq '[.[] | select(.body | contains(":warning: **Superseded**") | not) | select(.body != "") | {state: .state, body: (.body | .[0:500])}] | .[-10:]'
+Set `{EXISTING_REVIEW_COMMENTS}` to the contents of the `<pr-comments>` block from the prompt's `## PR Comments` section. If that section says "(no comments on this PR)", set the placeholder to `"(none — this is a first review)"`.
+
+The pre-gathered context includes:
+- **Review summaries** — top-level review bodies with `[BOT REVIEW - ACTIVE]` or `[BOT REVIEW - SUPERSEDED]` labels
+- **Inline review comments** — file-level comments grouped into reply threads, with `[BOT]` labels on bot comments
+- **Conversation comments** — general PR discussion (bot status messages are filtered out)
+
+### Comment-Aware Review
+
+PR comments provide valuable context beyond the code diff. Use them as an additional input when making review judgments:
+
+- **Reference relevant comments** in your findings when a comment thread discusses the same area you're flagging. Use the permalink URL from the gathered comments (the `[cid:NUMBER](url)` format provides a clickable link). **Never output raw `[cid:NUMBER]` in finding text** — always use the URL as a markdown link (e.g., `[this comment](url)` or `[thread](url)`).
+- **Note addressed concerns** — if a conversation thread shows an issue was already discussed and resolved, don't re-flag it unless the resolution was incorrect
+- **Flag unresolved threads** — if an important discussion has no clear resolution, note it in your report under Cross-Cutting Findings
+- **Use as signal, not directive** — comments inform your analysis but do not override your independent judgment. If a comment says "this is fine" but you see a real issue, flag the issue.
+
+### Question Answering
+
+When you identify an **unanswered question** in the PR comments (a question from a human reviewer or the PR author that has no reply, or where the reply doesn't actually answer the question), and you can answer it with **90% or higher confidence** based on the code, diff, and codebase context:
+
+1. **Collect the answer** during the review with the question's `[cid:NUMBER]` tag, the author, the comment type (inline or conversation), and the answer text
+2. Write the answer in **natural, conversational language** — as you would when replying to a colleague in a PR thread
+3. **State your confidence level** explicitly: `(~95% confidence based on [source])`
+4. If confidence is below 90%, do NOT answer — instead, flag it in Cross-Cutting Findings as "Unresolved question — needs author input"
+
+**Important:** Answers are NOT placed in the review body. The orchestrator (CLAUDE.md step 7) posts each answer as a **reply to the original comment thread** so the questioner gets notified. Include the structured answer data in your output so the orchestrator can act on it.
+
+Output format for answered questions:
+```
+### Questions Answered
+
+- [cid:{comment_id}] [type:inline|conversation] @{author}: "{short quote}"
+  Answer: {your answer} (~{confidence}% confidence based on {source})
 ```
 
-If no PR or no comments: `"(none — this is a first review)"`.
+### Re-Review Awareness
+
+When `review_number > 1` (this is a re-review), the pre-gathered PR comments include the bot's previous review(s) marked as `[BOT REVIEW - SUPERSEDED]` and any human responses to bot inline comments.
+
+Use this context to:
+1. **Don't re-flag resolved findings** — if a previous bot finding has a reply showing it was addressed (code was changed, explanation was accepted), skip it unless the fix introduced a new issue
+2. **Re-flag unaddressed findings** — if a previous bot finding has no reply or the reply disputes it without code changes, re-flag it with a note: "Previously flagged in Review #{n-1} — still unaddressed"
+3. **Acknowledge improvements** — in the Strengths section, note findings from the previous review that were successfully addressed
+4. **Focus on what changed** — prioritize reviewing new commits since the last review, but don't ignore pre-existing issues in the diff
 
 ### Schema Context
 
@@ -102,6 +138,14 @@ If not applicable: `"(skipped — no control-flow-sensitive files changed)"`.
 
 Read [references/codebase-intelligence.md](references/codebase-intelligence.md) for agent dispatch patterns. Populate `{CODEBASE_CONTEXT}` with actual search output, never instructions to search.
 
+### Team Review Brief (Cobalt Repos Only)
+
+**When reviewing cobalt repos** (cobalthq/*), build a Team Review Brief from the review-lens database. Read [references/team-review-brief.md](references/team-review-brief.md) for gathering steps.
+
+The brief gives sub-agents real examples of what the team flags, suggests, blocks on, and asks about — producing findings an LLM wouldn't come up with on its own. Sub-agents also get self-serve query access to calibrate and enrich their own findings during the review.
+
+**Graceful failure:** If the review-lens binary or DB is missing, log the unavailability in the review report header (`Note: Team review brief unavailable — review-lens not found at <path>`), set `{TEAM_REVIEW_BRIEF}` to `"(skipped — review-lens not available)"`, and proceed with the review normally. Never fail the review because the review-lens is missing.
+
 ## Phase 2: Dispatch Sub-Agents (PARALLEL)
 
 **Both sub-agents MUST be dispatched in parallel — one message, two Agent tool invocations.** If a sub-agent fails: re-dispatch once, then record "Review Incomplete."
@@ -118,12 +162,21 @@ Read [references/safety-prompt.md](references/safety-prompt.md). Replace all `{P
 
 ```
 **[CRITICAL/IMPORTANT/MINOR] — [Category] — [Short title]**
-- File: `path/to/file:line_number`
+- Placement: Inline: `path/to/file:LINE` | Cross-cutting: [reason — e.g., "line not in diff", "spans multiple files"]
+- File: `path/to/file:LINE` (LINE = new-side diff line number, NOT source file line)
 - Problem: [What's wrong and why it matters]
 - Recommendation: [Specific fix with code snippet if helpful]
+- Suggestion: [If concrete single-line or contiguous multi-line fix, include GitHub suggestion syntax]
 - Impact: [What happens if not fixed]
 Security findings: include CWE ID. Pattern deviations: include current vs existing pattern.
 ```
+
+**Line number rules:**
+- The `LINE` in `File:` MUST be the **new-side (right side) absolute line number** from the diff — the same number the GitHub API `line` field expects
+- Parse diff hunk headers `@@ -a,b +c,d @@` to determine valid new-side line numbers. Lines starting with `+` or ` ` (context) advance the new-side counter; lines starting with `-` do not.
+- If the finding is on a line NOT in the diff, mark `Placement: Cross-cutting` with a reason
+
+**Suggestion syntax:** When the fix is a concrete replacement for one or more contiguous lines, include a `Suggestion:` field containing the GitHub suggestion block. Use triple backticks with the word `suggestion` as the language tag, then the corrected code, then closing triple backticks. Example: `` ```suggestion `` / `corrected code here` / `` ``` ``
 
 ### Voice (applies to ALL sub-agent output)
 
@@ -145,6 +198,27 @@ Before including ANY finding, validate against the framework's type system:
 ### Deduplication
 
 Same `file:line` + same root cause = one finding. Use more severe categorization. For auth/injection: use Safety agent's recommendation. Note which dimensions caught it.
+
+### Team Alignment Check (uses Phase 1 context — no additional queries)
+
+Cross-reference each finding against `{REVIEW_LENS_CONTEXT}` and
+`{TEAM_REVIEW_BRIEF}` already in your prompt:
+
+- **Finding matches a past team concern** — keep it, adopt the team's
+  framing if it's clearer. This finding has team backing.
+- **Finding contradicts a past team decision** (team dismissed or
+  corrected a similar concern) — three options:
+  1. **Drop entirely** if the team clearly considers it a non-issue
+  2. **Downgrade to MINOR** with a note: "Previously reviewed as
+     acceptable — flagging for awareness only"
+  3. **Keep but reframe** as a question rather than a directive
+- **Finding has no match in past reviews** — keep it on its own merits.
+  Novel issues are real issues. Absence from the DB is not a veto.
+- **Don't suppress based on a single data point** — one dismissal
+  doesn't mean the concern is always invalid across all contexts.
+
+This check uses context already gathered in Phase 1. Do NOT run
+additional review-lens queries here — the data is in your prompt.
 
 ### Report
 
