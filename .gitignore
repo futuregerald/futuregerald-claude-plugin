@@ -14,3 +14,7 @@ skill-zips/
 # Python caches (skill scripts)
 __pycache__/
 *.pyc
+
+# Bootstrapped venvs (e.g. vectorize skill's auto-created uv venv)
+.venv/
+**/.venv/
