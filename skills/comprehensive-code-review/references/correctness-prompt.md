@@ -235,11 +235,15 @@ Agent tool:
     2. Compare against the examples in {CODEBASE_CONTEXT}.
     3. Flag deviations.
 
-    **Structured Logging (Ruby/Rails repos):**
-    First, read the cobalt-structured-logging skill: invoke Skill tool with
-    skill: "cobalt-structured-logging"
+    **Structured Logging (Ruby/Rails repos — only if diff touches logging):**
+    Only check structured logging if the diff contains changes to logging
+    statements (`Rails.logger`, `logger.`, `log_`, `puts`, `pp`) or
+    new interactors, jobs, services, or rescue blocks that should have logging.
+    If no logging-related changes are in the diff, skip this section entirely
+    — do NOT invoke the cobalt-structured-logging skill.
 
-    Check all new/modified code paths for structured logging compliance:
+    If logging IS relevant, invoke Skill tool with skill: "cobalt-structured-logging"
+    and check:
     - New interactors, jobs, services, and rescue blocks MUST have structured logging
     - Log calls must use the two-argument form: `Rails.logger.info('event_name', key: value)`
     - Flag string-interpolated logs as IMPORTANT — Pattern Deviation
@@ -265,8 +269,11 @@ Agent tool:
     Analyze changed code for: unnecessary complexity, redundant code, dead code,
     naming improvements, language-specific best practices.
 
-    For each opportunity:
-    **[APPROVED/DEFERRED] — [Short title]**
+    For each opportunity, label it either **Suggested** (worth making this
+    change) or **Optional** (noticed, but not asking for a change — up to the
+    author). Use plain words that non-native English readers can parse quickly.
+
+    **[Suggested/Optional] — [Short title]**
     - File: `path/to/file:line_number`
     - Current: [What the code does now]
     - Simplified: [What it should be, with code snippet]

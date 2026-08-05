@@ -237,8 +237,13 @@ Agent tool:
 
     If `{SCHEMA_CONTEXT}` is not "(skipped — no database-touching files changed)":
 
-    First, read the sql-optimization-patterns skill: invoke Skill tool with
-    skill: "sql-optimization-patterns"
+    Only invoke the sql-optimization-patterns skill if the diff contains
+    actual query changes (new `.where`, `.joins`, `.includes`, raw SQL,
+    ActiveRecord scopes, or migration files). If the only DB-touching files
+    are model validations, callbacks, or association declarations without
+    query changes, proceed with the checklist below WITHOUT loading the skill.
+
+    If query changes ARE present: invoke Skill tool with skill: "sql-optimization-patterns"
 
     Use `{SCHEMA_CONTEXT}` to verify indexes and column types — do NOT read
     `db/schema.rb` directly.

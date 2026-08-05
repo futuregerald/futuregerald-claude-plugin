@@ -184,6 +184,17 @@ See [references/voice.md](references/voice.md). Sub-agents MUST follow these gui
 
 ## Phase 3: Consolidate Results
 
+**IMPORTANT: Consolidation is a formatting and deduplication pass — NOT a re-investigation.**
+Do NOT read files, grep patterns, or run any tool calls to "verify" sub-agent findings.
+Sub-agents had full repo access and the diff. Trust their output. Your job here is:
+1. Deduplicate (same file:line + same root cause = one finding)
+2. Validate against framework rules (drop impossible findings)
+3. Cross-reference against review-lens context already in your prompt
+4. Format findings per the report template
+
+If a sub-agent finding seems wrong, include it with a note rather than re-investigating.
+The human reviewer will make the final call.
+
 ### Framework-Awareness Validation (MANDATORY)
 
 Before including ANY finding, validate against the framework's type system:
