@@ -19,10 +19,10 @@
 | 4. PLAN REVIEW | Adversarial review by a fresh sub-agent | `plan-review` skill → `adversarial-plan-reviewer` | Verdict APPROVE — zero CRITICAL, zero IMPORTANT |
 | 5. IMPLEMENT | Write code following TDD | `test-driven-development` | Tests exist and pass |
 | 6. TEST | `go test ./...` | — | Zero failures |
-| 7. BLAST-RADIUS VERIFY | Walk the Phase 2 caller list; confirm each still holds | — | Every caller verified with evidence |
-| 8. SIMPLIFY | `Task(subagent_type="code-simplifier")` | `code-simplifier` agent | Staff review complete |
-| 9. CODE REVIEW | `comprehensive-code-review` — parallel correctness + safety sub-agents | Fresh sub-agents | Reviewer approves |
-| 10. SQL REVIEW | If DB touched: `Task(subagent_type="sql-reviewer")` | `sql-optimization-patterns` skill | Reviewer approves |
+| 7. SIMPLIFY | `Agent(subagent_type="code-simplifier")` | `code-simplifier` agent | Staff review complete |
+| 8. CODE REVIEW | `comprehensive-code-review` — parallel correctness + safety sub-agents | Fresh sub-agents | Reviewer approves |
+| 9. SQL REVIEW | If DB touched: `Agent(subagent_type="sql-reviewer")` | `sql-optimization-patterns` skill | Reviewer approves |
+| 10. BLAST-RADIUS VERIFY | Walk the IMPACT ANALYSIS caller list; confirm each still holds. **Runs last, after every code-mutating phase** | — | Every caller verified with evidence |
 | 11. COMMIT | `git commit` | — | Commit created |
 | 12. PUSH | Push feature branch; `gh pr create` with `Closes #N` if `gh` available | — | Branch pushed (PR created if `gh`) |
 | 13. VERIFY CI | If `gh`: `gh run list`, autonomous PR review, auto-merge when green | — | CI green (if applicable) |
@@ -33,21 +33,22 @@
 
 **All phases are MANDATORY. No exceptions. No skipping "simple" changes.**
 
-- **Phases 4, 8, 9, 10** MUST use a fresh sub-agent via the Agent tool — no shared context
+- **PLAN REVIEW, SIMPLIFY, CODE REVIEW, and SQL REVIEW** MUST use a fresh sub-agent via the Agent tool — no shared context
 - NEVER review your own plan or code — you wrote it, you cannot objectively review it
-- **Phase 4 is not Phase 9.** Plan review and code review are separate gates with separate agents. Passing one never satisfies the other, and a code review cannot recover a wrong plan
-- **No source file gets edited before Phase 4 passes.** This includes "while I'm in here" fixes
+- **PLAN REVIEW is not CODE REVIEW.** Plan review and code review are separate gates with separate agents. Passing one never satisfies the other, and a code review cannot recover a wrong plan
+- **No source file gets edited before PLAN REVIEW passes.** This includes "while I'm in here" fixes
 - **"Review the plan" — in any phrasing — means invoke `plan-review`.** Never satisfy it by re-reading the plan yourself
 - Give the reviewer neutral inputs only: plan path, the goal it serves, repo root, base SHA. **Never pass your own suspicions or "check X"** — a reviewer aimed at your worries inherits your blind spots
 - If reviewer finds CRITICAL/IMPORTANT issues: fix, re-run tests, re-review with a fresh agent
 - Only proceed after explicit reviewer approval
-- `ExitPlanMode` requires a passed Phase 4
+- `ExitPlanMode` requires a passed PLAN REVIEW
+- **Any phase that mutates code re-opens BLAST-RADIUS VERIFY.** SIMPLIFY edits, and review fix-cycles edit. Re-running tests is not enough — a fix that alters a return contract regresses exactly the callers IMPACT ANALYSIS recorded as having no test. Re-walk the caller list before COMMIT
 
 ### System Thinking: Trace Before You Touch (Mandatory)
 
 **The dominant failure mode is a locally-correct change with unconsidered downstream effects.** The code compiles, the new test passes, and something three call sites away breaks.
 
-Before modifying any function, method, type, endpoint, or schema, reconstruct its call chain in both directions. This is Phase 2; its output is a required section of the plan.
+Before modifying any function, method, type, endpoint, or schema, reconstruct its call chain in both directions. This is the IMPACT ANALYSIS phase; its output is a required section of the plan.
 
 - **Upward** — every direct caller, then transitively out to real entry points (handler, command, job, scheduler, public API). For each: what does it do with the return value, and which part of the contract does it rely on? Include callers outside this repo.
 - **Downward** — every function called and its side effects: writes, external calls, queue sends, cache mutations, file IO. What errors propagate, and who handles them.
@@ -57,7 +58,7 @@ Before modifying any function, method, type, endpoint, or schema, reconstruct it
 
 Use graph tools first, grep second and only for what graphs cannot see. Conclusions rest on files actually read.
 
-**The bar:** "I read the function and it looks fine" is not an impact analysis. If you cannot name every caller and say what each expects, Phase 2 is not done — and Phase 4's reviewer will rebuild this chain independently and treat any caller you missed as at least IMPORTANT.
+**The bar:** "I read the function and it looks fine" is not an impact analysis. If you cannot name every caller and say what each expects, IMPACT ANALYSIS is not done — and the PLAN REVIEW reviewer will rebuild this chain independently and treat any caller you missed as at least IMPORTANT.
 
 ### Prove It, Don't Assume It
 
@@ -77,12 +78,12 @@ If steps 1–2 leave you confident, stop and cite the evidence. Spiking what you
 **Plan review dispatch:** see the `plan-review` skill. Give the agent neutral inputs only — plan path, the goal it serves, repo root, base SHA. It carries its own methodology; do not restate it, and do not steer it.
 
 **Code simplifier rules:**
-- Run after tests pass (Phase 6), before code review (Phase 9)
+- Run after TEST passes, before CODE REVIEW
 - Only implement APPROVED simplifications
 - Re-run tests after applying changes
 
 **SQL review rules:**
-- Run after code review passes (Phase 7), before commit (Phase 9)
+- Run after CODE REVIEW passes, before COMMIT
 - Dispatch a fresh Staff Engineer sub-agent using the `sql-reviewer` agent template
 - The reviewer audits ALL database queries, mutations, and ORM usage for: **performance**, **security**, and **defensive coding**
 - CRITICAL findings MUST be fixed. Re-run tests after fixes, then re-run SQL review
@@ -161,7 +162,7 @@ git worktree remove "../worktrees/$REPO_NAME/<branch>"
 
 ### Issues
 
-- Create in Phase 1 (RECEIVE) if `gh` available
+- Create in RECEIVE if `gh` available
 - Use conventional commit prefixes for titles: `feat:`, `fix:`, `refactor:`, etc.
 - Labels created by `/project:init` map from commit prefixes (feat→feature, fix→bug, etc.)
 - Workflow-created issues include `<!-- source: claude-code -->` marker; those without it are external requests
@@ -191,7 +192,7 @@ After every PR is created, automatically:
 ### Project Board (Kanban)
 
 - Columns: Todo → In Progress → Done
-- Move to "In Progress" when implementation starts (Phase 4)
+- Move to "In Progress" when IMPLEMENT starts — i.e. only after PLAN REVIEW has returned APPROVE
 - Move to "Done" after PR merged and cleaned up
 - Use `gh project item-edit` with `--jq` for filtering (no external `jq`)
 
@@ -208,9 +209,9 @@ After every PR is created, automatically:
 
 | Trigger | Skill |
 |---------|-------|
-| **Any code change, before writing code (Phase 3)** | `writing-plans` — always required, including one-line fixes. Must contain the Impact Analysis |
-| **Plan written, before implementing (Phase 4)** | `plan-review` → `adversarial-plan-reviewer` agent. **Also the required response to "review the plan" in any phrasing.** Never review a plan yourself |
-| Code review before commit (Phase 9) | `comprehensive-code-review` — parallel correctness + safety sub-agents |
+| **Any code change, before writing code (PLAN)** | `writing-plans` — always required, including one-line fixes. Must contain the Impact Analysis |
+| **Plan written, before implementing (PLAN REVIEW)** | `plan-review` → `adversarial-plan-reviewer` agent. **Also the required response to "review the plan" in any phrasing.** Never review a plan yourself |
+| Code review before commit (CODE REVIEW) | `comprehensive-code-review` — parallel correctness + safety sub-agents |
 | Bug investigation | `systematic-debugging` |
 | New feature | `test-driven-development` (RED→GREEN→REFACTOR) |
 | Database queries/mutations changed | `sql-optimization-patterns` + `sql-reviewer` agent |

@@ -1,6 +1,7 @@
 ---
 name: sql-reviewer
-description: Audits database queries, mutations, and ORM usage for performance, security, and defensive coding. Use after code review passes (Phase 7), before commit (Phase 9).
+model: opus
+description: Audits database queries, mutations, and ORM usage for performance, security, and defensive coding. Use after CODE REVIEW passes, before COMMIT.
 ---
 
 # SQL Performance Reviewer Subagent
@@ -9,7 +10,7 @@ Use this subagent to audit all database queries, mutations, and ORM usage for pe
 
 **Purpose:** Ruthlessly audit SQL patterns for performance bottlenecks, security vulnerabilities, and defensive coding gaps
 
-**When to use:** After CODE REVIEW passes (Phase 7), before COMMIT (Phase 9). This is Phase 8: SQL REVIEW.
+**When to use:** After CODE REVIEW passes, before COMMIT. This is the SQL REVIEW phase.
 
 **CRITICAL:** MUST always be dispatched via the `Task` tool as a fresh subagent with NO shared conversation context. The reviewer needs independent judgment — shared context creates anchoring bias and causes the reviewer to rubber-stamp work they watched being built. Never run reviews inline in the main conversation.
 

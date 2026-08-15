@@ -28,9 +28,6 @@ Use this template for the consolidated report in Phase 4.
 ## Out-of-Scope Changes (Advisory)
 [From Correctness agent. Omit if all in scope or no requirements provided.]
 
-## Strengths
-[What was done well — specific file:line references]
-
 ## Overall Assessment
 
 | Dimension | Verdict | Critical | Important | Minor |
@@ -39,7 +36,13 @@ Use this template for the consolidated report in Phase 4.
 | Safety | {verdict} | {n} | {n} | {n} |
 
 **Final Verdict:** {APPROVED | CHANGES REQUIRED}
-**Action Required:** CRITICAL: {n} must fix | IMPORTANT: {n} must fix | MINOR: {n} at discretion
+CHANGES REQUIRED if any CRITICAL **or IMPORTANT** is outstanding.
+
+**Action Required:** CRITICAL: {n} must fix | IMPORTANT: {n} must fix | MINOR: {n} must fix
+
+Every finding is a mandatory fix, MINOR included. There is no "at discretion" tier —
+the only exception is a finding that is factually incorrect, which is explained to the
+author rather than silently dropped.
 ```
 
 ## Skill File Reviews

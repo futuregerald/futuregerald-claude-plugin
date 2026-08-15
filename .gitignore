@@ -14,3 +14,6 @@ skill-zips/
 # Python caches (skill scripts)
 __pycache__/
 *.pyc
+
+# Implementation plans are working artifacts, never committed
+docs/plans/

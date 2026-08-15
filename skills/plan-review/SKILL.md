@@ -63,13 +63,14 @@ think are risky. Give it the path and the goal; it forms its own view.
 **REJECT** — any CRITICAL or IMPORTANT. Fix the plan, re-review with a fresh agent.
 Never argue a finding away; never proceed on a rejected plan.
 
-**APPROVE** — implementation may begin. MINOR findings remain mandatory fixes (see
-*Review Findings Are Mandatory Fixes*); approval is not permission to skip them.
+**APPROVE** — implementation may begin. MINOR findings remain mandatory fixes; approval
+is not permission to skip them. The only exception is a finding that is factually
+incorrect, which is explained to the author rather than silently dropped.
 
 **Verified Recommendations** are separate: emitted only for things established
 empirically with a `file:line` citation at very high confidence — never style rules or
-inference. They do not gate the plan. Surface each to Gerald with its evidence and
-recommend adopting it; the call is his. An empty section is a good outcome.
+inference. They do not gate the plan. Surface each to the author with its evidence and
+recommend adopting it; the call is theirs. An empty section is a good outcome.
 
 ## Report back
 
