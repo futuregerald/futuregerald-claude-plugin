@@ -14,16 +14,18 @@
 | Phase | Action | Skill/Tool | Gate |
 |-------|--------|------------|------|
 | 1. RECEIVE | Understand task, create todo list | `TaskCreate` | Todo list exists |
-| 2. PLAN | Write implementation plan | `writing-plans` | Plan document created |
-| 3. REVIEW PLAN | Staff Engineer reviews plan | `code-quality-reviewer` via `Task` | Reviewer approves |
-| 4. IMPLEMENT | Write code following TDD | `test-driven-development` | Tests exist and pass |
-| 5. TEST | `go test ./...` | — | Zero failures |
-| 6. SIMPLIFY | `Task(subagent_type="code-simplifier")` | `code-simplifier` agent | Staff review complete |
-| 7. CODE REVIEW | `Task(subagent_type="code-quality-reviewer")` | Fresh sub-agent | Reviewer approves |
-| 8. SQL REVIEW | `Task(subagent_type="code-quality-reviewer")` with SQL audit prompt | `sql-optimization-patterns` skill + `sql-reviewer` agent | Reviewer approves |
-| 9. COMMIT | `git commit` | — | Commit created |
-| 10. PUSH | Push feature branch; `gh pr create` with `Closes #N` if `gh` available | — | Branch pushed (PR created if `gh`) |
-| 11. VERIFY CI | If `gh`: `gh run list`, autonomous PR review, auto-merge when green | — | CI green (if applicable) |
+| 2. IMPACT ANALYSIS | Trace the call chain — up and down — of every symbol the change touches | See **System Thinking** below | Callers, callees, contract, coverage recorded |
+| 3. PLAN | Write implementation plan (always required, including one-line fixes) | `writing-plans` | Plan file exists and contains the Impact Analysis |
+| 4. PLAN REVIEW | Adversarial review by a fresh sub-agent | `plan-review` skill → `adversarial-plan-reviewer` | Verdict APPROVE — zero CRITICAL, zero IMPORTANT |
+| 5. IMPLEMENT | Write code following TDD | `test-driven-development` | Tests exist and pass |
+| 6. TEST | `go test ./...` | — | Zero failures |
+| 7. BLAST-RADIUS VERIFY | Walk the Phase 2 caller list; confirm each still holds | — | Every caller verified with evidence |
+| 8. SIMPLIFY | `Task(subagent_type="code-simplifier")` | `code-simplifier` agent | Staff review complete |
+| 9. CODE REVIEW | `comprehensive-code-review` — parallel correctness + safety sub-agents | Fresh sub-agents | Reviewer approves |
+| 10. SQL REVIEW | If DB touched: `Task(subagent_type="sql-reviewer")` | `sql-optimization-patterns` skill | Reviewer approves |
+| 11. COMMIT | `git commit` | — | Commit created |
+| 12. PUSH | Push feature branch; `gh pr create` with `Closes #N` if `gh` available | — | Branch pushed (PR created if `gh`) |
+| 13. VERIFY CI | If `gh`: `gh run list`, autonomous PR review, auto-merge when green | — | CI green (if applicable) |
 
 **Exceptions that skip planning:** pure doc updates, `git revert`.
 
@@ -31,22 +33,51 @@
 
 **All phases are MANDATORY. No exceptions. No skipping "simple" changes.**
 
-- **Phases 3, 6, 7, 8** MUST use `Task` tool (fresh sub-agent, no shared context)
+- **Phases 4, 8, 9, 10** MUST use a fresh sub-agent via the Agent tool — no shared context
 - NEVER review your own plan or code — you wrote it, you cannot objectively review it
-- If reviewer finds CRITICAL/IMPORTANT issues: fix, re-run tests, re-review
+- **Phase 4 is not Phase 9.** Plan review and code review are separate gates with separate agents. Passing one never satisfies the other, and a code review cannot recover a wrong plan
+- **No source file gets edited before Phase 4 passes.** This includes "while I'm in here" fixes
+- **"Review the plan" — in any phrasing — means invoke `plan-review`.** Never satisfy it by re-reading the plan yourself
+- Give the reviewer neutral inputs only: plan path, the goal it serves, repo root, base SHA. **Never pass your own suspicions or "check X"** — a reviewer aimed at your worries inherits your blind spots
+- If reviewer finds CRITICAL/IMPORTANT issues: fix, re-run tests, re-review with a fresh agent
 - Only proceed after explicit reviewer approval
-- `ExitPlanMode` requires prior staff engineer approval of the plan
+- `ExitPlanMode` requires a passed Phase 4
 
-**Plan review prompt template:**
-```
-Task(subagent_type="code-quality-reviewer", prompt="
-  Review this plan: <path>. Verify: file paths accurate, codebase facts correct,
-  no missing edge cases, response shapes match actual patterns, nothing already implemented.
-")
-```
+### System Thinking: Trace Before You Touch (Mandatory)
+
+**The dominant failure mode is a locally-correct change with unconsidered downstream effects.** The code compiles, the new test passes, and something three call sites away breaks.
+
+Before modifying any function, method, type, endpoint, or schema, reconstruct its call chain in both directions. This is Phase 2; its output is a required section of the plan.
+
+- **Upward** — every direct caller, then transitively out to real entry points (handler, command, job, scheduler, public API). For each: what does it do with the return value, and which part of the contract does it rely on? Include callers outside this repo.
+- **Downward** — every function called and its side effects: writes, external calls, queue sends, cache mutations, file IO. What errors propagate, and who handles them.
+- **The invisible edges** — reflection, interface dispatch, struct tags, code generation, registry maps, config-driven wiring, handler names as strings. A call graph cannot see these. Grep for them deliberately, every time.
+- **Contract** — current return shapes, zero values, nil cases, errors, ordering; which the change alters, and the specific callers affected by each.
+- **Coverage** — which callers have tests; what test would fail if the change were wrong.
+
+Use graph tools first, grep second and only for what graphs cannot see. Conclusions rest on files actually read.
+
+**The bar:** "I read the function and it looks fine" is not an impact analysis. If you cannot name every caller and say what each expects, Phase 2 is not done — and Phase 4's reviewer will rebuild this chain independently and treat any caller you missed as at least IMPORTANT.
+
+### Prove It, Don't Assume It
+
+Reasoning from memory about runtime behavior is how wrong premises reach a plan. Settle it with evidence — cheapest first:
+
+1. **Trace it** — graph tools, call paths, the code index. Fastest, usually decisive
+2. **Read the actual source** — the installed dependency version, the schema, the generated file. If you can read the answer, you do not need to run it
+3. **Spike it** — last resort, only for runtime behavior you cannot read off the code
+
+If steps 1–2 leave you confident, stop and cite the evidence. Spiking what you already established wastes time and tokens. When you do spike:
+
+- Scratch or temp directory only. Never the working tree, never repo files
+- **Keep it small: one file, a few dozen lines, isolating the single behavior.** Never rebuild the app, boot the framework, or stand up a database — if proving it requires that, it is not a spike
+- Two attempts, a few minutes. Then abandon it and state only what you can support
+- Where independent checks would run serially, dispatch narrowly-scoped sub-agents in parallel — one question each. Do not spawn an agent for what a single search would answer
+
+**Plan review dispatch:** see the `plan-review` skill. Give the agent neutral inputs only — plan path, the goal it serves, repo root, base SHA. It carries its own methodology; do not restate it, and do not steer it.
 
 **Code simplifier rules:**
-- Run after tests pass (Phase 5), before code review (Phase 7)
+- Run after tests pass (Phase 6), before code review (Phase 9)
 - Only implement APPROVED simplifications
 - Re-run tests after applying changes
 
@@ -177,6 +208,9 @@ After every PR is created, automatically:
 
 | Trigger | Skill |
 |---------|-------|
+| **Any code change, before writing code (Phase 3)** | `writing-plans` — always required, including one-line fixes. Must contain the Impact Analysis |
+| **Plan written, before implementing (Phase 4)** | `plan-review` → `adversarial-plan-reviewer` agent. **Also the required response to "review the plan" in any phrasing.** Never review a plan yourself |
+| Code review before commit (Phase 9) | `comprehensive-code-review` — parallel correctness + safety sub-agents |
 | Bug investigation | `systematic-debugging` |
 | New feature | `test-driven-development` (RED→GREEN→REFACTOR) |
 | Database queries/mutations changed | `sql-optimization-patterns` + `sql-reviewer` agent |

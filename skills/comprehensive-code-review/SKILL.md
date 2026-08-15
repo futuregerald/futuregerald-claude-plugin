@@ -2,7 +2,7 @@
 name: comprehensive-code-review
 description: Use when performing code review on a PR, reviewing code changes before merge, or when a GitHub code review is requested or received - orchestrates parallel sub-agents for correctness and safety review
 tags: [quality, review, security, sql, code-review, pr, architecture, owasp, defensive-coding]
-model: sonnet
+model: opus
 author: Gerald Onyango <gerald.onyango@gmail.com>
 ---
 

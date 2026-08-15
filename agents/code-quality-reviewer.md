@@ -1,6 +1,7 @@
 ---
 name: code-quality-reviewer
-description: Reviews code quality for correctness, architecture, defensive coding, and testing. Use after spec compliance is verified.
+description: Adversarially reviews code quality for correctness, architecture, defensive coding, testing, and consistency with existing codebase patterns. Use after spec compliance is verified.
+model: opus
 ---
 
 # Code Quality Reviewer Subagent

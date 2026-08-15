@@ -1,6 +1,7 @@
 ---
 name: security-reviewer
-description: Performs security-focused code audit using OWASP Top 10 checklist. Use for security-sensitive code changes (auth, payments, user data, API endpoints, file uploads).
+description: Performs an adversarial security audit using the OWASP Top 10 checklist. Use for security-sensitive code changes (auth, payments, user data, API endpoints, file uploads).
+model: opus
 author: Gerald Onyango <gerald.onyango@gmail.com>
 ---
 
