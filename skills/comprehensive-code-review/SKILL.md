@@ -2,7 +2,7 @@
 name: comprehensive-code-review
 description: Use when performing code review on a PR, reviewing code changes before merge, or when a GitHub code review is requested or received - orchestrates parallel sub-agents for correctness and safety review
 tags: [quality, review, security, sql, code-review, pr, architecture, owasp, defensive-coding]
-model: sonnet
+model: opus
 author: Gerald Onyango <gerald.onyango@gmail.com>
 ---
 
@@ -19,7 +19,7 @@ You are a **Staff Engineer** orchestrating a multi-dimensional code review. You 
 
 ```
 1. Gather Context  ->  2. Dispatch 2 Sub-Agents in PARALLEL  ->  3. Consolidate  ->  4. Present Report
-Any CRITICAL? -> CHANGES REQUIRED | else -> APPROVED (with conditions)
+Any CRITICAL or IMPORTANT? -> CHANGES REQUIRED | else -> APPROVED
 * SQL section only activated if DB-touching files changed
 * If a sub-agent fails: re-dispatch once, then mark "Review Incomplete"
 ```
@@ -115,7 +115,7 @@ When `review_number > 1` (this is a re-review), the pre-gathered PR comments inc
 Use this context to:
 1. **Don't re-flag resolved findings** — if a previous bot finding has a reply showing it was addressed (code was changed, explanation was accepted), skip it unless the fix introduced a new issue
 2. **Re-flag unaddressed findings** — if a previous bot finding has no reply or the reply disputes it without code changes, re-flag it with a note: "Previously flagged in Review #{n-1} — still unaddressed"
-3. **Acknowledge improvements** — in the Strengths section, note findings from the previous review that were successfully addressed
+3. **Acknowledge improvements** — note in one line which previous findings were successfully addressed, then move on
 4. **Focus on what changed** — prioritize reviewing new commits since the last review, but don't ignore pre-existing issues in the diff
 
 ### Schema Context
@@ -237,12 +237,12 @@ Use the template in [references/report-format.md](references/report-format.md). 
 
 ## Integration
 
-- **Replaces Phase 7 (CODE REVIEW) and Phase 8 (SQL REVIEW)** in the development lifecycle
+- **Is the CODE REVIEW phase** of the development lifecycle. It does NOT replace SQL REVIEW, which remains a separate phase dispatching `sql-reviewer`
 - For PR reviews: fetch metadata, gather diff, fetch comments, dispatch sub-agents, post report
-- For receiving review feedback: use `receiving-code-review` skill instead
+- For receiving review feedback: address every finding per *Review Findings Are Mandatory Fixes*
 
 ## Rules
 
-**NEVER:** Review code yourself | Skip the safety audit | Run sub-agents sequentially | Mark everything CRITICAL | Pass verdict with CRITICAL issues
+**NEVER:** Review code yourself | Skip the safety audit | Run sub-agents sequentially | Mark everything CRITICAL | Pass verdict with CRITICAL **or IMPORTANT** issues outstanding | Soften a sub-agent's finding when consolidating
 
 **ALWAYS:** Dispatch BOTH sub-agents in a SINGLE parallel call | Include file:line for every finding | Provide actionable recommendations | Deduplicate across dimensions | Present unified report

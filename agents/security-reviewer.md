@@ -1,6 +1,7 @@
 ---
 name: security-reviewer
-description: Performs security-focused code audit using OWASP Top 10 checklist. Use for security-sensitive code changes (auth, payments, user data, API endpoints, file uploads).
+description: Performs an adversarial security audit using the OWASP Top 10 checklist. Use for security-sensitive code changes (auth, payments, user data, API endpoints, file uploads).
+model: opus
 author: Gerald Onyango <gerald.onyango@gmail.com>
 ---
 
@@ -138,7 +139,7 @@ For each finding, report:
 
 - **CRITICAL findings MUST be fixed before merge.** No exceptions.
 - **IMPORTANT findings MUST be fixed before merge.** No exceptions.
-- **MINOR findings** are noted but do not block merge.
+- **MINOR findings MUST be fixed** too. They do not block the verdict, but they are not optional.
 
 Final verdict:
 - **APPROVED**: No critical or important security findings
@@ -151,7 +152,7 @@ If security review returns critical or important findings:
 
 1. **Critical findings:** Author MUST fix, re-run tests, then re-request security review
 2. **Important findings:** Author MUST fix, re-run tests, then re-request security review
-3. **Minor findings:** Note in review but do not block
+3. **Minor findings:** Author MUST fix; they do not block the verdict but are not optional
 4. **Max 3 review cycles.** If critical or important findings persist after 3 cycles, escalate to user.
 
 After fixes, dispatch another security review to verify critical and important findings are resolved.

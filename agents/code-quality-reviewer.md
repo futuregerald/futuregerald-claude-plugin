@@ -1,6 +1,7 @@
 ---
 name: code-quality-reviewer
-description: Reviews code quality for correctness, architecture, defensive coding, and testing. Use after spec compliance is verified.
+description: Adversarially reviews code quality for correctness, architecture, defensive coding, testing, and consistency with existing codebase patterns. Use after spec compliance is verified.
+model: opus
 ---
 
 # Code Quality Reviewer Subagent
@@ -11,12 +12,12 @@ Use this subagent to review code quality after spec compliance is verified.
 
 **When to use:** ONLY after spec compliance review passes
 
-**CRITICAL:** MUST always be dispatched via the `Task` tool as a fresh subagent with NO shared conversation context. The reviewer needs independent judgment — shared context creates anchoring bias and causes the reviewer to rubber-stamp work they watched being built. Never run reviews inline in the main conversation.
+**CRITICAL:** MUST always be dispatched via the `Agent` tool as a fresh subagent with NO shared conversation context. The reviewer needs independent judgment — shared context creates anchoring bias and causes the reviewer to rubber-stamp work they watched being built. Never run reviews inline in the main conversation.
 
 ## Dispatch Configuration
 
 ```
-Task tool:
+Agent tool:
   subagent_type: code-quality-reviewer
   description: "Code quality review for Task N"
 ```
@@ -84,8 +85,6 @@ Check for:
 
 The code reviewer evaluates:
 
-**Strengths** - What was done well
-
 **Issues** - Categorized by severity:
 
 - **Critical:** Security issues, data loss risks, broken functionality
@@ -94,17 +93,28 @@ The code reviewer evaluates:
 
 **Assessment** - Overall verdict:
 
-- ✅ Approved
-- ⚠️ Approved with suggestions
-- ❌ Changes required
+- ✅ Approved — no Critical, no Important
+- ❌ Changes required — any Critical **or Important**
+
+There is no "approved with suggestions." If you have a reservation, it is a finding.
 
 ## Usage Example
 
 ```typescript
-Task({
+Agent({
   subagent_type: 'code-quality-reviewer',
   description: 'Code quality review for Task 3',
-  prompt: `Review the implementation for code quality.
+  prompt: `Perform an ADVERSARIAL correctness review of this implementation.
+
+Your default position is that this code is wrong; your job is to find the reason.
+Praise is noise — findings are the product. For every changed function ask what
+input makes it produce a wrong answer, what state makes it crash, and what the
+caller does on the unhappy path. Finding it plausible is not a review.
+
+For every new construct, SEARCH for prior art before judging it: does this already
+exist, and how does this codebase already solve this class of problem? Cite the
+established pattern with file:line. Never conclude "no prior art exists" without
+stating the searches you ran.
 
 ## What Was Implemented
 
@@ -136,8 +146,8 @@ full CRUD operations.
 
 If code quality review returns issues:
 
-1. **Critical issues:** Implementer MUST fix before proceeding
-2. **Important issues:** Implementer SHOULD fix, reviewer re-reviews
-3. **Minor issues:** Can be deferred or fixed at implementer's discretion
+1. **Critical issues:** MUST be fixed before proceeding
+2. **Important issues:** MUST be fixed, then re-reviewed by a fresh agent
+3. **Minor issues:** MUST also be fixed — there is no discretionary tier. The only exception is a finding that is factually incorrect, which is explained to the author rather than silently dropped
 
 After fixes, dispatch another code quality review to verify.
