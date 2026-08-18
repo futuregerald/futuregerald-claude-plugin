@@ -14,7 +14,7 @@ Every block below marked **complete file** compiles as written. Blocks marked
 
 ## The inversion, end to end
 
-Three packages. Note the import arrows: `postgres` and `httpapi` both import `accounts`;
+Three packages. Note the import arrows: `sqlstore` and `httpapi` both import `accounts`;
 `accounts` imports neither.
 
 ### `internal/accounts/accounts.go` — the domain declares what it needs (complete file)
@@ -115,10 +115,21 @@ deterministic under test.
 
 This is testable with zero infrastructure — every dependency is an argument.
 
-### `internal/postgres/accounts.go` — the adapter reaches inward (complete file)
+### `internal/sqlstore/accounts.go` — the adapter reaches inward
+
+Complete file. With `tx.go` (below) it forms `package sqlstore`; the two compile together.
+
+**The storage engine is incidental.** This example uses SQLite so it runs with no server, and
+the package is named `sqlstore` rather than `sqlite` because an `internal/sqlite` package
+would collide with the driver's own. Swapping in Postgres or MySQL changes exactly two things
+— the driver import and `isUniqueViolation`. Nothing about the architecture moves.
+
+Every query goes through `s.q(ctx)`, never `s.db` — see
+[Transactions across stores](#transactions-across-stores). A store method that touches `s.db`
+directly silently escapes any surrounding transaction, so its write survives a rollback.
 
 ```go
-package postgres
+package sqlstore
 
 import (
 	"context"
@@ -126,7 +137,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/jackc/pgx/v5/pgconn"
+	sqlitedriver "modernc.org/sqlite"
+	sqlite3 "modernc.org/sqlite/lib"
 
 	"example.com/user-service/internal/accounts"
 )
@@ -140,10 +152,10 @@ type AccountStore struct{ db *sql.DB }
 func NewAccountStore(db *sql.DB) *AccountStore { return &AccountStore{db: db} }
 
 func (s *AccountStore) ByEmail(ctx context.Context, email string) (accounts.User, error) {
-	const q = `SELECT id, email, password_hash, created_at FROM users WHERE email = $1`
+	const query = `SELECT id, email, password_hash, created_at FROM users WHERE email = ?`
 
 	var u accounts.User
-	err := s.db.QueryRowContext(ctx, q, email).
+	err := s.q(ctx).QueryRowContext(ctx, query, email).
 		Scan(&u.ID, &u.Email, &u.PasswordHash, &u.CreatedAt)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
@@ -157,12 +169,12 @@ func (s *AccountStore) ByEmail(ctx context.Context, email string) (accounts.User
 }
 
 func (s *AccountStore) Create(ctx context.Context, u accounts.User) error {
-	const q = `INSERT INTO users (id, email, password_hash, created_at)
-	           VALUES ($1, $2, $3, $4)`
+	const query = `INSERT INTO users (id, email, password_hash, created_at)
+	               VALUES (?, ?, ?, ?)`
 
-	_, err := s.db.ExecContext(ctx, q, u.ID, u.Email, u.PasswordHash, u.CreatedAt)
+	_, err := s.q(ctx).ExecContext(ctx, query, u.ID, u.Email, u.PasswordHash, u.CreatedAt)
 	if isUniqueViolation(err) {
-		// The race the service's pre-check cannot close is closed here.
+		// The race the service pre-check cannot close is closed here.
 		return accounts.ErrEmailTaken
 	}
 	if err != nil {
@@ -171,16 +183,22 @@ func (s *AccountStore) Create(ctx context.Context, u accounts.User) error {
 	return nil
 }
 
-// isUniqueViolation is driver-specific by nature; this is the pgx form.
-// 23505 is the SQLSTATE for unique_violation.
+// isUniqueViolation is the ONLY driver-specific function in this package, and
+// the only thing that changes when the storage engine does:
+//
+//	Postgres (pgx): var e *pgconn.PgError;    errors.As(err, &e) && e.Code == "23505"
+//	MySQL:          var e *mysql.MySQLError;  errors.As(err, &e) && e.Number == 1062
+//
+// Keeping it in one function is what makes "swap the database" a real claim
+// rather than an aspiration.
 func isUniqueViolation(err error) bool {
-	var pgErr *pgconn.PgError
-	return errors.As(err, &pgErr) && pgErr.Code == "23505"
+	var e *sqlitedriver.Error
+	return errors.As(err, &e) && e.Code() == sqlite3.SQLITE_CONSTRAINT_UNIQUE
 }
 ```
 
 If a DB row needs tags or columns the domain type shouldn't carry, declare a private
-`type userRow struct { … }` in `postgres` and map it. Keep `db:` tags out of `accounts.User`.
+`type userRow struct { … }` in `sqlstore` and map it. Keep `db:` tags out of `accounts.User`.
 
 ### `internal/httpapi/accounts.go` — transport owns the wire format (complete file)
 
@@ -388,10 +406,10 @@ func (s *Service) RegisterWithBilling(ctx context.Context, email, password strin
 }
 ```
 
-### `internal/postgres/tx.go` — the adapter side (complete file)
+### `internal/sqlstore/tx.go` — the adapter side (complete file)
 
 ```go
-package postgres
+package sqlstore
 
 import (
 	"context"
@@ -472,7 +490,7 @@ That converts one cycle into a package every future change has to edit.
 
 - Domain packages define sentinel errors (`accounts.ErrNotFound`) or typed errors.
 - Adapters translate foreign errors into domain errors at their edge — `sql.ErrNoRows` and
-  SQLSTATE `23505` never escape `postgres`.
+  a unique-constraint code never escape `sqlstore`.
 - Transport translates domain errors into status codes at its edge.
 - Wrap with `%w` when adding context; check with `errors.Is`/`errors.As`, never string
   matching.

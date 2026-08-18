@@ -5,6 +5,7 @@
 - [Config](#config)
 - [Wiring in main](#wiring-in-main)
 - [Graceful shutdown](#graceful-shutdown)
+- [Context: deadlines, cancellation, values](#context-deadlines-cancellation-values)
 - [Test file placement](#test-file-placement)
 
 ## Per-directory contracts
@@ -43,22 +44,27 @@ needs to do its job.
 - **May import:** stdlib, and other domain packages only when the dependency is genuinely
   one-directional.
 - **May not import:** `net/http`, `database/sql`, drivers, SDKs, `internal/httpapi`,
-  `internal/postgres`, or anything else in the outer ring.
+  `internal/sqlstore`, or anything else in the outer ring.
 - Files: `<domain>.go` for types, errors, and interfaces; `service.go` for behaviour. Split
   `service.go` by cohesive group (`registration.go`, `authentication.go`) when it gets long —
   splitting into *packages* is what to avoid, not splitting into files.
 
-### `internal/<adapter>/` — `postgres`, `redis`, `kafka`, `s3`, `stripe`
+### `internal/<adapter>/` — `sqlstore`, `redis`, `kafka`, `s3`, `stripe`
 
 One package per external system. Implements interfaces the domain declared.
 
+**The skill is not opinionated about which storage engine you pick.** The worked example uses
+SQLite because it runs with no server; the same package serves Postgres or MySQL with a
+different driver import and a different unique-violation check. Name the package for what it
+is (`sqlstore`), not for today's engine, when the engine is genuinely interchangeable.
+
 **When the technology name collides with the library's own package, name the adapter for the
-capability instead.** An `internal/argon2` implementing `accounts.Hasher` would have to import
-`golang.org/x/crypto/argon2` under an alias, and every reader then has to work out which
-`argon2` a call refers to. `internal/pwhash`, exposing `NewArgon2Hasher`, avoids the collision
-and leaves room for the second algorithm — which is the realistic case, since password hashing
-gets migrated. Same for `internal/redis` wrapping `github.com/redis/go-redis` — prefer
-`internal/cache` if it bites.
+capability instead.** An `internal/sqlite` package would have to import `modernc.org/sqlite`
+under an alias, and every reader then has to work out which `sqlite` a given call refers to —
+hence `sqlstore`. The same applies to an `internal/argon2` wrapping
+`golang.org/x/crypto/argon2` (use `pwhash`, which also leaves room for the second algorithm
+you will eventually migrate to) and an `internal/redis` wrapping `github.com/redis/go-redis`
+(use `cache`).
 
 Default new services to **argon2id** (`golang.org/x/crypto/argon2`), which is the current
 password-hashing recommendation. bcrypt remains perfectly serviceable and is not a bug to be
@@ -69,6 +75,7 @@ migration means adding `NewBcryptHasher` alongside and re-hashing on next succes
 - **May not import:** `internal/httpapi`, or another adapter. Two adapters that need each
   other are being orchestrated in the wrong place — that belongs in a domain service.
 - Include `var _ accounts.Store = (*AccountStore)(nil)` so a drifting contract fails the build.
+- Confine driver-specific error decoding to one function, so "swap the database" stays true.
 - One workflow writing atomically through two stores is the case these rules do not solve on
   their own. See "Transactions across stores" in `interfaces.md` — the domain declares an
   `Atomic` interface, the adapter owns the transaction.
@@ -79,7 +86,7 @@ Everything that knows about the wire: routing, middleware, decoding, encoding, s
 auth extraction.
 
 - **May import:** domain packages.
-- **May not import:** adapters. A handler reaching for `postgres` has skipped the domain, and
+- **May not import:** adapters. A handler reaching for `sqlstore` has skipped the domain, and
   the business rule it skipped will be reimplemented, differently, elsewhere.
 - Request/response types live here with `json:` tags. Map to and from domain types explicitly.
 
@@ -148,8 +155,10 @@ Construct dependencies in order, innermost last, and hand each one only what it 
 
 ```go
 // fragment — cmd/api/main.go, imports elided except the one that is easy to miss:
-//   _ "github.com/jackc/pgx/v5/stdlib"   // registers the "pgx" driver name
-// Without that blank import, sql.Open("pgx", …) fails with: unknown driver "pgx".
+//   _ "modernc.org/sqlite"   // registers the "sqlite" driver name
+// A driver is registered by importing it for side effects. Without that blank
+// import, sql.Open fails at runtime with: unknown driver "sqlite".
+// Postgres would be _ "github.com/jackc/pgx/v5/stdlib" and the name "pgx".
 
 func main() {
 	if err := run(); err != nil {
@@ -163,7 +172,7 @@ func run() error {
 		return fmt.Errorf("load config: %w", err)
 	}
 
-	db, err := sql.Open("pgx", cfg.DB.DSN)
+	db, err := sql.Open("sqlite", cfg.DB.DSN)
 	if err != nil {
 		return fmt.Errorf("open db: %w", err)
 	}
@@ -172,7 +181,7 @@ func run() error {
 
 	// adapters — each takes its OWN params struct, so no package below cmd/
 	// imports internal/config. main does the mapping.
-	accountStore := postgres.NewAccountStore(db)
+	accountStore := sqlstore.NewAccountStore(db)
 	hasher := pwhash.NewArgon2Hasher(pwhash.Argon2Params{
 		Memory:      cfg.Auth.Argon2Memory,
 		Iterations:  cfg.Auth.Argon2Iterations,
@@ -230,6 +239,7 @@ import (
 // independent of how configuration happens to be loaded.
 type ServerConfig struct {
 	Addr            string
+	RequestTimeout  time.Duration
 	ShutdownTimeout time.Duration
 }
 
@@ -238,12 +248,38 @@ type Server struct {
 	shutdownTimeout time.Duration
 }
 
+const defaultRequestTimeout = 30 * time.Second
+
 func NewServer(cfg ServerConfig, svc registrar) *Server {
+	// The zero value of a timeout means "unset", but http.TimeoutHandler
+	// reads 0 as "time out immediately" -- an unset field would make every
+	// request 503 rather than simply not time out. http.Server's own
+	// timeouts have the opposite convention, where 0 means no limit. That
+	// asymmetry is worth defending against here rather than debugging later.
+	if cfg.RequestTimeout <= 0 {
+		cfg.RequestTimeout = defaultRequestTimeout
+	}
+
 	mux := http.NewServeMux()
 	mux.Handle("POST /users", handleRegister(svc))
 
 	return &Server{
-		http:            &http.Server{Addr: cfg.Addr, Handler: mux},
+		http: &http.Server{
+			Addr: cfg.Addr,
+			// TimeoutHandler is what puts a deadline on every request
+			// context, so handlers inherit cancellation without each one
+			// remembering to set it.
+			Handler: http.TimeoutHandler(mux, cfg.RequestTimeout,
+				`{"error":"request timeout"}`),
+			// Guards against a client that opens a connection and dribbles
+			// headers forever. Not a context — the net/http server enforces
+			// these itself, and no deadline reaches the handler from them.
+			ReadHeaderTimeout: 5 * time.Second,
+			// Must exceed RequestTimeout, or the connection dies before
+			// TimeoutHandler can write its response.
+			WriteTimeout: cfg.RequestTimeout + 5*time.Second,
+			IdleTimeout:  60 * time.Second,
+		},
 		shutdownTimeout: cfg.ShutdownTimeout,
 	}
 }
@@ -278,6 +314,108 @@ timeout below the orchestrator's termination grace period.
 Propagate `r.Context()` down every call so a disconnected client cancels its DB query.
 `context.Context` is always the first parameter and is never stored in a struct.
 
+## Context: deadlines, cancellation, values
+
+Threading `ctx` through every signature is the easy half. These are the parts that are
+usually missing, and each one is a real failure mode rather than a style preference.
+
+**Zero means opposite things in the two timeout APIs.** `http.Server`'s `ReadTimeout`,
+`WriteTimeout` and `IdleTimeout` treat `0` as *no limit*. `http.TimeoutHandler` treats `0` as
+*expire immediately*, so an unset config field yields a server that 503s every request. Default
+it explicitly in the constructor rather than trusting the zero value.
+
+**The edge sets the deadline; leaves inherit it.** A handler should not invent its own
+timeout, and neither should a store method. `http.TimeoutHandler` above puts one deadline on
+the request context, and everything downstream — service, store, driver — is bounded by it
+for free. A leaf that calls `context.WithTimeout` on its own is overriding a budget it cannot
+see.
+
+**Give outbound calls their own, shorter budget.** The exception to the rule above: when one
+request fans out to a dependency that should not be allowed to consume the whole budget, bound
+that call specifically. Always `defer cancel()` — skipping it leaks the timer until the parent
+is done.
+
+```go
+// fragment — inside a service method
+ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+defer cancel()
+
+resp, err := s.payments.Charge(ctx, amount)
+```
+
+**Cancellation only works if you pass it on.** `QueryRowContext` and `ExecContext` exist so a
+disconnected client actually stops the query; `Query`/`Exec` are the same call with the
+cancellation silently discarded. Prefer the `…Context` variant of every library call. In a
+loop that does not otherwise block, check explicitly:
+
+```go
+// fragment — a long-running worker loop
+for _, item := range items {
+	if err := ctx.Err(); err != nil {
+		return err // cancelled or past deadline; stop cleanly
+	}
+	if err := s.process(ctx, item); err != nil {
+		return err
+	}
+}
+```
+
+**Distinguish the two cancellation causes when it matters.** `errors.Is(err, context.Canceled)`
+means the caller went away — usually not worth logging as an error. `context.DeadlineExceeded`
+means you were too slow, which is. Mapping both to 500 hides a real signal; a cancelled
+request is better logged at info and answered with 499/no response at all.
+
+**Do not use the request context for work that outlives the request.** Firing a goroutine with
+the request's `ctx` means it is cancelled the moment the response is written. Detach
+deliberately:
+
+```go
+// fragment — keep the request's values (trace IDs, auth) but drop its deadline
+bg := context.WithoutCancel(ctx)
+go func() {
+	ctx, cancel := context.WithTimeout(bg, 30*time.Second)
+	defer cancel()
+	if err := s.sendWelcomeEmail(ctx, u); err != nil {
+		s.log.Error("welcome email failed", "err", err)
+	}
+}()
+```
+
+`context.WithoutCancel` requires Go 1.21+. Before that the idiom was to construct a fresh
+`context.Background()` and copy the values across by hand.
+
+**`context.Value` is for request-scoped data that middleware attaches and handlers read** —
+trace ID, authenticated user, the transaction in `sqlstore`. It is not a dependency-injection
+mechanism: anything a component needs in order to *function* is a constructor argument, so
+that it is visible in the type system rather than discovered at runtime by a failed type
+assertion.
+
+When you do use it, the key must be an unexported named type, never a bare string:
+
+```go
+// fragment — the only correct shape for a context key
+type userIDKey struct{}
+
+func withUserID(ctx context.Context, id string) context.Context {
+	return context.WithValue(ctx, userIDKey{}, id)
+}
+
+func userIDFrom(ctx context.Context) (string, bool) {
+	id, ok := ctx.Value(userIDKey{}).(string)
+	return id, ok
+}
+```
+
+A `string` key collides silently across packages, because `ctx.Value("user_id")` set by your
+middleware and by a library are the same key. An unexported struct type cannot collide,
+because no other package can name it. Export the accessor functions, never the key.
+
+**`ctx` is always the first parameter and is never stored in a struct.** A stored context is
+frozen at construction time, so it carries the deadline of whatever call happened to build the
+object — usually startup, meaning no deadline at all. The one legitimate long-lived context is
+the process lifetime context in `main`, and it is passed, not stored.
+
+
 ## Test file placement
 
 Tests live beside the code, in the same directory. There is no `test/` tree.
@@ -292,7 +430,8 @@ Both `accounts` and `accounts_test` may coexist in the directory.
 
 - **Domain packages:** table-driven tests with fakes. Fast, no Docker, run on every save.
 - **Adapters:** integration tests against a real instance (`testcontainers-go`, or a compose
-  service in CI). Testing a SQL adapter against a mock DB verifies the mock.
+  service in CI). Testing a SQL adapter against a mock DB verifies the mock. An in-process engine such as
+  SQLite makes this cheap enough to run on every save.
 - **Transport:** `net/http/httptest` with a fake service — asserts status codes, decoding, and
   error mapping, not business rules.
 - Guard slow tests with `testing.Short()` and `if testing.Short() { t.Skip(…) }`, so

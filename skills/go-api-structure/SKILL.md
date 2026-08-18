@@ -34,7 +34,7 @@ State the tier before proposing a layout. Unsure between 1 and 2? Pick 1 — pro
    cmd/api ────────────────────────────────────┐  wires everything, imports everyone
       │                                        │
       ▼                                        ▼
-internal/httpapi ────▶ internal/accounts ◀──── internal/postgres
+internal/httpapi ────▶ internal/accounts ◀──── internal/sqlstore
    (transport)          (domain: types, rules,   (adapter: satisfies the
                          and the interfaces       interfaces the domain
                          it needs)                declared)
@@ -58,7 +58,7 @@ user-service/
 │   │   ├── service.go         #   Register, Authenticate, ChangeEmail …
 │   │   └── service_test.go    #   in-memory fakes, no DB
 │   ├── billing/               # second bounded context, same shape
-│   ├── postgres/              # ADAPTER: implements accounts.Store, billing.Store
+│   ├── sqlstore/              # ADAPTER: implements accounts.Store, billing.Store
 │   ├── stripe/                # ADAPTER: implements billing.PaymentGateway
 │   └── httpapi/               # TRANSPORT: router, middleware, handlers, wire DTOs
 │       ├── server.go
@@ -75,8 +75,10 @@ Two things commonly copied layouts get wrong:
 - **Infrastructure goes inside `internal/`.** An `infrastructure/` directory at the repo
   root makes DB repos and clients importable by anything depending on your module, which
   defeats the reason `internal/` was chosen.
-- **Adapters group by technology, not feature.** You swap Postgres for Spanner, not "the
-  user half of Postgres." Domain code groups by feature; adapters group by external system.
+- **Adapters group by technology, not feature.** You swap one database for another, not "the
+  user half of the database." Domain code groups by feature; adapters group by external
+  system. Confine the driver-specific parts (error codes, placeholder syntax) to one place so
+  the swap stays cheap.
 
 ## Interfaces: the default posture
 
@@ -92,7 +94,7 @@ generation never leave the process, so inject them as plain function values —
 one-method interface with exactly one production implementation.
 
 1. **Declare the interface in the package that consumes it.** `accounts` declares `Store`;
-   `postgres` imports `accounts` and satisfies it. This is what inverts the dependency — the
+   `sqlstore` imports `accounts` and satisfies it. This is what inverts the dependency — the
    folder move does not.
 2. **Only the methods that caller calls.** A 3-method interface is an interface; a 20-method
    `Repository` is the concrete type with extra steps.
@@ -110,7 +112,7 @@ Worked examples, fakes, and cycle-breaking: `references/interfaces.md`.
 | Entity or value type with business rules | `internal/<domain>/` | `accounts` |
 | Interface for something the domain needs | same package as its **consumer** | `accounts` |
 | A business workflow / use case | `internal/<domain>/service.go`, as a method | `accounts` |
-| SQL, queries, row scanning, DB structs | `internal/postgres/` | `postgres` |
+| SQL, queries, row scanning, DB structs | `internal/sqlstore/` | `sqlstore` |
 | HTTP handler, decode, encode, status mapping | `internal/httpapi/` | `httpapi` |
 | Request/response DTO | `internal/httpapi/`, beside its handler | `httpapi` |
 | Third-party API client | `internal/<vendor>/` | `stripe` |
@@ -118,7 +120,7 @@ Worked examples, fakes, and cycle-breaking: `references/interfaces.md`.
 | Password hashing, crypto, other pure-capability adapters | `internal/<capability>/` | `pwhash` |
 | Env parsing, flags, defaults | `internal/config/` | `config` |
 | Wiring, lifecycle, graceful shutdown | `cmd/<binary>/main.go` | `main` |
-| An atomic write across two stores | domain declares `Atomic`, adapter owns the tx | `accounts` + `postgres` |
+| An atomic write across two stores | domain declares `Atomic`, adapter owns the tx | `accounts` + `sqlstore` |
 | Something two domains both need | first try moving the interface to the consumer; a shared domain package is the last resort, and never `shared/` | — |
 | Genuinely reusable outside this repo | a separate published module | — |
 
@@ -136,7 +138,7 @@ A use case is a **method on a service, not a package**. One package per endpoint
   `accounts.User`, not `user.User`.
 - Never `util`, `common`, `helpers`, `shared`, `base`, `misc`, or an app-wide `models`. They
   have no boundary, so everything drifts into them.
-- Name adapters after the technology (`postgres`, `redis`, `s3`) — the thing that gets
+- Name adapters after the external system (`sqlstore`, `redis`, `s3`) — the thing that gets
   swapped. When that collides with the library's own package name, name it for the capability
   instead (`pwhash`, not `bcrypt`); see `references/layout.md`.
 - Avoid `cmd/http/`; name binaries for what they are (`cmd/api/`), not their transport.
@@ -150,6 +152,10 @@ A use case is a **method on a service, not a package**. One package per endpoint
 - An app-wide `models/` every other package imports
 - A `dependencies.go` past ~150 lines, or returning a struct of 30 fields
 - `context.Context` stored in a struct, or not the first parameter
+- A `Query`/`Exec` where a `QueryContext`/`ExecContext` exists — cancellation silently dropped
+- `context.WithTimeout` in a leaf function, overriding a budget the edge already set
+- `context.WithValue` with a bare `string` key, or used to pass a dependency
+- A goroutine outliving its request while still holding the request's `ctx`
 - An import cycle "fixed" by inventing a third package for the shared types — the cycle means
   the interface is declared on the wrong side
 - Domain types carrying `json:` or `db:` tags — wire and table leaking inward
@@ -159,4 +165,4 @@ A use case is a **method on a service, not a package**. One package per endpoint
 | File | When to read |
 |------|-------------|
 | `references/interfaces.md` | Anything crossing a process boundary; deciding whether something deserves an interface; writing fakes; breaking an import cycle |
-| `references/layout.md` | Standing up or restructuring a service: per-directory contracts, tier growth, `main.go` wiring, config, shutdown, test placement |
+| `references/layout.md` | Standing up or restructuring a service: per-directory contracts, tier growth, `main.go` wiring, config, graceful shutdown, context deadlines/cancellation/values, test placement |
