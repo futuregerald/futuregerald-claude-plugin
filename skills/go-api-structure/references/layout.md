@@ -30,8 +30,10 @@ Env vars and flags into a typed struct, validated once, at startup.
 
 - **May import:** stdlib and a config library.
 - **May not import:** any other `internal/` package. Config is a leaf.
-- Pass the sub-struct a component needs (`cfg.DB`), not the whole `Config`, so packages don't
-  gain access to unrelated settings.
+- **Nothing outside `cmd/` imports `config`.** Each component declares the settings struct it
+  needs (`httpapi.ServerConfig`) and `main` maps the loaded config onto it. Same principle as
+  consumer-declared interfaces: the component states its requirement, and the outer layer
+  satisfies it. This is why `config` can be a leaf and still serve everyone.
 
 ### `internal/<domain>/`
 
@@ -50,10 +52,26 @@ needs to do its job.
 
 One package per external system. Implements interfaces the domain declared.
 
-- **May import:** its driver/SDK, and the domain packages whose interfaces it satisfies.
+**When the technology name collides with the library's own package, name the adapter for the
+capability instead.** An `internal/argon2` implementing `accounts.Hasher` would have to import
+`golang.org/x/crypto/argon2` under an alias, and every reader then has to work out which
+`argon2` a call refers to. `internal/pwhash`, exposing `NewArgon2Hasher`, avoids the collision
+and leaves room for the second algorithm — which is the realistic case, since password hashing
+gets migrated. Same for `internal/redis` wrapping `github.com/redis/go-redis` — prefer
+`internal/cache` if it bites.
+
+Default new services to **argon2id** (`golang.org/x/crypto/argon2`), which is the current
+password-hashing recommendation. bcrypt remains perfectly serviceable and is not a bug to be
+fixed on sight; the point of `accounts.Hasher` is that the choice stays swappable, and a
+migration means adding `NewBcryptHasher` alongside and re-hashing on next successful login.
+
+- **May import:** its driver/SDK and the domain packages whose interfaces it satisfies.
 - **May not import:** `internal/httpapi`, or another adapter. Two adapters that need each
   other are being orchestrated in the wrong place — that belongs in a domain service.
 - Include `var _ accounts.Store = (*AccountStore)(nil)` so a drifting contract fails the build.
+- One workflow writing atomically through two stores is the case these rules do not solve on
+  their own. See "Transactions across stores" in `interfaces.md` — the domain declares an
+  `Atomic` interface, the adapter owns the transaction.
 
 ### `internal/httpapi/` (or `grpcapi`, `consumer`)
 
@@ -67,9 +85,12 @@ auth extraction.
 
 ### `migrations/`
 
-Plain SQL, applied by tooling (`golang-migrate`, `atlas`, `goose`) as a deploy step or by
-`cmd/migrate/`. Never auto-migrate from the API binary at startup — concurrent replicas will
-race, and a failed migration takes the service down with it.
+Plain SQL, applied by tooling (`golang-migrate`, `atlas`, `goose`) as a deploy step or by a
+dedicated `cmd/migrate/`. Do not auto-migrate from the API binary at startup: a failed
+migration turns every replica into a crash loop, schema changes need different DB privileges
+than request serving, and rollback becomes a deploy problem rather than an operator decision.
+(Concurrency itself is usually handled — `golang-migrate` takes a Postgres advisory lock, and
+goose supports locking — so serialisation is not the argument; deploy control is.)
 
 ## Growing through the tiers
 
@@ -88,11 +109,13 @@ repos add version-bump friction to every cross-cutting change and are hard to re
 ## Config
 
 ```go
+// fragment — struct tags assume caarlos0/env; Load elided
 package config
 
 type Config struct {
 	HTTP HTTPConfig
 	DB   DBConfig
+	Auth AuthConfig
 }
 
 type HTTPConfig struct {
@@ -101,8 +124,14 @@ type HTTPConfig struct {
 }
 
 type DBConfig struct {
-	DSN         string `env:"DATABASE_URL,required"`
-	MaxOpenConns int   `env:"DB_MAX_OPEN_CONNS" envDefault:"25"`
+	DSN          string `env:"DATABASE_URL,required"`
+	MaxOpenConns int    `env:"DB_MAX_OPEN_CONNS" envDefault:"25"`
+}
+
+type AuthConfig struct {
+	Argon2Memory      uint32 `env:"ARGON2_MEMORY_KIB" envDefault:"65536"`
+	Argon2Iterations  uint32 `env:"ARGON2_ITERATIONS" envDefault:"3"`
+	Argon2Parallelism uint8  `env:"ARGON2_PARALLELISM" envDefault:"2"`
 }
 
 func Load() (Config, error) { … }
@@ -118,6 +147,10 @@ undocumentable.
 Construct dependencies in order, innermost last, and hand each one only what it needs.
 
 ```go
+// fragment — cmd/api/main.go, imports elided except the one that is easy to miss:
+//   _ "github.com/jackc/pgx/v5/stdlib"   // registers the "pgx" driver name
+// Without that blank import, sql.Open("pgx", …) fails with: unknown driver "pgx".
+
 func main() {
 	if err := run(); err != nil {
 		log.Fatalf("startup: %v", err)
@@ -137,18 +170,33 @@ func run() error {
 	defer db.Close()
 	db.SetMaxOpenConns(cfg.DB.MaxOpenConns)
 
-	// adapters
+	// adapters — each takes its OWN params struct, so no package below cmd/
+	// imports internal/config. main does the mapping.
 	accountStore := postgres.NewAccountStore(db)
-	hasher := bcrypt.NewHasher(cfg.Auth.Cost)
+	hasher := pwhash.NewArgon2Hasher(pwhash.Argon2Params{
+		Memory:      cfg.Auth.Argon2Memory,
+		Iterations:  cfg.Auth.Argon2Iterations,
+		Parallelism: cfg.Auth.Argon2Parallelism,
+	})
 
 	// domain
-	accountSvc := accounts.NewService(accountStore, hasher, time.Now)
+	accountSvc := accounts.NewService(accountStore, hasher, time.Now, uuid.NewString)
 
 	// transport
-	srv := httpapi.NewServer(cfg.HTTP, accountSvc)
+	srv := httpapi.NewServer(httpapi.ServerConfig{
+		Addr:            cfg.HTTP.Addr,
+		ShutdownTimeout: cfg.HTTP.ShutdownTimeout,
+	}, accountSvc)
 	return srv.Run()
 }
 ```
+
+The mapping is a few lines of boilerplate in exactly one place, and it buys a codebase where
+every package below `cmd/` can be constructed in a test without touching environment
+variables.
+
+Note `sql.Open` does not connect — it validates arguments and returns lazily. Call
+`db.PingContext` during startup if the process should fail fast on an unreachable database.
 
 `main` returning through `run() error` keeps `defer` working — `log.Fatal` skips deferred
 calls, so connections never close on the error path.
@@ -161,7 +209,45 @@ component the whole dependency struct instead of its two real dependencies.
 
 ## Graceful shutdown
 
+### `internal/httpapi/server.go` (complete file)
+
 ```go
+package httpapi
+
+import (
+	"context"
+	"errors"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+)
+
+// ServerConfig is declared here rather than imported from internal/config,
+// for the same reason interfaces are declared by their consumer: this package
+// states what it needs, and main maps the app config onto it. httpapi stays
+// independent of how configuration happens to be loaded.
+type ServerConfig struct {
+	Addr            string
+	ShutdownTimeout time.Duration
+}
+
+type Server struct {
+	http            *http.Server
+	shutdownTimeout time.Duration
+}
+
+func NewServer(cfg ServerConfig, svc registrar) *Server {
+	mux := http.NewServeMux()
+	mux.Handle("POST /users", handleRegister(svc))
+
+	return &Server{
+		http:            &http.Server{Addr: cfg.Addr, Handler: mux},
+		shutdownTimeout: cfg.ShutdownTimeout,
+	}
+}
+
 func (s *Server) Run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

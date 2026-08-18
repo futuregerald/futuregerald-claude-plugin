@@ -235,6 +235,7 @@ If symlinked to `~/.claude/skills` (installed as personal skills), invoke them b
 | `code-simplifier` | Simplify recently changed code, with Staff Engineer review |
 | `requesting-code-review` | Request review before merge to verify requirements are met |
 | `skill-reviewer` | Review skills for quality, size, and progressive disclosure |
+| `review-lens` | Surface similar past reviewer objections to calibrate findings |
 | `resolving-merge-conflicts` | Resolve an in-progress git merge/rebase conflict |
 
 **Architecture & Modeling:**
@@ -274,6 +275,7 @@ If symlinked to `~/.claude/skills` (installed as personal skills), invoke them b
 | Skill | Description |
 |-------|-------------|
 | `nano-banana` | Image generation and editing |
+| `vectorize` | Convert raster PNG/JPG into clean SVG |
 | `copywriting` | Marketing copy for landing, pricing, and feature pages |
 | `marketing-psychology` | Mental models and behavioral science for marketing |
 

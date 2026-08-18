@@ -1,10 +1,14 @@
 # Interfaces and Dependency Direction
 
+Every block below marked **complete file** compiles as written. Blocks marked
+**fragment** omit imports or surrounding code and are illustrative only.
+
 - [The inversion, end to end](#the-inversion-end-to-end)
 - [When an interface earns its place](#when-an-interface-earns-its-place)
 - [Sizing an interface](#sizing-an-interface)
 - [Fakes](#fakes)
 - [Non-determinism: clock, IDs, randomness](#non-determinism-clock-ids-randomness)
+- [Transactions across stores](#transactions-across-stores)
 - [Breaking an import cycle](#breaking-an-import-cycle)
 - [Errors across the boundary](#errors-across-the-boundary)
 
@@ -13,7 +17,7 @@
 Three packages. Note the import arrows: `postgres` and `httpapi` both import `accounts`;
 `accounts` imports neither.
 
-### `internal/accounts/accounts.go` — the domain declares what it needs
+### `internal/accounts/accounts.go` — the domain declares what it needs (complete file)
 
 ```go
 package accounts
@@ -43,14 +47,15 @@ type Store interface {
 	Create(ctx context.Context, u User) error
 }
 
-// Hasher keeps bcrypt/argon2 out of the domain.
+// Hasher keeps the password-hashing library out of the domain, and keeps the
+// algorithm swappable — argon2id today, whatever replaces it later.
 type Hasher interface {
 	Hash(plain string) (string, error)
 	Compare(hash, plain string) error
 }
 ```
 
-### `internal/accounts/service.go` — rules only, no I/O of its own
+### `internal/accounts/service.go` — rules only, no I/O of its own (complete file)
 
 ```go
 package accounts
@@ -66,13 +71,18 @@ type Service struct {
 	store  Store
 	hasher Hasher
 	now    func() time.Time
+	newID  func() string
 }
 
-func NewService(store Store, hasher Hasher, now func() time.Time) *Service {
-	return &Service{store: store, hasher: hasher, now: now}
+func NewService(store Store, hasher Hasher, now func() time.Time, newID func() string) *Service {
+	return &Service{store: store, hasher: hasher, now: now, newID: newID}
 }
 
 func (s *Service) Register(ctx context.Context, email, password string) (User, error) {
+	// This pre-check exists to return a clean error in the common case. It is
+	// NOT the uniqueness guarantee — two concurrent calls can both pass it.
+	// The unique index on users.email is the guarantee, and Store.Create
+	// reports a violation as ErrEmailTaken. Both paths are handled.
 	if _, err := s.store.ByEmail(ctx, email); err == nil {
 		return User{}, ErrEmailTaken
 	} else if !errors.Is(err, ErrNotFound) {
@@ -84,17 +94,28 @@ func (s *Service) Register(ctx context.Context, email, password string) (User, e
 		return User{}, fmt.Errorf("hash password: %w", err)
 	}
 
-	u := User{Email: email, PasswordHash: hash, CreatedAt: s.now()}
+	u := User{
+		ID:           s.newID(),
+		Email:        email,
+		PasswordHash: hash,
+		CreatedAt:    s.now(),
+	}
 	if err := s.store.Create(ctx, u); err != nil {
+		// Already wrapped as ErrEmailTaken by the adapter when the unique
+		// index fires; errors.Is at the transport edge still matches.
 		return User{}, fmt.Errorf("create user: %w", err)
 	}
 	return u, nil
 }
 ```
 
+The service mints the ID rather than letting the database do it, so the value is known
+before the write and the caller gets a populated `User` back. Injecting `newID` keeps that
+deterministic under test.
+
 This is testable with zero infrastructure — every dependency is an argument.
 
-### `internal/postgres/accounts.go` — the adapter reaches inward
+### `internal/postgres/accounts.go` — the adapter reaches inward (complete file)
 
 ```go
 package postgres
@@ -104,6 +125,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"example.com/user-service/internal/accounts"
 )
@@ -132,12 +155,34 @@ func (s *AccountStore) ByEmail(ctx context.Context, email string) (accounts.User
 	}
 	return u, nil
 }
+
+func (s *AccountStore) Create(ctx context.Context, u accounts.User) error {
+	const q = `INSERT INTO users (id, email, password_hash, created_at)
+	           VALUES ($1, $2, $3, $4)`
+
+	_, err := s.db.ExecContext(ctx, q, u.ID, u.Email, u.PasswordHash, u.CreatedAt)
+	if isUniqueViolation(err) {
+		// The race the service's pre-check cannot close is closed here.
+		return accounts.ErrEmailTaken
+	}
+	if err != nil {
+		return fmt.Errorf("insert user: %w", err)
+	}
+	return nil
+}
+
+// isUniqueViolation is driver-specific by nature; this is the pgx form.
+// 23505 is the SQLSTATE for unique_violation.
+func isUniqueViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505"
+}
 ```
 
 If a DB row needs tags or columns the domain type shouldn't carry, declare a private
 `type userRow struct { … }` in `postgres` and map it. Keep `db:` tags out of `accounts.User`.
 
-### `internal/httpapi/accounts.go` — transport owns the wire format
+### `internal/httpapi/accounts.go` — transport owns the wire format (complete file)
 
 ```go
 package httpapi
@@ -188,17 +233,26 @@ func handleRegister(svc registrar) http.HandlerFunc {
 		writeJSON(w, http.StatusCreated, userResponse{ID: u.ID, Email: u.Email})
 	}
 }
+
+func writeError(w http.ResponseWriter, status int, msg string) {
+	writeJSON(w, status, map[string]string{"error": msg})
+}
+
+func writeJSON(w http.ResponseWriter, status int, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(v)
+}
 ```
 
 Status codes live here and nowhere else. The domain returns errors; transport decides they
-mean 409.
+mean 409. Because the service wraps with `%w`, `errors.Is` still matches through the wrap.
 
 ## When an interface earns its place
 
 Introduce one when **any** of these is true:
 
 - The call leaves the process — DB, HTTP, queue, cache, blob store, mail, shell.
-- The result is non-deterministic — time, randomness, UUIDs.
 - A second real implementation exists or is imminent.
 - A test needs to force an error path that is impractical to trigger for real.
 
@@ -206,6 +260,8 @@ Do **not** introduce one for:
 
 - A struct with one implementation, used in one place, tested by calling it.
 - "Future-proofing" a swap nobody has asked for.
+- Non-determinism — clock, randomness, IDs. Inject a function value instead; see
+  [Non-determinism](#non-determinism-clock-ids-randomness).
 - Every service, on principle. `*accounts.Service` is a fine parameter type — its
   dependencies are already injected, so it is already substitutable where it matters.
 
@@ -218,9 +274,10 @@ Interfaces belong to the caller, so they should be as small as the caller's actu
 Two callers needing different subsets get two interfaces, not one union.
 
 ```go
-// In the package that only reads:
+// fragment — in a package OTHER than accounts, which is why the type is
+// qualified. Inside accounts itself it would be plain User.
 type userReader interface {
-	ByEmail(ctx context.Context, email string) (User, error)
+	ByEmail(ctx context.Context, email string) (accounts.User, error)
 }
 ```
 
@@ -232,12 +289,25 @@ nothing about what the caller touches.
 Hand-written fakes beat generated mocks for these narrow interfaces: no codegen step, no
 mock-framework DSL, and they read as ordinary Go.
 
+### `internal/accounts/fake_test.go` (complete file)
+
 ```go
 package accounts_test
+
+import (
+	"context"
+
+	"example.com/user-service/internal/accounts"
+)
 
 type fakeStore struct {
 	users     map[string]accounts.User
 	createErr error // force the failure path
+}
+
+func newFakeStore() *fakeStore {
+	// The map must be initialised — assigning into a nil map panics.
+	return &fakeStore{users: make(map[string]accounts.User)}
 }
 
 func (f *fakeStore) ByEmail(_ context.Context, email string) (accounts.User, error) {
@@ -261,17 +331,124 @@ Reach for a mock library only when call-order or call-count assertions genuinely
 
 ## Non-determinism: clock, IDs, randomness
 
-Inject them as plain function values rather than inventing a `Clock` interface:
+These do not leave the process, so they do **not** get an interface. Inject them as plain
+function values:
 
 ```go
+// fragment — field declarations only
 type Service struct {
 	now   func() time.Time
 	newID func() string
 }
 ```
 
-Production passes `time.Now` and a UUID function; tests pass fixed values. This is why
-`service.go` above takes `now func() time.Time` — asserting on `CreatedAt` requires it.
+Production passes `time.Now` and a UUID function; a test passes fixed values:
+
+```go
+// fragment — inside a test
+svc := accounts.NewService(
+	newFakeStore(),
+	stubHasher{},
+	func() time.Time { return time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC) },
+	func() string { return "user-1" },
+)
+```
+
+This is why `NewService` takes `now` and `newID` — asserting on `CreatedAt` or `ID`
+requires it. A `Clock` interface would be the anti-pattern flagged above: one method, one
+production implementation, one test implementation.
+
+## Transactions across stores
+
+The hard case the layout rules do not solve on their own: one workflow must write through
+two stores atomically. The domain may not import `database/sql`, and adapters may not
+import each other, so neither side can own the transaction.
+
+Resolve it with an interface the domain declares and the adapter implements, carrying the
+transaction in the context so store methods stay unchanged.
+
+```go
+// fragment — in internal/accounts, beside the other interfaces
+type Atomic interface {
+	InTx(ctx context.Context, fn func(ctx context.Context) error) error
+}
+```
+
+The service composes writes without knowing what a transaction is:
+
+```go
+// fragment — a method on *Service
+func (s *Service) RegisterWithBilling(ctx context.Context, email, password string) error {
+	return s.atomic.InTx(ctx, func(ctx context.Context) error {
+		if _, err := s.Register(ctx, email, password); err != nil {
+			return err
+		}
+		return s.billing.OpenAccount(ctx, email)
+	})
+}
+```
+
+### `internal/postgres/tx.go` — the adapter side (complete file)
+
+```go
+package postgres
+
+import (
+	"context"
+	"database/sql"
+	"fmt"
+)
+
+type txKey struct{}
+
+// querier is satisfied by both *sql.DB and *sql.Tx, so store methods do not
+// care whether they are inside a transaction.
+type querier interface {
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+}
+
+type TxManager struct{ db *sql.DB }
+
+func NewTxManager(db *sql.DB) *TxManager { return &TxManager{db: db} }
+
+func (m *TxManager) InTx(ctx context.Context, fn func(ctx context.Context) error) error {
+	tx, err := m.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	// Rollback after a successful Commit is a no-op, so this is safe
+	// unconditionally and covers panics and early returns.
+	defer func() { _ = tx.Rollback() }()
+
+	if err := fn(context.WithValue(ctx, txKey{}, tx)); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit tx: %w", err)
+	}
+	return nil
+}
+
+// q returns the transaction bound to ctx if there is one, else the pool.
+// Every store method uses this instead of touching s.db directly.
+func (s *AccountStore) q(ctx context.Context) querier {
+	if tx, ok := ctx.Value(txKey{}).(*sql.Tx); ok {
+		return tx
+	}
+	return s.db
+}
+```
+
+Trade-off worth stating: the transaction travels implicitly in the context, so a store
+method's behaviour depends on how it was called. That is the price of keeping `database/sql`
+out of the domain, and it is the usual bargain in Go. The alternative — passing `*sql.Tx`
+through domain signatures — leaks the driver into the layer this whole structure exists to
+protect.
+
+If the two writes span **services rather than stores**, a shared transaction is not
+available. Use the transactional outbox: write the row and an event in one local
+transaction, publish from the outbox, and make the consumer idempotent.
 
 ## Breaking an import cycle
 
@@ -285,8 +462,8 @@ Fix in this order:
    in `cmd/` adapts `accounts` to it. The cycle disappears without a new package.
 2. **Communicate by event.** If the coupling is "when X happens, Y should react", publish
    from `accounts` and subscribe in `billing` — wired in `cmd/`.
-3. **Split the genuinely shared concept** into its own domain package it turns out both
-   depend on. Legitimate, but only after 1 and 2 fail.
+3. **Split the genuinely shared concept** into its own domain package both depend on.
+   Legitimate, but only after 1 and 2 fail.
 
 Never resolve a cycle by creating `internal/types` or `internal/shared` to hold the structs.
 That converts one cycle into a package every future change has to edit.
@@ -294,7 +471,8 @@ That converts one cycle into a package every future change has to edit.
 ## Errors across the boundary
 
 - Domain packages define sentinel errors (`accounts.ErrNotFound`) or typed errors.
-- Adapters translate foreign errors into domain errors at their edge.
+- Adapters translate foreign errors into domain errors at their edge — `sql.ErrNoRows` and
+  SQLSTATE `23505` never escape `postgres`.
 - Transport translates domain errors into status codes at its edge.
 - Wrap with `%w` when adding context; check with `errors.Is`/`errors.As`, never string
   matching.

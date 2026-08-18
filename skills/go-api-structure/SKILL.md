@@ -81,10 +81,15 @@ Two things commonly copied layouts get wrong:
 ## Interfaces: the default posture
 
 **Every boundary that leaves the process gets an interface, declared by the caller** — DB,
-HTTP client, queue, cache, object store, mailer, clock, UUID/random source.
+HTTP client, queue, cache, object store, mailer, shell.
 
 **Nothing else does.** In-process logic is tested by calling it. An interface with one
 implementation and no test fake is indirection charging rent.
+
+**Non-determinism is the exception that is not an interface.** Clock, randomness and ID
+generation never leave the process, so inject them as plain function values —
+`now func() time.Time`, `newID func() string` — not a `Clock` interface, which would be a
+one-method interface with exactly one production implementation.
 
 1. **Declare the interface in the package that consumes it.** `accounts` declares `Store`;
    `postgres` imports `accounts` and satisfies it. This is what inverts the dependency — the
@@ -110,9 +115,11 @@ Worked examples, fakes, and cycle-breaking: `references/interfaces.md`.
 | Request/response DTO | `internal/httpapi/`, beside its handler | `httpapi` |
 | Third-party API client | `internal/<vendor>/` | `stripe` |
 | Queue producer/consumer | `internal/kafka/` | `kafka` |
+| Password hashing, crypto, other pure-capability adapters | `internal/<capability>/` | `pwhash` |
 | Env parsing, flags, defaults | `internal/config/` | `config` |
 | Wiring, lifecycle, graceful shutdown | `cmd/<binary>/main.go` | `main` |
-| Something two domains both need | its own domain package — never `shared/` | — |
+| An atomic write across two stores | domain declares `Atomic`, adapter owns the tx | `accounts` + `postgres` |
+| Something two domains both need | first try moving the interface to the consumer; a shared domain package is the last resort, and never `shared/` | — |
 | Genuinely reusable outside this repo | a separate published module | — |
 
 A use case is a **method on a service, not a package**. One package per endpoint turns a
@@ -121,12 +128,17 @@ A use case is a **method on a service, not a package**. One package per endpoint
 ## Package naming
 
 - Lowercase, one word, no underscores, **no camelCase**. `useCases/`, `registerUser/`,
-  `getProfile/` are not Go — those directory names become package names.
+  `getProfile/` are legal identifiers but violate the naming convention every Go reader and
+  linter expects. The package name comes from the `package` clause, not the directory — but
+  they are conventionally identical, so a `useCases/` directory produces `package useCases`
+  in practice. State this as convention, not as a language rule.
 - **Name the package for the bounded context, not the entity**, so call sites don't stutter:
   `accounts.User`, not `user.User`.
 - Never `util`, `common`, `helpers`, `shared`, `base`, `misc`, or an app-wide `models`. They
   have no boundary, so everything drifts into them.
-- Name adapters after the technology (`postgres`, `redis`, `s3`) — the thing that gets swapped.
+- Name adapters after the technology (`postgres`, `redis`, `s3`) — the thing that gets
+  swapped. When that collides with the library's own package name, name it for the capability
+  instead (`pwhash`, not `bcrypt`); see `references/layout.md`.
 - Avoid `cmd/http/`; name binaries for what they are (`cmd/api/`), not their transport.
 
 ## Red flags
