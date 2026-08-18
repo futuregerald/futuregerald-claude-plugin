@@ -58,7 +58,7 @@ skill-installer --mode config-only --target claude --yes
 
 ### Skills — Teaching Claude How to Work
 
-Skills are markdown-based instruction sets that give Claude specialized knowledge and workflows. When invoked, Claude follows the skill's process exactly. The plugin includes 48 skills covering:
+Skills are markdown-based instruction sets that give Claude specialized knowledge and workflows. When invoked, Claude follows the skill's process exactly. The plugin includes 51 skills covering:
 
 - **Test-driven development** — RED/GREEN/REFACTOR cycle
 - **Systematic debugging** — root-cause-first protocol with feedback-loop construction
@@ -203,7 +203,7 @@ If symlinked to `~/.claude/skills` (installed as personal skills), invoke them b
 
 ## Skills and Agents Reference
 
-### Skills (48)
+### Skills (51)
 
 **Planning & Specs:**
 
@@ -245,6 +245,7 @@ If symlinked to `~/.claude/skills` (installed as personal skills), invoke them b
 | `domain-modeling` | Build and sharpen a project's domain model and ubiquitous language |
 | `architecture-decision-records` | Write and maintain ADRs |
 | `improve-codebase-architecture` | Find module-deepening opportunities; visual report, then grill |
+| `go-api-structure` | Go service layout and interface-driven dependency direction |
 
 **Delivery & Dev Workflow:**
 
