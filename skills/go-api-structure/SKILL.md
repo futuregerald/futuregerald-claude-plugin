@@ -207,11 +207,15 @@ A use case is a **method on a service, not a package**. One package per endpoint
 - An import cycle "fixed" by inventing a third package for the shared types — the cycle means
   the interface is declared on the wrong side
 - Domain types carrying `json:` or `db:` tags — wire and table leaking inward
+- A test suite that is all unit tests — ten passing functions do not mean the flow works;
+  see the functional tests in `example/`
+- A test that has never been watched fail
 
 ## References
 
 | File | When to read |
 |------|-------------|
 | `references/interfaces.md` | Anything crossing a process boundary; deciding whether something deserves an interface; writing fakes; breaking an import cycle |
+| `example/` | A runnable version of this whole service — `cd example && go test ./... -race`. Read `functional/flow_test.go` for what good tests look like here |
 | `references/concurrency.md` | Running work in the background or in parallel: worker pools, job queues, capping how many run at once, backpressure, draining on shutdown, goroutine leaks, `errgroup` |
 | `references/layout.md` | Standing up or restructuring a service: per-directory contracts, tier growth, `main.go` wiring, config, graceful shutdown, context deadlines/cancellation/values, test placement |

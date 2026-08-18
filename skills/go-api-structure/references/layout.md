@@ -356,6 +356,11 @@ func NewServer(cfg ServerConfig, svc registrar) *Server {
 	}
 }
 
+// Handler exposes the routed handler so functional tests can drive the whole
+// stack through httptest without binding a port. Cheap, and it is what makes
+// end-to-end tests of the real wiring possible.
+func (s *Server) Handler() http.Handler { return s.http.Handler }
+
 // Run serves until ctx is cancelled, then shuts down gracefully.
 //
 // The CALLER owns signal handling. Signals are a process-wide singleton, so a
@@ -512,6 +517,42 @@ outlives the request; it does not ban a component owning its own lifecycle.
 
 
 ## Test file placement
+
+### Start with functional tests, not unit tests
+
+The default instinct is a unit test per function. Resist it. **Ten functions that each pass
+their own test still do not tell you the business flow works** — the interesting failures live
+in the wiring between them, and that is exactly the ground unit tests do not cover.
+
+Both real defects found while writing this skill make the point. An adapter queried the
+connection pool instead of the active transaction, so writes survived a rollback. A worker pool
+returned success for jobs it then dropped. Every individual function was correct; every unit
+test passed. Only driving the whole stack found them.
+
+So the ordering is:
+
+1. **Functional / integration first.** Wire the real transport, real service, real adapter and
+   a real database, and drive it through the front door. In-process SQLite makes this fast
+   enough to run on every save — there is no excuse to defer it.
+2. **Unit tests for genuinely tricky logic** — a pricing rule, a state machine, a parser.
+   Things with many branches and no I/O.
+3. **Mocks last, and rarely.** A test that mocks the thing it is testing tests the mock.
+
+**Cover failure paths, not just the happy path.** One test for "it works"; the rest for
+duplicates, races, dead dependencies, timeouts, cancellations and partial writes. That is where
+production actually breaks, and where a green unit suite gives the most false confidence.
+
+**And confirm each test can fail.** Break the code on purpose and watch it go red. A concurrent
+duplicate-registration test written for the example passed against a deliberately broken
+adapter — the database serialised the writes, the pre-check absorbed every duplicate, and the
+constraint path was never reached. It asserted a real invariant and still proved nothing.
+Replacing luck with a deterministic injection point fixed it. A test that has never failed has
+not been shown to test anything.
+
+A worked set lives in `example/functional/flow_test.go`, with the reasoning in
+`example/README.md`.
+
+### Placement
 
 Tests live beside the code, in the same directory. There is no `test/` tree.
 
