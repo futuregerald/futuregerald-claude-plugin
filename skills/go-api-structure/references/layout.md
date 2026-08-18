@@ -49,27 +49,39 @@ needs to do its job.
   `service.go` by cohesive group (`registration.go`, `authentication.go`) when it gets long —
   splitting into *packages* is what to avoid, not splitting into files.
 
-### `internal/<adapter>/` — `sqlstore`, `redis`, `kafka`, `s3`, `stripe`
+### `internal/<adapter>/` — `sqlstore`, `cache`, `eventbus`, `objectstore`, `payments`
 
 One package per external system. Implements interfaces the domain declared.
 
 **The skill is not opinionated about which storage engine you pick.** The worked example uses
-SQLite because it runs with no server; the same package serves Postgres or MySQL with a
-different driver import and a different unique-violation check. Name the package for what it
-is (`sqlstore`), not for today's engine, when the engine is genuinely interchangeable.
+SQLite because it runs with no server; the same package serves Postgres or MySQL by changing
+the driver import, the unique-violation check, the placeholder syntax and any DSN/scan
+options — a bounded set, all inside this package. Name the package for what it is
+(`sqlstore`), not for today's engine, when the engine is genuinely interchangeable.
 
 **When the technology name collides with the library's own package, name the adapter for the
 capability instead.** An `internal/sqlite` package would have to import `modernc.org/sqlite`
 under an alias, and every reader then has to work out which `sqlite` a given call refers to —
 hence `sqlstore`. The same applies to an `internal/argon2` wrapping
-`golang.org/x/crypto/argon2` (use `pwhash`, which also leaves room for the second algorithm
+`golang.org/x/crypto/argon2` — though see below: prefer a vetted wrapper over that package
+directly (use `pwhash`, which also leaves room for the second algorithm
 you will eventually migrate to) and an `internal/redis` wrapping `github.com/redis/go-redis`
 (use `cache`).
 
-Default new services to **argon2id** (`golang.org/x/crypto/argon2`), which is the current
-password-hashing recommendation. bcrypt remains perfectly serviceable and is not a bug to be
-fixed on sight; the point of `accounts.Hasher` is that the choice stays swappable, and a
-migration means adding `NewBcryptHasher` alongside and re-hashing on next successful login.
+Default new services to **argon2id**, the current password-hashing recommendation — but use a
+vetted wrapper such as `github.com/alexedwards/argon2id`, **not** `golang.org/x/crypto/argon2`
+directly.
+
+That distinction matters more than it looks. `x/crypto/argon2` is a bare key-derivation
+function: it exposes `IDKey` and nothing else, leaving you to generate the salt, encode the
+result, store the parameters, and compare in constant time. Each is silently wrong when done
+wrong — a fixed or missing salt, `==` instead of `subtle.ConstantTimeCompare`, or parameters
+you never stored and therefore can never tune. bcrypt's `GenerateFromPassword` /
+`ComparePasswordAndHash` handle all of that for you, which is why bcrypt remains perfectly
+serviceable and is not a bug to fix on sight.
+
+The point of `accounts.Hasher` is that the choice stays swappable: migrating means adding a
+second implementation and re-hashing on next successful login.
 
 - **May import:** its driver/SDK and the domain packages whose interfaces it satisfies.
 - **May not import:** `internal/httpapi`, or another adapter. Two adapters that need each
@@ -131,8 +143,13 @@ type HTTPConfig struct {
 }
 
 type DBConfig struct {
-	DSN          string `env:"DATABASE_URL,required"`
-	MaxOpenConns int    `env:"DB_MAX_OPEN_CONNS" envDefault:"25"`
+	// For SQLite the DSN must carry pragmas, e.g.
+	//   file:app.db?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)
+	// See "Pool size and DSN are engine-specific" below — without
+	// busy_timeout, concurrent writes fail rather than wait.
+	DSN string `env:"DATABASE_URL,required"`
+	// 25 suits Postgres/MySQL. SQLite wants 1. Engine-specific, always.
+	MaxOpenConns int `env:"DB_MAX_OPEN_CONNS" envDefault:"25"`
 }
 
 type AuthConfig struct {
@@ -143,6 +160,32 @@ type AuthConfig struct {
 
 func Load() (Config, error) { … }
 ```
+
+### Pool size and DSN are engine-specific
+
+Copying a connection-pool setting between engines is a real outage. Measured against the
+example's own adapter, 50 concurrent writes through an on-disk SQLite database with
+`SetMaxOpenConns(25)` and no pragmas:
+
+```
+as documented (pool 25, no pragmas)   FAILED 48/50 — database is locked (SQLITE_BUSY)
+                                      FAILED 18/20 concurrent transactions
+with _pragma=busy_timeout(5000)       50/50 OK, 20/20 OK
+with SetMaxOpenConns(1)               50/50 OK, 20/20 OK
+```
+
+SQLite allows exactly one writer. Without `busy_timeout` a blocked writer fails immediately
+instead of waiting, and `SQLITE_BUSY` is not a unique-violation, so it surfaces as a 500.
+`journal_mode(WAL)` additionally lets readers proceed during a write.
+
+Postgres and MySQL have none of these constraints and genuinely want a pool of ~25. The rule
+is that **pool size and DSN options travel with the engine, not with the code** — so treat
+them as configuration, not as something to copy from another service.
+
+One more trap, for tests: an in-memory SQLite DSN **without** `cache=shared` gives every
+pooled connection its own private database, so a table created on one connection is missing on
+the next. It fails with `no such table`, not a lock error, which sends you hunting in the wrong
+place entirely.
 
 Parse and validate everything at startup and fail loudly. A service that boots with a missing
 setting and discovers it on the first request has turned a deploy failure into an incident.
@@ -161,8 +204,10 @@ Construct dependencies in order, innermost last, and hand each one only what it 
 // Postgres would be _ "github.com/jackc/pgx/v5/stdlib" and the name "pgx".
 
 func main() {
+	// Neutral label: run() returns config, database AND server errors, and each
+	// is already wrapped with its own context. A prefix here could only mislabel.
 	if err := run(); err != nil {
-		log.Fatalf("startup: %v", err)
+		log.Fatalf("%v", err)
 	}
 }
 
@@ -172,6 +217,7 @@ func run() error {
 		return fmt.Errorf("load config: %w", err)
 	}
 
+	// DSN carries the SQLite pragmas; see "Pool size and DSN are engine-specific".
 	db, err := sql.Open("sqlite", cfg.DB.DSN)
 	if err != nil {
 		return fmt.Errorf("open db: %w", err)
@@ -196,7 +242,11 @@ func run() error {
 		Addr:            cfg.HTTP.Addr,
 		ShutdownTimeout: cfg.HTTP.ShutdownTimeout,
 	}, accountSvc)
-	return srv.Run()
+
+	// main owns signal handling and hands the resulting context down.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	return srv.Run(ctx)
 }
 ```
 
@@ -218,7 +268,11 @@ component the whole dependency struct instead of its two real dependencies.
 
 ## Graceful shutdown
 
-### `internal/httpapi/server.go` (complete file)
+### `internal/httpapi/server.go`
+
+Complete file, but it forms `package httpapi` **together with** `accounts.go` from
+`interfaces.md` — `registrar` and `handleRegister` are declared there. The two compile as a
+pair; neither is standalone.
 
 ```go
 package httpapi
@@ -226,10 +280,9 @@ package httpapi
 import (
 	"context"
 	"errors"
+	"fmt"
+	"net"
 	"net/http"
-	"os"
-	"os/signal"
-	"syscall"
 	"time"
 )
 
@@ -246,9 +299,13 @@ type ServerConfig struct {
 type Server struct {
 	http            *http.Server
 	shutdownTimeout time.Duration
+	listen          func(network, addr string) (net.Listener, error)
 }
 
-const defaultRequestTimeout = 30 * time.Second
+const (
+	defaultRequestTimeout  = 30 * time.Second
+	defaultShutdownTimeout = 15 * time.Second
+)
 
 func NewServer(cfg ServerConfig, svc registrar) *Server {
 	// The zero value of a timeout means "unset", but http.TimeoutHandler
@@ -259,8 +316,17 @@ func NewServer(cfg ServerConfig, svc registrar) *Server {
 	if cfg.RequestTimeout <= 0 {
 		cfg.RequestTimeout = defaultRequestTimeout
 	}
+	// Same defence: an unset ShutdownTimeout would make context.WithTimeout
+	// produce an already-expired deadline, so Shutdown would abort instantly
+	// and sever in-flight requests -- the opposite of graceful.
+	if cfg.ShutdownTimeout <= 0 {
+		cfg.ShutdownTimeout = defaultShutdownTimeout
+	}
 
 	mux := http.NewServeMux()
+	// Method patterns ("POST /users") require Go 1.22+. On 1.21 and earlier
+	// this parses as a HOST pattern and silently never matches -- no error,
+	// no panic, just 404s.
 	mux.Handle("POST /users", handleRegister(svc))
 
 	return &Server{
@@ -281,16 +347,27 @@ func NewServer(cfg ServerConfig, svc registrar) *Server {
 			IdleTimeout:  60 * time.Second,
 		},
 		shutdownTimeout: cfg.ShutdownTimeout,
+		listen:          net.Listen,
 	}
 }
 
-func (s *Server) Run() error {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
+// Run serves until ctx is cancelled, then shuts down gracefully.
+//
+// The CALLER owns signal handling. Signals are a process-wide singleton, so a
+// binary running an HTTP server plus a worker needs one place deciding the
+// shutdown order -- and that place is main, not a transport package.
+//
+// listen is injectable so tests can bind 127.0.0.1:0 and learn the real port.
+// A shutdown path that cannot be tested is exactly the kind that rots.
+func (s *Server) Run(ctx context.Context) error {
+	ln, err := s.listen("tcp", s.http.Addr)
+	if err != nil {
+		return fmt.Errorf("listen %s: %w", s.http.Addr, err)
+	}
 
 	errCh := make(chan error, 1)
 	go func() {
-		if err := s.http.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err := s.http.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- err
 		}
 	}()
@@ -312,7 +389,8 @@ would abort in-flight requests immediately, which is the opposite of graceful. K
 timeout below the orchestrator's termination grace period.
 
 Propagate `r.Context()` down every call so a disconnected client cancels its DB query.
-`context.Context` is always the first parameter and is never stored in a struct.
+`context.Context` is always the first parameter, and a **request** context is never stored in a
+struct.
 
 ## Context: deadlines, cancellation, values
 
@@ -381,6 +459,9 @@ go func() {
 }()
 ```
 
+For one-off work this is fine. Once it happens on every request, bound it with a worker pool
+instead — see `references/concurrency.md`.
+
 `context.WithoutCancel` requires Go 1.21+. Before that the idiom was to construct a fresh
 `context.Background()` and copy the values across by hand.
 
@@ -410,10 +491,14 @@ A `string` key collides silently across packages, because `ctx.Value("user_id")`
 middleware and by a library are the same key. An unexported struct type cannot collide,
 because no other package can name it. Export the accessor functions, never the key.
 
-**`ctx` is always the first parameter and is never stored in a struct.** A stored context is
+**`ctx` is always the first parameter, and a request context is never stored in a struct.**
+A stored request context is
 frozen at construction time, so it carries the deadline of whatever call happened to build the
-object — usually startup, meaning no deadline at all. The one legitimate long-lived context is
-the process lifetime context in `main`, and it is passed, not stored.
+object — usually startup, meaning no deadline at all. Two long-lived contexts are legitimate: the process
+lifetime context in `main` (passed, not stored), and a context a long-lived component creates
+for *itself* at construction and cancels in its own `Shutdown` — see the worker pool in
+`references/concurrency.md`. The rule bans borrowing a *request's* deadline for work that
+outlives the request; it does not ban a component owning its own lifecycle.
 
 
 ## Test file placement

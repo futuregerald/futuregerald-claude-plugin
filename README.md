@@ -246,7 +246,7 @@ If symlinked to `~/.claude/skills` (installed as personal skills), invoke them b
 | `domain-modeling` | Build and sharpen a project's domain model and ubiquitous language |
 | `architecture-decision-records` | Write and maintain ADRs |
 | `improve-codebase-architecture` | Find module-deepening opportunities; visual report, then grill |
-| `go-api-structure` | Go service layout and interface-driven dependency direction |
+| `go-api-structure` | Go service layout, interface-driven dependencies, and bounded concurrency |
 
 **Delivery & Dev Workflow:**
 

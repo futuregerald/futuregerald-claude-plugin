@@ -121,8 +121,13 @@ Complete file. With `tx.go` (below) it forms `package sqlstore`; the two compile
 
 **The storage engine is incidental.** This example uses SQLite so it runs with no server, and
 the package is named `sqlstore` rather than `sqlite` because an `internal/sqlite` package
-would collide with the driver's own. Swapping in Postgres or MySQL changes exactly two things
-— the driver import and `isUniqueViolation`. Nothing about the architecture moves.
+would be confusing next to the driver's own package of that name.
+
+Swapping in Postgres or MySQL changes four things, all confined to this package: the driver
+import, `isUniqueViolation`, the **placeholder syntax** (`?` here; Postgres needs `$1`), and
+**DSN/scan details** (MySQL needs `parseTime=true` for `created_at` to scan into
+`time.Time`). Not zero — but a bounded, listable set inside one package, which is the point.
+Nothing about the architecture moves.
 
 Every query goes through `s.q(ctx)`, never `s.db` — see
 [Transactions across stores](#transactions-across-stores). A store method that touches `s.db`
@@ -183,8 +188,9 @@ func (s *AccountStore) Create(ctx context.Context, u accounts.User) error {
 	return nil
 }
 
-// isUniqueViolation is the ONLY driver-specific function in this package, and
-// the only thing that changes when the storage engine does:
+// isUniqueViolation is the driver-specific error check. Swapping engines also
+// means changing the placeholder syntax above (? vs $1) and possibly DSN/scan
+// options -- all confined to this package. The equivalents:
 //
 //	Postgres (pgx): var e *pgconn.PgError;    errors.As(err, &e) && e.Code == "23505"
 //	MySQL:          var e *mysql.MySQLError;  errors.As(err, &e) && e.Number == 1062
@@ -242,6 +248,15 @@ func handleRegister(svc registrar) http.HandlerFunc {
 		switch {
 		case errors.Is(err, accounts.ErrEmailTaken):
 			writeError(w, http.StatusConflict, "email already registered")
+			return
+		case errors.Is(err, context.Canceled):
+			// The client hung up. Nobody will read a response body, and this
+			// is not a server fault -- do not log it as one.
+			return
+		case errors.Is(err, context.DeadlineExceeded):
+			// We were too slow. Distinct from the 503 TimeoutHandler writes
+			// when the whole request budget expires.
+			writeError(w, http.StatusGatewayTimeout, "request timed out")
 			return
 		case err != nil:
 			writeError(w, http.StatusInternalServerError, "internal error")
@@ -339,6 +354,12 @@ func (f *fakeStore) ByEmail(_ context.Context, email string) (accounts.User, err
 func (f *fakeStore) Create(_ context.Context, u accounts.User) error {
 	if f.createErr != nil {
 		return f.createErr
+	}
+	// A fake must honour the contract it fakes. The real adapter reports a
+	// duplicate email as ErrEmailTaken; a fake that silently overwrote would
+	// make the race path untestable and pass tests the real code would fail.
+	if _, exists := f.users[u.Email]; exists {
+		return accounts.ErrEmailTaken
 	}
 	f.users[u.Email] = u
 	return nil

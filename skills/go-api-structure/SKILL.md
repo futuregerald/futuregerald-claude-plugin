@@ -1,6 +1,6 @@
 ---
 name: go-api-structure
-description: Structure Go API and service codebases — package layout, module boundaries, and interface-driven dependency direction. Use when starting a new Go service, adding a feature or endpoint to an existing Go service, deciding which package a file or type belongs in, resolving an import cycle, reviewing Go project layout in a PR, or answering "how should I structure my Go project". Also use before writing Go code that touches a database, HTTP client, cache, queue, clock, or any other external system, so it lands behind a consumer-defined interface.
+description: Structure Go API and service codebases — package layout, module boundaries, and interface-driven dependency direction. Use when starting a new Go service, adding a feature or endpoint to an existing Go service, deciding which package a file or type belongs in, resolving an import cycle, reviewing Go project layout in a PR, or answering "how should I structure my Go project". Also use before writing Go code that touches a database, HTTP client, cache, queue, clock, or any other external system, so it lands behind a consumer-defined interface; and for Go concurrency work — goroutines, channels, worker pools, job queues, bounding how many things run at once, backpressure, graceful shutdown, or hunting a goroutine leak.
 tags: [go, architecture]
 ---
 
@@ -13,6 +13,42 @@ Directories are navigation. **The import graph is the architecture.**
 Moving a file into `internal/core/` does not decouple it from Postgres; deleting its
 `import "database/sql"` does. Decide which way imports point first, then decide where files
 go. Get the first wrong and no layout rescues it.
+
+## The words this skill uses
+
+Defined here because the rest of the page leans on them. Each is described in terms of the
+running example rather than in the abstract.
+
+| Term | What it means here |
+|---|---|
+| **Import graph** | A picture of which package imports which: every package is a box, every `import` line an arrow. It is the only structure the Go compiler enforces — and a cycle in it is a hard build error, not a style complaint. |
+| **Domain** | Code holding business rules — "an email must be unique", "a password is stored hashed". Knows nothing about HTTP or databases. Here: `internal/accounts`. |
+| **Adapter** | Code that talks to something outside your process — a database, Stripe, Redis, S3. Here: `internal/sqlstore`. |
+| **Transport** | Code that speaks the wire protocol — HTTP handlers, JSON, status codes. Here: `internal/httpapi`. |
+| **Bounded context** | One coherent slice of the business (`accounts`, `billing`, `catalog`). Used to decide where one package should end and the next begin. |
+| **Consumer-declared interface** | An interface written in the package that *calls* it, rather than the package that implements it. This is what lets you point an arrow the other way. |
+| **Backpressure** | What happens when work arrives faster than you can process it: either the producer waits, or the work is refused. An unbounded queue is the one wrong answer. |
+
+### Why "the import graph is the architecture" is a literal claim
+
+Take a working service and rename the directory holding its business logic:
+
+```
+before:  httpapi ──▶ accounts              ◀── sqlstore
+after:   httpapi ──▶ core/domain/entities  ◀── sqlstore
+```
+
+Every importing file had to be edited and the build broke until they were. Yet the dependencies
+are identical — the same two arrows, pointing the same way. If the business logic imported a
+database driver before the rename, it still does.
+
+That is the whole point. **Coupling is an arrow existing**, and the only way to remove an arrow
+is to delete the `import` line. Renaming relabels a box. A directory layout, on its own, cannot
+decouple anything — which is why this skill decides arrow direction first and folder names
+second.
+
+(A related consequence: a directory's name and its package name are independent in Go. They
+match by convention, not by rule.)
 
 ## Step 0 — pick the tier before drawing folders
 
@@ -59,7 +95,8 @@ user-service/
 │   │   └── service_test.go    #   in-memory fakes, no DB
 │   ├── billing/               # second bounded context, same shape
 │   ├── sqlstore/              # ADAPTER: implements accounts.Store, billing.Store
-│   ├── stripe/                # ADAPTER: implements billing.PaymentGateway
+│   ├── payments/              # ADAPTER: implements billing.PaymentGateway (wraps stripe-go)
+│   ├── jobs/                  # CAPABILITY: bounded worker pool (see concurrency.md)
 │   └── httpapi/               # TRANSPORT: router, middleware, handlers, wire DTOs
 │       ├── server.go
 │       ├── accounts.go        #   handlers + their request/response types
@@ -115,8 +152,9 @@ Worked examples, fakes, and cycle-breaking: `references/interfaces.md`.
 | SQL, queries, row scanning, DB structs | `internal/sqlstore/` | `sqlstore` |
 | HTTP handler, decode, encode, status mapping | `internal/httpapi/` | `httpapi` |
 | Request/response DTO | `internal/httpapi/`, beside its handler | `httpapi` |
-| Third-party API client | `internal/<vendor>/` | `stripe` |
-| Queue producer/consumer | `internal/kafka/` | `kafka` |
+| Third-party API client | `internal/<capability>/` | `payments` |
+| Queue producer/consumer | `internal/eventbus/` | `eventbus` |
+| Background work, bounded concurrency, a job queue | `internal/jobs/` | `jobs` |
 | Password hashing, crypto, other pure-capability adapters | `internal/<capability>/` | `pwhash` |
 | Env parsing, flags, defaults | `internal/config/` | `config` |
 | Wiring, lifecycle, graceful shutdown | `cmd/<binary>/main.go` | `main` |
@@ -138,7 +176,7 @@ A use case is a **method on a service, not a package**. One package per endpoint
   `accounts.User`, not `user.User`.
 - Never `util`, `common`, `helpers`, `shared`, `base`, `misc`, or an app-wide `models`. They
   have no boundary, so everything drifts into them.
-- Name adapters after the external system (`sqlstore`, `redis`, `s3`) — the thing that gets
+- Name adapters after the external system (`sqlstore`, `cache`, `objectstore`) — the thing that gets
   swapped. When that collides with the library's own package name, name it for the capability
   instead (`pwhash`, not `bcrypt`); see `references/layout.md`.
 - Avoid `cmd/http/`; name binaries for what they are (`cmd/api/`), not their transport.
@@ -151,11 +189,14 @@ A use case is a **method on a service, not a package**. One package per endpoint
 - `pkg/` at the repo root, or a package named `utils`/`common`/`shared`
 - An app-wide `models/` every other package imports
 - A `dependencies.go` past ~150 lines, or returning a struct of 30 fields
-- `context.Context` stored in a struct, or not the first parameter
+- A **request** `context.Context` stored in a struct, or a ctx that is not the first parameter
+  (a long-lived component holding its own lifecycle context, cancelled by its `Shutdown`, is the
+  documented exception — see `references/concurrency.md`)
 - A `Query`/`Exec` where a `QueryContext`/`ExecContext` exists — cancellation silently dropped
 - `context.WithTimeout` in a leaf function, overriding a budget the edge already set
 - `context.WithValue` with a bare `string` key, or used to pass a dependency
-- A goroutine outliving its request while still holding the request's `ctx`
+- A goroutine outliving its request while still holding the request's `ctx` — see
+  `references/concurrency.md` for the bounded alternative
 - An import cycle "fixed" by inventing a third package for the shared types — the cycle means
   the interface is declared on the wrong side
 - Domain types carrying `json:` or `db:` tags — wire and table leaking inward
@@ -165,4 +206,5 @@ A use case is a **method on a service, not a package**. One package per endpoint
 | File | When to read |
 |------|-------------|
 | `references/interfaces.md` | Anything crossing a process boundary; deciding whether something deserves an interface; writing fakes; breaking an import cycle |
+| `references/concurrency.md` | Running work in the background or in parallel: worker pools, job queues, capping how many run at once, backpressure, draining on shutdown, goroutine leaks, `errgroup` |
 | `references/layout.md` | Standing up or restructuring a service: per-directory contracts, tier growth, `main.go` wiring, config, graceful shutdown, context deadlines/cancellation/values, test placement |
