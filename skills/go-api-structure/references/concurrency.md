@@ -33,7 +33,10 @@ Two terms used throughout:
 
 ## Where a pool lives
 
-`internal/jobs` — a **capability package**. It is not an adapter (nothing leaves the process)
+`internal/jobs` — a **capability package**: in-process machinery, named for what it does.
+(Adapters are also often named for a capability, to dodge library name collisions — the
+difference is not the name but whether the code leaves the process. This one does not.)
+It is not an adapter (nothing leaves the process)
 and not domain logic (it encodes no business rule). It is a reusable mechanism, so it sits
 beside them and is wired in `main` like everything else.
 
@@ -71,10 +74,14 @@ type Handler func(ctx context.Context, j Job) error
 
 type Option func(*Pool)
 
-// WithOnError registers a callback for handler errors and panics. Without it
-// the pool DISCARDS them: a pool cannot know whether an error is retryable,
-// fatal or expected, so it must not invent a policy — but it must not swallow
-// one silently either, which is what this option exists to prevent.
+// WithOnError registers a callback for handler errors, panics, and jobs
+// dropped by an expired Shutdown deadline. It is called from multiple worker
+// goroutines concurrently, so the callback must be safe for concurrent use.
+//
+// Without it the pool DISCARDS them. A pool cannot know whether an error is
+// retryable, fatal or expected, so it must not invent a policy — but it must
+// not swallow one silently either, which is what this option exists to
+// prevent.
 func WithOnError(fn func(j Job, err error)) Option {
 	return func(p *Pool) { p.onError = fn }
 }
@@ -97,7 +104,14 @@ type Pool struct {
 }
 
 // New starts exactly `workers` goroutines. They run until Shutdown.
+//
+// Panics on workers < 1: a pool with no workers would accept jobs into the
+// buffer and never run any of them, which is silent data loss wearing the
+// costume of a working queue. Fail at construction instead.
 func New(workers, queueSize int, h Handler, opts ...Option) *Pool {
+	if workers < 1 {
+		panic("jobs: New requires at least one worker")
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	p := &Pool{
 		queue:  make(chan Job, queueSize),
@@ -124,6 +138,12 @@ func (p *Pool) worker() {
 		case <-p.ctx.Done():
 			return
 		case j := <-p.queue:
+			// Re-check: cancellation may have landed while this job was being
+			// received. Starting work with a context that is already dead
+			// wastes effort and muddies the reason it failed.
+			if p.ctx.Err() != nil {
+				return
+			}
 			p.run(j)
 		case <-p.closed:
 			// Shutdown started. Drain whatever is still queued, then exit.
@@ -166,11 +186,15 @@ func (p *Pool) report(j Job, err error) {
 // It returns ctx.Err() if the caller gives up first, or ErrPoolClosed after
 // Shutdown.
 //
-// Racing Shutdown, the outcome is deliberately not guaranteed: if a worker
-// frees a slot at the same moment Shutdown fires, both select cases are ready
-// and Go picks one AT RANDOM. So a submission racing shutdown is sometimes
-// accepted and processed by the drain, sometimes rejected. The only promise is
-// that Submit does not block forever.
+// Racing Shutdown, WHICH outcome you get is deliberately not guaranteed: if a
+// worker frees a slot at the same moment Shutdown fires, both select cases are
+// ready and Go picks one AT RANDOM. So a submission racing shutdown is
+// sometimes accepted and sometimes rejected with ErrPoolClosed.
+//
+// What IS guaranteed: if Submit returns nil, the job runs. That is not free --
+// the last worker can exit between the closed-check and the send, so Shutdown
+// drains the queue again after the workers are gone (see drainResidual).
+// Without that, Submit would return success for work nobody would ever do.
 func (p *Pool) Submit(ctx context.Context, j Job) error {
 	select {
 	case <-p.closed:
@@ -225,12 +249,38 @@ func (p *Pool) Shutdown(ctx context.Context) error {
 
 	select {
 	case <-done:
-		p.cancel()
-		return nil
 	case <-ctx.Done():
 		p.cancel()
 		<-done
+		// Deadline blown: report it. Anything still queued is dropped, and
+		// reported so the loss is never silent.
+		p.drainResidual(true)
 		return ctx.Err()
+	}
+
+	// Workers have exited. A Submit that passed its closed-check just before
+	// close() may have landed a job in the buffer after the last worker left;
+	// without this, that job is accepted (Submit returns nil) and never runs.
+	p.drainResidual(false)
+	p.cancel()
+	return nil
+}
+
+// drainResidual empties the queue after the workers are gone. With report=true
+// the jobs are abandoned rather than run, and each is passed to OnError so a
+// dropped job is always observable.
+func (p *Pool) drainResidual(report bool) {
+	for {
+		select {
+		case j := <-p.queue:
+			if report {
+				p.report(j, fmt.Errorf("jobs: dropped, shutdown deadline expired: %v", j))
+				continue
+			}
+			p.run(j)
+		default:
+			return
+		}
 	}
 }
 ```
@@ -267,6 +317,8 @@ the loop pushes.
 | `sync.WaitGroup` | `Shutdown` returns while workers are still running; the process exits mid-job |
 | `sync.Once` on close | A second `Shutdown` closes an already-closed channel and panics |
 | **Never closing `queue`** | A `Submit` blocked on send would panic — sending on a closed channel is a panic, and you cannot check "is it closed" first without a race |
+| `drainResidual` after `wg.Wait` | A job accepted in the instant the last worker exits is queued and never run — `Submit` returned `nil` for work that silently vanishes |
+| Panic in `New` on `workers < 1` | A zero-worker pool accepts everything and runs nothing |
 | `recover` in `run` | One panicking job kills a worker permanently; after N panics the pool silently stops working |
 | Pool ctx (not request ctx) | Jobs get cancelled the instant the HTTP request that queued them returns |
 | Buffered `queue` | An unbuffered channel makes `Submit` wait for a free worker rather than a free slot — usually fine, but you lose the queue |

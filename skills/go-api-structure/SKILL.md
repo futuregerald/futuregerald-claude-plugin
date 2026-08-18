@@ -27,6 +27,8 @@ running example rather than in the abstract.
 | **Transport** | Code that speaks the wire protocol — HTTP handlers, JSON, status codes. Here: `internal/httpapi`. |
 | **Bounded context** | One coherent slice of the business (`accounts`, `billing`, `catalog`). Used to decide where one package should end and the next begin. |
 | **Consumer-declared interface** | An interface written in the package that *calls* it, rather than the package that implements it. This is what lets you point an arrow the other way. |
+| **DTO** | Data Transfer Object — a struct that exists only to shape data on the wire, with `json:` tags. Kept separate from domain types so the API's shape and the business model can change independently. |
+| **Capability package** | In-process machinery that is neither business rules nor an external system — a worker pool, a password hasher. Named for what it does. |
 | **Backpressure** | What happens when work arrives faster than you can process it: either the producer waits, or the work is refused. An unbounded queue is the one wrong answer. |
 
 ### Why "the import graph is the architecture" is a literal claim
@@ -152,10 +154,10 @@ Worked examples, fakes, and cycle-breaking: `references/interfaces.md`.
 | SQL, queries, row scanning, DB structs | `internal/sqlstore/` | `sqlstore` |
 | HTTP handler, decode, encode, status mapping | `internal/httpapi/` | `httpapi` |
 | Request/response DTO | `internal/httpapi/`, beside its handler | `httpapi` |
-| Third-party API client | `internal/<capability>/` | `payments` |
+| Third-party API client (an adapter — it leaves the process) | `internal/<capability>/` | `payments` |
 | Queue producer/consumer | `internal/eventbus/` | `eventbus` |
 | Background work, bounded concurrency, a job queue | `internal/jobs/` | `jobs` |
-| Password hashing, crypto, other pure-capability adapters | `internal/<capability>/` | `pwhash` |
+| Password hashing, crypto, other in-process capabilities | `internal/<capability>/` | `pwhash` |
 | Env parsing, flags, defaults | `internal/config/` | `config` |
 | Wiring, lifecycle, graceful shutdown | `cmd/<binary>/main.go` | `main` |
 | An atomic write across two stores | domain declares `Atomic`, adapter owns the tx | `accounts` + `sqlstore` |
@@ -176,9 +178,12 @@ A use case is a **method on a service, not a package**. One package per endpoint
   `accounts.User`, not `user.User`.
 - Never `util`, `common`, `helpers`, `shared`, `base`, `misc`, or an app-wide `models`. They
   have no boundary, so everything drifts into them.
-- Name adapters after the external system (`sqlstore`, `cache`, `objectstore`) — the thing that gets
-  swapped. When that collides with the library's own package name, name it for the capability
-  instead (`pwhash`, not `bcrypt`); see `references/layout.md`.
+- Name an adapter for **the external system it wraps** — that is the thing you swap. Use the
+  **capability** instead whenever the system's name would collide with its own client library's
+  package name, which in practice is most of them: `cache` not `redis`, `objectstore` not `s3`,
+  `payments` not `stripe`, `eventbus` not `kafka`, `pwhash` not `bcrypt`, `sqlstore` not
+  `sqlite`. Collision is the common case, so capability names are the common answer. See
+  `references/layout.md`.
 - Avoid `cmd/http/`; name binaries for what they are (`cmd/api/`), not their transport.
 
 ## Red flags
@@ -193,7 +198,9 @@ A use case is a **method on a service, not a package**. One package per endpoint
   (a long-lived component holding its own lifecycle context, cancelled by its `Shutdown`, is the
   documented exception — see `references/concurrency.md`)
 - A `Query`/`Exec` where a `QueryContext`/`ExecContext` exists — cancellation silently dropped
-- `context.WithTimeout` in a leaf function, overriding a budget the edge already set
+- `context.WithTimeout` in a leaf function, overriding a budget the edge already set — the
+  exception is deliberately bounding one outbound call so it cannot eat the whole budget
+  (see `references/layout.md`)
 - `context.WithValue` with a bare `string` key, or used to pass a dependency
 - A goroutine outliving its request while still holding the request's `ctx` — see
   `references/concurrency.md` for the bounded alternative

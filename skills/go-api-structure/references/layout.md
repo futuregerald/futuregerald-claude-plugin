@@ -73,11 +73,11 @@ vetted wrapper such as `github.com/alexedwards/argon2id`, **not** `golang.org/x/
 directly.
 
 That distinction matters more than it looks. `x/crypto/argon2` is a bare key-derivation
-function: it exposes `IDKey` and nothing else, leaving you to generate the salt, encode the
+function: it exposes `IDKey` (argon2id) and `Key` (argon2i) and nothing more, leaving you to generate the salt, encode the
 result, store the parameters, and compare in constant time. Each is silently wrong when done
 wrong — a fixed or missing salt, `==` instead of `subtle.ConstantTimeCompare`, or parameters
 you never stored and therefore can never tune. bcrypt's `GenerateFromPassword` /
-`ComparePasswordAndHash` handle all of that for you, which is why bcrypt remains perfectly
+`CompareHashAndPassword` handle all of that for you, which is why bcrypt remains perfectly
 serviceable and is not a bug to fix on sight.
 
 The point of `accounts.Hasher` is that the choice stays swappable: migrating means adding a
@@ -148,7 +148,8 @@ type DBConfig struct {
 	// See "Pool size and DSN are engine-specific" below — without
 	// busy_timeout, concurrent writes fail rather than wait.
 	DSN string `env:"DATABASE_URL,required"`
-	// 25 suits Postgres/MySQL. SQLite wants 1. Engine-specific, always.
+	// 25 suits Postgres/MySQL. For SQLite, 25 is fine WITH the busy_timeout
+	// pragma above; without it, use 1. Engine-specific, always.
 	MaxOpenConns int `env:"DB_MAX_OPEN_CONNS" envDefault:"25"`
 }
 
@@ -178,8 +179,12 @@ SQLite allows exactly one writer. Without `busy_timeout` a blocked writer fails 
 instead of waiting, and `SQLITE_BUSY` is not a unique-violation, so it surfaces as a 500.
 `journal_mode(WAL)` additionally lets readers proceed during a write.
 
-Postgres and MySQL have none of these constraints and genuinely want a pool of ~25. The rule
-is that **pool size and DSN options travel with the engine, not with the code** — so treat
+So there are two working SQLite configurations, and the benchmark above shows both: keep the
+pool at 25 **and** set `busy_timeout` (preferred — WAL still gives you concurrent readers), or
+drop `SetMaxOpenConns` to 1 and serialise everything. What does not work is the default of one
+without the other. Postgres and MySQL have none of these constraints and genuinely want ~25.
+
+The rule is that **pool size and DSN options travel with the engine, not with the code** — so treat
 them as configuration, not as something to copy from another service.
 
 One more trap, for tests: an in-memory SQLite DSN **without** `cache=shared` gives every
@@ -440,8 +445,13 @@ for _, item := range items {
 
 **Distinguish the two cancellation causes when it matters.** `errors.Is(err, context.Canceled)`
 means the caller went away — usually not worth logging as an error. `context.DeadlineExceeded`
-means you were too slow, which is. Mapping both to 500 hides a real signal; a cancelled
-request is better logged at info and answered with 499/no response at all.
+means you were too slow, which is. Mapping both to 500 hides a real signal.
+
+For a cancelled request, return without writing: the client has gone, so there is nobody to
+read a body. Be aware that Go then sends an implicit **200** — a handler that returns without
+calling `WriteHeader` cannot produce "no status at all". If you need cancelled requests
+excluded from success metrics, record 499 (nginx's client-closed convention) in your logging
+or metrics middleware, not on the wire.
 
 **Do not use the request context for work that outlives the request.** Firing a goroutine with
 the request's `ctx` means it is cancelled the moment the response is written. Detach
