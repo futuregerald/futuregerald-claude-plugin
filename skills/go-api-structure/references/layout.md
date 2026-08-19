@@ -100,7 +100,9 @@ auth extraction.
 - **May import:** domain packages.
 - **May not import:** adapters. A handler reaching for `sqlstore` has skipped the domain, and
   the business rule it skipped will be reimplemented, differently, elsewhere.
-- Request/response types live here with `json:` tags. Map to and from domain types explicitly.
+
+What goes inside the package — handlers, middleware, encoding, validation, health probes and
+input hardening — is [`transport.md`](transport.md).
 
 ### `migrations/`
 
