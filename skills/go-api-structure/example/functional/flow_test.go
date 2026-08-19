@@ -106,9 +106,15 @@ func newStack(t *testing.T) *stack {
 	return &stack{db: db, handler: srv.Handler()}
 }
 
+// httptest.NewRequest sets no Content-Type, so a fixture that does not add one
+// never gets past the media-type guard and never reaches the code it was
+// written to exercise. The tests that assert a specific status catch that
+// immediately; the ones that assert only "not a 500" would keep passing on a
+// 415 and quietly cover nothing.
 func (s *stack) register(t *testing.T, body string) *httptest.ResponseRecorder {
 	t.Helper()
 	req := httptest.NewRequest(http.MethodPost, "/users", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	s.handler.ServeHTTP(rec, req)
 	return rec
@@ -352,6 +358,7 @@ func TestCancelledRequestIsNotAServerError(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/users",
 		strings.NewReader(`{"email":"gone@example.com","password":"pw"}`)).WithContext(ctx)
+	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	s.handler.ServeHTTP(rec, req)
 
@@ -402,6 +409,7 @@ func TestDuplicateLosingTheRaceIsA409NotA500(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/users",
 		strings.NewReader(`{"email":"race2@example.com","password":"pw"}`))
+	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
 

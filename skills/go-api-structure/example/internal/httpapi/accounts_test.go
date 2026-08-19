@@ -30,9 +30,23 @@ func (f fakeRegistrar) Register(ctx context.Context, email, password string) (ac
 	return f.user, nil
 }
 
+// post sends what a real client sends: a JSON body declared as JSON. Fixtures
+// that omit the header do not exercise the handler at all -- they stop at the
+// media-type guard -- so the default has to be the honest one.
 func post(t *testing.T, h http.Handler, body string) *httptest.ResponseRecorder {
 	t.Helper()
+	return postAs(t, h, "application/json", body)
+}
+
+// postAs is post with the Content-Type under test's control. An empty
+// contentType sends no header at all, which is the bypass the guard has to
+// refuse and which httptest.NewRequest produces by default.
+func postAs(t *testing.T, h http.Handler, contentType, body string) *httptest.ResponseRecorder {
+	t.Helper()
 	req := httptest.NewRequest(http.MethodPost, "/users", strings.NewReader(body))
+	if contentType != "" {
+		req.Header.Set("Content-Type", contentType)
+	}
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	return rec
@@ -124,6 +138,52 @@ func TestRegisterRejectsTrailingJSON(t *testing.T) {
 		`{"email":"a@example.com","password":"pw"}{"email":"b@example.com"}`)
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("got %d, want 400", rec.Code)
+	}
+}
+
+// The media-type guard, and why it is a 415 rather than a 400. Nothing is
+// malformed about this request -- it is syntactically fine and the server
+// simply does not speak the format it declares. Same distinction the 413 makes:
+// the body was well-formed, just too big.
+func TestRegisterRejectsNonJSONContentType(t *testing.T) {
+	rec := postAs(t, handleRegister(fakeRegistrar{}), "text/plain",
+		`{"email":"a@example.com","password":"pw"}`)
+	if rec.Code != http.StatusUnsupportedMediaType {
+		t.Fatalf("got %d, want 415 (body %s)", rec.Code, rec.Body.String())
+	}
+}
+
+// A guard that rejected only a WRONG Content-Type would be bypassed by sending
+// none, which is the first thing anyone tries. So the header is required, not
+// merely checked when present.
+func TestRegisterRejectsMissingContentType(t *testing.T) {
+	rec := postAs(t, handleRegister(fakeRegistrar{}), "",
+		`{"email":"a@example.com","password":"pw"}`)
+	if rec.Code != http.StatusUnsupportedMediaType {
+		t.Fatalf("got %d, want 415 (body %s)", rec.Code, rec.Body.String())
+	}
+}
+
+// Parameters on the media type are legal and extremely common. Comparing the
+// raw header against "application/json" would 415 every client that sends a
+// charset -- which is why the guard parses instead of comparing strings.
+func TestRegisterAcceptsContentTypeParameters(t *testing.T) {
+	svc := fakeRegistrar{user: accounts.User{ID: "user-1", Email: "a@example.com"}}
+	rec := postAs(t, handleRegister(svc), "application/json; charset=utf-8",
+		`{"email":"a@example.com","password":"pw"}`)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("got %d, want 201 (body %s)", rec.Code, rec.Body.String())
+	}
+}
+
+// Media types are case-insensitive (RFC 9110), so this is a valid JSON request
+// and must be served, not refused.
+func TestRegisterContentTypeIsCaseInsensitive(t *testing.T) {
+	svc := fakeRegistrar{user: accounts.User{ID: "user-1", Email: "a@example.com"}}
+	rec := postAs(t, handleRegister(svc), "APPLICATION/JSON",
+		`{"email":"a@example.com","password":"pw"}`)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("got %d, want 201 (body %s)", rec.Code, rec.Body.String())
 	}
 }
 

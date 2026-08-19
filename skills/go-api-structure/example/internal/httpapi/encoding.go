@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
+	"strings"
 )
 
 // maxBodyBytes caps every decoded request body. Without it a single client can
@@ -13,12 +15,18 @@ import (
 // gigabytes.
 const maxBodyBytes = 1 << 20 // 1 MiB
 
+// errUnsupportedMediaType is a sentinel rather than a status returned straight
+// from decode, so that every way decode can fail is still one error value and
+// decodeStatus stays the single place that decides what the client is told.
+var errUnsupportedMediaType = errors.New("body must be declared as application/json")
+
 // decode reads exactly one JSON value of type T from the request.
 //
-// The three guards are each a real failure seen in production: an unbounded
-// body (resource exhaustion), an unknown field (a client sending `admin:true`
-// and believing it worked), and trailing data (two objects concatenated, of
-// which only the first is honoured).
+// The four guards are each a real failure seen in production: a body that is
+// not JSON at all (a form post, or a client that forgot the header), an
+// unbounded body (resource exhaustion), an unknown field (a client sending
+// `admin:true` and believing it worked), and trailing data (two objects
+// concatenated, of which only the first is honoured).
 //
 // Validation is deliberately NOT done here -- see the note below on why the
 // Validator interface is not used with handler-local request types.
@@ -29,6 +37,28 @@ const maxBodyBytes = 1 << 20 // 1 MiB
 // returns. A plain `any` would force every caller to allocate and type-assert.
 func decode[T any](w http.ResponseWriter, r *http.Request) (T, error) {
 	var v T
+
+	// Checked first, before the body is so much as wrapped: refusing a format
+	// the server does not speak should not require reading the body to find
+	// out. The cap below bounds that cost but does not avoid it.
+	//
+	// The header is REQUIRED, not merely checked when present. A guard that
+	// rejects `text/plain` while accepting a request with no Content-Type at
+	// all is bypassed by dropping the header, which makes it decorative.
+	//
+	// mime.ParseMediaType rather than a comparison against the raw header:
+	// `application/json; charset=utf-8` is legal and common, and a string
+	// compare would refuse it. Parsing also rejects an empty header for us --
+	// there is no media type to parse -- which is the missing-header case.
+	// ParseMediaType lowercases what it returns, so EqualFold is not what makes
+	// this work; it is here to keep the RFC 9110 rule that media types are
+	// case-insensitive visible at the comparison rather than resting on a
+	// normalisation happening out of sight.
+	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err != nil || !strings.EqualFold(mediaType, "application/json") {
+		return v, errUnsupportedMediaType
+	}
+
 	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
 
 	dec := json.NewDecoder(r.Body)
@@ -79,9 +109,17 @@ func encode(w http.ResponseWriter, status int, v any) error {
 	return nil
 }
 
-// decodeStatus maps a decode failure to the status the client deserves.
-// An oversized body is 413, not 400: the request was well-formed, just too big.
+// decodeStatus maps a decode failure to the status the client deserves. Both
+// of the specific cases exist because "malformed body" would be a lie:
+//
+//	415 the request is syntactically fine; the server does not speak the format
+//	    it declares. Nothing about it is malformed, and telling the client it is
+//	    sends them looking for a bug in a body that is correct.
+//	413 the body was well-formed, just too big.
 func decodeStatus(err error) (int, string) {
+	if errors.Is(err, errUnsupportedMediaType) {
+		return http.StatusUnsupportedMediaType, "body must be application/json"
+	}
 	var mbe *http.MaxBytesError
 	if errors.As(err, &mbe) {
 		return http.StatusRequestEntityTooLarge, "request body too large"
