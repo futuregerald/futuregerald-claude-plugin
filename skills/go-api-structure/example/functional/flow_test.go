@@ -76,7 +76,7 @@ func newStack(t *testing.T) *stack {
 	}
 	t.Cleanup(func() { _ = db.Close() })
 
-	if _, err := db.Exec(schema); err != nil {
+	if _, err := db.ExecContext(t.Context(), schema); err != nil {
 		t.Fatalf("schema: %v", err)
 	}
 
@@ -106,14 +106,25 @@ func newStack(t *testing.T) *stack {
 	return &stack{db: db, handler: srv.Handler()}
 }
 
-// httptest.NewRequest sets no Content-Type, so a fixture that does not add one
-// never gets past the media-type guard and never reaches the code it was
-// written to exercise. The tests that assert a specific status catch that
-// immediately; the ones that assert only "not a 500" would keep passing on a
-// 415 and quietly cover nothing.
+// A request carries no Content-Type unless one is set, so a fixture that does
+// not add one never gets past the media-type guard and never reaches the code
+// it was written to exercise. The tests that assert a specific status catch
+// that immediately; the ones that assert only "not a 500" would keep passing on
+// a 415 and quietly cover nothing.
+//
+// register takes t.Context() -- the request context a test has no opinion about
+// should still be the test's own, so it is cancelled when the test ends rather
+// than outliving it. The one test that DOES have an opinion (a client that has
+// already hung up) calls registerCtx instead; that is why the context is a
+// parameter of the shared helper rather than hardcoded inside it.
 func (s *stack) register(t *testing.T, body string) *httptest.ResponseRecorder {
 	t.Helper()
-	req := httptest.NewRequest(http.MethodPost, "/users", strings.NewReader(body))
+	return s.registerCtx(t.Context(), t, body)
+}
+
+func (s *stack) registerCtx(ctx context.Context, t *testing.T, body string) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequestWithContext(ctx, http.MethodPost, "/users", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	s.handler.ServeHTTP(rec, req)
@@ -123,14 +134,15 @@ func (s *stack) register(t *testing.T, body string) *httptest.ResponseRecorder {
 func (s *stack) get(t *testing.T, path string) *httptest.ResponseRecorder {
 	t.Helper()
 	rec := httptest.NewRecorder()
-	s.handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+	s.handler.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, path, nil))
 	return rec
 }
 
 func (s *stack) countUsers(t *testing.T, email string) int {
 	t.Helper()
 	var n int
-	if err := s.db.QueryRow(`SELECT COUNT(*) FROM users WHERE email = ?`, email).Scan(&n); err != nil {
+	if err := s.db.QueryRowContext(t.Context(),
+		`SELECT COUNT(*) FROM users WHERE email = ?`, email).Scan(&n); err != nil {
 		t.Fatalf("count: %v", err)
 	}
 	return n
@@ -231,7 +243,7 @@ func TestMalformedBodyIsRejectedAndWritesNothing(t *testing.T) {
 	}
 
 	var n int
-	if err := s.db.QueryRow(`SELECT COUNT(*) FROM users`).Scan(&n); err != nil {
+	if err := s.db.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM users`).Scan(&n); err != nil {
 		t.Fatalf("count: %v", err)
 	}
 	if n != 0 {
@@ -302,7 +314,8 @@ func TestPasswordNeverStoredOrReturnedInPlaintext(t *testing.T) {
 	}
 
 	var hash string
-	if err := s.db.QueryRow(`SELECT password_hash FROM users WHERE email = ?`,
+	if err := s.db.QueryRowContext(t.Context(),
+		`SELECT password_hash FROM users WHERE email = ?`,
 		"p@example.com").Scan(&hash); err != nil {
 		t.Fatalf("select: %v", err)
 	}
@@ -353,14 +366,13 @@ func TestPartialWriteIsRolledBackEntirely(t *testing.T) {
 func TestCancelledRequestIsNotAServerError(t *testing.T) {
 	s := newStack(t)
 
-	ctx, cancel := context.WithCancel(context.Background())
+	// Derived from the test's own context, then cancelled immediately: the
+	// already-dead context IS the fixture here, so this is the one caller that
+	// must not take t.Context() as-is.
+	ctx, cancel := context.WithCancel(t.Context())
 	cancel() // client is already gone
 
-	req := httptest.NewRequest(http.MethodPost, "/users",
-		strings.NewReader(`{"email":"gone@example.com","password":"pw"}`)).WithContext(ctx)
-	req.Header.Set("Content-Type", "application/json")
-	rec := httptest.NewRecorder()
-	s.handler.ServeHTTP(rec, req)
+	rec := s.registerCtx(ctx, t, `{"email":"gone@example.com","password":"pw"}`)
 
 	if rec.Code == http.StatusInternalServerError {
 		t.Error("a client disconnect was reported as a 500")
@@ -387,7 +399,13 @@ type raceHasher struct {
 
 func (h *raceHasher) Hash(plain string) (string, error) {
 	h.once.Do(func() {
-		_, _ = h.db.Exec(
+		// accounts.Hasher is deliberately context-free -- hashing is CPU work,
+		// not I/O -- so this test-only side effect has no request context in
+		// scope to propagate and Background is the honest answer. Reaching for
+		// a context.Context field on the fixture to fake one would store a
+		// context in a struct to satisfy a linter, which is the trade this
+		// example argues against.
+		_, _ = h.db.ExecContext(context.Background(),
 			`INSERT INTO users (id, email, password_hash, created_at) VALUES (?, ?, ?, ?)`,
 			"interloper", "race2@example.com", "h", time.Now())
 	})
@@ -407,7 +425,7 @@ func TestDuplicateLosingTheRaceIsA409NotA500(t *testing.T) {
 		Addr: "127.0.0.1:0", RequestTimeout: 5 * time.Second},
 		slog.New(slog.DiscardHandler), svc)
 
-	req := httptest.NewRequest(http.MethodPost, "/users",
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/users",
 		strings.NewReader(`{"email":"race2@example.com","password":"pw"}`))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()

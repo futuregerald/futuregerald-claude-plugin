@@ -36,7 +36,7 @@ func onDisk(t *testing.T, pragmas string) *sql.DB {
 	t.Cleanup(func() { _ = db.Close() })
 	db.SetMaxOpenConns(25) // the documented pool size
 
-	if _, err := db.Exec(schema); err != nil {
+	if _, err := db.ExecContext(t.Context(), schema); err != nil {
 		t.Fatalf("schema: %v", err)
 	}
 	return db

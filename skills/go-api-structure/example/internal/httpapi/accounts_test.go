@@ -43,7 +43,8 @@ func post(t *testing.T, h http.Handler, body string) *httptest.ResponseRecorder 
 // refuse and which httptest.NewRequest produces by default.
 func postAs(t *testing.T, h http.Handler, contentType, body string) *httptest.ResponseRecorder {
 	t.Helper()
-	req := httptest.NewRequest(http.MethodPost, "/users", strings.NewReader(body))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/users",
+		strings.NewReader(body))
 	if contentType != "" {
 		req.Header.Set("Content-Type", contentType)
 	}
@@ -272,7 +273,7 @@ func TestNewServerRoutesPostUsers(t *testing.T) {
 	}
 
 	// A route the mux should not serve.
-	req := httptest.NewRequest(http.MethodGet, "/users", nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/users", nil)
 	rec2 := httptest.NewRecorder()
 	srv.http.Handler.ServeHTTP(rec2, req)
 	if rec2.Code == http.StatusCreated {

@@ -35,7 +35,7 @@ func newDB(t *testing.T) *sql.DB {
 	db.SetMaxOpenConns(1)
 	t.Cleanup(func() { _ = db.Close() })
 
-	if _, err := db.Exec(schema); err != nil {
+	if _, err := db.ExecContext(t.Context(), schema); err != nil {
 		t.Fatalf("schema: %v", err)
 	}
 	return db

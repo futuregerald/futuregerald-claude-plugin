@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"crypto/rand"
+	"errors"
 	"log/slog"
 	"net/http"
 	"runtime/debug"
@@ -102,7 +103,13 @@ func recoverPanic(log *slog.Logger) func(http.Handler) http.Handler {
 				// abandon a response deliberately; the server expects to catch
 				// it and drop the connection silently. Swallowing it here would
 				// convert an intentional abort into a bogus 500.
-				if rec == http.ErrAbortHandler {
+				//
+				// recover() hands back an any, so `rec == http.ErrAbortHandler`
+				// would compare interface values and miss a panic value that
+				// WRAPS the sentinel. Assert to error first, then errors.Is;
+				// re-panic with rec, not err, so the value the server catches
+				// and the stack it unwinds are the original ones.
+				if err, ok := rec.(error); ok && errors.Is(err, http.ErrAbortHandler) {
 					panic(rec)
 				}
 

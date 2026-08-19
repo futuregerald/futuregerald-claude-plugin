@@ -23,7 +23,7 @@ import (
 func get(t *testing.T, h http.Handler, path string) *httptest.ResponseRecorder {
 	t.Helper()
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+	h.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, path, nil))
 	return rec
 }
 
@@ -108,7 +108,9 @@ func TestReadyzReportsEveryCheckAndHidesErrorDetail(t *testing.T) {
 // promptly even if the checks below ran forever. This asserts the handler's own
 // behaviour.
 func TestReadyzStopsCheckingWhenTheRequestIsCancelled(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	// The request context is the fixture: this test cancels it by hand to prove
+	// the handler stops probing. t.Context() is the parent, not a substitute.
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	dialing := make(chan struct{})
@@ -125,7 +127,7 @@ func TestReadyzStopsCheckingWhenTheRequestIsCancelled(t *testing.T) {
 		}},
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/readyz", nil).WithContext(ctx)
+	req := httptest.NewRequestWithContext(ctx, http.MethodGet, "/readyz", nil)
 	done := make(chan struct{})
 	go func() {
 		defer close(done)

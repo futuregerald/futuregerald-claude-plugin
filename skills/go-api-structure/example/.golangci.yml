@@ -1,0 +1,91 @@
+# A floor, not a ceiling. Every linter here maps to a red flag the skill
+# already states in prose -- which is both the reason it is enabled and the
+# test for whether it belongs. A linter that catches nothing this skill
+# teaches is noise, however popular it is.
+#
+# The value of the list is that it moves a rule from "something you have to
+# remember during review" to "something CI refuses". The red-flag list in
+# SKILL.md exists for the rules a linter cannot see.
+version: "2"
+
+linters:
+  # The standard set (errcheck, govet, ineffassign, staticcheck, unused) is
+  # already on by default; the additions below are the ones that carry this
+  # skill's specific opinions.
+  enable:
+    # Unhandled errors. The single most common way a Go service loses the
+    # information it needed to explain an incident.
+    - errcheck
+
+    # Suspicious constructs, including lost struct tags and printf mismatches.
+    - govet
+
+    # Correctness and simplification, and the successor to golint/gosimple.
+    - staticcheck
+
+    # Security: hardcoded credentials, weak randomness, unchecked file paths.
+    # Noisy in some codebases; in a service that handles registration it earns
+    # its place.
+    - gosec
+
+    # errors.Is/As instead of == and type assertions. This skill's error
+    # handling depends on wrapping surviving, and a == comparison against a
+    # wrapped error silently stops matching the moment someone adds %w.
+    - errorlint
+
+    # Requests built without a context. Directly enforces the ctx-first rule.
+    - noctx
+
+    # A context.Context stored in a struct field rather than passed as the
+    # first argument. The exact inversion the layout reference argues against.
+    - containedctx
+
+    # Response bodies never closed. A leak that looks like nothing until the
+    # service runs out of file descriptors under load.
+    - bodyclose
+
+    # Returning nil after checking a non-nil error -- an error detected, then
+    # discarded. Reads as correct and is why the caller sees success.
+    - nilerr
+
+  exclusions:
+    rules:
+      # Test files legitimately do things production code should not: ignore
+      # errors on cleanup, use weak randomness for fixtures, and hardcode
+      # credential-shaped strings. Flagging those trains people to add
+      # //nolint, which is worse than the finding.
+      - path: _test\.go$
+        linters:
+          - gosec
+
+      # The one sanctioned exception in this module.
+      #
+      # containedctx flags ANY context.Context struct field. The rule this skill
+      # actually teaches is narrower: do not store a REQUEST context, because
+      # its deadline then leaks into work that never asked for one. A long-lived
+      # component owning its OWN lifecycle context -- created at construction,
+      # cancelled by its own Stop -- is the documented exception, and
+      # internal/jobs.Pool is the only place in this module that does it.
+      #
+      # Scoped to that directory rather than disabled outright: the transport
+      # package is exactly where containedctx earns its keep, and a request
+      # context parked on a handler struct there must still fail the build.
+      #
+      # This is a config rule and not a //nolint on purpose. The code in
+      # internal/jobs is presented as exemplary, and a suppression comment
+      # sitting in exemplary code teaches the reader that suppression comments
+      # are how you deal with a linter you disagree with. Recording the
+      # disagreement here keeps the reason reviewable in one place and keeps the
+      # example free of pragmas people would copy along with the pattern.
+      - path: internal/jobs/
+        linters:
+          - containedctx
+
+# golangci-lint truncates by default (max-same-issues: 3, max-issues-per-linter:
+# 50), so a run can print a short list and still be hiding findings of exactly
+# the same kind. For a gate whose whole claim is "this example passes its own
+# linter", a truncated report is worse than no report -- it turns "0 issues"
+# into a statement about the display limit. Both limits are lifted.
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

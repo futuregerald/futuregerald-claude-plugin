@@ -90,7 +90,10 @@ func TestSlowHandlerIsTimedOutAndContextCancelled(t *testing.T) {
 	})
 
 	h := http.TimeoutHandler(slow, 30*time.Millisecond, `{"error":"request timeout"}`)
-	req := httptest.NewRequest(http.MethodGet, "/slow", nil)
+	// t.Context() is the right parent even here: TimeoutHandler derives its own
+	// 30ms deadline from the request context, so the cancellation under test is
+	// still produced by the handler chain, not by the fixture.
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/slow", nil)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 

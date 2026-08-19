@@ -35,7 +35,11 @@ func TestRunDrainsInFlightRequestOnCancel(t *testing.T) {
 	srv := NewServer(ServerConfig{Addr: "127.0.0.1:0", RequestTimeout: 5 * time.Second},
 		slog.New(slog.DiscardHandler), svc)
 
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	// ListenConfig's context bounds the BIND only -- once the listener exists it
+	// is unaffected by that context -- so t.Context() here cannot interfere with
+	// the shutdown sequence this test is actually about.
+	var lc net.ListenConfig
+	ln, err := lc.Listen(t.Context(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("listen: %v", err)
 	}
@@ -47,10 +51,26 @@ func TestRunDrainsInFlightRequestOnCancel(t *testing.T) {
 	runErr := make(chan error, 1)
 	go func() { runErr <- srv.Run(ctx) }()
 
+	// Built here rather than inside the goroutine so a construction failure is a
+	// t.Fatalf instead of an error on respErr, which the assertion below would
+	// misreport as a severed connection.
+	//
+	// t.Context() is deliberate: this request must be DRAINED, not cancelled.
+	// The server's own ctx (cancelled at line "simulates SIGTERM") must be the
+	// only cancellation in play, and t.Context() outlives the <-respErr wait.
+	// The Content-Type is load-bearing -- without it the media-type guard
+	// answers 415, blockingRegistrar never runs, and <-svc.started deadlocks.
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodPost,
+		"http://"+ln.Addr().String()+"/users",
+		strings.NewReader(`{"email":"a@example.com","password":"pw"}`))
+	if err != nil {
+		t.Fatalf("build request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
 	respErr := make(chan error, 1)
 	go func() {
-		resp, err := http.Post("http://"+ln.Addr().String()+"/users",
-			"application/json", strings.NewReader(`{"email":"a@example.com","password":"pw"}`))
+		resp, err := http.DefaultClient.Do(req)
 		if err == nil {
 			_ = resp.Body.Close()
 		}

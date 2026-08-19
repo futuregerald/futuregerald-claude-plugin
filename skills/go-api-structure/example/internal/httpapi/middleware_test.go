@@ -25,7 +25,8 @@ import (
 func TestHandlerIncludesMiddleware(t *testing.T) {
 	srv := NewServer(ServerConfig{Addr: ":0"}, slog.New(slog.DiscardHandler), fakeRegistrar{})
 	rec := httptest.NewRecorder()
-	srv.Handler().ServeHTTP(rec, httptest.NewRequest("GET", "/no-such-route", nil))
+	srv.Handler().ServeHTTP(rec,
+		httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/no-such-route", nil))
 	if rec.Header().Get("X-Request-Id") == "" {
 		t.Fatal("Handler() did not include the request-ID middleware")
 	}
@@ -37,7 +38,8 @@ func TestRecoverPanicReturns500AndLogs(t *testing.T) {
 	boom := http.HandlerFunc(func(http.ResponseWriter, *http.Request) { panic("boom") })
 
 	rec := httptest.NewRecorder()
-	recoverPanic(log)(boom).ServeHTTP(rec, httptest.NewRequest("GET", "/", nil))
+	recoverPanic(log)(boom).ServeHTTP(rec,
+		httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", nil))
 
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("got %d, want 500", rec.Code)
