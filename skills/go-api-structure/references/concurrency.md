@@ -387,38 +387,69 @@ polling can do — polling can see that submissions stopped, not that they stopp
 number:
 
 ```go
-// fragment — see TestSubmitBlocksWhenPoolIsSaturated for the whole test
-synctest.Test(t, func(t *testing.T) {
-	p := New(2, 3, func(context.Context, Job) error {
-		time.Sleep(time.Second) // virtual: instant
-		return nil
-	})
+// fragment — internal/jobs/pool_test.go, verbatim. Only the numbered
+// comment above the function in the source is elided; imports are not shown.
+func TestSubmitBlocksWhenPoolIsSaturated(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		const (
+			workers   = 2
+			queueSize = 3
+			jobTime   = time.Second
+			total     = 12
+			// One slot per busy worker plus one per queue slot. Past this the
+			// pool has nowhere to put a job, and Submit's whole contract is
+			// that it waits rather than growing without bound.
+			capacity = workers + queueSize
+		)
 
-	var accepted atomic.Int64
-	go func() {
-		for i := range 12 {
-			if err := p.Submit(context.Background(), i); err != nil {
-				t.Errorf("Submit(%d): %v", i, err)
-				return
+		var processed atomic.Int64
+		p := New(workers, queueSize, func(context.Context, Job) error {
+			time.Sleep(jobTime) // virtual time: instant
+			processed.Add(1)
+			return nil
+		})
+
+		var accepted atomic.Int64
+		go func() {
+			for i := range total {
+				if err := p.Submit(context.Background(), i); err != nil {
+					t.Errorf("Submit(%d): %v", i, err)
+					return
+				}
+				accepted.Add(1)
 			}
-			accepted.Add(1)
+		}()
+
+		// Everything is now durably blocked: both workers asleep in a handler,
+		// the submitter parked on a full queue. Nothing is merely "not done
+		// yet", so this count is the real ceiling and not a snapshot of a race.
+		synctest.Wait()
+		if got := accepted.Load(); got != capacity {
+			t.Fatalf("accepted %d jobs before blocking, want exactly %d — the queue is not bounded", got, capacity)
 		}
-	}()
 
-	// Both workers are asleep in a handler and the submitter is parked on a
-	// full queue. 2 in flight + 3 queued, and the 6th Submit is blocked.
-	synctest.Wait()
-	if got := accepted.Load(); got != 5 {
-		t.Fatalf("accepted %d before blocking, want 5 — the queue is not bounded", got)
-	}
+		// Each completed job frees exactly one slot, so every jobTime lets
+		// exactly `workers` more submissions through. Backpressure is not only
+		// that it stopped — it is the rate.
+		for tick := 1; accepted.Load() < total; tick++ {
+			if tick > total {
+				t.Fatalf("only %d of %d accepted after %d ticks — the pool stopped draining", accepted.Load(), total, tick)
+			}
+			time.Sleep(jobTime)
+			synctest.Wait()
+			if got, want := accepted.Load(), min(int64(capacity+tick*workers), int64(total)); got != want {
+				t.Fatalf("after %v, accepted %d, want %d", time.Duration(tick)*jobTime, got, want)
+			}
+		}
 
-	// One second of virtual time frees exactly one slot per worker.
-	time.Sleep(time.Second)
-	synctest.Wait()
-	if got := accepted.Load(); got != 7 {
-		t.Fatalf("accepted %d, want 7", got)
-	}
-})
+		if err := p.Shutdown(context.Background()); err != nil {
+			t.Fatalf("Shutdown: %v", err)
+		}
+		if got := processed.Load(); got != total {
+			t.Errorf("processed %d of %d — applying backpressure must not mean losing work", got, total)
+		}
+	})
+}
 ```
 
 **"Durably blocked" is narrower than "blocked", and this is the whole gotcha.** Blocked in a
@@ -495,13 +526,17 @@ the test as a deadlock.
 
 Testing an HTTP client or server under virtual time does not work yet. `httptest.NewServer`
 listens on real loopback, and network I/O is not durably blocking — the bubble never goes idle,
-so the clock never moves. **`httptest.NewTestServer`, which serves over an in-memory connection
-instead, lands in Go 1.27.** This module targets `go 1.25.0`, so it is not used here.
+so the clock never moves. **As of Go 1.26, `net/http/httptest` offers no server that serves
+over an in-memory connection** — which is what a bubbled HTTP test needs. Adding one is the
+announced direction, so check the `httptest` documentation for the toolchain you are actually
+on rather than trusting a version number written here. This module targets `go 1.25.0` and uses
+no such server.
 
-Until you are on 1.27 the options are `net.Pipe` for a hand-built connection (this is what the
-`testing/synctest` package documentation's own HTTP example does), or skipping the transport
-entirely and calling the handler with `httptest.NewRecorder` — which is what every test in
-`internal/httpapi` does anyway, and which is faster and clearer regardless of Go version.
+Until your toolchain has one, the options are `net.Pipe` for a hand-built connection (this is
+what the `testing/synctest` package documentation's own HTTP example does), or skipping the
+transport entirely and calling the handler with `httptest.NewRecorder` — which is what every
+test in `internal/httpapi` does anyway, and which is faster and clearer regardless of Go
+version.
 
 ## Classic bugs
 

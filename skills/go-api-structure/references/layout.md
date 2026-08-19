@@ -285,40 +285,28 @@ component the whole dependency struct instead of its two real dependencies.
 
 ### `internal/httpapi/server.go`
 
-Fragment, not a complete file. It keeps the shutdown path and elides what this section does
-not argue about — readiness validation, the logger default, the middleware bodies. The file as
-it stands is [`example/internal/httpapi/server.go`](../example/internal/httpapi/server.go); it
-forms `package httpapi` **together with** `accounts.go` from `interfaces.md`, where `registrar`
-and `handleRegister` are declared, so neither is standalone.
+Fragment, not a complete file. It keeps the two timeout defaults and the shutdown path, and
+elides everything the transport package argues for itself — the `ServerConfig` and
+`ReadinessCheck` declarations, the logger default and the nil-check panic, the cloned checks,
+the route table, the middleware stack, and `Handler()`. Those are in
+[`transport.md`](transport.md#the-transport-composition-root).
+
+`package httpapi` is not one file, and the complete
+[`example/internal/httpapi/server.go`](../example/internal/httpapi/server.go) is not standalone
+either: it needs `routes.go` for `addRoutes`, `middleware.go` for `chain`, `recoverPanic`,
+`requestID` and `requestLog`, and `accounts.go` for `registrar` and `handleRegister`. Read the
+[directory](../example/internal/httpapi/), not any one file.
 
 ```go
-// fragment — internal/httpapi/server.go, trimmed to the shutdown path.
-// Elisions are marked. The file as it actually stands, middleware and all,
-// is example/internal/httpapi/server.go.
-
-// ServerConfig is declared here rather than imported from internal/config,
-// for the same reason interfaces are declared by their consumer: this package
-// states what it needs, and main maps the app config onto it. httpapi stays
-// independent of how configuration happens to be loaded.
-type ServerConfig struct {
-	Addr            string
-	RequestTimeout  time.Duration
-	ShutdownTimeout time.Duration
-}
-
-// ReadinessCheck reports whether one dependency is usable right now.
-// Name appears in the /readyz body so a failing check is identifiable.
-type ReadinessCheck struct {
-	Name  string
-	Check func(context.Context) error
-}
+// fragment — internal/httpapi/server.go, trimmed to the timeout defaults and
+// the shutdown path. Elisions are marked. The complete file, middleware and
+// all, is example/internal/httpapi/server.go.
 
 type Server struct {
 	http            *http.Server
 	shutdownTimeout time.Duration
 	listen          func(network, addr string) (net.Listener, error)
-	log             *slog.Logger
-	ready           []ReadinessCheck
+	// Elided: the logger and the readiness checks.
 }
 
 const (
@@ -327,8 +315,10 @@ const (
 )
 
 func NewServer(cfg ServerConfig, log *slog.Logger, svc registrar, ready ...ReadinessCheck) *Server {
-	// Elided: a nil logger falls back to slog.DiscardHandler, while a nil
-	// ReadinessCheck.Check panics here rather than at the first probe.
+	// Elided: ServerConfig and ReadinessCheck are declared in this file; the
+	// constructor also defaults a nil logger, panics on a nil check func,
+	// clones `ready`, registers the routes and builds the middleware stack.
+	// All of that is transport's own argument -- see transport.md.
 
 	// The zero value of a timeout means "unset", but http.TimeoutHandler
 	// reads 0 as "time out immediately" -- an unset field would make every
@@ -345,30 +335,13 @@ func NewServer(cfg ServerConfig, log *slog.Logger, svc registrar, ready ...Readi
 		cfg.ShutdownTimeout = defaultShutdownTimeout
 	}
 
-	// Cloned because a variadic parameter shares the caller's backing array,
-	// so keeping it would let the caller mutate what /readyz reports.
-	checks := slices.Clone(ready)
-
-	mux := http.NewServeMux()
-	addRoutes(mux, log, svc, checks)
-
-	// Outermost first: a request travels recoverPanic -> requestID ->
-	// requestLog -> TimeoutHandler -> mux. The order is load-bearing; the
-	// reasoning is on chain in middleware.go.
-	//
-	// TimeoutHandler is what puts a deadline on every request context, so
-	// handlers inherit cancellation without each one remembering to set it.
-	handler := chain(
-		http.TimeoutHandler(mux, cfg.RequestTimeout, `{"error":"request timeout"}`),
-		recoverPanic(log),
-		requestID(),
-		requestLog(log),
-	)
-
 	return &Server{
 		http: &http.Server{
-			Addr:    cfg.Addr,
-			Handler: handler,
+			Addr: cfg.Addr,
+			// Elided: Handler, the middleware stack wrapped around the route
+			// table. http.TimeoutHandler lives in there, and cfg.RequestTimeout
+			// is the deadline it puts on every request context.
+
 			// Guards against a client that opens a connection and dribbles
 			// headers forever. Not a context — the net/http server enforces
 			// these itself, and no deadline reaches the handler from them.
@@ -380,15 +353,8 @@ func NewServer(cfg ServerConfig, log *slog.Logger, svc registrar, ready ...Readi
 		},
 		shutdownTimeout: cfg.ShutdownTimeout,
 		listen:          net.Listen,
-		log:             log,
-		ready:           checks,
 	}
 }
-
-// Handler exposes the routed handler so functional tests can drive the whole
-// stack through httptest without binding a port. Cheap, and it is what makes
-// end-to-end tests of the real wiring possible.
-func (s *Server) Handler() http.Handler { return s.http.Handler }
 
 // Run serves until ctx is cancelled, then shuts down gracefully.
 //
@@ -442,10 +408,10 @@ usually missing, and each one is a real failure mode rather than a style prefere
 it explicitly in the constructor rather than trusting the zero value.
 
 **The edge sets the deadline; leaves inherit it.** A handler should not invent its own
-timeout, and neither should a store method. `http.TimeoutHandler` above puts one deadline on
-the request context, and everything downstream — service, store, driver — is bounded by it
-for free. A leaf that calls `context.WithTimeout` on its own is overriding a budget it cannot
-see.
+timeout, and neither should a store method. `http.TimeoutHandler`, wrapped around the mux in
+the middleware stack (see [`transport.md`](transport.md#middleware)), puts one deadline on the
+request context, and everything downstream — service, store, driver — is bounded by it for
+free. A leaf that calls `context.WithTimeout` on its own is overriding a budget it cannot see.
 
 **Give outbound calls their own, shorter budget.** The exception to the rule above: when one
 request fans out to a dependency that should not be allowed to consume the whole budget, bound

@@ -77,7 +77,7 @@ linters:
       # are how you deal with a linter you disagree with. Recording the
       # disagreement here keeps the reason reviewable in one place and keeps the
       # example free of pragmas people would copy along with the pattern.
-      - path: internal/jobs/
+      - path: ^internal/jobs/
         linters:
           - containedctx
 
@@ -86,6 +86,11 @@ linters:
 # the same kind. For a gate whose whole claim is "this example passes its own
 # linter", a truncated report is worse than no report -- it turns "0 issues"
 # into a statement about the display limit. Both limits are lifted.
+#
+# Adopting this in a repo that is not yet clean: leave the defaults in place
+# while you migrate, so the first run is a readable list rather than every
+# finding of every kind at once, then set both to 0 once you reach zero —
+# after that a truncated report can only hide a regression.
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0

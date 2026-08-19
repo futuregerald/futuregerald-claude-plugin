@@ -167,9 +167,10 @@ func requestID() func(http.Handler) http.Handler {
 	}
 }
 
-// requestLog writes exactly one line per request, at the edge. Handlers below
-// stay silent: log once where every request necessarily passes, and the volume
-// is predictable and the fields are uniform.
+// requestLog writes exactly one line per request, at the edge -- deferred, so
+// "exactly one" holds for a request that dies in a panic as well as for one
+// that returns. Handlers below stay silent: log once where every request
+// necessarily passes, and the volume is predictable and the fields are uniform.
 //
 // It sits outside TimeoutHandler so it reports the status the client actually
 // received -- including the 503 the timeout itself writes -- and so its
@@ -182,15 +183,50 @@ func requestLog(log *slog.Logger) func(http.Handler) http.Handler {
 			start := time.Now()
 			rw := &recordingWriter{ResponseWriter: w, status: http.StatusOK}
 
-			next.ServeHTTP(rw, r)
+			// completed is set only if the call below returns normally, so the
+			// deferred function can tell a finished request from an unwinding
+			// panic WITHOUT recovering. A recover() here would swallow the panic
+			// that recoverPanic -- which sits outside this middleware -- exists
+			// to handle.
+			completed := false
 
-			log.InfoContext(r.Context(), "http request",
-				"method", r.Method,
-				"path", r.URL.Path,
-				"status", rw.status,
-				"duration_ms", time.Since(start).Milliseconds(),
-				"request_id", requestIDFrom(r.Context()),
-			)
+			// Deferred, not written after the call. recoverPanic is outermost
+			// and http.TimeoutHandler re-raises a handler panic on this
+			// goroutine, so a panic unwinds straight through the ServeHTTP
+			// below: a log statement on the next line is never reached, and the
+			// access log goes silent on exactly the requests that matter most.
+			defer func() {
+				// rw.status is the status the client received -- including the
+				// implicit 200 that a handler writing nothing produces -- except
+				// while a panic is unwinding with nothing yet written. The 500
+				// recoverPanic then sends is written to ITS recordingWriter,
+				// outside this one, so it can never be observed here; reporting
+				// the initial 200 would have the access log claim a success the
+				// client never got. Naming the status recoverPanic is about to
+				// write is the one honest answer available.
+				//
+				// The exception is a handler aborting with http.ErrAbortHandler:
+				// recoverPanic re-panics, the server drops the connection, and
+				// no status reaches the client at all. The panic field is what
+				// separates both of those from a handler that genuinely
+				// returned 500.
+				status := rw.status
+				if !completed && !rw.written {
+					status = http.StatusInternalServerError
+				}
+
+				log.InfoContext(r.Context(), "http request",
+					"method", r.Method,
+					"path", r.URL.Path,
+					"status", status,
+					"duration_ms", time.Since(start).Milliseconds(),
+					"request_id", requestIDFrom(r.Context()),
+					"panic", !completed,
+				)
+			}()
+
+			next.ServeHTTP(rw, r)
+			completed = true
 		})
 	}
 }

@@ -1,6 +1,6 @@
 ---
 name: go-api-structure
-description: Structure Go API and service codebases — package layout, module boundaries, interface-driven dependency direction, and the HTTP edge. Use when starting a new Go service, adding a feature or endpoint to an existing Go service, deciding which package a file or type belongs in, resolving an import cycle, reviewing Go project layout in a PR, or answering "how should I structure my Go project". Also use before writing Go code that touches a database, HTTP client, cache, queue, clock, or any other external system, so it lands behind a consumer-defined interface. Covers the HTTP edge — routing, handlers, where middleware goes and what order it runs in, panic recovery, request IDs, decoding a JSON body, validating a request, rejecting hostile or oversized input, and where request/response DTOs live; observability — structured logging with slog, whether to log in the domain or at the edge, tracing, and liveness versus readiness health checks; and Go concurrency — goroutines, channels, worker pools, job queues, bounding how many things run at once, backpressure, graceful shutdown, or hunting a goroutine leak.
+description: Structure Go API and service codebases — package layout, interface-driven dependency direction, and the HTTP edge. Use when starting a new Go service, adding a feature or endpoint, deciding which package a file or type belongs in, resolving an import cycle, reviewing Go layout in a PR, or answering "how should I structure my Go project". Also use before writing Go code that touches a database, HTTP client, cache, queue, or clock, so it lands behind a consumer-declared interface. Covers the HTTP edge — routing, handlers, middleware placement and order, panic recovery, decoding and validating a JSON body, rejecting oversized input, where wire DTOs live, structured logging with slog, and liveness versus readiness health checks; context — deadlines, cancellation, ctx-first, WithValue keys; config loading; testing — where tests belong, functional tests, fakes, synctest, race and goroutine-leak detection; and concurrency — worker pools, job queues, bounding concurrency, backpressure, graceful shutdown.
 tags: [go, architecture]
 ---
 
@@ -209,13 +209,16 @@ go test ./... -race -shuffle=on
 govulncheck ./...
 ```
 
+`golangci-lint` on its defaults enforces none of the rules argued for here, so a green run says
+nothing about them. [`example/.golangci.yml`](example/.golangci.yml) is the config this skill
+ships — every linter in it records the red flag it catches and why it is on.
+
 `-race` and `-shuffle=on` catch the two things a green suite hides: a data race no single test
 observes, and a test that only passes because an earlier one left state behind.
 
 `govulncheck` reports only vulnerabilities your code actually reaches, and most of what it
-returns is standard library. Run against `example/` on go1.25.4 it reports 15 called stdlib
-vulnerabilities and none from any dependency; go1.25.5 clears all 15. A stdlib finding means
-"upgrade your Go", which is exactly the signal the gate exists to give.
+returns is standard library. A stdlib finding means "upgrade your Go", which is exactly the
+signal the gate exists to give.
 
 The red flags below are what none of these can see.
 

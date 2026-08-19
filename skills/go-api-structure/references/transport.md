@@ -431,10 +431,12 @@ exists for the tests that deliberately do not — in
 
 ### A fifth guard arrives with `encoding/json` v2
 
-**Go 1.27 backs `encoding/json` with the v2 implementation.** v1 semantics are intended to be
-preserved, so this is not a rewrite you have to plan for — but **error text differs**, which is
-what breaks code that asserts on a decode error's message rather than on its type, and
-`GOEXPERIMENT=nojsonv2` exists as the opt-out for whatever it does break.
+**As of Go 1.26 the v2 implementation is opt-in**, behind `GOEXPERIMENT=jsonv2`; the announced
+direction is that it becomes what `encoding/json` is built on, with `GOEXPERIMENT=nojsonv2` as
+the opt-out. Check the release notes for the toolchain you are on rather than a version number
+written here. v1 semantics are intended to be preserved, so this is not a rewrite you have to
+plan for — but **error text differs**, which is what breaks code that asserts on a decode
+error's message rather than on its type.
 
 Importing `encoding/json/v2` explicitly buys two rejections v1 does not make: **duplicate object
 names and invalid UTF-8**. Both are worth opting into on a public API. Duplicate keys are a

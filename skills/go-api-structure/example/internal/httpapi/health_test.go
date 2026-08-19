@@ -128,15 +128,18 @@ func TestReadyzStopsCheckingWhenTheRequestIsCancelled(t *testing.T) {
 	})
 
 	req := httptest.NewRequestWithContext(ctx, http.MethodGet, "/readyz", nil)
+	rec := httptest.NewRecorder()
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		h.ServeHTTP(httptest.NewRecorder(), req)
+		h.ServeHTTP(rec, req)
 	}()
 
 	<-dialing
 	cancel()
 
+	// rec is only read after done is closed, so the handler goroutine's writes
+	// to it happen-before this goroutine's reads.
 	select {
 	case <-done:
 	case <-time.After(2 * time.Second):
@@ -144,5 +147,37 @@ func TestReadyzStopsCheckingWhenTheRequestIsCancelled(t *testing.T) {
 	}
 	if laterCheckRan.Load() {
 		t.Error("a check ran after the request was cancelled; nobody is left to read the answer")
+	}
+	// Stopping early is only half of it. A handler that returns without writing
+	// sends the implicit 200 net/http produces for silence, which on a readiness
+	// probe reads as "send me traffic" -- asserted from an unfinished sweep.
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Errorf("status = %d, want 503 -- readiness was abandoned, not confirmed (body %s)",
+			rec.Code, rec.Body)
+	}
+	if !strings.Contains(rec.Body.String(), `"status":"unknown"`) {
+		t.Errorf("body = %s, want the inconclusive status rather than a verdict", rec.Body)
+	}
+}
+
+// The instance with no registered checks is the one that never enters the loop,
+// so it is the one a guard written inside the loop does not protect: before this
+// existed, a cancelled request to such an instance was answered
+// 200 {"checks":[]} -- "route traffic to me" -- with nothing consulted at all.
+func TestReadyzWithNoChecksDoesNotAnswerReadyWhenCancelled(t *testing.T) {
+	// The already-dead context IS the fixture, exactly as in the cancelled
+	// register test: this is a request whose client left before it was served.
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	rec := httptest.NewRecorder()
+	handleReady(slog.New(slog.DiscardHandler), nil).ServeHTTP(rec,
+		httptest.NewRequestWithContext(ctx, http.MethodGet, "/readyz", nil))
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want 503 (body %s)", rec.Code, rec.Body)
+	}
+	if strings.Contains(rec.Body.String(), `"status":"ready"`) {
+		t.Errorf("body claims readiness for a request nothing was checked for: %s", rec.Body)
 	}
 }

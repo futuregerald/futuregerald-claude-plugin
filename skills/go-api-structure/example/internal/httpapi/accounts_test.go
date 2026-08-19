@@ -299,11 +299,16 @@ func TestContextErrorsMapToDistinctStatuses(t *testing.T) {
 
 	rec = post(t, handleRegister(fakeRegistrar{err: wrap(context.Canceled)}),
 		`{"email":"a@example.com","password":"pw"}`)
-	// The client is gone; writing an error payload serves nobody.
-	if strings.Contains(rec.Body.String(), "error") {
-		t.Errorf("wrote an error body for a cancelled client: %q", rec.Body.String())
+	// The client is gone, so the handler writes NOTHING -- no status, no body --
+	// and net/http turns that silence into an implicit 200 nobody is left to
+	// read. Pinned exactly rather than as "not a 500": every rejection this
+	// handler can produce is also "not a 500", so that form of the assertion
+	// passes just as happily on a 415 from a fixture that never reached the
+	// handler at all. It once did.
+	if rec.Code != http.StatusOK {
+		t.Errorf("Canceled -> %d, want the implicit 200 of a handler that wrote nothing", rec.Code)
 	}
-	if rec.Code == http.StatusInternalServerError {
-		t.Error("a cancelled client was reported as a server error (500)")
+	if rec.Body.Len() != 0 {
+		t.Errorf("wrote a body for a cancelled client: %q", rec.Body.String())
 	}
 }

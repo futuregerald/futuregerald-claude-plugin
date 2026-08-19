@@ -363,6 +363,13 @@ func TestPartialWriteIsRolledBackEntirely(t *testing.T) {
 
 // A client that hangs up mid-request must not be reported as a server error,
 // and must not leave a half-written row.
+//
+// The status is asserted exactly, and that is the whole point of this test's
+// history: it once asserted only "not a 500", so when the media-type guard
+// arrived and every fixture started 415-ing, it kept passing while the path it
+// existed for was never entered again. An assertion that survives an unrelated
+// status cannot report its own irrelevance -- and `countUsers == 0` does not
+// compensate, because any rejection at all satisfies it.
 func TestCancelledRequestIsNotAServerError(t *testing.T) {
 	s := newStack(t)
 
@@ -374,11 +381,38 @@ func TestCancelledRequestIsNotAServerError(t *testing.T) {
 
 	rec := s.registerCtx(ctx, t, `{"email":"gone@example.com","password":"pw"}`)
 
-	if rec.Code == http.StatusInternalServerError {
-		t.Error("a client disconnect was reported as a 500")
+	// 503 with an EMPTY body, and neither half is incidental. A request whose
+	// context is already dead never reaches the handler's own response path:
+	// http.TimeoutHandler sees the cancelled context the instant it starts,
+	// answers 503 and abandons the handler goroutine it just launched. The
+	// empty body is what tells that apart from an expired budget, which writes
+	// the configured `{"error":"request timeout"}`.
+	//
+	// So the 503 comes from the transport giving up on a client that has gone,
+	// never from the handler blaming the server: handleRegister writes nothing
+	// at all for context.Canceled, which is asserted directly in
+	// internal/httpapi/accounts_test.go.
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Errorf("status = %d, want 503 (body %s)", rec.Code, rec.Body)
+	}
+	if rec.Body.Len() != 0 {
+		t.Errorf("body = %s, want nothing written to a client that is already gone", rec.Body)
 	}
 	if n := s.countUsers(t, "gone@example.com"); n != 0 {
 		t.Errorf("%d rows written for a cancelled request", n)
+	}
+
+	// The control, and the only assertion here that can catch a broken fixture.
+	// For an already-dead request the response is written ENTIRELY by
+	// TimeoutHandler, so nothing about it distinguishes "the handler declined to
+	// write" from "the request never reached the handler" -- a 415 from a
+	// fixture missing its Content-Type produces the same 503, which is exactly
+	// how this test once passed while covering nothing. Sending the same fixture
+	// down a live context is what proves it still reaches the handler at all.
+	if rec := s.register(t, `{"email":"live@example.com","password":"pw"}`); rec.Code != http.StatusCreated {
+		t.Fatalf("control register = %d, want 201 -- the fixture no longer reaches the handler, "+
+			"so the assertions above are about a request that was rejected at the door (body %s)",
+			rec.Code, rec.Body)
 	}
 }
 

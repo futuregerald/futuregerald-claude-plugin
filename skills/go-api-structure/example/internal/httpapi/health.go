@@ -66,10 +66,9 @@ func handleReady(log *slog.Logger, checks []ReadinessCheck) http.HandlerFunc {
 			// client hung up -- or the request budget expired -- while an
 			// earlier check was dialling, probing the rest only piles load onto
 			// dependencies that are already struggling, to produce a body
-			// nobody is left to read. Nothing is written for the same reason
-			// the register handler writes nothing to a cancelled client.
+			// nobody is left to read.
 			if ctx.Err() != nil {
-				return
+				break
 			}
 
 			status := "ok"
@@ -88,6 +87,30 @@ func handleReady(log *slog.Logger, checks []ReadinessCheck) http.HandlerFunc {
 				)
 			}
 			results = append(results, checkResult{Name: c.Name, Status: status})
+		}
+
+		// A probe has three answers, not two: ready, not ready, and could not
+		// tell. Abandoning the loop above lands in the third, and returning
+		// without writing would answer it with the implicit 200 net/http sends
+		// for a handler that writes nothing -- "route traffic to me", emitted
+		// without a single dependency having been consulted. Anything other
+		// than 200 keeps the instance out of the pool, so the inconclusive case
+		// takes the same 503 as a failure while saying plainly which one it is.
+		//
+		// Tested here rather than only inside the loop because an instance with
+		// NO registered checks never enters it: without this, the one shape
+		// that consults nothing at all would be the one shape that always
+		// answers "ready".
+		//
+		// Usually nobody reads it: under the real chain TimeoutHandler writes
+		// its own 503 once the budget expires, and a client that hung up is not
+		// listening. It is written for the case where something IS listening,
+		// because a probe that guesses "ready" is the failure mode with
+		// consequences -- traffic routed to an instance nothing vouched for.
+		if ctx.Err() != nil {
+			_ = encode(w, http.StatusServiceUnavailable,
+				response{Status: "unknown", Checks: results})
+			return
 		}
 
 		// Every check has run before anything is written, because the loop does
