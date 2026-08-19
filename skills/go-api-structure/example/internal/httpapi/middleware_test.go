@@ -18,12 +18,14 @@ import (
 // a future edit returning the bare mux would leave every functional test
 // passing while middleware silently stopped being exercised.
 //
-// /healthz is deliberately an unrouted path: the request-ID middleware sits
-// outside the mux, so the header must be set even on a 404.
+// The path is deliberately one the mux does not route: the request-ID
+// middleware sits outside the mux, so the header must be set even on a 404.
+// Using a real route would leave it ambiguous whether the middleware ran or
+// the handler happened to set the header itself.
 func TestHandlerIncludesMiddleware(t *testing.T) {
 	srv := NewServer(ServerConfig{Addr: ":0"}, slog.New(slog.DiscardHandler), fakeRegistrar{})
 	rec := httptest.NewRecorder()
-	srv.Handler().ServeHTTP(rec, httptest.NewRequest("GET", "/healthz", nil))
+	srv.Handler().ServeHTTP(rec, httptest.NewRequest("GET", "/no-such-route", nil))
 	if rec.Header().Get("X-Request-Id") == "" {
 		t.Fatal("Handler() did not include the request-ID middleware")
 	}
