@@ -103,6 +103,41 @@ func TestRegisterMalformedBodyIs400(t *testing.T) {
 	}
 }
 
+func TestRegisterRejectsOversizedBody(t *testing.T) {
+	big := `{"email":"` + strings.Repeat("a", 2<<20) + `","password":"pw"}`
+	rec := post(t, handleRegister(fakeRegistrar{}), big)
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("got %d, want 413", rec.Code)
+	}
+}
+
+func TestRegisterRejectsUnknownFields(t *testing.T) {
+	rec := post(t, handleRegister(fakeRegistrar{}),
+		`{"email":"a@example.com","password":"pw","admin":true}`)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("got %d, want 400", rec.Code)
+	}
+}
+
+func TestRegisterRejectsTrailingJSON(t *testing.T) {
+	rec := post(t, handleRegister(fakeRegistrar{}),
+		`{"email":"a@example.com","password":"pw"}{"email":"b@example.com"}`)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("got %d, want 400", rec.Code)
+	}
+}
+
+func TestRegisterRejectsMissingFields(t *testing.T) {
+	rec := post(t, handleRegister(fakeRegistrar{}), `{"email":"","password":""}`)
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("got %d, want 422", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "email") ||
+		!strings.Contains(rec.Body.String(), "password") {
+		t.Fatalf("want both problems reported, got %s", rec.Body.String())
+	}
+}
+
 // Exercises NewServer's routing, not just the bare handler.
 func TestNewServerRoutesPostUsers(t *testing.T) {
 	svc := fakeRegistrar{user: accounts.User{ID: "user-9", Email: "r@example.com"}}
