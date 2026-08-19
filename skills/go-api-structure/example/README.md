@@ -20,9 +20,11 @@ internal/jobs/       capability — bounded worker pool
 functional/          the whole stack, driven through the front door
 ```
 
-The `internal/` packages are extracted verbatim from the code blocks in `SKILL.md`,
-`references/interfaces.md`, `references/layout.md` and `references/concurrency.md`. If they
-drift from the documentation, the documentation is wrong.
+These packages are the source of truth, and the documentation quotes them.
+`references/interfaces.md` and `references/concurrency.md` reproduce several of these files in
+full — each such block is labelled **complete file**. `references/layout.md` and
+`references/transport.md` quote **fragments** only, with imports and surrounding code elided. If
+a quote and the code it names disagree, the code is right and the documentation is wrong.
 
 ## The tests are the point
 

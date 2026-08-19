@@ -429,6 +429,22 @@ The example's fixtures now default to the honest thing — `post` sends the head
 exists for the tests that deliberately do not — in
 [`accounts_test.go`](../example/internal/httpapi/accounts_test.go).
 
+### A fifth guard arrives with `encoding/json` v2
+
+**Go 1.27 backs `encoding/json` with the v2 implementation.** v1 semantics are intended to be
+preserved, so this is not a rewrite you have to plan for — but **error text differs**, which is
+what breaks code that asserts on a decode error's message rather than on its type, and
+`GOEXPERIMENT=nojsonv2` exists as the opt-out for whatever it does break.
+
+Importing `encoding/json/v2` explicitly buys two rejections v1 does not make: **duplicate object
+names and invalid UTF-8**. Both are worth opting into on a public API. Duplicate keys are a
+classic parser differential — a gateway that honours the first `"role"` in
+`{"role":"user","role":"admin"}` and a backend that honours the last disagree about who is an
+admin, and neither is malformed under v1's rules, so neither rejects it. `DisallowUnknownFields`
+does not help: both keys are known.
+
+This module targets `go 1.25.0` and stays on v1.
+
 ### What this does not cover
 
 Authentication and authorization, rate limiting, CORS, and request-size limits at the proxy are

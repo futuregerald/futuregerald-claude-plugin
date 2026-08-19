@@ -1,10 +1,14 @@
 ---
 name: go-api-structure
-description: Structure Go API and service codebases — package layout, module boundaries, and interface-driven dependency direction. Use when starting a new Go service, adding a feature or endpoint to an existing Go service, deciding which package a file or type belongs in, resolving an import cycle, reviewing Go project layout in a PR, or answering "how should I structure my Go project". Also use before writing Go code that touches a database, HTTP client, cache, queue, clock, or any other external system, so it lands behind a consumer-defined interface; and for Go concurrency work — goroutines, channels, worker pools, job queues, bounding how many things run at once, backpressure, graceful shutdown, or hunting a goroutine leak.
+description: Structure Go API and service codebases — package layout, module boundaries, interface-driven dependency direction, and the HTTP edge. Use when starting a new Go service, adding a feature or endpoint to an existing Go service, deciding which package a file or type belongs in, resolving an import cycle, reviewing Go project layout in a PR, or answering "how should I structure my Go project". Also use before writing Go code that touches a database, HTTP client, cache, queue, clock, or any other external system, so it lands behind a consumer-defined interface. Covers the HTTP edge — routing, handlers, where middleware goes and what order it runs in, panic recovery, request IDs, decoding a JSON body, validating a request, rejecting hostile or oversized input, and where request/response DTOs live; observability — structured logging with slog, whether to log in the domain or at the edge, tracing, and liveness versus readiness health checks; and Go concurrency — goroutines, channels, worker pools, job queues, bounding how many things run at once, backpressure, graceful shutdown, or hunting a goroutine leak.
 tags: [go, architecture]
 ---
 
 # Go API Structure
+
+**Targets Go 1.25+**, which the runnable `example/` module declares as `go 1.25.0`. Advice that
+only holds from a particular release carries an inline version gate at the point it is given;
+everything without one applies to any supported toolchain.
 
 ## The rule everything else follows
 
@@ -186,6 +190,35 @@ A use case is a **method on a service, not a package**. One package per endpoint
   `references/layout.md`.
 - Avoid `cmd/http/`; name binaries for what they are (`cmd/api/`), not their transport.
 
+**`golang-standards/project-layout` is not a standard.** It is one person's repository with no
+connection to the Go team, and Russ Cox — Go's tech lead — has said publicly that it is not a
+standard and should not be treated as one. Name it when you reject it, because an unnamed rule
+loses to a repo called "Standard Go Project Layout": that repo is where almost every `pkg/` in
+the wild comes from, and `pkg/` adds a path segment that hides nothing, while `internal/` is
+enforced by the compiler.
+
+## Gates
+
+Run these rather than trying to recall the list below:
+
+```bash
+gofmt -l .                     # any output at all is a failure
+go vet ./...
+golangci-lint run
+go test ./... -race -shuffle=on
+govulncheck ./...
+```
+
+`-race` and `-shuffle=on` catch the two things a green suite hides: a data race no single test
+observes, and a test that only passes because an earlier one left state behind.
+
+`govulncheck` reports only vulnerabilities your code actually reaches, and most of what it
+returns is standard library. Run against `example/` on go1.25.4 it reports 15 called stdlib
+vulnerabilities and none from any dependency; go1.25.5 clears all 15. A stdlib finding means
+"upgrade your Go", which is exactly the signal the gate exists to give.
+
+The red flags below are what none of these can see.
+
 ## Red flags
 
 - A domain package importing `database/sql`, `net/http`, a driver, or a vendor SDK
@@ -207,6 +240,19 @@ A use case is a **method on a service, not a package**. One package per endpoint
 - An import cycle "fixed" by inventing a third package for the shared types — the cycle means
   the interface is declared on the wrong side
 - Domain types carrying `json:` or `db:` tags — wire and table leaking inward
+- A handler decoding a request body with no `http.MaxBytesReader` in front of it — one client
+  can make the process allocate until it dies; see `references/transport.md`
+- A package-level logger — global mutable state no test can substitute, so log assertions go
+  order-dependent the moment tests run in parallel
+- A `*slog.Logger` field on a domain struct — a dependency the domain needs to compute nothing,
+  carried by every constructor and every test (see `references/transport.md`)
+- An HTTP server with no panic-recovery middleware — one nil dereference in one handler takes
+  the whole process down
+- Request/response types at package scope in the transport package — the second handler reuses
+  one, and then a field added for endpoint A changes endpoint B's wire contract with no diff at
+  the site that broke it
+- A readiness endpoint that returns 200 unconditionally — it decides load-balancer routing
+  without consulting anything, so a broken instance keeps being sent traffic
 - A test suite that is all unit tests — ten passing functions do not mean the flow works;
   see the functional tests in `example/`
 - A test that has never been watched fail
@@ -216,6 +262,7 @@ A use case is a **method on a service, not a package**. One package per endpoint
 | File | When to read |
 |------|-------------|
 | `references/interfaces.md` | Anything crossing a process boundary; deciding whether something deserves an interface; writing fakes; breaking an import cycle |
+| `references/transport.md` | Adding or reviewing an endpoint: routing, handlers, decoding and validating a body, where middleware goes and in what order, panic recovery, request IDs, logging at the edge, tracing, liveness vs readiness, rejecting oversized or hostile input |
 | `example/` | A runnable version of this whole service — `cd example && go test ./... -race`. Read `functional/flow_test.go` for what good tests look like here |
 | `references/concurrency.md` | Running work in the background or in parallel: worker pools, job queues, capping how many run at once, backpressure, draining on shutdown, goroutine leaks, `errgroup` |
 | `references/layout.md` | Standing up or restructuring a service: per-directory contracts, tier growth, `main.go` wiring, config, graceful shutdown, context deadlines/cancellation/values, test placement |
