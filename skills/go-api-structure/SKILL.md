@@ -257,6 +257,22 @@ The red flags below are what none of these can see.
   see the functional tests in `example/`
 - A test that has never been watched fail
 
+## Out of scope
+
+Named so the omission reads as a decision rather than an oversight. Each of these has real
+disagreement behind it, and a skill that improvised an answer would be asserting a preference
+it has not argued for.
+
+- **The database query layer.** Whether to reach for `sqlc`, hand-written SQL, or an ORM. What
+  this skill does constrain is where the answer lives: behind a consumer-declared interface, in
+  an adapter package, with driver-specific error decoding confined to one function — see
+  `references/interfaces.md` and `references/layout.md`.
+- **Migration tooling.** `golang-migrate`, `atlas`, `goose`. `references/layout.md` states the
+  one rule that is not a tooling preference: do not auto-migrate from the API binary at startup.
+- **API contracts and versioning.** OpenAPI, `oapi-codegen`, spec-first versus code-first, and
+  how to version an endpoint. `references/transport.md` covers what a handler does with a
+  request, not how its schema is published or evolved.
+
 ## References
 
 | File | When to read |
