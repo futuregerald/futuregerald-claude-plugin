@@ -27,8 +27,8 @@ func waitFor(t *testing.T, d time.Duration, cond func() bool) bool {
 	return cond()
 }
 
-// 1. 1000 jobs through a queue far smaller than 1000, so backpressure is
-//    genuinely exercised rather than bypassed by an oversized buffer.
+//  1. 1000 jobs through a queue far smaller than 1000, so backpressure is
+//     genuinely exercised rather than bypassed by an oversized buffer.
 func TestProcessesEveryJobExactlyOnce(t *testing.T) {
 	const n = 1000
 	var mu sync.Mutex
@@ -196,8 +196,8 @@ func TestShutdownDrainsQueuedWork(t *testing.T) {
 	}
 }
 
-// 7. Submitting after Shutdown reports closure and never panics. A pool that
-//    closed its job channel would panic here instead.
+//  7. Submitting after Shutdown reports closure and never panics. A pool that
+//     closed its job channel would panic here instead.
 func TestSubmitAfterShutdownIsRejectedNotPanic(t *testing.T) {
 	p := New(2, 4, noop)
 	if err := p.Shutdown(context.Background()); err != nil {
@@ -282,7 +282,7 @@ func TestHandlerPanicDoesNotKillPool(t *testing.T) {
 	}
 }
 
-// 10. Once the deadline expires, still-queued jobs are dropped rather than
+//  10. Once the deadline expires, still-queued jobs are dropped rather than
 //     started with a context that is already dead.
 func TestQueuedJobsDroppedAfterDeadline(t *testing.T) {
 	started := make(chan struct{})
@@ -318,7 +318,7 @@ func TestQueuedJobsDroppedAfterDeadline(t *testing.T) {
 	}
 }
 
-// 11. A Submit blocked on a full queue returns PROMPTLY when Shutdown starts.
+//  11. A Submit blocked on a full queue returns PROMPTLY when Shutdown starts.
 //     Deliberately does NOT assert ErrPoolClosed: if a worker frees a slot as
 //     Shutdown fires, both select cases are ready and Go picks at random, so
 //     nil is equally correct. Asserting the specific error would require
@@ -351,7 +351,7 @@ func TestBlockedSubmitReturnsPromptlyOnShutdown(t *testing.T) {
 	}
 }
 
-// 12. Handler errors reach OnError; without it they are discarded quietly and
+//  12. Handler errors reach OnError; without it they are discarded quietly and
 //     the pool keeps working.
 func TestOnErrorReceivesHandlerErrors(t *testing.T) {
 	boom := errors.New("nope")
@@ -388,7 +388,7 @@ func TestOnErrorReceivesHandlerErrors(t *testing.T) {
 	}
 }
 
-// 13. REGRESSION: a job Submit accepted must always run. The last worker can
+//  13. REGRESSION: a job Submit accepted must always run. The last worker can
 //     exit between Submit's closed-check and its send, leaving the job in the
 //     buffer with nobody to take it — Submit returned nil for work that would
 //     silently vanish.
