@@ -5,6 +5,7 @@ package httpapi
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -17,7 +18,8 @@ import (
 func TestZeroRequestTimeoutDoesNotBreakEveryRequest(t *testing.T) {
 	svc := fakeRegistrar{user: accounts.User{ID: "user-9", Email: "r@example.com"}}
 	// RequestTimeout deliberately left unset.
-	srv := NewServer(ServerConfig{Addr: ":0", ShutdownTimeout: time.Second}, svc)
+	srv := NewServer(ServerConfig{Addr: ":0", ShutdownTimeout: time.Second},
+		slog.New(slog.DiscardHandler), svc)
 
 	rec := post(t, srv.http.Handler, `{"email":"r@example.com","password":"pw"}`)
 	if rec.Code != http.StatusCreated {
@@ -26,7 +28,8 @@ func TestZeroRequestTimeoutDoesNotBreakEveryRequest(t *testing.T) {
 }
 
 func TestServerAppliesDefaultTimeouts(t *testing.T) {
-	srv := NewServer(ServerConfig{Addr: ":0", ShutdownTimeout: time.Second}, fakeRegistrar{})
+	srv := NewServer(ServerConfig{Addr: ":0", ShutdownTimeout: time.Second},
+		slog.New(slog.DiscardHandler), fakeRegistrar{})
 
 	if srv.http.ReadHeaderTimeout <= 0 {
 		t.Error("ReadHeaderTimeout not set; server is exposed to slow-header clients")

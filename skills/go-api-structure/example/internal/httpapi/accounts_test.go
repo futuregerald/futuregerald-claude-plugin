@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -105,7 +106,8 @@ func TestRegisterMalformedBodyIs400(t *testing.T) {
 // Exercises NewServer's routing, not just the bare handler.
 func TestNewServerRoutesPostUsers(t *testing.T) {
 	svc := fakeRegistrar{user: accounts.User{ID: "user-9", Email: "r@example.com"}}
-	srv := NewServer(ServerConfig{Addr: ":0", ShutdownTimeout: time.Second}, svc)
+	srv := NewServer(ServerConfig{Addr: ":0", ShutdownTimeout: time.Second},
+		slog.New(slog.DiscardHandler), svc)
 
 	rec := post(t, srv.http.Handler, `{"email":"r@example.com","password":"pw"}`)
 	if rec.Code != http.StatusCreated {

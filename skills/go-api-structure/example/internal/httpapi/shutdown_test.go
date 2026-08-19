@@ -7,6 +7,7 @@ package httpapi
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net"
 	"net/http"
 	"strings"
@@ -31,7 +32,8 @@ func TestRunDrainsInFlightRequestOnCancel(t *testing.T) {
 	svc := blockingRegistrar{started: make(chan struct{}), release: make(chan struct{})}
 
 	// ShutdownTimeout deliberately unset — the default must cover it.
-	srv := NewServer(ServerConfig{Addr: "127.0.0.1:0", RequestTimeout: 5 * time.Second}, svc)
+	srv := NewServer(ServerConfig{Addr: "127.0.0.1:0", RequestTimeout: 5 * time.Second},
+		slog.New(slog.DiscardHandler), svc)
 
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -81,7 +83,7 @@ func TestRunDrainsInFlightRequestOnCancel(t *testing.T) {
 }
 
 func TestUnsetShutdownTimeoutIsDefaulted(t *testing.T) {
-	srv := NewServer(ServerConfig{Addr: "127.0.0.1:0"}, fakeRegistrar{})
+	srv := NewServer(ServerConfig{Addr: "127.0.0.1:0"}, slog.New(slog.DiscardHandler), fakeRegistrar{})
 	if srv.shutdownTimeout <= 0 {
 		t.Fatalf("shutdownTimeout = %v; an unset value yields an already-expired "+
 			"context and an instant, ungraceful shutdown", srv.shutdownTimeout)

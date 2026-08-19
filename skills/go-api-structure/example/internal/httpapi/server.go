@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
 	"time"
@@ -19,10 +20,19 @@ type ServerConfig struct {
 	ShutdownTimeout time.Duration
 }
 
+// ReadinessCheck reports whether one dependency is usable right now.
+// Name appears in the /readyz body so a failing check is identifiable.
+type ReadinessCheck struct {
+	Name  string
+	Check func(context.Context) error
+}
+
 type Server struct {
 	http            *http.Server
 	shutdownTimeout time.Duration
 	listen          func(network, addr string) (net.Listener, error)
+	log             *slog.Logger
+	ready           []ReadinessCheck
 }
 
 const (
@@ -30,7 +40,13 @@ const (
 	defaultShutdownTimeout = 15 * time.Second
 )
 
-func NewServer(cfg ServerConfig, svc registrar) *Server {
+func NewServer(cfg ServerConfig, log *slog.Logger, svc registrar, ready ...ReadinessCheck) *Server {
+	// A nil logger is tolerated rather than fatal: the alternative is a panic
+	// on the first request instead of at construction, which is strictly worse
+	// to debug.
+	if log == nil {
+		log = slog.New(slog.DiscardHandler)
+	}
 	// The zero value of a timeout means "unset", but http.TimeoutHandler
 	// reads 0 as "time out immediately" -- an unset field would make every
 	// request 503 rather than simply not time out. http.Server's own
@@ -71,6 +87,8 @@ func NewServer(cfg ServerConfig, svc registrar) *Server {
 		},
 		shutdownTimeout: cfg.ShutdownTimeout,
 		listen:          net.Listen,
+		log:             log,
+		ready:           ready,
 	}
 }
 

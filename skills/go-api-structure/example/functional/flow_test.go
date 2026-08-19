@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -92,7 +93,7 @@ func newStack(t *testing.T) *stack {
 	srv := httpapi.NewServer(httpapi.ServerConfig{
 		Addr:           "127.0.0.1:0",
 		RequestTimeout: 5 * time.Second,
-	}, svc)
+	}, slog.New(slog.DiscardHandler), svc)
 
 	return &stack{db: db, handler: srv.Handler()}
 }
@@ -351,7 +352,8 @@ func TestDuplicateLosingTheRaceIsA409NotA500(t *testing.T) {
 		sqlstore.NewAccountStore(s.db), &raceHasher{db: s.db},
 		time.Now, func() string { return "user-race" })
 	srv := httpapi.NewServer(httpapi.ServerConfig{
-		Addr: "127.0.0.1:0", RequestTimeout: 5 * time.Second}, svc)
+		Addr: "127.0.0.1:0", RequestTimeout: 5 * time.Second},
+		slog.New(slog.DiscardHandler), svc)
 
 	req := httptest.NewRequest(http.MethodPost, "/users",
 		strings.NewReader(`{"email":"race2@example.com","password":"pw"}`))
