@@ -1,7 +1,7 @@
 ---
 name: plan-review
-description: MANDATORY before writing any code. Dispatches the adversarial-plan-reviewer agent (Fable) to independently attack an implementation plan and verify its Impact Analysis against the real code. Use whenever the user says "review the plan", "review this plan", "plan review", "check the plan", "is this plan right", "adversarial review", "grill this plan", or whenever a plan has been written and implementation is about to start. This is a separate gate from code review and cannot be satisfied by reviewing the plan yourself.
-tags: [plan, review, adversarial, gate, lifecycle, impact-analysis, fable]
+description: MANDATORY before writing any code. Dispatches the adversarial-plan-reviewer agent to independently attack an implementation plan and verify its Impact Analysis against the real code. Use whenever the user says "review the plan", "review this plan", "plan review", "check the plan", "is this plan right", "adversarial review", "grill this plan", or whenever a plan has been written and implementation is about to start. This is a separate gate from code review and cannot be satisfied by reviewing the plan yourself.
+tags: [plan, review, adversarial, gate, lifecycle, impact-analysis]
 author: Gerald Onyango <gerald.onyango@gmail.com>
 ---
 

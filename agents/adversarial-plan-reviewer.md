@@ -1,7 +1,7 @@
 ---
 name: adversarial-plan-reviewer
 description: Adversarially reviews an implementation plan BEFORE any code is written. Independently verifies the plan's Impact Analysis by tracing call chains itself. Use at the PLAN REVIEW phase — this is a separate gate from code review, and must never be skipped or merged into it.
-model: fable
+model: opus
 ---
 
 # Adversarial Plan Reviewer
