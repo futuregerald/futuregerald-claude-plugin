@@ -242,11 +242,19 @@ func run() error {
 	// domain
 	accountSvc := accounts.NewService(accountStore, hasher, time.Now, uuid.NewString)
 
-	// transport
+	// transport — main owns the logger for the same reason it owns signal
+	// handling below: one process, one place deciding. Named logger rather than
+	// log, because this file already imports log for log.Fatalf.
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	srv := httpapi.NewServer(httpapi.ServerConfig{
 		Addr:            cfg.HTTP.Addr,
 		ShutdownTimeout: cfg.HTTP.ShutdownTimeout,
-	}, accountSvc)
+	}, logger, accountSvc, httpapi.ReadinessCheck{
+		// main is the only place holding the *sql.DB, so it is the only place
+		// that can hand httpapi a check without httpapi importing a driver.
+		Name:  "database",
+		Check: db.PingContext,
+	})
 
 	// main owns signal handling and hands the resulting context down.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -275,21 +283,16 @@ component the whole dependency struct instead of its two real dependencies.
 
 ### `internal/httpapi/server.go`
 
-Complete file, but it forms `package httpapi` **together with** `accounts.go` from
-`interfaces.md` — `registrar` and `handleRegister` are declared there. The two compile as a
-pair; neither is standalone.
+Fragment, not a complete file. It keeps the shutdown path and elides what this section does
+not argue about — readiness validation, the logger default, the middleware bodies. The file as
+it stands is [`example/internal/httpapi/server.go`](../example/internal/httpapi/server.go); it
+forms `package httpapi` **together with** `accounts.go` from `interfaces.md`, where `registrar`
+and `handleRegister` are declared, so neither is standalone.
 
 ```go
-package httpapi
-
-import (
-	"context"
-	"errors"
-	"fmt"
-	"net"
-	"net/http"
-	"time"
-)
+// fragment — internal/httpapi/server.go, trimmed to the shutdown path.
+// Elisions are marked. The file as it actually stands, middleware and all,
+// is example/internal/httpapi/server.go.
 
 // ServerConfig is declared here rather than imported from internal/config,
 // for the same reason interfaces are declared by their consumer: this package
@@ -301,10 +304,19 @@ type ServerConfig struct {
 	ShutdownTimeout time.Duration
 }
 
+// ReadinessCheck reports whether one dependency is usable right now.
+// Name appears in the /readyz body so a failing check is identifiable.
+type ReadinessCheck struct {
+	Name  string
+	Check func(context.Context) error
+}
+
 type Server struct {
 	http            *http.Server
 	shutdownTimeout time.Duration
 	listen          func(network, addr string) (net.Listener, error)
+	log             *slog.Logger
+	ready           []ReadinessCheck
 }
 
 const (
@@ -312,7 +324,10 @@ const (
 	defaultShutdownTimeout = 15 * time.Second
 )
 
-func NewServer(cfg ServerConfig, svc registrar) *Server {
+func NewServer(cfg ServerConfig, log *slog.Logger, svc registrar, ready ...ReadinessCheck) *Server {
+	// Elided: a nil logger falls back to slog.DiscardHandler, while a nil
+	// ReadinessCheck.Check panics here rather than at the first probe.
+
 	// The zero value of a timeout means "unset", but http.TimeoutHandler
 	// reads 0 as "time out immediately" -- an unset field would make every
 	// request 503 rather than simply not time out. http.Server's own
@@ -328,20 +343,30 @@ func NewServer(cfg ServerConfig, svc registrar) *Server {
 		cfg.ShutdownTimeout = defaultShutdownTimeout
 	}
 
+	// Cloned because a variadic parameter shares the caller's backing array,
+	// so keeping it would let the caller mutate what /readyz reports.
+	checks := slices.Clone(ready)
+
 	mux := http.NewServeMux()
-	// Method patterns ("POST /users") require Go 1.22+. On 1.21 and earlier
-	// this parses as a HOST pattern and silently never matches -- no error,
-	// no panic, just 404s.
-	mux.Handle("POST /users", handleRegister(svc))
+	addRoutes(mux, log, svc, checks)
+
+	// Outermost first: a request travels recoverPanic -> requestID ->
+	// requestLog -> TimeoutHandler -> mux. The order is load-bearing; the
+	// reasoning is on chain in middleware.go.
+	//
+	// TimeoutHandler is what puts a deadline on every request context, so
+	// handlers inherit cancellation without each one remembering to set it.
+	handler := chain(
+		http.TimeoutHandler(mux, cfg.RequestTimeout, `{"error":"request timeout"}`),
+		recoverPanic(log),
+		requestID(),
+		requestLog(log),
+	)
 
 	return &Server{
 		http: &http.Server{
-			Addr: cfg.Addr,
-			// TimeoutHandler is what puts a deadline on every request
-			// context, so handlers inherit cancellation without each one
-			// remembering to set it.
-			Handler: http.TimeoutHandler(mux, cfg.RequestTimeout,
-				`{"error":"request timeout"}`),
+			Addr:    cfg.Addr,
+			Handler: handler,
 			// Guards against a client that opens a connection and dribbles
 			// headers forever. Not a context — the net/http server enforces
 			// these itself, and no deadline reaches the handler from them.
@@ -353,6 +378,8 @@ func NewServer(cfg ServerConfig, svc registrar) *Server {
 		},
 		shutdownTimeout: cfg.ShutdownTimeout,
 		listen:          net.Listen,
+		log:             log,
+		ready:           checks,
 	}
 }
 
