@@ -37,6 +37,11 @@ func handleRegister(svc registrar) http.HandlerFunc {
 	// inversion this skill exists to prevent. It would also be unenforceable:
 	// any other entry point (a CLI, a seed script, a gRPC handler) would bypass
 	// it entirely.
+	// This is also the only thing standing between a body of `null` and a 201.
+	// `null` into a struct is a documented no-op: it decodes successfully and
+	// leaves the zero value, so it arrives here indistinguishable from `{}`.
+	// The decoder cannot catch either -- both are valid JSON -- so the presence
+	// check is what turns them into a 422.
 	valid := func(r request) map[string]string {
 		problems := map[string]string{}
 		if r.Email == "" {

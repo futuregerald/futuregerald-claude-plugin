@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"slices"
 	"time"
 )
 
@@ -61,6 +62,17 @@ func NewServer(cfg ServerConfig, log *slog.Logger, svc registrar, ready ...Readi
 	if cfg.ShutdownTimeout <= 0 {
 		cfg.ShutdownTimeout = defaultShutdownTimeout
 	}
+	// A nil logger got a default a few lines up; a nil Check func gets a panic.
+	// The difference is that discarding logs degrades observability, while the
+	// only defaults available for a missing check are to skip it -- reporting
+	// ready for a dependency nobody verified -- or to fail it forever. Both
+	// are worse than refusing to start, and both surface as a misleading
+	// /readyz rather than as the wiring bug they are.
+	for _, c := range ready {
+		if c.Check == nil {
+			panic("httpapi: ReadinessCheck " + c.Name + " has a nil Check func")
+		}
+	}
 
 	mux := http.NewServeMux()
 	// Method patterns ("POST /users") require Go 1.22+. On 1.21 and earlier
@@ -103,7 +115,11 @@ func NewServer(cfg ServerConfig, log *slog.Logger, svc registrar, ready ...Readi
 		shutdownTimeout: cfg.ShutdownTimeout,
 		listen:          net.Listen,
 		log:             log,
-		ready:           ready,
+		// Cloned because a variadic parameter is not automatically a private
+		// copy: NewServer(cfg, log, svc, checks...) passes the caller's own
+		// backing array, so keeping the slice would let the caller mutate what
+		// /readyz reports after construction.
+		ready: slices.Clone(ready),
 	}
 }
 

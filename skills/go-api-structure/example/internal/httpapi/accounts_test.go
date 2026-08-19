@@ -127,6 +127,68 @@ func TestRegisterRejectsTrailingJSON(t *testing.T) {
 	}
 }
 
+// The single-value guard runs a second Decode, and that read can fail for
+// reasons that have nothing to do with trailing data: the body can overflow
+// the cap only after the first value has decoded. Reporting that as "malformed
+// body" would be a lie -- the request was well-formed, just too big -- so the
+// guard has to preserve the error rather than replace it.
+func TestRegisterOversizedAfterFirstValueIsStill413(t *testing.T) {
+	body := `{"email":"a@example.com","password":"pw"}` +
+		`{"email":"` + strings.Repeat("a", 2<<20) + `"}`
+	rec := post(t, handleRegister(fakeRegistrar{}), body)
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("got %d, want 413", rec.Code)
+	}
+}
+
+// The two branches of the single-value guard, side by side. Only the cleanly
+// decoding cases exercise the err == nil branch -- a trailing value the
+// decoder rejects (the unknown-field entry) never reaches it, which is why
+// both kinds are worth pinning.
+func TestRegisterRejectsTrailingJSONValues(t *testing.T) {
+	const first = `{"email":"a@example.com","password":"pw"}`
+	tests := []struct {
+		name     string
+		trailing string
+	}{
+		{"object decodes cleanly", `{}`},
+		{"null decodes cleanly", `null`},
+		{"number decodes cleanly", `7`},
+		{"decoder rejects the trailing value", `{"password":"pw"}`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rec := post(t, handleRegister(fakeRegistrar{}), first+tt.trailing)
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("got %d, want 400 (body %s)", rec.Code, rec.Body.String())
+			}
+		})
+	}
+}
+
+// A bare `null` is valid JSON and decodes into a struct as a documented no-op:
+// it succeeds and leaves the zero value. So it reaches validation looking
+// exactly like `{}`, and it is the presence check -- not the decoder -- that
+// rejects it. An empty body is a different failure entirely: nothing to
+// decode, so io.EOF, so 400. Pinning both keeps that boundary deliberate.
+func TestRegisterNullBodyIs422(t *testing.T) {
+	rec := post(t, handleRegister(fakeRegistrar{}), `null`)
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("got %d, want 422 (body %s)", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "email") ||
+		!strings.Contains(rec.Body.String(), "password") {
+		t.Fatalf("want both problems reported, got %s", rec.Body.String())
+	}
+}
+
+func TestRegisterEmptyBodyIs400(t *testing.T) {
+	rec := post(t, handleRegister(fakeRegistrar{}), ``)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("got %d, want 400 (body %s)", rec.Code, rec.Body.String())
+	}
+}
+
 func TestRegisterRejectsMissingFields(t *testing.T) {
 	rec := post(t, handleRegister(fakeRegistrar{}), `{"email":"","password":""}`)
 	if rec.Code != http.StatusUnprocessableEntity {

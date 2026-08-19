@@ -42,6 +42,41 @@ func TestServerAppliesDefaultTimeouts(t *testing.T) {
 	}
 }
 
+// A variadic parameter is not a private copy: called with the spread form,
+// Go hands the callee the caller's own backing array. Storing it as-is would
+// let the caller keep mutating what /readyz reports.
+func TestNewServerCopiesReadinessChecks(t *testing.T) {
+	checks := []ReadinessCheck{{
+		Name:  "db",
+		Check: func(context.Context) error { return nil },
+	}}
+	srv := NewServer(ServerConfig{Addr: ":0"},
+		slog.New(slog.DiscardHandler), fakeRegistrar{}, checks...)
+
+	checks[0].Name = "mutated by the caller"
+	if srv.ready[0].Name != "db" {
+		t.Fatalf("ready[0].Name = %q; the server aliases the caller's slice", srv.ready[0].Name)
+	}
+}
+
+// A nil Check func has no sane default, so it fails loudly at construction
+// rather than panicking on the first /readyz request.
+func TestNewServerPanicsOnNilReadinessCheckFunc(t *testing.T) {
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Fatal("NewServer accepted a ReadinessCheck with a nil Check func")
+		}
+		msg, ok := r.(string)
+		if !ok || !strings.Contains(msg, "db") {
+			t.Fatalf("panic %v does not name the offending check", r)
+		}
+	}()
+
+	NewServer(ServerConfig{Addr: ":0"},
+		slog.New(slog.DiscardHandler), fakeRegistrar{}, ReadinessCheck{Name: "db"})
+}
+
 // A handler that outruns its budget must be cut off by TimeoutHandler, and
 // the request context must be cancelled so downstream work stops too.
 func TestSlowHandlerIsTimedOutAndContextCancelled(t *testing.T) {
