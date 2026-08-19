@@ -74,11 +74,16 @@ func NewServer(cfg ServerConfig, log *slog.Logger, svc registrar, ready ...Readi
 		}
 	}
 
+	// Cloned because a variadic parameter is not automatically a private copy:
+	// NewServer(cfg, log, svc, checks...) passes the caller's own backing
+	// array, so keeping the slice would let the caller mutate what /readyz
+	// reports after construction. Cloned ONCE and shared by the route table and
+	// the field below -- two clones would be two answers to the same question,
+	// and only one of them is the one /readyz serves.
+	checks := slices.Clone(ready)
+
 	mux := http.NewServeMux()
-	// Method patterns ("POST /users") require Go 1.22+. On 1.21 and earlier
-	// this parses as a HOST pattern and silently never matches -- no error,
-	// no panic, just 404s.
-	mux.Handle("POST /users", handleRegister(svc))
+	addRoutes(mux, log, svc, checks)
 
 	// Outermost first: a request travels recoverPanic -> requestID ->
 	// requestLog -> TimeoutHandler -> mux, and a response travels back out the
@@ -115,11 +120,7 @@ func NewServer(cfg ServerConfig, log *slog.Logger, svc registrar, ready ...Readi
 		shutdownTimeout: cfg.ShutdownTimeout,
 		listen:          net.Listen,
 		log:             log,
-		// Cloned because a variadic parameter is not automatically a private
-		// copy: NewServer(cfg, log, svc, checks...) passes the caller's own
-		// backing array, so keeping the slice would let the caller mutate what
-		// /readyz reports after construction.
-		ready: slices.Clone(ready),
+		ready:           checks,
 	}
 }
 

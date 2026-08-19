@@ -90,10 +90,18 @@ func newStack(t *testing.T) *stack {
 	}
 
 	svc := accounts.NewService(sqlstore.NewAccountStore(db), stubHasher{}, time.Now, newID)
+	// The readiness check is the real one: db.PingContext already has the
+	// func(context.Context) error shape ReadinessCheck asks for, so nothing has
+	// to be written to adapt it. A probe that consults a stub proves nothing --
+	// the point of registering it here is that these tests can kill the actual
+	// database and watch /readyz notice.
 	srv := httpapi.NewServer(httpapi.ServerConfig{
 		Addr:           "127.0.0.1:0",
 		RequestTimeout: 5 * time.Second,
-	}, slog.New(slog.DiscardHandler), svc)
+	}, slog.New(slog.DiscardHandler), svc, httpapi.ReadinessCheck{
+		Name:  "database",
+		Check: db.PingContext,
+	})
 
 	return &stack{db: db, handler: srv.Handler()}
 }
@@ -103,6 +111,13 @@ func (s *stack) register(t *testing.T, body string) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(http.MethodPost, "/users", strings.NewReader(body))
 	rec := httptest.NewRecorder()
 	s.handler.ServeHTTP(rec, req)
+	return rec
+}
+
+func (s *stack) get(t *testing.T, path string) *httptest.ResponseRecorder {
+	t.Helper()
+	rec := httptest.NewRecorder()
+	s.handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
 	return rec
 }
 
@@ -233,6 +248,36 @@ func TestDatabaseFailureDoesNotLeakInternals(t *testing.T) {
 		if strings.Contains(body, leak) {
 			t.Errorf("response leaked %q to the client: %s", leak, rec.Body)
 		}
+	}
+}
+
+// The probe an orchestrator polls, against the database it actually talks to.
+// A unit test can only prove that a stub returning an error produces a 503;
+// this proves the wiring in between -- that the check registered at
+// construction reaches the real pool, and that a dead pool is visible from
+// outside the process rather than only in a log line.
+func TestReadyzTurnsRedWhenTheDatabaseIsGone(t *testing.T) {
+	s := newStack(t)
+
+	if rec := s.get(t, "/readyz"); rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 with a live database (body %s)", rec.Code, rec.Body)
+	}
+
+	_ = s.db.Close() // the database goes away, the process stays up
+
+	rec := s.get(t, "/readyz")
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want 503 (body %s)", rec.Code, rec.Body)
+	}
+	// Naming the dependency is the entire value of the body during an incident.
+	if !strings.Contains(rec.Body.String(), "database") {
+		t.Errorf("body does not name the failing check: %s", rec.Body)
+	}
+
+	// Liveness is a different question, and the answer is still yes: restarting
+	// this process would not bring the database back.
+	if rec := s.get(t, "/healthz"); rec.Code != http.StatusOK {
+		t.Errorf("/healthz = %d, want 200 -- a dead dependency must not trigger a restart", rec.Code)
 	}
 }
 
