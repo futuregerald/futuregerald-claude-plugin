@@ -404,15 +404,13 @@ func TestAcceptedJobIsNeverSilentlyDropped(t *testing.T) {
 		var wg sync.WaitGroup
 		var accepted int64
 		for i := 0; i < 4; i++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+			wg.Go(func() {
 				for j := 0; j < 3; j++ {
 					if err := p.Submit(context.Background(), j); err == nil {
 						atomic.AddInt64(&accepted, 1)
 					}
 				}
-			}()
+			})
 		}
 		go func() { _ = p.Shutdown(context.Background()) }()
 		wg.Wait()
