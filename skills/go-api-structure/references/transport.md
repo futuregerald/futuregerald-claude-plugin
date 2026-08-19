@@ -249,8 +249,23 @@ assertions become order-dependent and parallel tests interleave.
 
 The mechanics follow from the placement:
 
-- One line per request, written by `requestLog`, where every request necessarily passes.
-  Volume is predictable and fields are uniform.
+- One line per request, written by `requestLog`, where every request necessarily passes. Volume
+  is predictable and fields are uniform: `method`, `path`, `status`, `duration_ms`,
+  `request_id`, `panic`.
+- **The line is written from a `defer`, which is what makes "every request" true.** `recoverPanic`
+  sits outside `requestLog` and `http.TimeoutHandler` re-raises a handler panic on this
+  goroutine, so a panic unwinds straight through the `next.ServeHTTP` call: a log statement
+  written on the next line is never reached, and the access log goes silent on exactly the
+  requests that matter most. That was the bug — a panicking request produced a `panic recovered`
+  line naming the URL and no access-log line at all.
+- **Every line carries `panic`, and a panicking request is logged as 500.** The recorded status
+  is the client's, including the implicit 200 of a handler that wrote nothing — but a panic that
+  unwinds before anything is written leaves the recorder still holding its seeded 200, while
+  `recoverPanic` writes its 500 to a *different* `recordingWriter` outside this one. Reporting
+  the 200 would have the access log claim a success the client never got, so the deferred
+  function names the 500 that is about to be sent. The `panic` boolean is what separates that
+  from a handler that genuinely returned 500, and from an `http.ErrAbortHandler` abort where the
+  connection is dropped and no status reaches the client at all.
 - Handlers below stay silent on the success path. A handler that also logs turns one request
   into three lines that have to be correlated.
 - Errors that reach the edge are logged there, once, with the request ID from the context.
@@ -306,7 +321,14 @@ rather than a second opinion from the first. Failing readiness pulls the instanc
 load-balancer pool and leaves it running, so it rejoins the moment its dependency returns — no
 restart, no lost warm state, no thundering herd.
 
-Four details in [`health.go`](../example/internal/httpapi/health.go) are each a real failure:
+**A probe has three answers, not two.** `handleReady` reports `"ready"` with 200, `"not ready"`
+with 503, and `"unknown"` with 503 — the last meaning "I could not confirm", not "I checked and
+it is fine". It is what a request whose context died mid-sweep gets, and what an instance with
+no registered checks gets when the request arrives already cancelled. Both statuses that are not
+`"ready"` keep the instance out of the pool, so the inconclusive case costs nothing beyond
+saying plainly which one it is. Consumers parsing the body must expect all three.
+
+Five details in [`health.go`](../example/internal/httpapi/health.go) are each a real failure:
 
 - **Every check runs; the loop does not stop at the first failure.** A body naming one broken
   dependency while staying silent about the other two reads as "only this one is broken" and
@@ -314,6 +336,15 @@ Four details in [`health.go`](../example/internal/httpapi/health.go) are each a 
 - **`ctx.Err()` is re-tested before each check.** If the client hung up while an earlier check
   was dialling, probing the rest only piles load onto dependencies that are already struggling,
   to produce a body nobody is left to read.
+- **Abandoning the sweep is answered explicitly, and the test for it sits *outside* the loop.**
+  Returning without writing would answer with the implicit 200 net/http sends for a handler that
+  writes nothing — "route traffic to me", emitted without a single dependency having been
+  consulted. Testing only inside the loop would leave the one shape that consults nothing at all
+  — an instance with no registered checks, which never enters the loop — as the one shape that
+  always answers `"ready"`. That was a real hole. Usually nobody reads the 503: under the real
+  chain `TimeoutHandler` writes its own once the budget expires, and a client that hung up is
+  not listening. It is written for the case where something *is* listening, because a probe that
+  guesses "ready" is the failure mode with consequences.
 - **The results slice is allocated non-nil.** A nil slice marshals to `null`, and every
   dashboard parsing the response then has to special-case it — or, more often, does not, and
   breaks on the one instance that has no dependencies.
@@ -412,11 +443,26 @@ becomes a 400. That was a real defect caught in review of this example.
 
 ### A new rejection rule's blast radius is the tests that send a body
 
-Adding the media-type guard turned all 17 existing fixtures into 415s, because
+Adding the media-type guard turned every existing fixture into a 415, because
 `httptest.NewRequest` sets no `Content-Type` — so none of them reached the code they were
-written to exercise. Most failed loudly, which is the good case. One asserted only "not a 500",
-so it **kept passing while covering nothing**: the cancelled-request path it existed for was
-never entered again.
+written to exercise. Most failed loudly, which is the good case. One —
+`TestCancelledRequestIsNotAServerError` — asserted only "not a 500", so it **kept passing while
+covering nothing**: the cancelled-request path it existed for was never entered again. Its
+`countUsers == 0` assertion did not compensate, because any rejection at all satisfies that too.
+
+That test has since been fixed, and what it took is worth more than the anecdote. It now asserts
+the status **exactly** — 503 with an empty body, the answer `http.TimeoutHandler` writes for a
+context that is already dead — so an unrelated rejection can no longer satisfy it. But an exact
+assertion was not enough on its own: for an already-dead request the response is written
+entirely by `TimeoutHandler`, so nothing about it distinguishes "the handler declined to write"
+from "the request never reached the handler". A 415 from a missing `Content-Type` produces the
+same 503.
+
+So the test ends with a **control request**: the same fixture sent down a live context, asserted
+to be 201. That is the only assertion in it that can catch a broken fixture, and it is the
+general technique — when the response under test is written by something *upstream* of the code
+you are exercising, add one request that proves the code is still reachable. Without it, no
+assertion on the response can report the test's own irrelevance.
 
 The general lesson: when a change adds a way to reject input, the tests at risk are the ones
 that **send a body**, not the ones that name the changed function. Grep for the payload, not the
@@ -427,7 +473,10 @@ fail.
 
 The example's fixtures now default to the honest thing — `post` sends the header, `postAs`
 exists for the tests that deliberately do not — in
-[`accounts_test.go`](../example/internal/httpapi/accounts_test.go).
+[`accounts_test.go`](../example/internal/httpapi/accounts_test.go). The handler's own cancelled
+path is pinned there too, in isolation: `TestContextErrorsMapToDistinctStatuses` asserts exactly
+200 with an empty body, the implicit 200 net/http produces for a handler that wrote nothing at
+all.
 
 ### A fifth guard arrives with `encoding/json` v2
 

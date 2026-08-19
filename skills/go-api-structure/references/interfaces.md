@@ -115,9 +115,9 @@ deterministic under test.
 
 This is testable with zero infrastructure — every dependency is an argument.
 
-### `internal/sqlstore/accounts.go` — the adapter reaches inward
+### `internal/sqlstore/accounts.go` — the adapter reaches inward (complete file)
 
-Complete file. With `tx.go` (below) it forms `package sqlstore`; the two compile together.
+With `tx.go` (below) it forms `package sqlstore`; the two compile together.
 
 **The storage engine is incidental.** This example uses SQLite so it runs with no server, and
 the package is named `sqlstore` rather than `sqlite` because an `internal/sqlite` package

@@ -489,8 +489,8 @@ futuregerald-claude-plugin/
 │       ├── current.md           # /project:current
 │       ├── inbox.md             # /project:inbox
 │       └── cleanup.md           # /project:cleanup
-├── skills/                      # 34 skill directories, each with SKILL.md
-├── agents/                      # 6 agent markdown files
+├── skills/                      # 51 skill directories, each with SKILL.md
+├── agents/                      # 9 agent markdown files
 ├── templates/
 │   ├── CLAUDE-BASE.md           # Base template for generated CLAUDE.md files
 │   └── languages/               # Framework-specific template snippets

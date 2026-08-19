@@ -218,7 +218,8 @@ observes, and a test that only passes because an earlier one left state behind.
 
 `govulncheck` reports only vulnerabilities your code actually reaches, and most of what it
 returns is standard library. A stdlib finding means "upgrade your Go", which is exactly the
-signal the gate exists to give.
+signal the gate exists to give. Against `example/` it currently prints `No vulnerabilities
+found.` — that is the expected output, not a sign the tool did nothing.
 
 The red flags below are what none of these can see.
 
@@ -282,6 +283,6 @@ it has not argued for.
 |------|-------------|
 | `references/interfaces.md` | Anything crossing a process boundary; deciding whether something deserves an interface; writing fakes; breaking an import cycle |
 | `references/transport.md` | Adding or reviewing an endpoint: routing, handlers, decoding and validating a body, where middleware goes and in what order, panic recovery, request IDs, logging at the edge, tracing, liveness vs readiness, rejecting oversized or hostile input |
-| `example/` | A runnable version of this whole service — `cd example && go test ./... -race`. Read `functional/flow_test.go` for what good tests look like here |
+| `example/` | A runnable version of this whole service — `cd example && go test ./... -race -shuffle=on && golangci-lint run`, against the `.golangci.yml` it ships. Read `functional/flow_test.go` for what good tests look like here |
 | `references/concurrency.md` | Running work in the background or in parallel: worker pools, job queues, capping how many run at once, backpressure, draining on shutdown, goroutine leaks, `errgroup` |
 | `references/layout.md` | Standing up or restructuring a service: per-directory contracts, tier growth, `main.go` wiring, config, graceful shutdown, context deadlines/cancellation/values, test placement |
