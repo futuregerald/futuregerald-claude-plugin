@@ -68,14 +68,29 @@ func NewServer(cfg ServerConfig, log *slog.Logger, svc registrar, ready ...Readi
 	// no panic, just 404s.
 	mux.Handle("POST /users", handleRegister(svc))
 
+	// Outermost first: a request travels recoverPanic -> requestID ->
+	// requestLog -> TimeoutHandler -> mux, and a response travels back out the
+	// same way. The order is not cosmetic:
+	//
+	//   - recoverPanic is outermost so it also catches a panic raised by the
+	//     middleware inside it, not just by a handler.
+	//   - requestID precedes requestLog because the log line carries the ID.
+	//   - requestLog wraps TimeoutHandler rather than sitting under it, so it
+	//     records the 503 the timeout writes and stays on one goroutine.
+	//
+	// TimeoutHandler is what puts a deadline on every request context, so
+	// handlers inherit cancellation without each one remembering to set it.
+	handler := chain(
+		http.TimeoutHandler(mux, cfg.RequestTimeout, `{"error":"request timeout"}`),
+		recoverPanic(log),
+		requestID(),
+		requestLog(log),
+	)
+
 	return &Server{
 		http: &http.Server{
-			Addr: cfg.Addr,
-			// TimeoutHandler is what puts a deadline on every request
-			// context, so handlers inherit cancellation without each one
-			// remembering to set it.
-			Handler: http.TimeoutHandler(mux, cfg.RequestTimeout,
-				`{"error":"request timeout"}`),
+			Addr:    cfg.Addr,
+			Handler: handler,
 			// Guards against a client that opens a connection and dribbles
 			// headers forever. Not a context — the net/http server enforces
 			// these itself, and no deadline reaches the handler from them.
