@@ -16,7 +16,15 @@ Assume they are a skilled developer, but know almost nothing about our toolset o
 
 **Context:** This should be run in a dedicated worktree (created by brainstorming skill).
 
-**Save plans to:** `docs/plans/YYYY-MM-DD-<feature-name>.md`
+**Save plans to:** `docs/plans/<TICKET>-<slug>.md` when a ticket or issue key exists,
+otherwise `docs/plans/YYYY-MM-DD-<slug>.md`. This is the single source for the plan path —
+other documents refer here rather than restating it.
+
+**Never commit a plan.** Add `docs/plans/` to `.git/info/exclude` if it is not already ignored.
+
+**Every plan MUST contain an Impact Analysis section** — the call chain, up and down, of every
+symbol the change touches. See *System Thinking: Trace Before You Touch* in CLAUDE.md. A plan
+without one is auto-rejected at PLAN REVIEW, so write it before handing off.
 
 ## Bite-Sized Task Granularity
 
@@ -101,9 +109,19 @@ git commit -m "feat: add specific feature"
 
 ## Execution Handoff
 
-After saving the plan, offer execution choice:
+**MANDATORY GATE — do not skip, and do not offer execution before it passes.**
 
-**"Plan complete and saved to `docs/plans/<filename>.md`. Two execution options:**
+After saving the plan, the PLAN REVIEW phase runs. Invoke the `plan-review` skill, which
+dispatches the `adversarial-plan-reviewer` agent against the saved plan file. Never review
+the plan yourself — you wrote it, and a self-review is exactly what this gate replaces.
+
+- **REJECT** (any CRITICAL or IMPORTANT): fix the plan, re-review with a fresh agent. Do not
+  offer execution, and do not begin implementation.
+- **APPROVE**: report the findings and Verified Recommendations, then offer execution below.
+
+Only after an APPROVE verdict, offer execution choice:
+
+**"Plan complete, saved to `docs/plans/<filename>.md`, and APPROVED by adversarial review. Two execution options:**
 
 **1. Subagent-Driven (this session)** - I dispatch fresh subagent per task, review between tasks, fast iteration
 

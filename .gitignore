@@ -15,6 +15,9 @@ skill-zips/
 __pycache__/
 *.pyc
 
+# Implementation plans are working artifacts, never committed
+docs/plans/
+
 # Bootstrapped venvs (e.g. vectorize skill's auto-created uv venv)
 .venv/
 **/.venv/

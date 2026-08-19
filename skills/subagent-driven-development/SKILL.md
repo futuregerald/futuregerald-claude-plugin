@@ -10,6 +10,8 @@ Execute plan by dispatching fresh subagent per task, with two-stage review after
 
 **Core principle:** Fresh subagent per task + two-stage review (spec then quality) = high quality, fast iteration
 
+**PRECONDITION — the plan must have passed PLAN REVIEW.** Before dispatching the first implementer, confirm the plan went through the `plan-review` skill and returned APPROVE. If it did not, run that gate first. The per-task spec and quality reviews below review *code against the plan* — they cannot catch a wrong plan, so they are not a substitute for the plan gate.
+
 ## When to Use
 
 ```dot
