@@ -357,6 +357,149 @@ return g.Wait() // returns the first error and cancels the rest
 
 If you are reaching for a pool inside a single request handler, you probably want `errgroup`.
 
+## Testing concurrent code
+
+Concurrency tests have a problem the code under test does not: there is no way to ask the
+runtime whether it has finished being busy. So they poll (`waitFor` in `pool_test.go`) or they
+sleep, and both answer "has it happened yet?" with a guess. A generous timeout makes the suite
+slow; a tight one makes it flaky on a loaded CI box. Neither is an assertion.
+
+### `testing/synctest` — virtual time and a settled state
+
+**Go 1.25+.** It shipped experimentally in 1.24 behind `GOEXPERIMENT=synctest` with a different
+entry point (`synctest.Run(func())`); the 1.25 API below is the one that stays.
+
+`synctest.Test` runs a function inside a *bubble*, along with every goroutine started in it.
+Two things change inside:
+
+- **The clock is virtual.** It advances only when every goroutine in the bubble is durably
+  blocked, and then jumps straight to the next time something wakes. Simulated seconds cost no
+  wall-clock time.
+- **`synctest.Wait` blocks until every other goroutine in the bubble is durably blocked** —
+  a state where nothing is merely "not done yet". Assert after `Wait` and you are asserting
+  about a settled system rather than photographing a race.
+
+`internal/jobs/pool_test.go` uses it to measure backpressure exactly, which no amount of
+polling can do — polling can see that submissions stopped, not that they stopped at the right
+number:
+
+```go
+// fragment — see TestSubmitBlocksWhenPoolIsSaturated for the whole test
+synctest.Test(t, func(t *testing.T) {
+	p := New(2, 3, func(context.Context, Job) error {
+		time.Sleep(time.Second) // virtual: instant
+		return nil
+	})
+
+	var accepted atomic.Int64
+	go func() {
+		for i := range 12 {
+			if err := p.Submit(context.Background(), i); err != nil {
+				t.Errorf("Submit(%d): %v", i, err)
+				return
+			}
+			accepted.Add(1)
+		}
+	}()
+
+	// Both workers are asleep in a handler and the submitter is parked on a
+	// full queue. 2 in flight + 3 queued, and the 6th Submit is blocked.
+	synctest.Wait()
+	if got := accepted.Load(); got != 5 {
+		t.Fatalf("accepted %d before blocking, want 5 — the queue is not bounded", got)
+	}
+
+	// One second of virtual time frees exactly one slot per worker.
+	time.Sleep(time.Second)
+	synctest.Wait()
+	if got := accepted.Load(); got != 7 {
+		t.Fatalf("accepted %d, want 7", got)
+	}
+})
+```
+
+**"Durably blocked" is narrower than "blocked", and this is the whole gotcha.** Blocked in a
+way only another goroutine *in the bubble* can undo:
+
+| Durably blocking | Not durably blocking |
+|---|---|
+| Send/receive on a channel created in the bubble | Locking a `sync.Mutex` or `RWMutex` |
+| A `select` where every case is such a channel | Network or file I/O |
+| `time.Sleep` | Syscalls |
+| `sync.Cond.Wait` | Anything waiting on a goroutine outside the bubble |
+| `sync.WaitGroup.Wait`, when `Add` ran in the bubble | |
+
+A goroutine sitting on something in the right-hand column never lets the bubble go idle, so
+time stops advancing and `Wait` never returns. `synctest.Test` reports that as a deadlock panic
+rather than hanging, which is the failure mode you want: bubble a component that touches the
+network and the test tells you immediately instead of at the CI timeout.
+
+### `sync.WaitGroup.Go`
+
+**Go 1.25+.** `wg.Go(f)` increments the counter, runs `f` in a new goroutine, and decrements
+when it returns. `New` uses it to start the workers:
+
+```go
+// fragment — what New used to do
+p.wg.Add(workers)
+for i := 0; i < workers; i++ {
+	go p.worker() // and `defer p.wg.Done()` at the top of worker
+}
+
+// fragment — what it does now
+for i := 0; i < workers; i++ {
+	p.wg.Go(p.worker)
+}
+```
+
+The counter can no longer get out of step with the goroutines, which makes the `Add`-inside-
+the-goroutine bug below unrepresentable. **When converting existing code, delete the
+`defer wg.Done()` from the function body.** `Go` owns the decrement; a leftover `Done`
+double-decrements and panics with `sync: negative WaitGroup counter` — on the first shutdown,
+not at the call site that caused it.
+
+### `goleak` for leak assertions
+
+`TestNoGoroutineLeak` in `pool_test.go` compares `runtime.NumGoroutine()` against a baseline
+and tolerates a couple of stragglers, because runtime and timer goroutines come and go. That is
+the weakest test in the file: it counts goroutines, so it can tell you one leaked but never
+which one, and the tolerance that stops it flaking is also what lets a single leak through.
+
+[`go.uber.org/goleak`](https://github.com/uber-go/goleak) does the job properly — it diffs the
+goroutine profile and fails with the *stack* of whatever is still running:
+
+```go
+// fragment — one test
+func TestShutdownLeavesNothingRunning(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	// ...exercise and shut down the component...
+}
+
+// fragment — or the whole package at once
+func TestMain(m *testing.M) { goleak.VerifyTestMain(m) }
+```
+
+This module deliberately does not take that dependency: it is a teaching example, and every
+`require` line is something a reader has to evaluate before copying anything. In a real service
+it is worth taking — a leak that names the goroutine is a five-minute fix, and a leak that only
+shows up as a rising count is an afternoon.
+
+Note that `synctest` covers part of the same ground for free: `synctest.Test` does not return
+until every goroutine in the bubble has exited, so a worker that outlives its shutdown fails
+the test as a deadlock.
+
+### The missing piece: HTTP inside a bubble
+
+Testing an HTTP client or server under virtual time does not work yet. `httptest.NewServer`
+listens on real loopback, and network I/O is not durably blocking — the bubble never goes idle,
+so the clock never moves. **`httptest.NewTestServer`, which serves over an in-memory connection
+instead, lands in Go 1.27.** This module targets `go 1.25.0`, so it is not used here.
+
+Until you are on 1.27 the options are `net.Pipe` for a hand-built connection (this is what the
+`testing/synctest` package documentation's own HTTP example does), or skipping the transport
+entirely and calling the handler with `httptest.NewRecorder` — which is what every test in
+`internal/httpapi` does anyway, and which is faster and clearer regardless of Go version.
+
 ## Classic bugs
 
 Each block below is deliberately wrong.

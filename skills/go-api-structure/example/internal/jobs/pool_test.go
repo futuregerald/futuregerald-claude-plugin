@@ -7,6 +7,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -422,4 +423,77 @@ func TestAcceptedJobIsNeverSilentlyDropped(t *testing.T) {
 				attempt, want, got, want-got)
 		}
 	}
+}
+
+//  14. Backpressure, measured exactly rather than approximately. A saturated
+//     pool holds workers+queueSize jobs and not one more: the next Submit must
+//     BLOCK. Every other test in this file has to reach for a poll loop or a
+//     sleep to talk about "meanwhile", because there is no way to ask the real
+//     scheduler whether it has finished being busy.
+//
+//     testing/synctest (Go 1.25+) removes that problem. Inside a bubble the
+//     clock is virtual and only advances when every goroutine is durably
+//     blocked, and synctest.Wait blocks until that settled state is reached. So
+//     the assertions below are exact, the simulated handler work costs no
+//     wall-clock time, and the result is identical on every run.
+func TestSubmitBlocksWhenPoolIsSaturated(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		const (
+			workers   = 2
+			queueSize = 3
+			jobTime   = time.Second
+			total     = 12
+			// One slot per busy worker plus one per queue slot. Past this the
+			// pool has nowhere to put a job, and Submit's whole contract is
+			// that it waits rather than growing without bound.
+			capacity = workers + queueSize
+		)
+
+		var processed atomic.Int64
+		p := New(workers, queueSize, func(context.Context, Job) error {
+			time.Sleep(jobTime) // virtual time: instant
+			processed.Add(1)
+			return nil
+		})
+
+		var accepted atomic.Int64
+		go func() {
+			for i := range total {
+				if err := p.Submit(context.Background(), i); err != nil {
+					t.Errorf("Submit(%d): %v", i, err)
+					return
+				}
+				accepted.Add(1)
+			}
+		}()
+
+		// Everything is now durably blocked: both workers asleep in a handler,
+		// the submitter parked on a full queue. Nothing is merely "not done
+		// yet", so this count is the real ceiling and not a snapshot of a race.
+		synctest.Wait()
+		if got := accepted.Load(); got != capacity {
+			t.Fatalf("accepted %d jobs before blocking, want exactly %d — the queue is not bounded", got, capacity)
+		}
+
+		// Each completed job frees exactly one slot, so every jobTime lets
+		// exactly `workers` more submissions through. Backpressure is not only
+		// that it stopped — it is the rate.
+		for tick := 1; accepted.Load() < total; tick++ {
+			if tick > total {
+				t.Fatalf("only %d of %d accepted after %d ticks — the pool stopped draining", accepted.Load(), total, tick)
+			}
+			time.Sleep(jobTime)
+			synctest.Wait()
+			if got, want := accepted.Load(), min(int64(capacity+tick*workers), int64(total)); got != want {
+				t.Fatalf("after %v, accepted %d, want %d", time.Duration(tick)*jobTime, got, want)
+			}
+		}
+
+		if err := p.Shutdown(context.Background()); err != nil {
+			t.Fatalf("Shutdown: %v", err)
+		}
+		if got := processed.Load(); got != total {
+			t.Errorf("processed %d of %d — applying backpressure must not mean losing work", got, total)
+		}
+	})
 }

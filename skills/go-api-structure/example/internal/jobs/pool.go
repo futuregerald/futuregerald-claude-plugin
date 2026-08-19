@@ -73,15 +73,18 @@ func New(workers, queueSize int, h Handler, opts ...Option) *Pool {
 		o(p)
 	}
 
-	p.wg.Add(workers)
+	// WaitGroup.Go (Go 1.25+) owns both halves of the counter: it increments
+	// before starting the goroutine and decrements when that goroutine returns.
+	// The Add/Done pair it replaces is the classic place to leak a worker --
+	// an Add without its Done makes Wait hang forever, and a Done without its
+	// Add panics.
 	for i := 0; i < workers; i++ {
-		go p.worker()
+		p.wg.Go(p.worker)
 	}
 	return p
 }
 
 func (p *Pool) worker() {
-	defer p.wg.Done()
 	for {
 		select {
 		case <-p.ctx.Done():
