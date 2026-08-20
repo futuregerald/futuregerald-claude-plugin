@@ -58,7 +58,7 @@ skill-installer --mode config-only --target claude --yes
 
 ### Skills — Teaching Claude How to Work
 
-Skills are markdown-based instruction sets that give Claude specialized knowledge and workflows. When invoked, Claude follows the skill's process exactly. The plugin includes 48 skills covering:
+Skills are markdown-based instruction sets that give Claude specialized knowledge and workflows. When invoked, Claude follows the skill's process exactly. The plugin includes 51 skills covering:
 
 - **Test-driven development** — RED/GREEN/REFACTOR cycle
 - **Systematic debugging** — root-cause-first protocol with feedback-loop construction
@@ -203,7 +203,7 @@ If symlinked to `~/.claude/skills` (installed as personal skills), invoke them b
 
 ## Skills and Agents Reference
 
-### Skills (48)
+### Skills (51)
 
 **Planning & Specs:**
 
@@ -235,6 +235,7 @@ If symlinked to `~/.claude/skills` (installed as personal skills), invoke them b
 | `code-simplifier` | Simplify recently changed code, with Staff Engineer review |
 | `requesting-code-review` | Request review before merge to verify requirements are met |
 | `skill-reviewer` | Review skills for quality, size, and progressive disclosure |
+| `review-lens` | Surface similar past reviewer objections to calibrate findings |
 | `resolving-merge-conflicts` | Resolve an in-progress git merge/rebase conflict |
 
 **Architecture & Modeling:**
@@ -245,6 +246,7 @@ If symlinked to `~/.claude/skills` (installed as personal skills), invoke them b
 | `domain-modeling` | Build and sharpen a project's domain model and ubiquitous language |
 | `architecture-decision-records` | Write and maintain ADRs |
 | `improve-codebase-architecture` | Find module-deepening opportunities; visual report, then grill |
+| `go-api-structure` | Go service layout, interface-driven dependencies, the HTTP edge, structured logging, and bounded concurrency |
 
 **Delivery & Dev Workflow:**
 
@@ -273,6 +275,7 @@ If symlinked to `~/.claude/skills` (installed as personal skills), invoke them b
 | Skill | Description |
 |-------|-------------|
 | `nano-banana` | Image generation and editing |
+| `vectorize` | Convert raster PNG/JPG into clean SVG |
 | `copywriting` | Marketing copy for landing, pricing, and feature pages |
 | `marketing-psychology` | Mental models and behavioral science for marketing |
 
@@ -486,8 +489,8 @@ futuregerald-claude-plugin/
 │       ├── current.md           # /project:current
 │       ├── inbox.md             # /project:inbox
 │       └── cleanup.md           # /project:cleanup
-├── skills/                      # 34 skill directories, each with SKILL.md
-├── agents/                      # 6 agent markdown files
+├── skills/                      # 51 skill directories, each with SKILL.md
+├── agents/                      # 9 agent markdown files
 ├── templates/
 │   ├── CLAUDE-BASE.md           # Base template for generated CLAUDE.md files
 │   └── languages/               # Framework-specific template snippets
