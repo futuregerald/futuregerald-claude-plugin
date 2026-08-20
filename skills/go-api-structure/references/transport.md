@@ -480,12 +480,21 @@ all.
 
 ### A fifth guard arrives with `encoding/json` v2
 
-**As of Go 1.26 the v2 implementation is opt-in**, behind `GOEXPERIMENT=jsonv2`; the announced
-direction is that it becomes what `encoding/json` is built on, with `GOEXPERIMENT=nojsonv2` as
-the opt-out. Check the release notes for the toolchain you are on rather than a version number
+**As of Go 1.27, `encoding/json` is built on the v2 implementation**, with
+`GOEXPERIMENT=nojsonv2` as the opt-out. That is a property of the **toolchain you compile
+with**, not of your `go` directive — a module declaring `go 1.21` gets the v2-backed
+implementation the moment a 1.27 toolchain builds it, so a low directive is not a way to hold
+the old one. Check the release notes for the toolchain you are on rather than a version number
 written here. v1 semantics are intended to be preserved, so this is not a rewrite you have to
 plan for — but **error text differs**, which is what breaks code that asserts on a decode
 error's message rather than on its type.
+
+"Intended" is doing real work in that sentence. On 1.27 a `map` with a struct key marshals to
+`{}` when it is empty, where 1.26 returned `json: unsupported type`; the non-empty case still
+fails, but as an `UnsupportedValueError` where it used to be an `UnsupportedTypeError`.
+Asserting on the type rather than the message is still the better default, but it is not immune
+either — the assertion that survives a toolchain bump is on the status and body your handler
+returns.
 
 Importing `encoding/json/v2` explicitly buys two rejections v1 does not make: **duplicate object
 names and invalid UTF-8**. Both are worth opting into on a public API. Duplicate keys are a
@@ -494,7 +503,9 @@ classic parser differential — a gateway that honours the first `"role"` in
 admin, and neither is malformed under v1's rules, so neither rejects it. `DisallowUnknownFields`
 does not help: both keys are known.
 
-This module targets `go 1.25.0` and stays on v1.
+The example does not import `encoding/json/v2`, so it does not buy those two rejections —
+`decode` is still exactly the four guards above. Being built by a 1.27 toolchain gets it the v2
+implementation; it does not get it v2's stricter defaults.
 
 ### What this does not cover
 
