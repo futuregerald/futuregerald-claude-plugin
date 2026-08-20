@@ -522,18 +522,34 @@ Note that `synctest` covers part of the same ground for free: `synctest.Test` do
 until every goroutine in the bubble has exited, so a worker that outlives its shutdown fails
 the test as a deadlock.
 
-### The missing piece: HTTP inside a bubble
+### HTTP inside a bubble
 
-Testing an HTTP client or server under virtual time does not work yet. `httptest.NewServer`
-listens on real loopback, and network I/O is not durably blocking — the bubble never goes idle,
-so the clock never moves. **As of Go 1.26, `net/http/httptest` offers no server that serves
-over an in-memory connection** — which is what a bubbled HTTP test needs. Adding one is the
-announced direction, so check the `httptest` documentation for the toolchain you are actually
-on rather than trusting a version number written here. This module targets `go 1.25.0` and uses
-no such server.
+`httptest.NewServer` listens on real loopback, and network I/O is not durably blocking — the
+bubble never goes idle, so the clock never moves. What a bubbled HTTP test needs is a server
+that serves over an in-memory connection instead.
 
-Until your toolchain has one, the options are `net.Pipe` for a hand-built connection (this is
-what the `testing/synctest` package documentation's own HTTP example does), or skipping the
+**Go 1.27+.** `net/http/httptest` has one:
+`func NewTestServer(t testing.TB, handler http.Handler) *Server`. Note the `testing.TB` — it is
+not a drop-in for `NewServer(handler)`, so copying `httptest.NewTestServer(handler)` out of
+prose that only names the function is a compile error. Its doc comment is this use case
+exactly: *"NewTestServer returns a new [Server] for a test. The server will use an in-memory
+network implementation by default."* The `httptest` package documentation describes that
+in-memory network as suitable for use with `testing/synctest`, and is where to read how to
+drive it — read it there rather than trusting usage written out here.
+
+**The example module declares `go 1.27.0`, so it clears the gate — and still does not use
+`NewTestServer`.** Every test in `internal/httpapi` drives the handler directly instead, for
+the reason below.
+
+1.27 also adds **`synctest.Sleep(d)`**, which is exactly `time.Sleep(d)` followed by
+`synctest.Wait()`. When the test and the system under test sleep for the same duration, which
+of the two wakes first is unpredictable, and an assertion after a bare `time.Sleep` is back to
+photographing a race; `Sleep` settles the bubble before the test looks at it.
+
+Below 1.27 the fallbacks still apply, and the gate is the module's `go` directive as well as
+the toolchain: a module declaring `go 1.25.0` on a 1.27 toolchain gets `NewTestServer requires
+go1.27 or later (file is go1.25)`. The options are `net.Pipe` for a hand-built connection (this
+is what the `testing/synctest` package documentation's own HTTP example does), or skipping the
 transport entirely and calling the handler with `httptest.NewRecorder` — which is what every
 test in `internal/httpapi` does anyway, and which is faster and clearer regardless of Go
 version.

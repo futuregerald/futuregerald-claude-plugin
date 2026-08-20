@@ -6,9 +6,9 @@ tags: [go, golang, architecture, best-practices]
 
 # Go API Structure
 
-**Targets Go 1.25+**, which the runnable `example/` module declares as `go 1.25.0`. Advice that
-only holds from a particular release carries an inline version gate at the point it is given;
-everything without one applies to any supported toolchain.
+The runnable `example/` module — in this skill's repo, not the installed skill — declares
+`go 1.27.0`. Advice that only holds from a particular release carries an inline version gate at
+the point it is given; everything without one applies to any supported toolchain.
 
 ## The rule everything else follows
 
