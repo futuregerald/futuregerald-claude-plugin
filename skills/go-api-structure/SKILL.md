@@ -20,8 +20,10 @@ go. Get the first wrong and no layout rescues it.
 
 ## The words this skill uses
 
-Four role names, each mapped to the package in `example/` that plays it. The roles matter more
-than the definitions: every rule below is stated in terms of which role may import which.
+Four role names — Domain, Adapter, Transport, Capability — each mapped to the package in
+`example/` that plays it, plus a wire type and the mechanism that inverts a dependency. The roles
+matter more than the definitions: every rule below is stated in terms of which role may import
+which.
 
 | Term | What it means here |
 |---|---|
@@ -186,7 +188,8 @@ A use case is a **method on a service, not a package**. One package per endpoint
 - Name an adapter for **the external system it wraps** — that is the thing you swap — but use
   the **capability** whenever that name would collide with its own client library's package
   (`cache` not `redis`, `sqlstore` not `sqlite`). Collision is the common case, so capability
-  names are the common answer. Full list and reasoning in `references/layout.md`.
+  names are the common answer. Full list and reasoning in
+  [`references/layout.md`](references/layout.md#internaladapter--sqlstore-cache-eventbus-objectstore-payments).
 - Avoid `cmd/http/`; name binaries for what they are (`cmd/api/`), not their transport.
 
 **`golang-standards/project-layout` is not a standard** — name it explicitly when you reject it,
@@ -234,7 +237,7 @@ The red flags below are what none of these can see.
 - A `Query`/`Exec` where a `QueryContext`/`ExecContext` exists — cancellation silently dropped
 - `context.WithTimeout` in a leaf function, overriding a budget the edge already set — the
   exception is deliberately bounding one outbound call so it cannot eat the whole budget
-  (see `references/layout.md`)
+  (see [`references/layout.md`](references/layout.md#context-deadlines-cancellation-values))
 - `context.WithValue` with a bare `string` key, or used to pass a dependency
 - A goroutine outliving its request while still holding the request's `ctx` — see
   `references/concurrency.md` for the bounded alternative
@@ -268,7 +271,8 @@ it has not argued for.
   this skill does constrain is where the answer lives: behind a consumer-declared interface, in
   an adapter package, with driver-specific error decoding confined to one function — see
   `references/interfaces.md` and `references/layout.md`.
-- **Migration tooling.** `golang-migrate`, `atlas`, `goose`. `references/layout.md` states the
+- **Migration tooling.** `golang-migrate`, `atlas`, `goose`.
+  [`references/layout.md`](references/layout.md#migrations) states the
   one rule that is not a tooling preference: do not auto-migrate from the API binary at startup.
 - **API contracts and versioning.** OpenAPI, `oapi-codegen`, spec-first versus code-first, and
   how to version an endpoint. `references/transport.md` covers what a handler does with a
