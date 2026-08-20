@@ -29,11 +29,12 @@ than the definitions: every rule below is stated in terms of which role may impo
 | **Adapter** | Talks to something outside the process — a database, Stripe, S3. `internal/sqlstore`. |
 | **Transport** | Speaks the wire protocol — handlers, JSON, status codes. `internal/httpapi`. |
 | **Capability** | In-process machinery that is neither: a worker pool, a password hasher. Named for what it does. `internal/jobs`. |
+| **DTO** | Data Transfer Object — a struct that exists only to shape data on the wire, carrying the `json:` tags a domain type must not. Separate from the domain type so the API's shape and the business model change independently. |
 | **Consumer-declared interface** | An interface written in the package that *calls* it, not the one that implements it. This is the mechanism that points an arrow the other way. |
 
 **Bounded context** — one coherent slice of the business (`accounts`, `billing`) — decides where
-one package ends and the next begins. **DTO** and **backpressure** are defined where they are
-used, in `references/transport.md` and `references/concurrency.md`.
+one package ends and the next begins. **Backpressure** is defined where it is used, in
+[`references/concurrency.md`](references/concurrency.md#the-problem-this-solves).
 
 ### Why "the import graph is the architecture" is a literal claim
 
