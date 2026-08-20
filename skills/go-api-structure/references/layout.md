@@ -83,6 +83,13 @@ serviceable and is not a bug to fix on sight.
 The point of `accounts.Hasher` is that the choice stays swappable: migrating means adding a
 second implementation and re-hashing on next successful login.
 
+The same collision rule produces the remaining adapter names: where the obvious name is already
+taken by the client library that talks to the system, the adapter takes the capability instead —
+`objectstore` rather than `s3`, `payments` rather than `stripe`, `eventbus` rather than `kafka`,
+`pwhash` rather than `bcrypt`. Some Kafka clients dodge the collision (`sarama`, `franz-go`), but
+the capability name is the one that survives swapping them, which is the reason to prefer it
+either way.
+
 - **May import:** its driver/SDK and the domain packages whose interfaces it satisfies.
 - **May not import:** `internal/httpapi`, or another adapter. Two adapters that need each
   other are being orchestrated in the wrong place — that belongs in a domain service.
