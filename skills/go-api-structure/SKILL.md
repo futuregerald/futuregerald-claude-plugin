@@ -190,9 +190,9 @@ A use case is a **method on a service, not a package**. One package per endpoint
 - Avoid `cmd/http/`; name binaries for what they are (`cmd/api/`), not their transport.
 
 **`golang-standards/project-layout` is not a standard** — name it explicitly when you reject it,
-because an unnamed rule loses to a repo called "Standard Go Project Layout". It is where almost
-every `pkg/` in the wild comes from, and `pkg/` hides nothing while `internal/` is compiler-
-enforced. The provenance is in `references/layout.md`.
+because an unnamed rule loses to a repo called "Standard Go Project Layout". Why it carries that
+authority, and why `pkg/` earns nothing that `internal/` does not,
+is in [`references/layout.md`](references/layout.md#why-there-is-no-pkg).
 
 ## Gates
 
@@ -282,4 +282,4 @@ it has not argued for.
 | `references/transport.md` | Adding or reviewing an endpoint: routing, handlers, decoding and validating a body, where middleware goes and in what order, panic recovery, request IDs, logging at the edge, tracing, liveness vs readiness, rejecting oversized or hostile input |
 | `example/` | A runnable version of this whole service — `cd example && go test ./... -race -shuffle=on && golangci-lint run`, against the `.golangci.yml` it ships. Read `functional/flow_test.go` for what good tests look like here |
 | `references/concurrency.md` | Running work in the background or in parallel: worker pools, job queues, capping how many run at once, backpressure, draining on shutdown, goroutine leaks, `errgroup` |
-| `references/layout.md` | Standing up or restructuring a service: per-directory contracts, tier growth, `main.go` wiring, config, graceful shutdown, context deadlines/cancellation/values, test placement |
+| `references/layout.md` | Standing up or restructuring a service: per-directory contracts, adapter naming, tier growth, `main.go` wiring, config, graceful shutdown, context deadlines/cancellation/values, test placement, and why there is no `pkg/` |
