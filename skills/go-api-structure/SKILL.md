@@ -1,7 +1,7 @@
 ---
 name: go-api-structure
-description: Structure Go API and service codebases — package layout, interface-driven dependency direction, and the HTTP edge. Use when starting a new Go service, adding a feature or endpoint, deciding which package a file or type belongs in, resolving an import cycle, reviewing Go layout in a PR, or answering "how should I structure my Go project". Also use before writing Go code that touches a database, HTTP client, cache, queue, or clock, so it lands behind a consumer-declared interface. Covers the HTTP edge — routing, handlers, middleware placement and order, panic recovery, decoding and validating a JSON body, rejecting oversized input, where wire DTOs live, structured logging with slog, and liveness versus readiness health checks; context — deadlines, cancellation, ctx-first, WithValue keys; config loading; testing — where tests belong, functional tests, fakes, synctest, race and goroutine-leak detection; and concurrency — worker pools, job queues, bounding concurrency, backpressure, graceful shutdown.
-tags: [go, architecture]
+description: Structure Go API and service codebases — package layout, interface-driven dependency direction, and the HTTP edge. Use when starting a Go service, adding a feature or endpoint, deciding which package a file or type belongs in, resolving an import cycle, reviewing Go layout in a PR, or asking "how should I structure my Go project". Also before writing Go that touches a database, HTTP client, cache, queue, or clock, so it lands behind a consumer-declared interface. Covers routing, handlers, middleware placement and order, panic recovery, decoding and validating a JSON body, rejecting oversized input, where wire DTOs live, structured logging with slog, liveness versus readiness probes; context deadlines, cancellation, ctx-first, WithValue keys; config loading; testing — where tests belong, functional tests, fakes, synctest, race and goroutine-leak detection; and concurrency — worker pools, job queues, backpressure, graceful shutdown.
+tags: [go, golang, architecture, best-practices]
 ---
 
 # Go API Structure
@@ -20,20 +20,20 @@ go. Get the first wrong and no layout rescues it.
 
 ## The words this skill uses
 
-Defined here because the rest of the page leans on them. Each is described in terms of the
-running example rather than in the abstract.
+Four role names, each mapped to the package in `example/` that plays it. The roles matter more
+than the definitions: every rule below is stated in terms of which role may import which.
 
 | Term | What it means here |
 |---|---|
-| **Import graph** | A picture of which package imports which: every package is a box, every `import` line an arrow. It is the only structure the Go compiler enforces — and a cycle in it is a hard build error, not a style complaint. |
-| **Domain** | Code holding business rules — "an email must be unique", "a password is stored hashed". Knows nothing about HTTP or databases. Here: `internal/accounts`. |
-| **Adapter** | Code that talks to something outside your process — a database, Stripe, Redis, S3. Here: `internal/sqlstore`. |
-| **Transport** | Code that speaks the wire protocol — HTTP handlers, JSON, status codes. Here: `internal/httpapi`. |
-| **Bounded context** | One coherent slice of the business (`accounts`, `billing`, `catalog`). Used to decide where one package should end and the next begin. |
-| **Consumer-declared interface** | An interface written in the package that *calls* it, rather than the package that implements it. This is what lets you point an arrow the other way. |
-| **DTO** | Data Transfer Object — a struct that exists only to shape data on the wire, with `json:` tags. Kept separate from domain types so the API's shape and the business model can change independently. |
-| **Capability package** | In-process machinery that is neither business rules nor an external system — a worker pool, a password hasher. Named for what it does. |
-| **Backpressure** | What happens when work arrives faster than you can process it: either the producer waits, or the work is refused. An unbounded queue is the one wrong answer. |
+| **Domain** | Business rules — "an email must be unique". Knows nothing about HTTP or databases. `internal/accounts`. |
+| **Adapter** | Talks to something outside the process — a database, Stripe, S3. `internal/sqlstore`. |
+| **Transport** | Speaks the wire protocol — handlers, JSON, status codes. `internal/httpapi`. |
+| **Capability** | In-process machinery that is neither: a worker pool, a password hasher. Named for what it does. `internal/jobs`. |
+| **Consumer-declared interface** | An interface written in the package that *calls* it, not the one that implements it. This is the mechanism that points an arrow the other way. |
+
+**Bounded context** — one coherent slice of the business (`accounts`, `billing`) — decides where
+one package ends and the next begins. **DTO** and **backpressure** are defined where they are
+used, in `references/transport.md` and `references/concurrency.md`.
 
 ### Why "the import graph is the architecture" is a literal claim
 
@@ -182,20 +182,16 @@ A use case is a **method on a service, not a package**. One package per endpoint
   `accounts.User`, not `user.User`.
 - Never `util`, `common`, `helpers`, `shared`, `base`, `misc`, or an app-wide `models`. They
   have no boundary, so everything drifts into them.
-- Name an adapter for **the external system it wraps** — that is the thing you swap. Use the
-  **capability** instead whenever the system's name would collide with its own client library's
-  package name, which in practice is most of them: `cache` not `redis`, `objectstore` not `s3`,
-  `payments` not `stripe`, `eventbus` not `kafka`, `pwhash` not `bcrypt`, `sqlstore` not
-  `sqlite`. Collision is the common case, so capability names are the common answer. See
-  `references/layout.md`.
+- Name an adapter for **the external system it wraps** — that is the thing you swap — but use
+  the **capability** whenever that name would collide with its own client library's package
+  (`cache` not `redis`, `sqlstore` not `sqlite`). Collision is the common case, so capability
+  names are the common answer. Full list and reasoning in `references/layout.md`.
 - Avoid `cmd/http/`; name binaries for what they are (`cmd/api/`), not their transport.
 
-**`golang-standards/project-layout` is not a standard.** It is one person's repository with no
-connection to the Go team, and Russ Cox — Go's tech lead — has said publicly that it is not a
-standard and should not be treated as one. Name it when you reject it, because an unnamed rule
-loses to a repo called "Standard Go Project Layout": that repo is where almost every `pkg/` in
-the wild comes from, and `pkg/` adds a path segment that hides nothing, while `internal/` is
-enforced by the compiler.
+**`golang-standards/project-layout` is not a standard** — name it explicitly when you reject it,
+because an unnamed rule loses to a repo called "Standard Go Project Layout". It is where almost
+every `pkg/` in the wild comes from, and `pkg/` hides nothing while `internal/` is compiler-
+enforced. The provenance is in `references/layout.md`.
 
 ## Gates
 
