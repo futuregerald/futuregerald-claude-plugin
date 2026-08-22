@@ -1,6 +1,6 @@
 ---
 name: go-api-structure
-description: Structure Go API and service codebases — package layout, interface-driven dependency direction, and the HTTP edge. Use when starting a Go service, adding a feature or endpoint, deciding which package a file or type belongs in, resolving an import cycle, reviewing Go layout in a PR, or asking "how should I structure my Go project". Also before writing Go that touches a database, HTTP client, cache, queue, or clock, so it lands behind a consumer-declared interface. Covers routing, handlers, middleware placement and order, panic recovery, decoding and validating a JSON body, rejecting oversized input, where wire DTOs live, structured logging with slog, liveness versus readiness probes; context deadlines, cancellation, ctx-first, WithValue keys; config loading; testing — where tests belong, functional tests, fakes, synctest, race and goroutine-leak detection; and concurrency — worker pools, job queues, backpressure, graceful shutdown.
+description: Structure Go API and service codebases — package layout, interface-driven dependency direction, and the HTTP edge. Use when starting a Go service, adding a feature or endpoint, deciding which package a file or type belongs in, resolving an import cycle, reviewing Go layout in a PR, or asking "how should I structure my Go project". Also before writing Go that touches a database, HTTP client, cache, queue, or clock, so it lands behind a consumer-declared interface. Covers routing, handlers, middleware placement and order, panic recovery, decoding and validating a JSON body, rejecting oversized input, where wire DTOs live, structured logging with slog, liveness versus readiness health checks; context deadlines, cancellation, ctx-first, WithValue keys; config loading; testing — where tests belong, functional tests, fakes, synctest, race and goroutine-leak detection; and concurrency — worker pools, job queues, bounding concurrency, backpressure, graceful shutdown.
 tags: [go, golang, architecture, best-practices]
 ---
 
@@ -20,8 +20,10 @@ go. Get the first wrong and no layout rescues it.
 
 ## The words this skill uses
 
-Four role names, each mapped to the package in `example/` that plays it. The roles matter more
-than the definitions: every rule below is stated in terms of which role may import which.
+Four role names — Domain, Adapter, Transport, Capability — each mapped to the package in
+`example/` that plays it, plus a wire type and the mechanism that inverts a dependency. The roles
+matter more than the definitions: every rule below is stated in terms of which role may import
+which.
 
 | Term | What it means here |
 |---|---|
@@ -29,11 +31,12 @@ than the definitions: every rule below is stated in terms of which role may impo
 | **Adapter** | Talks to something outside the process — a database, Stripe, S3. `internal/sqlstore`. |
 | **Transport** | Speaks the wire protocol — handlers, JSON, status codes. `internal/httpapi`. |
 | **Capability** | In-process machinery that is neither: a worker pool, a password hasher. Named for what it does. `internal/jobs`. |
+| **DTO** | Data Transfer Object — a struct that exists only to shape data on the wire, carrying the `json:` tags a domain type must not. Separate from the domain type so the API's shape and the business model change independently. |
 | **Consumer-declared interface** | An interface written in the package that *calls* it, not the one that implements it. This is the mechanism that points an arrow the other way. |
 
 **Bounded context** — one coherent slice of the business (`accounts`, `billing`) — decides where
-one package ends and the next begins. **DTO** and **backpressure** are defined where they are
-used, in `references/transport.md` and `references/concurrency.md`.
+one package ends and the next begins. **Backpressure** is defined where it is used, in
+[`references/concurrency.md`](references/concurrency.md#the-problem-this-solves).
 
 ### Why "the import graph is the architecture" is a literal claim
 
@@ -185,13 +188,14 @@ A use case is a **method on a service, not a package**. One package per endpoint
 - Name an adapter for **the external system it wraps** — that is the thing you swap — but use
   the **capability** whenever that name would collide with its own client library's package
   (`cache` not `redis`, `sqlstore` not `sqlite`). Collision is the common case, so capability
-  names are the common answer. Full list and reasoning in `references/layout.md`.
+  names are the common answer. Full list and reasoning in
+  [`references/layout.md`](references/layout.md#internaladapter--sqlstore-cache-eventbus-objectstore-payments).
 - Avoid `cmd/http/`; name binaries for what they are (`cmd/api/`), not their transport.
 
 **`golang-standards/project-layout` is not a standard** — name it explicitly when you reject it,
-because an unnamed rule loses to a repo called "Standard Go Project Layout". It is where almost
-every `pkg/` in the wild comes from, and `pkg/` hides nothing while `internal/` is compiler-
-enforced. The provenance is in `references/layout.md`.
+because an unnamed rule loses to a repo called "Standard Go Project Layout". Why it carries that
+authority, and why `pkg/` earns nothing that `internal/` does not,
+is in [`references/layout.md`](references/layout.md#why-there-is-no-pkg).
 
 ## Gates
 
@@ -233,7 +237,7 @@ The red flags below are what none of these can see.
 - A `Query`/`Exec` where a `QueryContext`/`ExecContext` exists — cancellation silently dropped
 - `context.WithTimeout` in a leaf function, overriding a budget the edge already set — the
   exception is deliberately bounding one outbound call so it cannot eat the whole budget
-  (see `references/layout.md`)
+  (see [`references/layout.md`](references/layout.md#context-deadlines-cancellation-values))
 - `context.WithValue` with a bare `string` key, or used to pass a dependency
 - A goroutine outliving its request while still holding the request's `ctx` — see
   `references/concurrency.md` for the bounded alternative
@@ -267,7 +271,8 @@ it has not argued for.
   this skill does constrain is where the answer lives: behind a consumer-declared interface, in
   an adapter package, with driver-specific error decoding confined to one function — see
   `references/interfaces.md` and `references/layout.md`.
-- **Migration tooling.** `golang-migrate`, `atlas`, `goose`. `references/layout.md` states the
+- **Migration tooling.** `golang-migrate`, `atlas`, `goose`.
+  [`references/layout.md`](references/layout.md#migrations) states the
   one rule that is not a tooling preference: do not auto-migrate from the API binary at startup.
 - **API contracts and versioning.** OpenAPI, `oapi-codegen`, spec-first versus code-first, and
   how to version an endpoint. `references/transport.md` covers what a handler does with a
@@ -281,4 +286,4 @@ it has not argued for.
 | `references/transport.md` | Adding or reviewing an endpoint: routing, handlers, decoding and validating a body, where middleware goes and in what order, panic recovery, request IDs, logging at the edge, tracing, liveness vs readiness, rejecting oversized or hostile input |
 | `example/` | A runnable version of this whole service — `cd example && go test ./... -race -shuffle=on && golangci-lint run`, against the `.golangci.yml` it ships. Read `functional/flow_test.go` for what good tests look like here |
 | `references/concurrency.md` | Running work in the background or in parallel: worker pools, job queues, capping how many run at once, backpressure, draining on shutdown, goroutine leaks, `errgroup` |
-| `references/layout.md` | Standing up or restructuring a service: per-directory contracts, tier growth, `main.go` wiring, config, graceful shutdown, context deadlines/cancellation/values, test placement |
+| `references/layout.md` | Standing up or restructuring a service: per-directory contracts, adapter naming, tier growth, `main.go` wiring, config, graceful shutdown, context deadlines/cancellation/values, test placement, and why there is no `pkg/` |

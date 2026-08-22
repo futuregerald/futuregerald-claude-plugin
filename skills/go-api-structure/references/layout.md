@@ -83,6 +83,13 @@ serviceable and is not a bug to fix on sight.
 The point of `accounts.Hasher` is that the choice stays swappable: migrating means adding a
 second implementation and re-hashing on next successful login.
 
+The same collision rule produces the remaining adapter names: where the obvious name is already
+taken by the client library that talks to the system, the adapter takes the capability instead —
+`objectstore` rather than `s3`, `payments` rather than `stripe`, `eventbus` rather than `kafka`,
+`pwhash` rather than `bcrypt`. Some Kafka clients dodge the collision (`sarama`, `franz-go`), but
+the capability name is the one that survives swapping them, which is the reason to prefer it
+either way.
+
 - **May import:** its driver/SDK and the domain packages whose interfaces it satisfies.
 - **May not import:** `internal/httpapi`, or another adapter. Two adapters that need each
   other are being orchestrated in the wrong place — that belongs in a domain service.
@@ -115,8 +122,7 @@ goose supports locking — so serialisation is not the argument; deploy control 
 
 ### Why there is no `pkg/`
 
-`SKILL.md` rejects `golang-standards/project-layout` by name. The provenance is the reason that
-rejection has to be explicit rather than implied.
+`golang-standards/project-layout` is not a standard. Where its authority comes from:
 
 It is one person's repository. It has no connection to the Go team, and Russ Cox — Go's tech
 lead — has said publicly that it is not a standard and should not be treated as one. But it is
@@ -126,9 +132,6 @@ named "Standard Go Project Layout" and it is the top search result, which is whe
 `pkg/` adds a path segment that hides nothing: `pkg/accounts` and `accounts` are equally
 importable by anyone. `internal/` is the one that is actually enforced, by the compiler, which
 is why this skill uses it and nothing else.
-
-Name the repo when you reject it. An unnamed rule loses an argument to a repository with
-"Standard" in its title.
 
 ## Growing through the tiers
 
