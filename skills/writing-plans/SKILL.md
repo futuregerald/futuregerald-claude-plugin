@@ -29,28 +29,16 @@ ignored.
 
 ## Required sections
 
-A plan is rejected at PLAN REVIEW without these.
+Goal · **Impact Analysis** · Approach · Step-by-step TDD tasks · Risks · Rollback · Out of scope.
 
-| Section | What it is | Reference |
-|---|---|---|
-| **Claim Ledger** | Every factual assertion, with `file:line` and what you actually read | [references/claim-ledger.md](references/claim-ledger.md) |
-| **Could Not Verify** | Uncertainty, recorded rather than laundered into prose | [references/claim-ledger.md](references/claim-ledger.md) |
-| **Impact Analysis** | The call chain, up and down, of every symbol touched | [references/impact-analysis.md](references/impact-analysis.md) |
-| Goal · Approach · Risks · Rollback · Out of scope | | |
+**Every plan MUST contain an Impact Analysis** — the call chain, up and down, of every symbol
+the change touches. See *System Thinking: Trace Before You Touch* in CLAUDE.md. A plan without
+one is auto-rejected at PLAN REVIEW, so write it before handing off.
 
-For a plan with more than one task, also carry contract deltas and a moving baseline —
-[references/multiphase.md](references/multiphase.md).
-
-Before tracing anything, read [references/indexing.md](references/indexing.md): use the index
-if there is one, build it once if there is not, and degrade to grep without blocking if the
-tooling is absent.
-
-### Why these three
-
-Measured across 83 real adversarial reviews: **false premises were 43% of gating findings**
-and the sole cause of 12 rejections; **verification that cannot fail was 13%** and is owned
-by no later gate; **intra-plan interference was 8%**. The ledger, the gate-falsifiability
-rules and the moving baseline target those three directly.
+State each factual claim about existing code with the `file:line` you actually read, and say
+plainly what you could not verify rather than writing round it. False premises are the largest
+single cause of rejection at PLAN REVIEW; an unverified claim the plan depends on is worth
+settling before dispatch, not after.
 
 ## Bite-sized task granularity
 
@@ -93,10 +81,14 @@ A cited line range must match the replacement text supplied for it. If the Files
 `foo.rb:12–18` but the replacement covers only `:12–15`, the implementer silently deletes
 three lines.
 
-**Every gate must be able to fail, and you must have watched it fail.** An existence check
-that a one-line stub would satisfy is not a gate. Write `set -euo pipefail`; never let
-`| head` or `| grep` decide an exit status. The full list of failure modes is in
-[references/multiphase.md](references/multiphase.md) under Gate falsifiability.
+**Every gate must be able to fail, and you must have watched it fail.** An existence check that
+a one-line stub would satisfy is not a gate. Write `set -euo pipefail`; never let `| head` or
+`| grep` decide an exit status. A "write the failing test" step whose test would actually pass
+at that point in the sequence is the same defect in test form.
+
+In a multi-task plan, each task changes the tree the next one runs against. Say what each task
+alters about the symbols it touches, and check that a later task's expected output and cited
+line numbers still hold after the earlier ones have run.
 
 ## Remember
 

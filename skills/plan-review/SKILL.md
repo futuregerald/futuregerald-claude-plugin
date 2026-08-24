@@ -10,9 +10,9 @@ author: Gerald Onyango <gerald.onyango@gmail.com>
 Phase 4 of the development lifecycle. The plan is attacked by three fresh reviewers,
 running concurrently, before any code is written.
 
-One reviewer samples rather than drains. Measured against a plan with 22 known defects,
-a single reviewer recalled 11; three recalled 16 between them, with barely any overlap —
-each lens finds what the others structurally cannot.
+One reviewer samples rather than drains. Measured against a plan with 22 known defects, a
+single reviewer recalled 11 and the panel recalled 16 between them — the arms overlapped on
+almost nothing, so each lens finds what the others structurally cannot.
 
 **You never review the plan yourself.** You wrote it — you cannot objectively review
 it, and a reviewer that watched it being built rubber-stamps it. Reading it over again
@@ -29,15 +29,15 @@ is not this phase.
 
 The plan must be a file at `docs/plans/<TICKET>-<slug>.md` and must contain an
 **Impact Analysis** section — the call chain, up and down, of every symbol the change
-touches. Without one the reviewer auto-rejects, so write it before dispatching.
+touches. Without one the reviewers auto-reject, so write it before dispatching.
 
 If no plan file exists, stop and write one (`writing-plans`). Do not dispatch a review
 of an idea held in conversation.
 
 ## Dispatch
 
-Three Agent calls **in one message** so they run concurrently. Wall clock is one review,
-not three. Each gets the identical neutral input block; none is told what the others do.
+Three Agent calls **in one message** so they run concurrently — roughly one round of wall
+clock, not three. Each gets the identical neutral input block; none is told what the others do.
 
 ```
 Agent tool:
@@ -79,6 +79,16 @@ The three lenses are deliberately different and barely overlap:
 | `plan-blindspot-hunter` | Callers, consumers and invisible edges the plan never names |
 | `plan-consistency-checker` | Gates that cannot fail, and task N contradicting task M |
 
+### Do not steer them
+
+**Never include your own suspicions, uncertainties, "areas of concern", or "please
+check X".** A reviewer pointed at your worries inherits your blind spots, which is the
+exact failure this phase exists to prevent. The agents report any steering they detect,
+and a steered review does not count.
+
+Do not summarize the plan for them, pre-empt their findings, or tell them which parts you
+think are risky. Give them the path and the goal; each forms its own view.
+
 ## Merge
 
 When all three return, merge before reporting:
@@ -88,23 +98,6 @@ When all three return, merge before reporting:
   record that two found it independently — that is corroboration, and it is worth keeping.
 - **Never soften a finding while merging, and never drop one because another agent missed
   it.** Disagreement between reviewers is not a tie to be broken; it is the point.
-
-### Do not steer it
-
-**Never include your own suspicions, uncertainties, "areas of concern", or "please
-check X".** A reviewer pointed at your worries inherits your blind spots, which is the
-exact failure this phase exists to prevent. The agent reports any steering it detects,
-and a steered review does not count.
-
-Do not summarize the plan for it, pre-empt its findings, or tell it which parts you
-think are risky. Give it the path and the goal; it forms its own view.
-
-**The Claim Ledger is the one exception, and it is not steering.** A plan may carry a
-ledger — the author's own factual assertions with `file:line` citations. Steering is
-"check X, I am worried about it", which points a reviewer at the author's frame. A ledger
-is a list of liabilities the author has signed for, and every row is a target to falsify.
-It lives *in the plan file*, not in the dispatch prompt, so nothing about the dispatch
-changes.
 
 ## Handling the verdict
 

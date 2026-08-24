@@ -75,7 +75,7 @@ If steps 1–2 leave you confident, stop and cite the evidence. Spiking what you
 - Two attempts, a few minutes. Then abandon it and state only what you can support
 - Where independent checks would run serially, dispatch narrowly-scoped sub-agents in parallel — one question each. Do not spawn an agent for what a single search would answer
 
-**Plan review dispatch:** see the `plan-review` skill — three agents in one message. Give each neutral inputs only — plan path, the goal it serves, repo root, base SHA. Each carries its own methodology; do not restate it, do not tailor the input per agent, and do not steer them. A **Claim Ledger** inside the plan file is not steering: it is a list of the author's own liabilities to falsify.
+**Plan review dispatch:** see the `plan-review` skill — three agents in one message. Give each neutral inputs only — plan path, the goal it serves, repo root, base SHA. Each carries its own methodology; do not restate it, do not tailor the input per agent, and do not steer them.
 
 **Code simplifier rules:**
 - Run after TEST passes, before CODE REVIEW
