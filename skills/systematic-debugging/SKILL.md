@@ -127,6 +127,13 @@ You MUST complete each phase before proceeding to the next.
    - Keep tracing up until you find the source
    - Fix at source, not at symptom
 
+   **At every hop, check whether the function does what its callers assume:**
+   - Can it fail silently — return normally having done nothing?
+   - Does the answer change by environment or deployment shape?
+   - Would the test still pass if this were broken?
+
+   Answer from the code, not from guesswork. See `references/root-cause-tracing.md` → *Interrogate Every Hop*.
+
 ### Phase 2: Pattern Analysis
 
 **Find the pattern before fixing:**
