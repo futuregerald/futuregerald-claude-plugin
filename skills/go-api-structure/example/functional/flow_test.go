@@ -90,17 +90,26 @@ func newStack(t *testing.T) *stack {
 	}
 
 	svc := accounts.NewService(sqlstore.NewAccountStore(db), stubHasher{}, time.Now, newID)
-	// The readiness check is the real one: db.PingContext already has the
-	// func(context.Context) error shape ReadinessCheck asks for, so nothing has
-	// to be written to adapt it. A probe that consults a stub proves nothing --
-	// the point of registering it here is that these tests can kill the actual
-	// database and watch /readyz notice.
+	// The readiness check is the real one -- a probe that consults a stub proves
+	// nothing, and the point of registering it here is that these tests can kill
+	// the actual database and watch /readyz notice.
+	//
+	// It queries a table rather than calling db.PingContext, because reachability
+	// is not readiness: Ping returns nil against a database that has never been
+	// migrated. ErrNoRows is healthy -- an empty users table is still a migrated
+	// one.
 	srv := httpapi.NewServer(httpapi.ServerConfig{
 		Addr:           "127.0.0.1:0",
 		RequestTimeout: 5 * time.Second,
 	}, slog.New(slog.DiscardHandler), svc, httpapi.ReadinessCheck{
-		Name:  "database",
-		Check: db.PingContext,
+		Name: "database",
+		Check: func(ctx context.Context) error {
+			err := db.QueryRowContext(ctx, "SELECT 1 FROM users LIMIT 1").Scan(new(int))
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil
+			}
+			return err
+		},
 	})
 
 	return &stack{db: db, handler: srv.Handler()}
