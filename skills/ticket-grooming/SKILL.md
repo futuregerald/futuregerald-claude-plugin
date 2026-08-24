@@ -88,7 +88,7 @@ Dispatch each sub-agent using the template in **[references/investigation-prompt
 
 ## Staff Engineer Review
 
-After the investigation sub-agent returns, dispatch a review sub-agent using **[references/staff-review-prompt.md](references/staff-review-prompt.md)** with `model: "sonnet"`.
+After the investigation sub-agent returns, dispatch a review sub-agent using **[references/staff-review-prompt.md](references/staff-review-prompt.md)** with `model: "opus"`.
 
 The review checks:
 - Is the note about the reporter's actual problem? (highest priority)

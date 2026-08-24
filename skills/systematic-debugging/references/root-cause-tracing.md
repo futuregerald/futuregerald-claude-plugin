@@ -72,6 +72,26 @@ const context = setupCoreTest() // Returns { tempDir: '' }
 Project.create('name', context.tempDir) // Accessed before beforeEach!
 ```
 
+## Interrogate Every Hop
+
+Tracing shows where execution went, not whether each hop did the right thing.
+
+At every hop, ask whether the function does what its callers assume — then check
+these specifically, because they are the ones that get skipped:
+
+- Can it fail **silently** — return normally having done nothing?
+- Does the answer change by **environment or deployment shape**? Answer per variant.
+- What does the **platform** enforce here that the code never mentions?
+- **Would the test still pass if this were broken?** What can the test double not
+  represent?
+
+Answer from the code in front of you. If you can't point at the line that makes an
+answer true, you haven't checked it — say so rather than guessing.
+
+Example: a `document.cookie` write is silently discarded when the server already set
+that cookie HttpOnly. Nothing throws, the caller reads it back empty, and jsdom cannot
+model HttpOnly so the test stayed green.
+
 ## Adding Stack Traces
 
 When you can't trace manually, add instrumentation:

@@ -62,4 +62,11 @@ When Datadog MCP is available and the ticket touches request paths, background j
 - Reference existing monitors that will be affected
 - Flag error patterns that inform the design
 - Note if Datadog was unavailable and metrics were skipped
+
+**Reproducibility (MANDATORY):**
+Every Datadog finding in the notes MUST include either:
+1. A direct Datadog URL (logs explorer, trace, dashboard) that the reader can click to see the data, OR
+2. The exact query to reproduce the finding — service name, time range (absolute timestamps), filters, and facets — so the reader can paste it into the Datadog UI and see the same results
+
+"I found it in Datadog" without a link or reproducible query is not evidence. The reader must be able to verify your claim in under 30 seconds.
 ```
