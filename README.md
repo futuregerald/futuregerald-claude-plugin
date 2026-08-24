@@ -77,7 +77,7 @@ Skills are invoked by name in Claude Code:
 
 ### Agents — Specialized Sub-Agents
 
-Agents are dispatched via the `Task` tool to handle focused work with fresh context. The plugin includes 9 agents: code quality reviewer, code simplifier (with Staff Engineer review), codebase searcher, context finder (index/memory-aware read-only search), debugger, implementer, security reviewer, spec reviewer, and SQL performance reviewer.
+Agents are dispatched via the `Task` tool to handle focused work with fresh context. The plugin includes 12 agents: adversarial plan reviewer, plan blind-spot hunter, plan self-consistency checker, code quality reviewer, code simplifier (with Staff Engineer review), codebase searcher, context finder (index/memory-aware read-only search), debugger, implementer, security reviewer, spec reviewer, and SQL performance reviewer.
 
 ### Development Workflow — A Structured Lifecycle
 
@@ -86,7 +86,7 @@ The plugin defines a 10-phase development lifecycle in the generated CLAUDE.md:
 ```
  1. RECEIVE     Understand task, create todo list
  2. PLAN        Write implementation plan
- 3. REVIEW      Staff Engineer sub-agent reviews the plan
+ 3. REVIEW      Three concurrent sub-agents review the plan (plan-review skill)
  4. IMPLEMENT   Write code following TDD
  5. TEST        Run tests and type checking
  6. SIMPLIFY    Code-simplifier agent analyzes for improvements
@@ -296,12 +296,15 @@ If symlinked to `~/.claude/skills` (installed as personal skills), invoke them b
 | `team-pulse` | Engineering-manager team status reports |
 | `meeting-debrief` | Strategic meeting analysis from Krisp transcripts |
 
-### Agents (9)
+### Agents (12)
 
 Agents are specialized sub-agents dispatched via the Task tool. They run with fresh context and no knowledge of the parent conversation.
 
 | Agent | Description |
 |-------|-------------|
+| `adversarial-plan-reviewer` | Attacks a plan before any code is written; verifies premises and runtime semantics |
+| `plan-blindspot-hunter` | Finds callers, consumers and invisible edges a plan never names |
+| `plan-consistency-checker` | Finds gates that cannot fail, and task N contradicting task M |
 | `code-quality-reviewer` | Reviews code for quality issues |
 | `code-simplifier` | Analyzes code for simplification, with Staff Engineer review |
 | `codebase-searcher` | Searches and explores codebases |
@@ -490,7 +493,7 @@ futuregerald-claude-plugin/
 │       ├── inbox.md             # /project:inbox
 │       └── cleanup.md           # /project:cleanup
 ├── skills/                      # 51 skill directories, each with SKILL.md
-├── agents/                      # 9 agent markdown files
+├── agents/                      # 12 agent markdown files
 ├── templates/
 │   ├── CLAUDE-BASE.md           # Base template for generated CLAUDE.md files
 │   └── languages/               # Framework-specific template snippets
@@ -559,7 +562,7 @@ The full development lifecycle managed by the plugin follows this sequence:
 ```
  1. RECEIVE TASK     Create a GitHub issue, create a git worktree + feature branch
  2. PLAN             Write an implementation plan (writing-plans skill)
- 3. REVIEW PLAN      Staff Engineer sub-agent reviews the plan (must approve)
+ 3. REVIEW PLAN      Three concurrent sub-agents review the plan (all must be clean)
  4. IMPLEMENT        Write code following TDD in the worktree (sub-agents do the work)
  5. TEST             Run all tests and type checking (must pass)
  6. SIMPLIFY         Code-simplifier agent analyzes for improvements (Staff review)

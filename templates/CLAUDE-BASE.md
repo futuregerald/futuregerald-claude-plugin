@@ -18,7 +18,7 @@
 |-------|--------|------------|------|
 | 1. RECEIVE | Understand task, create todo list | `TaskCreate` | Todo list exists |
 | 2. PLAN | Write implementation plan | `superpowers:writing-plans` | Plan document created |
-| 3. REVIEW PLAN | Staff Engineer reviews plan | `superpowers:code-reviewer` via `Task` | Reviewer approves |
+| 3. REVIEW PLAN | Adversarial review by three fresh sub-agents, concurrently | `plan-review` skill → `adversarial-plan-reviewer` + `plan-blindspot-hunter` + `plan-consistency-checker` | Zero CRITICAL, zero IMPORTANT |
 | 4. IMPLEMENT | Write code following TDD | `superpowers:test-driven-development` | Tests exist and pass |
 | 5. TEST | `{{TEST_COMMAND}}` + `{{TYPECHECK_COMMAND}}` | — | Zero failures |
 | 6. SIMPLIFY | `Task(subagent_type="code-simplifier")` | `code-simplifier` agent | Staff review complete |
@@ -40,13 +40,10 @@
 - Only proceed after explicit reviewer approval
 - `ExitPlanMode` requires prior staff engineer approval of the plan
 
-**Plan review prompt template:**
-```
-Task(subagent_type="superpowers:code-reviewer", prompt="
-  Review this plan: <path>. Verify: file paths accurate, codebase facts correct,
-  no missing edge cases, response shapes match actual patterns, nothing already implemented.
-")
-```
+**Plan review dispatch:** invoke the `plan-review` skill. It dispatches three agents in one
+message and carries the prompt format. Give each neutral inputs only — plan path, the goal
+it serves, repo root, base SHA. Never hand a reviewer your own suspicions or a checklist of
+what to look at: a reviewer aimed at your worries inherits your blind spots.
 
 **Code simplifier rules:**
 - Run after tests pass (Phase 5), before review (Phase 7)
