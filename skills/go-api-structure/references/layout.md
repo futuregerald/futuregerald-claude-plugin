@@ -274,8 +274,20 @@ func run() error {
 	}, logger, accountSvc, httpapi.ReadinessCheck{
 		// main is the only place holding the *sql.DB, so it is the only place
 		// that can hand httpapi a check without httpapi importing a driver.
-		Name:  "database",
-		Check: db.PingContext,
+		//
+		// Probe the schema, not the connection. PingContext answers "is the
+		// database reachable", which is not the question /readyz asks -- it
+		// returns nil against a database that has never been migrated, and
+		// creates the file as a side effect, so a fresh replica reports ready
+		// and 500s every write. Swallow ErrNoRows: an empty table is migrated.
+		Name: "database",
+		Check: func(ctx context.Context) error {
+			err := db.QueryRowContext(ctx, "SELECT 1 FROM users LIMIT 1").Scan(new(int))
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil
+			}
+			return err
+		},
 	})
 
 	// main owns signal handling and hands the resulting context down.
@@ -291,6 +303,10 @@ variables.
 
 Note `sql.Open` does not connect — it validates arguments and returns lazily. Call
 `db.PingContext` during startup if the process should fail fast on an unreachable database.
+That is the question `Ping` does answer, and it is a different question from the one `/readyz`
+asks. Reachability is not readiness: a reachable database with no schema serves nothing, so the
+readiness check above queries a table instead. Use `Ping` to fail fast at boot, and a real query
+to decide whether this instance should be sent traffic.
 
 `main` returning through `run() error` keeps `defer` working — `log.Fatal` skips deferred
 calls, so connections never close on the error path.
