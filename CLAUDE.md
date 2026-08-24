@@ -16,7 +16,7 @@
 | 1. RECEIVE | Understand task, create todo list | `TaskCreate` | Todo list exists |
 | 2. IMPACT ANALYSIS | Trace the call chain — up and down — of every symbol the change touches | See **System Thinking** below | Callers, callees, contract, coverage recorded |
 | 3. PLAN | Write implementation plan (always required, including one-line fixes) | `writing-plans` | Plan file exists and contains the Impact Analysis |
-| 4. PLAN REVIEW | Adversarial review by a fresh sub-agent | `plan-review` skill → `adversarial-plan-reviewer` | Verdict APPROVE — zero CRITICAL, zero IMPORTANT |
+| 4. PLAN REVIEW | Adversarial review by three fresh sub-agents, concurrently | `plan-review` → `adversarial-plan-reviewer` + `plan-blindspot-hunter` + `plan-consistency-checker` (3 concurrent) | Verdict APPROVE — zero CRITICAL, zero IMPORTANT |
 | 5. IMPLEMENT | Write code following TDD | `test-driven-development` | Tests exist and pass |
 | 6. TEST | `go test ./...` | — | Zero failures |
 | 7. SIMPLIFY | `Agent(subagent_type="code-simplifier")` | `code-simplifier` agent | Staff review complete |
@@ -33,7 +33,7 @@
 
 **All phases are MANDATORY. No exceptions. No skipping "simple" changes.**
 
-- **PLAN REVIEW, SIMPLIFY, CODE REVIEW, and SQL REVIEW** MUST use a fresh sub-agent via the Agent tool — no shared context
+- **PLAN REVIEW, SIMPLIFY, CODE REVIEW, and SQL REVIEW** MUST use fresh sub-agents via the Agent tool — no shared context. PLAN REVIEW dispatches three concurrently
 - NEVER review your own plan or code — you wrote it, you cannot objectively review it
 - **PLAN REVIEW is not CODE REVIEW.** Plan review and code review are separate gates with separate agents. Passing one never satisfies the other, and a code review cannot recover a wrong plan
 - **No source file gets edited before PLAN REVIEW passes.** This includes "while I'm in here" fixes
@@ -58,7 +58,7 @@ Before modifying any function, method, type, endpoint, or schema, reconstruct it
 
 Use graph tools first, grep second and only for what graphs cannot see. Conclusions rest on files actually read.
 
-**The bar:** "I read the function and it looks fine" is not an impact analysis. If you cannot name every caller and say what each expects, IMPACT ANALYSIS is not done — and the PLAN REVIEW reviewer will rebuild this chain independently and treat any caller you missed as at least IMPORTANT.
+**The bar:** "I read the function and it looks fine" is not an impact analysis. If you cannot name every caller and say what each expects, IMPACT ANALYSIS is not done — and the PLAN REVIEW reviewers will rebuild this chain independently and treat any caller you missed as at least IMPORTANT.
 
 ### Prove It, Don't Assume It
 
@@ -75,7 +75,7 @@ If steps 1–2 leave you confident, stop and cite the evidence. Spiking what you
 - Two attempts, a few minutes. Then abandon it and state only what you can support
 - Where independent checks would run serially, dispatch narrowly-scoped sub-agents in parallel — one question each. Do not spawn an agent for what a single search would answer
 
-**Plan review dispatch:** see the `plan-review` skill. Give the agent neutral inputs only — plan path, the goal it serves, repo root, base SHA. It carries its own methodology; do not restate it, and do not steer it.
+**Plan review dispatch:** see the `plan-review` skill — three agents in one message. Give each neutral inputs only — plan path, the goal it serves, repo root, base SHA. Each carries its own methodology; do not restate it, do not tailor the input per agent, and do not steer them. A **Claim Ledger** inside the plan file is not steering: it is a list of the author's own liabilities to falsify.
 
 **Code simplifier rules:**
 - Run after TEST passes, before CODE REVIEW
@@ -210,7 +210,7 @@ After every PR is created, automatically:
 | Trigger | Skill |
 |---------|-------|
 | **Any code change, before writing code (PLAN)** | `writing-plans` — always required, including one-line fixes. Must contain the Impact Analysis |
-| **Plan written, before implementing (PLAN REVIEW)** | `plan-review` → `adversarial-plan-reviewer` agent. **Also the required response to "review the plan" in any phrasing.** Never review a plan yourself |
+| **Plan written, before implementing (PLAN REVIEW)** | `plan-review` → three concurrent reviewers (`adversarial-plan-reviewer`, `plan-blindspot-hunter`, `plan-consistency-checker`). **Also the required response to "review the plan" in any phrasing.** Never review a plan yourself |
 | Code review before commit (CODE REVIEW) | `comprehensive-code-review` — parallel correctness + safety sub-agents |
 | Bug investigation | `systematic-debugging` |
 | New feature | `test-driven-development` (RED→GREEN→REFACTOR) |
