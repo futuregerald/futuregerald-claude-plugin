@@ -18,15 +18,14 @@
 |-------|--------|------------|------|
 | 1. RECEIVE | Understand task, create todo list | `TaskCreate` | Todo list exists |
 | 2. PLAN | Write implementation plan | `superpowers:writing-plans` | Plan document created |
-| 3. REVIEW PLAN | Adversarial review by three fresh sub-agents, concurrently | `plan-review` skill → `adversarial-plan-reviewer` + `plan-blindspot-hunter` + `plan-consistency-checker` | Zero CRITICAL, zero IMPORTANT |
-| 4. IMPLEMENT | Write code following TDD | `superpowers:test-driven-development` | Tests exist and pass |
-| 5. TEST | `{{TEST_COMMAND}}` + `{{TYPECHECK_COMMAND}}` | — | Zero failures |
-| 6. SIMPLIFY | `Task(subagent_type="code-simplifier")` | `code-simplifier` agent | Staff review complete |
-| 7. REVIEW | `comprehensive-code-review` skill — dispatches 5 parallel sub-agents (code quality, pattern consistency, SQL, security, simplification) | Fresh sub-agents | Findings documented by severity |
-| 8. FIX FINDINGS | Address all CRITICAL findings; address or explicitly defer IMPORTANT findings (tracking issue + user approval); track MINOR findings | — | All CRITICAL + IMPORTANT resolved; MINOR tracked |
-| 9. COMMIT | `git commit` | — | Commit created |
-| 10. PUSH | Push feature branch; `gh pr create` with `Closes #N` if `gh` available | — | Branch pushed (PR created if `gh`) |
-| 11. VERIFY CI | If `gh`: `gh run list`, autonomous PR review, auto-merge when green | — | CI green (if applicable) |
+| 3. IMPLEMENT | Write code following TDD | `superpowers:test-driven-development` | Tests exist and pass |
+| 4. TEST | `{{TEST_COMMAND}}` + `{{TYPECHECK_COMMAND}}` | — | Zero failures |
+| 5. SIMPLIFY | `Task(subagent_type="code-simplifier")` | `code-simplifier` agent | Staff review complete |
+| 6. REVIEW | `comprehensive-code-review` skill — dispatches 5 parallel sub-agents (code quality, pattern consistency, SQL, security, simplification) | Fresh sub-agents | Findings documented by severity |
+| 7. FIX FINDINGS | Address all CRITICAL findings; address or explicitly defer IMPORTANT findings (tracking issue + user approval); track MINOR findings | — | All CRITICAL + IMPORTANT resolved; MINOR tracked |
+| 8. COMMIT | `git commit` | — | Commit created |
+| 9. PUSH | Push feature branch; `gh pr create` with `Closes #N` if `gh` available | — | Branch pushed (PR created if `gh`) |
+| 10. VERIFY CI | If `gh`: `gh run list`, autonomous PR review, auto-merge when green | — | CI green (if applicable) |
 
 **Exceptions that skip planning:** pure doc updates, `git revert`.
 
@@ -34,27 +33,21 @@
 
 **All phases are MANDATORY. No exceptions. No skipping "simple" changes.**
 
-- **Phases 3, 6, 7** MUST use `Task` tool or `Agent` tool (fresh sub-agents, no shared context)
-- NEVER review your own plan or code — you wrote it, you cannot objectively review it
+- **Phases 5, 6** MUST use `Task` tool or `Agent` tool (fresh sub-agents, no shared context)
+- NEVER review your own code — you wrote it, you cannot objectively review it
 - If reviewer finds CRITICAL/IMPORTANT issues: fix, re-run tests, re-review
 - Only proceed after explicit reviewer approval
-- `ExitPlanMode` requires prior staff engineer approval of the plan
-
-**Plan review dispatch:** invoke the `plan-review` skill. It dispatches three agents in one
-message and carries the prompt format. Give each neutral inputs only — plan path, the goal
-it serves, repo root, base SHA. Never hand a reviewer your own suspicions or a checklist of
-what to look at: a reviewer aimed at your worries inherits your blind spots.
 
 **Code simplifier rules:**
-- Run after tests pass (Phase 5), before review (Phase 7)
+- Run after tests pass (Phase 4), before review (Phase 6)
 - Only implement APPROVED simplifications
 - Re-run tests after applying changes
 
-**Review rules (Phase 7 — `comprehensive-code-review`):**
+**Review rules (Phase 6 — `comprehensive-code-review`):**
 - Invoke the `comprehensive-code-review` skill — it orchestrates all review dimensions in parallel
 - Covers: code quality, pattern consistency, SQL performance, security (OWASP), and simplification
 - SQL sub-agent is automatically dispatched if DB-touching files changed; skipped otherwise
-- **CRITICAL findings:** MUST be fixed before commit — hard block on Phase 8. Re-run tests and re-review after fixes.
+- **CRITICAL findings:** MUST be fixed before commit — hard block on Phase 7. Re-run tests and re-review after fixes.
 - **IMPORTANT findings:** MUST be addressed before commit — fix the code, or (if scope-expanding) open a tracking issue AND get explicit user approval to defer. Cannot silently skip.
 - **MINOR findings:** address if straightforward; otherwise open a tracking issue. Do not block commit.
 - Max 3 review cycles before escalating to user
@@ -162,7 +155,7 @@ After every PR is created, automatically:
 ### Project Board (Kanban)
 
 - Columns: Todo → In Progress → Done
-- Move to "In Progress" when implementation starts (Phase 4)
+- Move to "In Progress" when implementation starts (Phase 3)
 - Move to "Done" after PR merged and cleaned up
 - Use `gh project item-edit` with `--jq` for filtering (no external `jq`)
 
@@ -182,13 +175,13 @@ If the codebase-memory-mcp server is configured, use these tools proactively —
 | Context | Tool | Purpose |
 |---------|------|---------|
 | Phase 2 (PLAN) | `get_architecture` | Understand affected areas before planning |
-| Phase 7 (REVIEW) | `search_graph`, `trace_call_path` | Verify no callers are broken, check impact radius; SQL callers traced by SQL sub-agent |
+| Phase 6 (REVIEW) | `search_graph`, `trace_call_path` | Verify no callers are broken, check impact radius; SQL callers traced by SQL sub-agent |
 | Debugging (`systematic-debugging`) | `trace_call_path`, `search_graph` | Understand call chains and dependencies before guessing |
 | Searching for relationships | `search_graph` | Prefer over text grep when searching for function/class relationships |
 
 **Rules:**
 - During **debugging**, ALWAYS use `trace_call_path` and `search_graph` to understand the call chain and dependencies before proposing fixes. Don't guess — trace.
-- During **review** (Phase 7), ALWAYS use `search_graph` to check the impact radius of changes and verify no callers are broken.
+- During **review** (Phase 6), ALWAYS use `search_graph` to check the impact radius of changes and verify no callers are broken.
 - During **planning** (Phase 2), use `get_architecture` to understand the affected areas.
 - Use `search_graph` over text grep when searching for function relationships, not just text matches.
 
@@ -201,7 +194,7 @@ If the codebase-memory-mcp server is configured, use these tools proactively —
 | Bug investigation | `systematic-debugging` |
 | New feature | `superpowers:test-driven-development` (RED→GREEN→REFACTOR) |
 | Database queries/mutations changed | `sql-optimization-patterns` + `sql-reviewer` agent |
-| Code review (Phase 7+8), reviewing a PR, or GitHub code review requested | `comprehensive-code-review` — orchestrates parallel sub-agents for code quality, patterns, SQL, security, and simplification |
+| Code review (Phase 6+7), reviewing a PR, or GitHub code review requested | `comprehensive-code-review` — orchestrates parallel sub-agents for code quality, patterns, SQL, security, and simplification |
 | Creating or updating a pull request | `pull-request-description` — structured summary, background, test plan, rollback plan. **Mandatory for both new PRs and PR description updates.** |
 | About to claim completion | `verification-before-completion` |
 

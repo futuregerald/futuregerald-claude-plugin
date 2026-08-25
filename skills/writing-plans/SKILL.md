@@ -32,13 +32,13 @@ ignored.
 Goal · **Impact Analysis** · Approach · Step-by-step TDD tasks · Risks · Rollback · Out of scope.
 
 **Every plan MUST contain an Impact Analysis** — the call chain, up and down, of every symbol
-the change touches. See *System Thinking: Trace Before You Touch* in CLAUDE.md. A plan without
-one is auto-rejected at PLAN REVIEW, so write it before handing off.
+the change touches. See *System Thinking: Trace Before You Touch* in CLAUDE.md. BLAST-RADIUS
+VERIFY walks this list before COMMIT, so a plan without one leaves that phase nothing to check.
 
 State each factual claim about existing code with the `file:line` you actually read, and say
-plainly what you could not verify rather than writing round it. False premises are the largest
-single cause of rejection at PLAN REVIEW; an unverified claim the plan depends on is worth
-settling before dispatch, not after.
+plainly what you could not verify rather than writing round it. A plan built on an unverified
+premise fails during implementation, which is the expensive place to find out — settle it
+while writing, not after.
 
 ## Bite-sized task granularity
 
@@ -100,21 +100,9 @@ line numbers still hold after the earlier ones have run.
 
 ## Execution handoff
 
-**MANDATORY GATE — do not skip, and do not offer execution before it passes.**
+After saving the plan, offer the execution choice:
 
-After saving the plan, PLAN REVIEW runs. Invoke the `plan-review` skill, which dispatches
-three concurrent reviewers — `adversarial-plan-reviewer`, `plan-blindspot-hunter` and
-`plan-consistency-checker` — against the saved plan file. Never review the plan yourself; you
-wrote it, and a self-review is exactly what this gate replaces.
-
-- **REJECT** (any CRITICAL or IMPORTANT from any reviewer): fix the plan, re-review with
-  fresh agents. Do not offer execution, and do not begin implementation.
-- **APPROVE**: report the findings and Verified Recommendations, then offer execution.
-
-Only after APPROVE, offer the execution choice:
-
-**"Plan complete, saved to `docs/plans/<filename>.md`, and APPROVED by adversarial review.
-Two execution options:**
+**"Plan complete, saved to `docs/plans/<filename>.md`. Two execution options:**
 
 **1. Subagent-Driven (this session)** — I dispatch a fresh subagent per task, review between
 tasks, fast iteration

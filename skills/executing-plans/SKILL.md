@@ -19,14 +19,11 @@ Load plan, review critically, execute tasks in batches, report for review betwee
 ### Step 1: Load and Review Plan
 
 1. Read plan file
-2. **Confirm the plan passed PLAN REVIEW.** If it has not been through the `plan-review`
-   skill and returned APPROVE, stop and run that gate first. Do NOT substitute your own
-   read-through — a self-review is the failure mode the gate exists to prevent.
-3. Confirm the plan contains an Impact Analysis. If it does not, it cannot have passed
-   review; send it back.
-4. If a genuinely new concern surfaces that the review did not cover, raise it with your
-   human partner before starting
-5. Create TodoWrite and proceed
+2. Confirm the plan contains an Impact Analysis. If it does not, send it back — BLAST-RADIUS
+   VERIFY has nothing to walk without one.
+3. If a genuinely new concern surfaces while reading, raise it with your human partner
+   before starting
+4. Create TodoWrite and proceed
 
 ### Step 2: Execute Batch
 

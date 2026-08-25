@@ -1,43 +1,40 @@
 ---
 name: plan-review
-description: MANDATORY before writing any code. Dispatches three concurrent reviewers - adversarial-plan-reviewer, plan-blindspot-hunter and plan-consistency-checker - to independently attack an implementation plan and verify its Impact Analysis against the real code. Use whenever the user says "review the plan", "review this plan", "plan review", "check the plan", "is this plan right", "adversarial review", "grill this plan", or whenever a plan has been written and implementation is about to start. This is a separate gate from code review and cannot be satisfied by reviewing the plan yourself.
-tags: [plan, review, adversarial, gate, lifecycle, impact-analysis]
+description: Use when the user asks to review a plan, sanity-check a plan, grill a plan, poke holes in a plan, or do an adversarial review of a plan. Dispatches one fresh staff-engineer reviewer against the plan file. Runs once before implementation - findings are fixed, and the plan is never sent back for a second review.
+tags: [plan, review, adversarial, staff-engineer]
+model: opus
 author: Gerald Onyango <gerald.onyango@gmail.com>
 ---
 
 # Plan Review
 
-Phase 4 of the development lifecycle. The plan is attacked by three fresh reviewers,
-running concurrently, before any code is written.
+Dispatch one fresh reviewer to attack an implementation plan the way an experienced staff
+engineer would, then fix what it finds before writing code.
 
-One reviewer samples rather than drains. Measured against a plan with 22 known defects, a
-single reviewer recalled 11 and the panel recalled 16 between them — the arms overlapped on
-almost nothing, so each lens finds what the others structurally cannot.
+**This is a gate, and it runs exactly once.** Blocking and Worth-fixing findings are fixed
+before implementation starts. The plan is *not* sent back for a second review — you verify
+your own fixes against the plan diff and proceed. One pass, then implement.
 
-**You never review the plan yourself.** You wrote it — you cannot objectively review
-it, and a reviewer that watched it being built rubber-stamps it. Reading it over again
-is not this phase.
+That single pass is the whole design. A gate that re-reviews until it is satisfied is
+unbounded: the previous version of this gate ran to a median of ~5 rounds and a maximum of 9,
+which cost more than the defects it caught were worth.
 
-## When this runs
+## When to use
 
-- Any time a plan exists and implementation is next — mandatory, including one-line fixes
-- Any time the user asks to review, check, grill, or sanity-check a plan
-- Before `ExitPlanMode`
-- Again after every revision — a re-review always uses a fresh agent, never the same one
+- The user asks to review, sanity-check, grill, or poke holes in a plan
+- A plan is written and it is worth a second pair of eyes before implementing
+
+Judgment call, not an automatic step on every plan. A one-line fix with an obvious blast
+radius does not need it; a change touching a contract other code depends on does.
 
 ## Preconditions
 
-The plan must be a file at `docs/plans/<TICKET>-<slug>.md` and must contain an
-**Impact Analysis** section — the call chain, up and down, of every symbol the change
-touches. Without one the reviewers auto-reject, so write it before dispatching.
-
-If no plan file exists, stop and write one (`writing-plans`). Do not dispatch a review
-of an idea held in conversation.
+A plan file must exist. If the plan is still an idea in the conversation, write it down
+first (`writing-plans`) — there is nothing to review otherwise.
 
 ## Dispatch
 
-Three Agent calls **in one message** so they run concurrently — roughly one round of wall
-clock, not three. Each gets the identical neutral input block; none is told what the others do.
+One Agent call:
 
 ```
 Agent tool:
@@ -51,77 +48,31 @@ Agent tool:
     Base SHA: <git rev-parse HEAD>
 ```
 
-```
-Agent tool:
-  subagent_type: plan-blindspot-hunter
-  description: "Plan blind-spot hunt"
-  prompt: |
-    <the identical block above, byte for byte>
-```
+That is the entire prompt. The agent carries its own methodology — do not restate it.
 
-```
-Agent tool:
-  subagent_type: plan-consistency-checker
-  description: "Plan self-consistency check"
-  prompt: |
-    <the identical block above, byte for byte>
-```
+**Do not steer it.** No suspicions, no "areas of concern", no "please check X". A reviewer
+pointed at your worries inherits your blind spots, which defeats the point of dispatching a
+fresh one. Do not summarise the plan for it either; let it form its own view. The agent
+reports steering it detects.
 
-That is the entire prompt for each. Every agent carries its own methodology — do not
-restate it, do not tailor the input per agent, and do not tell any of them that the
-others exist.
+If the reviewer will read a working tree shared with other sessions, add one line telling it
+to investigate read-only and not to mutate git state. That is a safety constraint about the
+checkout, not steering about the plan.
 
-The three lenses are deliberately different and barely overlap:
+## Handling the findings
 
-| Agent | Finds |
-|---|---|
-| `adversarial-plan-reviewer` | Wrong premises, and runtime semantics the plan asserts but never proves |
-| `plan-blindspot-hunter` | Callers, consumers and invisible edges the plan never names |
-| `plan-consistency-checker` | Gates that cannot fail, and task N contradicting task M |
+Relay every finding with its evidence, at the severity the reviewer assigned. **Never soften
+a finding while relaying it, and never quietly drop one.**
 
-### Do not steer them
+- **Blocking** and **Worth fixing** — fix the plan before implementing.
+- **Minor** — fix when trivial; otherwise surface it with the reviewer's evidence and let
+  the author decide.
+- A finding you believe is factually wrong gets explained to the author, with your evidence.
+  Never argue one away silently.
 
-**Never include your own suspicions, uncertainties, "areas of concern", or "please
-check X".** A reviewer pointed at your worries inherits your blind spots, which is the
-exact failure this phase exists to prevent. The agents report any steering they detect,
-and a steered review does not count.
+Then **verify each fix against the plan diff yourself** and report the evidence per finding.
+That verification is what replaces a second review — do not re-dispatch, and do not ask for
+another round. Once the fixes are verified, implementation starts.
 
-Do not summarize the plan for them, pre-empt their findings, or tell them which parts you
-think are risky. Give them the path and the goal; each forms its own view.
-
-## Merge
-
-When all three return, merge before reporting:
-
-- Concatenate every finding. Drop exact duplicates only.
-- Where two agents describe the same defect, keep the more specific failure scenario and
-  record that two found it independently — that is corroboration, and it is worth keeping.
-- **Never soften a finding while merging, and never drop one because another agent missed
-  it.** Disagreement between reviewers is not a tie to be broken; it is the point.
-
-## Handling the verdict
-
-**Any CRITICAL or IMPORTANT from any of the three ⇒ REJECT.** No agent's verdict overrides
-another's, and a clean report from two does not offset a finding from the third. All three
-clean ⇒ APPROVE.
-
-**REJECT** — Fix the plan, re-review with three fresh agents.
-Never argue a finding away; never proceed on a rejected plan.
-
-**APPROVE** — implementation may begin. MINOR findings remain mandatory fixes; approval
-is not permission to skip them. The only exception is a finding that is factually
-incorrect, which is explained to the author rather than silently dropped.
-
-**Verified Recommendations** are separate: emitted only for things established
-empirically with a `file:line` citation at very high confidence — never style rules or
-inference. They do not gate the plan. Surface each to the author with its evidence and
-recommend adopting it; the call is theirs. An empty section is a good outcome.
-
-## Report back
-
-Verdict, then every finding with its evidence, then the Impact Analysis audit —
-especially **any caller the reviewer found that the plan missed**, which is the signal
-that the plan's system-level thinking was too shallow. Then Verified Recommendations,
-then what you are changing and the re-dispatch.
-
-Never paraphrase a finding into something softer than the reviewer wrote.
+Reading the plan over yourself is not a substitute for the review itself. You wrote it; a
+self-review is exactly what the fresh reviewer replaces.
