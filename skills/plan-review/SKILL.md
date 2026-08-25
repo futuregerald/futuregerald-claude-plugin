@@ -1,6 +1,6 @@
 ---
 name: plan-review
-description: Use when the user asks to review a plan, sanity-check a plan, grill a plan, poke holes in a plan, or do an adversarial review of a plan. Dispatches one fresh staff-engineer reviewer against the plan file and reports what it found. Advisory, not a gate.
+description: Use when the user asks to review a plan, sanity-check a plan, grill a plan, poke holes in a plan, or do an adversarial review of a plan. Dispatches one fresh staff-engineer reviewer against the plan file. Runs once before implementation - findings are fixed, and the plan is never sent back for a second review.
 tags: [plan, review, adversarial, staff-engineer]
 model: opus
 author: Gerald Onyango <gerald.onyango@gmail.com>
@@ -9,18 +9,23 @@ author: Gerald Onyango <gerald.onyango@gmail.com>
 # Plan Review
 
 Dispatch one fresh reviewer to attack an implementation plan the way an experienced staff
-engineer would, then report back what it found.
+engineer would, then fix what it finds before writing code.
 
-**Advisory, not a gate.** It does not approve or reject. It does not re-dispatch. A finding
-does not block implementation. The author reads the findings and decides.
+**This is a gate, and it runs exactly once.** Blocking and Worth-fixing findings are fixed
+before implementation starts. The plan is *not* sent back for a second review — you verify
+your own fixes against the plan diff and proceed. One pass, then implement.
+
+That single pass is the whole design. A gate that re-reviews until it is satisfied is
+unbounded: the previous version of this gate ran to a median of ~5 rounds and a maximum of 9,
+which cost more than the defects it caught were worth.
 
 ## When to use
 
 - The user asks to review, sanity-check, grill, or poke holes in a plan
-- A plan is written and a second pair of eyes is genuinely worth it before implementing
+- A plan is written and it is worth a second pair of eyes before implementing
 
-**On demand only.** Do not run it automatically on every plan, and do not treat it as a
-phase that must pass before code gets written.
+Judgment call, not an automatic step on every plan. A one-line fix with an obvious blast
+radius does not need it; a change touching a contract other code depends on does.
 
 ## Preconditions
 
@@ -54,13 +59,20 @@ If the reviewer will read a working tree shared with other sessions, add one lin
 to investigate read-only and not to mutate git state. That is a safety constraint about the
 checkout, not steering about the plan.
 
-## Reporting back
+## Handling the findings
 
 Relay every finding with its evidence, at the severity the reviewer assigned. **Never soften
 a finding while relaying it, and never quietly drop one.**
 
-Then say what you are doing about each — fixing it, or leaving it and why. A finding you
-believe is factually wrong gets explained to the author, not silently skipped.
+- **Blocking** and **Worth fixing** — fix the plan before implementing.
+- **Minor** — fix when trivial; otherwise surface it with the reviewer's evidence and let
+  the author decide.
+- A finding you believe is factually wrong gets explained to the author, with your evidence.
+  Never argue one away silently.
 
-Reading the plan over yourself is not a substitute for this. You wrote it; a self-review is
-exactly what the fresh reviewer replaces.
+Then **verify each fix against the plan diff yourself** and report the evidence per finding.
+That verification is what replaces a second review — do not re-dispatch, and do not ask for
+another round. Once the fixes are verified, implementation starts.
+
+Reading the plan over yourself is not a substitute for the review itself. You wrote it; a
+self-review is exactly what the fresh reviewer replaces.

@@ -210,7 +210,7 @@ If symlinked to `~/.claude/skills` (installed as personal skills), invoke them b
 |-------|-------------|
 | `brainstorming` | Explore intent, requirements, and design before implementation |
 | `writing-plans` | Turn a spec into a bite-sized, TDD-driven implementation plan |
-| `plan-review` | On-demand staff-engineer review of a plan; advisory, never a gate |
+| `plan-review` | Staff-engineer review of a plan before implementing; one pass, never re-reviewed |
 | `executing-plans` | Execute a written plan with review checkpoints |
 | `subagent-driven-development` | Execute independent plan tasks via fresh sub-agents |
 | `dispatching-parallel-agents` | Run 2+ independent tasks concurrently |
@@ -302,7 +302,7 @@ Agents are specialized sub-agents dispatched via the Task tool. They run with fr
 
 | Agent | Description |
 |-------|-------------|
-| `adversarial-plan-reviewer` | Staff-engineer review of an implementation plan; advisory, one pass |
+| `adversarial-plan-reviewer` | Attacks an implementation plan before code is written; runs once |
 | `code-quality-reviewer` | Reviews code for quality issues |
 | `code-simplifier` | Analyzes code for simplification, with Staff Engineer review |
 | `codebase-searcher` | Searches and explores codebases |
