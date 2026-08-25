@@ -77,7 +77,7 @@ Skills are invoked by name in Claude Code:
 
 ### Agents — Specialized Sub-Agents
 
-Agents are dispatched via the `Task` tool to handle focused work with fresh context. The plugin includes 12 agents: adversarial plan reviewer, plan blind-spot hunter, plan self-consistency checker, code quality reviewer, code simplifier (with Staff Engineer review), codebase searcher, context finder (index/memory-aware read-only search), debugger, implementer, security reviewer, spec reviewer, and SQL performance reviewer.
+Agents are dispatched via the `Task` tool to handle focused work with fresh context. The plugin includes 9 agents: code quality reviewer, code simplifier (with Staff Engineer review), codebase searcher, context finder (index/memory-aware read-only search), debugger, implementer, security reviewer, spec reviewer, and SQL performance reviewer.
 
 ### Development Workflow — A Structured Lifecycle
 
@@ -86,15 +86,14 @@ The plugin defines a 10-phase development lifecycle in the generated CLAUDE.md:
 ```
  1. RECEIVE     Understand task, create todo list
  2. PLAN        Write implementation plan
- 3. REVIEW      Three concurrent sub-agents review the plan (plan-review skill)
- 4. IMPLEMENT   Write code following TDD
- 5. TEST        Run tests and type checking
- 6. SIMPLIFY    Code-simplifier agent analyzes for improvements
- 7. CODE REVIEW Code-reviewer sub-agent reviews changes
- 8. SQL REVIEW  Staff Engineer audits queries for performance, security, defensive coding
- 9. COMMIT      Commit to feature branch
-10. PUSH + PR   Push and create PR (if gh available)
-11. VERIFY CI   Check CI passes; auto-merge when green
+ 3. IMPLEMENT   Write code following TDD
+ 4. TEST        Run tests and type checking
+ 5. SIMPLIFY    Code-simplifier agent analyzes for improvements
+ 6. CODE REVIEW Code-reviewer sub-agent reviews changes
+ 7. SQL REVIEW  Staff Engineer audits queries for performance, security, defensive coding
+ 8. COMMIT      Commit to feature branch
+ 9. PUSH + PR   Push and create PR (if gh available)
+10. VERIFY CI   Check CI passes; auto-merge when green
 ```
 
 Each phase has a gate — the workflow doesn't advance until the gate passes. This works entirely locally. For teams using GitHub, an optional beta workflow adds issue tracking, worktrees, and autonomous PR review (see [GitHub Workflow](#github-workflow-optional--beta) below).
@@ -296,15 +295,12 @@ If symlinked to `~/.claude/skills` (installed as personal skills), invoke them b
 | `team-pulse` | Engineering-manager team status reports |
 | `meeting-debrief` | Strategic meeting analysis from Krisp transcripts |
 
-### Agents (12)
+### Agents (9)
 
 Agents are specialized sub-agents dispatched via the Task tool. They run with fresh context and no knowledge of the parent conversation.
 
 | Agent | Description |
 |-------|-------------|
-| `adversarial-plan-reviewer` | Attacks a plan before any code is written; verifies premises and runtime semantics |
-| `plan-blindspot-hunter` | Finds callers, consumers and invisible edges a plan never names |
-| `plan-consistency-checker` | Finds gates that cannot fail, and task N contradicting task M |
 | `code-quality-reviewer` | Reviews code for quality issues |
 | `code-simplifier` | Analyzes code for simplification, with Staff Engineer review |
 | `codebase-searcher` | Searches and explores codebases |
@@ -562,15 +558,14 @@ The full development lifecycle managed by the plugin follows this sequence:
 ```
  1. RECEIVE TASK     Create a GitHub issue, create a git worktree + feature branch
  2. PLAN             Write an implementation plan (writing-plans skill)
- 3. REVIEW PLAN      Three concurrent sub-agents review the plan (all must be clean)
- 4. IMPLEMENT        Write code following TDD in the worktree (sub-agents do the work)
- 5. TEST             Run all tests and type checking (must pass)
- 6. SIMPLIFY         Code-simplifier agent analyzes for improvements (Staff review)
- 7. CODE REVIEW      Code-reviewer sub-agent reviews changes (must approve)
- 8. SQL REVIEW       Staff Engineer audits queries for performance, security, defensive coding
- 9. COMMIT           Commit to the feature branch
-10. PUSH + PR        Push branch, create PR with "Closes #N" to auto-close the issue
-11. VERIFY CI        Check that CI passes; fix and re-push if it fails
+ 3. IMPLEMENT        Write code following TDD in the worktree (sub-agents do the work)
+ 4. TEST             Run all tests and type checking (must pass)
+ 5. SIMPLIFY         Code-simplifier agent analyzes for improvements (Staff review)
+ 6. CODE REVIEW      Code-reviewer sub-agent reviews changes (must approve)
+ 7. SQL REVIEW       Staff Engineer audits queries for performance, security, defensive coding
+ 8. COMMIT           Commit to the feature branch
+ 9. PUSH + PR        Push branch, create PR with "Closes #N" to auto-close the issue
+10. VERIFY CI        Check that CI passes; fix and re-push if it fails
 ```
 
 Each phase has a verification gate. The workflow does not advance until the gate passes. For example, code review must explicitly approve before SQL review runs, SQL review must approve before a commit is created, and CI must be green before work is considered done.

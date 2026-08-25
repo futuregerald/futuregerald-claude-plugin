@@ -143,9 +143,9 @@ Tests passing (<N> tests, 0 failures)
 Ready to implement <feature-name>
 ```
 
-**A worktree is a workspace, not a gate bypass.** No source file gets edited in it until
-the plan for this work has passed PLAN REVIEW via the `plan-review` skill. If no reviewed
-plan exists yet, the next step is IMPACT ANALYSIS and PLAN — not implementation.
+**A worktree is a workspace, not a shortcut past planning.** No source file gets edited in it
+until a plan for this work exists. If none does yet, the next step is IMPACT ANALYSIS and
+PLAN — not implementation.
 
 ## Quick Reference
 
