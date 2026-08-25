@@ -77,7 +77,7 @@ Skills are invoked by name in Claude Code:
 
 ### Agents — Specialized Sub-Agents
 
-Agents are dispatched via the `Task` tool to handle focused work with fresh context. The plugin includes 9 agents: code quality reviewer, code simplifier (with Staff Engineer review), codebase searcher, context finder (index/memory-aware read-only search), debugger, implementer, security reviewer, spec reviewer, and SQL performance reviewer.
+Agents are dispatched via the `Task` tool to handle focused work with fresh context. The plugin includes 10 agents: adversarial plan reviewer, code quality reviewer, code simplifier (with Staff Engineer review), codebase searcher, context finder (index/memory-aware read-only search), debugger, implementer, security reviewer, spec reviewer, and SQL performance reviewer.
 
 ### Development Workflow — A Structured Lifecycle
 
@@ -202,7 +202,7 @@ If symlinked to `~/.claude/skills` (installed as personal skills), invoke them b
 
 ## Skills and Agents Reference
 
-### Skills (51)
+### Skills (52)
 
 **Planning & Specs:**
 
@@ -210,6 +210,7 @@ If symlinked to `~/.claude/skills` (installed as personal skills), invoke them b
 |-------|-------------|
 | `brainstorming` | Explore intent, requirements, and design before implementation |
 | `writing-plans` | Turn a spec into a bite-sized, TDD-driven implementation plan |
+| `plan-review` | On-demand staff-engineer review of a plan; advisory, never a gate |
 | `executing-plans` | Execute a written plan with review checkpoints |
 | `subagent-driven-development` | Execute independent plan tasks via fresh sub-agents |
 | `dispatching-parallel-agents` | Run 2+ independent tasks concurrently |
@@ -295,12 +296,13 @@ If symlinked to `~/.claude/skills` (installed as personal skills), invoke them b
 | `team-pulse` | Engineering-manager team status reports |
 | `meeting-debrief` | Strategic meeting analysis from Krisp transcripts |
 
-### Agents (9)
+### Agents (10)
 
 Agents are specialized sub-agents dispatched via the Task tool. They run with fresh context and no knowledge of the parent conversation.
 
 | Agent | Description |
 |-------|-------------|
+| `adversarial-plan-reviewer` | Staff-engineer review of an implementation plan; advisory, one pass |
 | `code-quality-reviewer` | Reviews code for quality issues |
 | `code-simplifier` | Analyzes code for simplification, with Staff Engineer review |
 | `codebase-searcher` | Searches and explores codebases |
