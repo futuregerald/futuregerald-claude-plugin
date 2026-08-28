@@ -211,6 +211,26 @@ After every PR is created, automatically:
 
 ---
 
+## Code Comments (Hard Rule)
+
+**Write no code comments. Ask the user before adding any, every time. No exceptions.**
+
+If you think a comment is warranted, stop and ask, saying what a reader would get wrong without it. Do not write it and flag it afterwards. Do not write one because the surrounding file already has them.
+
+**The bar:** a competent engineer reading this code would reach a *wrong conclusion* without the comment. "It's helpful," "it explains the why," and "it documents the edge case" do not clear it. Rename the thing, extract a function, or write a test that states the case — all three age with the code; a comment does not.
+
+Never write: what the code does · how the language, framework, or library works · your reasoning or rejected alternatives (that belongs in the commit or PR) · product rationale inside reusable code · **a ticket reference**.
+
+Ticket references are called out because they rot fastest — the reference goes stale as soon as the code moves.
+
+Leave existing comments alone unless the change makes them wrong.
+
+**Names carry the meaning.** Renaming is the first tool, not the fallback — when a better name makes the code read clearly, use it. A name that conveys intent removes the reason the comment existed, and unlike a comment it cannot drift from the code. Prefer a longer, unambiguous name over a short one that needs explaining.
+
+Names say what the code *does*, not why product wants it — `CopyPentestQnr`, not `CopyQnrForResearch`.
+
+---
+
 ## Verification Before Completion (Always On)
 
 Evidence before claims. Never state that something is done, fixed, passing, or working without having run the check in THIS turn and read its output.
