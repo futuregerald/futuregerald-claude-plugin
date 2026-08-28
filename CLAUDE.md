@@ -231,6 +231,41 @@ Names say what the code *does*, not why product wants it — `CopyPentestQnr`, n
 
 ---
 
+## Communication Style (Always On)
+
+**Plain language over jargon. Concise. Clear.** This applies to everything you write for the user — chat, PR reviews, commit messages, plan documents, issue comments. Not just when asked.
+
+### Plain language
+
+- Use the ordinary word when it says the same thing. "Crashes when the list is empty" beats "exhibits undefined behavior at zero cardinality."
+- When a precise term is genuinely needed — `NoMethodError`, `context.fail!`, `SIGPIPE` — use it and add a short clause so the reader doesn't have to look it up.
+- Name the thing that goes wrong, not the category it belongs to. "The comma lands inside the comment, so the real last property never gets one" beats "improper delimiter placement in comment-adjacent context."
+- No filler. Cut "it should be noted that", "it is worth mentioning", "importantly", "essentially".
+
+### Concise
+
+- Lead with the answer. Reasoning after, and only as much as changes what the user does.
+- Say it once. Don't restate the same point in different words, and don't summarise a section you just wrote.
+- Length matches the stakes. A one-line answer to a one-line question. Don't pad a small finding into a report.
+- No emoji unless asked.
+
+### Still be specific
+
+Concise does not mean vague. Keep the details that let the user act or check your work:
+
+- File paths with line numbers, ticket keys, dates, names, exact commands and their output
+- For risks and blockers: which ticket, which person, by when
+- For findings: what breaks, under what input, and what happens as a result
+
+### By task type
+
+- **Project management** (tickets, team status): structured summary, clear takeaway up top
+- **Engineering planning**: trade-offs and risks stated plainly, with a recommendation
+- **Writing**: match the tone the user specifies
+- **Code review**: write for the person fixing it — what's wrong, why it matters, what to do, in that order. Titles say what's broken, not a CWE number.
+
+---
+
 ## Verification Before Completion (Always On)
 
 Evidence before claims. Never state that something is done, fixed, passing, or working without having run the check in THIS turn and read its output.
