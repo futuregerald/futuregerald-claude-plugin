@@ -26,6 +26,19 @@ Near the top, so a reader knows how much to trust the rest. Cover, in a few line
 
 Keep it about method, not machine. "Driven through real API requests as an authorized user" — not which database or port.
 
+## Source-only reports
+
+When the user has chosen a report without a running app, the content is the same but the labelling is not. A reader must never mistake it for a verified pass.
+
+- **Title it as one.** "Source review" or "Unverified source review", not "QA verification".
+- **First line of the methodology says so**, before anything else: findings come from reading the code and have not been confirmed by running it.
+- **Every finding is a prediction.** Write "this would return X" rather than "this returns X", and drop the measured-evidence section — quote the source instead.
+- **Say what is out of reach**, briefly: whether a path actually runs, what the logs emit, what a request returns, feature-switch state, timing and background work.
+- **No verified/reproduced counts** in the TL;DR. Count findings, not confirmations.
+- **Add a next step**: which findings most need confirming once an environment is available, ordered by how much rests on them.
+
+The tracker and git-history searches still apply in full — they need no running app, and they are what stops a source-only report re-filing known work.
+
 ## Every finding needs
 
 - **What breaks**, in plain words.

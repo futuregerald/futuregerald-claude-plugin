@@ -14,15 +14,30 @@ Common things that block a start, worth checking before escalating: a required c
 
 ### If you cannot get it running
 
-Stop and ask. Do not carry on and produce a report from reading the source alone — it will look exactly like a real QA report while being half-verified, which is worse than not writing one.
+Stop and ask. Do not carry on and silently produce a report from reading the source alone — unlabelled, it looks exactly like a verified QA report while being half of one.
 
 Keep the ask short:
 
 - what you looked for and what you tried
 - whether they already have the environment set up, and where it lives
 - a link to the setup instructions or the local-environment repo, **taken from this project's own documentation** — never a guessed URL
+- whether they want a source-only report instead
 
-Then wait. If the user says to proceed without it, say plainly in the report that findings were not reproduced and mark every one of them unverified.
+Then wait.
+
+### Offering the source-only report
+
+Put the choice to them honestly, in both directions. A source-only pass is a real deliverable — it catches requirements with no implementation behind them, code that contradicts the specification, logic errors visible on the page, and gaps in test coverage. Much of a QA pass survives without a running app.
+
+What it cannot do is confirm any of it. Be concrete about the gap rather than waving at it, because the difference is where the worst defects live:
+
+- **Whether a code path actually runs.** Code can be present, correct, and never reached — gated behind a switch that is off, or in a branch nothing enters.
+- **What the logs actually say.** A log line that reads correctly can emit the wrong value at runtime.
+- **What a request actually returns.** Status, body, and the resulting state after the call.
+- **Configuration and feature-switch state**, which frequently decides the behavior under test.
+- **Timing, ordering, and async effects** — what a background job does, and when.
+
+Say plainly that findings will be predictions rather than observations, and that some will be wrong. Then let the user choose. If they take it, label the report as `references/report-format.md` requires.
 
 ## Pick the thinnest path that is still real
 

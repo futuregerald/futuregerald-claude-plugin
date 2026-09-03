@@ -34,8 +34,9 @@ When you ask, keep it short and specific:
 - what you looked for and what you tried
 - whether they already have the environment set up, and where it lives
 - a link to the setup instructions or local-environment repo **taken from this project's own docs** — never a guessed URL
+- **whether they want a source-only report instead.** Offer it honestly: reading the source does find real problems, but nothing in it is confirmed by running code, logs, or actual request and response behavior. It is a weaker deliverable, not a worthless one — let them decide.
 
-Then wait. Resume once you can reach a running app.
+Then wait. If they choose source-only, `references/report-format.md` covers how to label it so no reader mistakes it for a verified one.
 
 ## 2. Collect the acceptance criteria
 
