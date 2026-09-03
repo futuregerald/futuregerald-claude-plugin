@@ -1,6 +1,6 @@
 ---
 name: qa-verification
-description: "Verifies that shipped work actually meets a ticket's acceptance criteria, by both reading the code and running it. Every finding is confirmed twice — traced in the source and reproduced against a running app — then checked against the tracker so existing tickets are linked rather than re-filed. Produces a QA report written for a product manager and posts it to the ticket. Use when asked to QA a ticket, test whether acceptance criteria were met, verify an epic or story was really delivered, check whether shipped work matches what was asked for, or when a PM says no testing has been done."
+description: "Verifies that shipped work actually meets a ticket's acceptance criteria, by both reading the code and running it. Every finding is confirmed twice — traced in the source and reproduced against a running app — then checked against the tracker and git history so existing tickets are linked rather than re-filed. Requires a runnable local environment; asks the user rather than falling back to a code-only review. Produces a QA report written for a product manager and posts it to the ticket. Use when asked to QA a ticket, test whether acceptance criteria were met, verify an epic or story was really delivered, or check whether shipped work matches what was asked for."
 tags: [workflow, testing, project-management]
 model: opus
 ---
@@ -21,7 +21,23 @@ Reading the source tells you what *should* happen. Running it tells you what *do
 
 If you catch yourself writing "the code does not call X" without having watched it not call X, stop and go run it.
 
-## 1. Collect the acceptance criteria
+## 1. Get the app running first — this is a prerequisite, not a step
+
+**Without a running local environment you cannot do this work.** Half of every finding comes from running the code, so a QA pass on an app you cannot start is not a QA pass.
+
+Find how this project runs locally: its README, `CONTRIBUTING`, `CLAUDE.md`, a compose file, a setup script, or a separate repo the project points at for local infrastructure. Start it and confirm it actually responds before testing anything.
+
+**If you cannot get it running, stop and ask the user.** Do not quietly fall back to a report based only on reading the source — that is the exact failure this skill exists to prevent, and a report that looks the same but is half-verified is worse than no report.
+
+When you ask, keep it short and specific:
+
+- what you looked for and what you tried
+- whether they already have the environment set up, and where it lives
+- a link to the setup instructions or local-environment repo **taken from this project's own docs** — never a guessed URL
+
+Then wait. Resume once you can reach a running app.
+
+## 2. Collect the acceptance criteria
 
 Three sources, all required:
 
@@ -31,13 +47,13 @@ Three sources, all required:
 
 Write them out and number them before testing anything, so the report can reference them and so a criterion cannot quietly go unchecked.
 
-## 2. Trace each criterion in the code
+## 3. Trace each criterion in the code
 
 Find the code implementing each one. Record file and line. Form a specific prediction — meets, fails, or partial, and under exactly what input.
 
 A prediction is not a result. It tells you what to go run.
 
-## 3. Run it
+## 4. Run it
 
 Full guidance in `references/running-the-code.md`. In short:
 
@@ -47,7 +63,7 @@ Full guidance in `references/running-the-code.md`. In short:
 - **Positive control first.** Before claiming something does not happen, prove your setup can observe it happening. Otherwise you cannot tell a real absence from a broken harness.
 - Leave no residue: no rows, no flag changes, no stray files.
 
-## 4. Check the tracker and the git history before calling anything new
+## 5. Check the tracker and the git history before calling anything new
 
 Two searches, both required, before any finding is called new:
 
@@ -55,13 +71,9 @@ Two searches, both required, before any finding is called new:
 
 Read the near misses too, not just the exact matches. A closed ticket covering adjacent behavior usually sharpens the finding: it may show the requirement was met and yours is a *different* requirement, or that one code path was fixed and a sibling path was left behind. Either reframing is more useful than the finding on its own.
 
-**The git history.** Check whether a later change already fixed it. A ticket marked Done tells you someone believed it was fixed, not that it is; a defect you found by reading old code may have been fixed since. Search merged pull requests and the log for the files and symbols involved.
+**The git history.** Check whether a later change already fixed it — a ticket marked Done tells you someone believed it was fixed, not that it is. Search merged pull requests and the log for the files involved. Testing against current `main` rather than the branch the ticket shipped on settles this by construction; say in the report which commit you tested. Check the reverse too: before citing an open ticket as covering a finding, confirm its fix has not already landed.
 
-The cleanest way to satisfy this is to test against current `main` rather than the branch the ticket shipped on — then anything you reproduce is present in the code today, by construction. Say in the report which commit you tested.
-
-Run it the other way too: for each existing ticket you are about to cite as covering a finding, confirm the fix has not already landed. Citing an open ticket for a defect that was quietly fixed is the same error in reverse.
-
-## 5. Check whether the existing tests catch it
+## 6. Check whether the existing tests catch it
 
 Run the relevant suite. For each finding it misses, say *why* it misses — usually one of:
 
@@ -69,9 +81,9 @@ Run the relevant suite. For each finding it misses, say *why* it misses — usua
 - the behavior is outside anything the tests assert
 - there is no test for that path at all
 
-This tells the team where to add coverage, and explains how the work passed review.
+This tells the team where to add coverage.
 
-## 6. Write the report and post it
+## 7. Write the report and post it
 
 Structure, language rules, and posting mechanics: `references/report-format.md`.
 

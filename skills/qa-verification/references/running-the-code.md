@@ -2,6 +2,28 @@
 
 How to actually exercise the behavior, so a finding rests on observed output rather than a reading of the source.
 
+## Start with a running app
+
+This is the prerequisite for everything else here. Get it up before collecting criteria, so you find out early if you cannot.
+
+Where projects record it: the README, `CONTRIBUTING`, `CLAUDE.md`, a `docker-compose.yml`, a `Procfile`, a `bin/setup` or `bin/dev` script, or a separate repository holding the local infrastructure for a group of services. Check the local machine before assuming nothing exists — the environment may already be set up, or partly running.
+
+Confirm it genuinely responds before trusting it. Supporting services running is not the same as the app being up, and an app booting is not the same as it answering a request. Make one real request and look at the response.
+
+Common things that block a start, worth checking before escalating: a required credential or token that is missing, a service the app depends on that is not running, or migrations that have not been applied since the last pull.
+
+### If you cannot get it running
+
+Stop and ask. Do not carry on and produce a report from reading the source alone — it will look exactly like a real QA report while being half-verified, which is worse than not writing one.
+
+Keep the ask short:
+
+- what you looked for and what you tried
+- whether they already have the environment set up, and where it lives
+- a link to the setup instructions or the local-environment repo, **taken from this project's own documentation** — never a guessed URL
+
+Then wait. If the user says to proceed without it, say plainly in the report that findings were not reproduced and mark every one of them unverified.
+
 ## Pick the thinnest path that is still real
 
 In order of preference, take the first one that genuinely exercises the change:
