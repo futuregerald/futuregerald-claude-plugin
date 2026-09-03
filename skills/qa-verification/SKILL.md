@@ -9,6 +9,8 @@ model: opus
 
 Confirm that what shipped matches what was asked for, and write it up so a product manager can act on it.
 
+This is routine quality work. Do it because the work is worth checking, not because someone complained that it hadn't been — and write it that way.
+
 **Announce at start:** "Using qa-verification to test [ticket] against its acceptance criteria."
 
 ## The rule that matters
@@ -79,6 +81,7 @@ Publish it as an artifact for sharing, and post a version to the ticket itself.
 
 - **Nothing environment-specific in the report.** No database names, row counts, ports, local paths, or seed data. They mean nothing to a reader on a different machine and nothing at all to a PM. Keep those in the working notes.
 - **Never address individuals with questions.** Anything unresolved goes in a single Open questions section at the end.
+- **Open with method and a TL;DR**, not with why the report exists. No framing the work as a response to someone's request.
 - **Plain language.** Say what breaks, when, and what happens as a result. Where a technical term is genuinely needed, use it and explain it in a clause.
 - **Full evidence collapsed by default.** Verdict and findings visible; measured output, file references and method behind a collapsed block.
 - **Report faithfully.** If a scenario was not reproduced, say so plainly and say what you did instead. A single overclaim discredits the whole report.

@@ -4,8 +4,8 @@ The report is read by a product manager first and an engineer second. Write for 
 
 ## Structure
 
-1. **Verdict** — one or two sentences. What works, what does not, how many defects.
-2. **Methodology** — near the top, short. See below.
+1. **How this was checked** — the methodology, first. See below.
+2. **TL;DR** — one or two sentences. What works, what does not, how many defects, and the one to fix first.
 3. **Acceptance criteria** — a table, one row per criterion, each Met / Partial / Failed with a one-line note. Include criteria taken from comments, visibly marked as such.
 4. **Findings** — one entry each, ordered by severity. Title says what breaks. Then: what happens, the measured evidence, where in the code, and why it matters.
 5. **Why the tests did not catch it** — per finding or grouped by reason.
@@ -88,3 +88,7 @@ Confirm the newest comment contains `expand`, `table`, and `codeBlock` nodes rat
 ## Tone
 
 Describe gaps in delivered work factually, not as blame. The useful sentence is what is broken and what it costs — not who missed it. Where the ticket itself was ambiguous, say that; it is usually the real cause.
+
+**Do not frame the report as a response to a request or a complaint.** QA is routine quality work and gets done whether or not anyone asked. Opening with "the comments asked for testing and none had been done" reads as pointing at a person, and it dates the report to one thread. Open with how it was checked and what was found.
+
+The same applies inside the report. A criterion drawn from a comment is a requirement like any other — record what was asked for, not that someone had to ask. When a test locks in a defect or a criterion went untested, that is a coverage gap to close, not a lapse to attribute.
