@@ -202,7 +202,7 @@ If symlinked to `~/.claude/skills` (installed as personal skills), invoke them b
 
 ## Skills and Agents Reference
 
-### Skills (52)
+### Skills (53)
 
 **Planning & Specs:**
 
@@ -285,6 +285,7 @@ If symlinked to `~/.claude/skills` (installed as personal skills), invoke them b
 |-------|-------------|
 | `javascript-testing-patterns` | Jest, Vitest, and Japa testing patterns |
 | `sql-optimization-patterns` | Query optimization, indexing, EXPLAIN, N+1 elimination |
+| `qa-verification` | Verify a ticket's acceptance criteria by running the code, not just reading it |
 
 **Automation & EM/Observability:**
 
