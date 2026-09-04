@@ -175,15 +175,61 @@ If the codebase-memory-mcp server is configured, use these tools proactively —
 | Context | Tool | Purpose |
 |---------|------|---------|
 | Phase 2 (PLAN) | `get_architecture` | Understand affected areas before planning |
-| Phase 6 (REVIEW) | `search_graph`, `trace_call_path` | Verify no callers are broken, check impact radius; SQL callers traced by SQL sub-agent |
-| Debugging (`systematic-debugging`) | `trace_call_path`, `search_graph` | Understand call chains and dependencies before guessing |
+| Phase 6 (REVIEW) | `search_graph` | Check impact radius. Callers come from grep — see the caveat below; SQL callers traced by SQL sub-agent |
+| Debugging (`systematic-debugging`) | `search_graph`, `trace_call_path` | Understand call chains before guessing — corroborate any caller claim with grep |
 | Searching for relationships | `search_graph` | Prefer over text grep when searching for function/class relationships |
 
 **Rules:**
-- During **debugging**, ALWAYS use `trace_call_path` and `search_graph` to understand the call chain and dependencies before proposing fixes. Don't guess — trace.
-- During **review** (Phase 6), ALWAYS use `search_graph` to check the impact radius of changes and verify no callers are broken.
+- During **debugging**, use `trace_call_path` and `search_graph` to understand the call chain before proposing fixes. Don't guess — trace. Corroborate callers with grep before acting on them.
+- During **review** (Phase 6), ALWAYS use `search_graph` to check the impact radius of changes.
 - During **planning** (Phase 2), use `get_architecture` to understand the affected areas.
 - Use `search_graph` over text grep when searching for function relationships, not just text matches.
+
+**What the graph does and does not prove.** A row proves a symbol EXISTS at that file:line. A symbol's ABSENCE proves nothing, and a zero-caller result is a prompt to grep — not a conclusion that nothing calls it. Call graphs cannot see reflection, interface dispatch, registry maps, config-driven wiring, or handler names held as strings, and in codebases built on those the graph will confidently report no callers for symbols that have them. **Never close "verify no callers are broken" on graph output alone.**
+
+### Reuse Before You Build
+
+**Before writing a new function, type, helper, or job, check whether it already exists.** Duplication caught in review is duplication someone already paid to write.
+
+- Search the **name** — `search_graph(name_pattern="<stem>")`.
+- Search the **body**, because a duplicate is usually named differently. Pull distinctive tokens out of what you are about to write — constants, called functions, type names — and search those too. A new `AddTwoBusinessDays` is found by its name; an existing `skipWeekend` that references a weekday table is only found by the body token.
+- Count it — `query_graph("MATCH (m:Method) WHERE m.name CONTAINS '<stem>' RETURN m.name AS name, count(*) AS n ORDER BY n DESC")`. Read the top rows — the count alone means nothing, because a common verb matches every class of its kind. Skip framework verbs and single short words; a stem worth counting is specific and multi-word.
+- **Read the candidate's body before reusing or rejecting it.** A matching name is a coincidence until you have read the code.
+
+Absence of a name is not absence of the capability. "I found nothing" is only credible with the queries attached.
+
+### Match the Pattern When You Do Build
+
+Reuse says don't write it. This says: when you must write it, make it look like the code next to it. New code that solves an old problem a new way is the most common defect in AI-assisted changes, and it passes tests every time.
+
+**Find the canonical exemplar first — one file, not a survey.** The most recently changed sibling in the same directory is the pattern, because it is the one that most recently passed review:
+
+```bash
+# Exclude the files you are changing: yours is by construction the newest in
+# the directory, so without this you rank the change as its own gold standard.
+for f in "$(dirname "$FILE")"/*.<ext>; do
+  [ "$f" = "$FILE" ] && continue
+  echo "$(git log -1 --format=%ad --date=short -- "$f") $f"
+done | sort -r | head -3
+```
+
+Match it on **naming, structure, error handling, logging, dependency wiring, and the shape and location of its tests.** Then confirm the family agrees with `search_graph(file_pattern=...)` and `search_graph(qn_pattern=...)`.
+
+- **Cite the exemplar in the plan.** "Modelled on `<path>:<line>`" is checkable; "follows codebase conventions" is not.
+- **Where the neighbours disagree with each other, the newest one wins** — and say that you found disagreement, because an inconsistent directory is itself worth reporting.
+- **A convention you can quote from the repo's own docs outranks one you inferred from code.**
+- **Diverge only deliberately, and say so in the PR with the reason.** An undocumented divergence reads to every future reader as an accident.
+
+### Pre-Work: Read the Repo's Written Conventions
+
+**Before starting any work on a repo**, read what the team already wrote down:
+
+```bash
+ls docs/adr/*.md 2>/dev/null | head -60
+ls docs/good-practices.md docs/*GUIDELINES*.md docs/*PATTERNS*.md CONTRIBUTING.md docs/CONTRIBUTING.md 2>/dev/null
+```
+
+Read `CONTRIBUTING.md` for branching, testing and deployment; the `docs/adr/` titles, then the two or three that bear on the change; and any guideline document in full. These are far more specific than anything you would infer from reading code, and a convention you can quote outranks one you inferred.
 
 ---
 

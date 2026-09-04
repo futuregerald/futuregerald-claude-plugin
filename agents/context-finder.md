@@ -36,7 +36,8 @@ Quick-check for `graphify-out/` (`Glob graphify-out/**`). If present, **Read** `
 
 ### 2 — Code index (codebase-memory)
 Call `index_status` first — and `list_projects` if there's any ambiguity. **Confirm the indexed project's path matches the current repo root** (and, for cross-repo questions, that a project covers the repo you need).
-- **Indexed & matching:** use `search_code` (semantic), `search_graph`/`query_graph` (entities + relationships), `trace_call_path` (call chains), `get_architecture` (overview), `get_code_snippet`. This is your primary tool for "where/how/what-calls-what".
+- **Indexed & matching:** use `search_code`, `search_graph`/`query_graph` (entities + relationships), `trace_call_path` (call chains), `get_architecture` (overview), `get_code_snippet`. This is your primary tool for "where" and "how".
+  - **Caller and dead-code questions are the exception.** A call graph does not see reflection, dynamic dispatch, registry maps, config-driven wiring, or class names held as strings — on Rails it returns zero callers for symbols reached through an `Interactor::Organizer` list. Corroborate every caller claim with grep, and **label each one with the tool that produced it** so the orchestrator can weigh it. A graph's silence is not evidence.
 - **Not indexed, or the index covers a DIFFERENT project than the current repo:** say so explicitly (never query the wrong project's index and pass it off as this repo's), and fall through to grep. Optionally note that indexing this repo would speed future searches.
 
 ### 3 — Session memory (prism), conditional
@@ -46,7 +47,7 @@ Query prism **only when the question implies history, rationale, or a prior deci
 Use literal search to confirm/locate what higher tiers surfaced, or to answer what the index can't (exact strings, existence/absence). When grep is your **primary** evidence — especially a negative "this does not exist anywhere" claim — list the exact patterns and directories you covered and give a confidence level; an absence proof is only as good as its coverage.
 
 ## Scope
-- Default to the current repo. If the question names another repo (e.g. a sibling `cobalt-*` repo), search there too via `list_projects` (index) and by reading its files — and say which repos/projects you covered.
+- Default to the current repo. If the question names another repo (e.g. a sibling repo in the same workspace), search there too via `list_projects` (index) and by reading its files — and say which repos/projects you covered.
 
 ## Output contract — return exactly these sections
 1. **Answer** — lead with the direct answer.

@@ -50,9 +50,59 @@ Before modifying any function, method, type, endpoint, or schema, reconstruct it
 - **Contract** — current return shapes, zero values, nil cases, errors, ordering; which the change alters, and the specific callers affected by each.
 - **Coverage** — which callers have tests; what test would fail if the change were wrong.
 
-Use graph tools first, grep second and only for what graphs cannot see. Conclusions rest on files actually read.
+Use graph tools first for **existence and shape**, grep second for **reachability**. Conclusions rest on files actually read.
+
+**A graph proves a symbol exists; it never proves nothing calls one.** A zero-caller result is a prompt to grep for the invisible edges above, not a conclusion — and an Impact Analysis built on one is short by exactly the callers BLAST-RADIUS VERIFY was meant to walk.
 
 **The bar:** "I read the function and it looks fine" is not an impact analysis. If you cannot name every caller and say what each expects, IMPACT ANALYSIS is not done — and BLAST-RADIUS VERIFY has nothing to walk, so a caller you missed is a caller nothing checks.
+
+### Pre-Work: Read the Repo's Written Conventions
+
+**Before starting any work on a repo**, read what the team already wrote down:
+
+```bash
+ls docs/adr/*.md 2>/dev/null | head -60
+ls docs/good-practices.md docs/*GUIDELINES*.md docs/*PATTERNS*.md CONTRIBUTING.md docs/CONTRIBUTING.md 2>/dev/null
+```
+
+- **`CONTRIBUTING.md`** — branching, testing, deployment, database changes.
+- **`docs/adr/`** — read the titles, then the two or three that bear on the change.
+- **Guideline docs** — `good-practices.md`, `CODE_GUIDELINES.md`, `*PATTERNS*.md`. These are the real "how we do it here", and they are usually far more specific than anything you would infer from reading code.
+
+A convention you can quote outranks a pattern you inferred. It is the difference between "this looks unusual to me" and "this contradicts what we decided."
+
+### Reuse Before You Build (Mandatory)
+
+**Before writing a new function, type, helper, or job, check whether it already exists.** Duplication caught in review is duplication someone already paid to write.
+
+- Search the **name** — `search_graph --name-pattern '<stem>' --detail ids`.
+- Search the **body**, because a duplicate is usually named differently. Pull distinctive tokens out of what you are about to write — constants, called functions, type names — and search those. A new `AddTwoBusinessDays` is found by its name; an existing `skipWeekend` that references a weekday table is only found by the body token.
+- Count it — `query_graph "MATCH (m:Method) WHERE m.name CONTAINS '<stem>' RETURN m.name AS name, count(*) AS n ORDER BY n DESC"`. Read the top rows — the count alone means nothing, because a common verb matches every class of its kind. Skip framework verbs and single short words; a stem worth counting is specific and multi-word.
+- **Read the candidate's body before reusing or rejecting it.** A matching name is a coincidence until you have read the code.
+
+Absence of a name is not absence of the capability. "I found nothing" is only credible with the queries attached.
+
+### Match the Pattern When You Do Build (Mandatory)
+
+Reuse says don't write it. This says: when you must write it, make it look like the code next to it. New code that solves an old problem a new way is the most common defect in AI-assisted changes, and it passes tests every time.
+
+**Find the canonical exemplar first — one file, not a survey.** The most recently changed sibling in the same directory is the pattern, because it is the one that most recently passed review:
+
+```bash
+# Exclude the files you are changing: yours is by construction the newest in
+# the directory, so without this you rank the change as its own gold standard.
+for f in "$(dirname "$FILE")"/*.go; do
+  [ "$f" = "$FILE" ] && continue
+  echo "$(git log -1 --format=%ad --date=short -- "$f") $f"
+done | sort -r | head -3
+```
+
+Match it on **naming, structure, error handling, logging, dependency wiring, and the shape and location of its tests.** Then confirm the family agrees: `search_graph --file-pattern '%<dir>%'` and `--qn-pattern '<package>'`.
+
+- **Cite the exemplar in the plan.** "Modelled on `internal/orders/process.go:42`" is checkable; "follows codebase conventions" is not.
+- **Where the neighbours disagree with each other, the newest one wins** — and say that you found disagreement, because an inconsistent directory is itself worth reporting.
+- **A convention you can quote from `docs/adr/` outranks one you inferred from code.**
+- **Diverge only deliberately, and say so in the PR with the reason.** An undocumented divergence reads to every future reader as an accident.
 
 ### Prove It, Don't Assume It
 
@@ -227,7 +277,7 @@ Leave existing comments alone unless the change makes them wrong.
 
 **Names carry the meaning.** Renaming is the first tool, not the fallback — when a better name makes the code read clearly, use it. A name that conveys intent removes the reason the comment existed, and unlike a comment it cannot drift from the code. Prefer a longer, unambiguous name over a short one that needs explaining.
 
-Names say what the code *does*, not why product wants it — `CopyPentestQnr`, not `CopyQnrForResearch`.
+Names say what the code *does*, not why product wants it — `CopyQuestionnaire`, not `CopyQnrForResearch`.
 
 ---
 
