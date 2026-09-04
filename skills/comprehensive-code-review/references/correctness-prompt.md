@@ -357,10 +357,11 @@ Agent tool:
     statements (`Rails.logger`, `logger.`, `log_`, `puts`, `pp`) or
     new interactors, jobs, services, or rescue blocks that should have logging.
     If no logging-related changes are in the diff, skip this section entirely
-    — do NOT invoke the structured-logging skill.
+    — and do not load a logging skill to decide that.
 
-    If logging IS relevant, invoke the project's structured-logging skill if one
-    is installed, then check:
+    If logging IS relevant, load the project's own structured-logging skill
+    when it has one (the name varies by org; there is none in this plugin),
+    then check:
     - New interactors, jobs, services, and rescue blocks MUST have structured logging
     - Log calls must use the two-argument form: `Rails.logger.info('event_name', key: value)`
     - Flag string-interpolated logs as IMPORTANT — Pattern Deviation
