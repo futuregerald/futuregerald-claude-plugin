@@ -1,0 +1,1555 @@
+package main
+
+import (
+	"archive/tar"
+	"archive/zip"
+	"bufio"
+	"compress/gzip"
+	"crypto/sha256"
+	"embed"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"io"
+	"io/fs"
+	"net/http"
+	"net/url"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/futuregerald/futuregerald-claude-plugin/internal/config"
+	"github.com/futuregerald/futuregerald-claude-plugin/internal/installer"
+	"github.com/spf13/cobra"
+)
+
+const (
+	modeFullInstall = "full"
+	modeConfigOnly  = "config-only"
+	modeAgentsOnly  = "agents-only"
+)
+
+const (
+	cbMemVersion = "v0.4.10"
+	cbMemRepo    = "DeusData/codebase-memory-mcp"
+	cbMemBinName = "codebase-memory-mcp"
+)
+
+//go:embed all:skills all:agents all:templates all:commands
+var content embed.FS
+
+var (
+	version       = "3.5.0"
+	force         bool
+	dryRun        bool
+	nonInteract   bool
+	targetType    string
+	skipClaude    bool
+	tags          []string
+	languages     []string
+	fromSource    string
+	configFile    string
+	skipAgents    bool
+	skipCommands  bool
+	globalInstall bool
+	installMode   string
+)
+
+// Target represents an installation target (IDE/tool).
+type Target struct {
+	Name             string
+	SkillsPath       string
+	AgentsPath       string
+	CommandsPath     string
+	ConfigPath       string
+	GlobalSkillsPath string
+	GlobalAgentsPath string
+}
+
+func homeDir() string {
+	h, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return h
+}
+
+var targets = map[string]Target{
+	"claude": {
+		Name:             "Claude Code",
+		SkillsPath:       ".claude/skills",
+		AgentsPath:       ".claude/agents",
+		CommandsPath:     ".claude/commands",
+		ConfigPath:       "CLAUDE.md",
+		GlobalSkillsPath: filepath.Join(homeDir(), ".claude", "skills"),
+		GlobalAgentsPath: filepath.Join(homeDir(), ".claude", "agents"),
+	},
+	"copilot": {
+		Name:             "GitHub Copilot",
+		SkillsPath:       ".github/skills",
+		AgentsPath:       ".github",
+		CommandsPath:     "",
+		ConfigPath:       ".github/copilot-instructions.md",
+		GlobalSkillsPath: filepath.Join(homeDir(), ".copilot", "skills"),
+		GlobalAgentsPath: "",
+	},
+	"cursor": {
+		Name:         "Cursor",
+		SkillsPath:   ".cursor/skills",
+		AgentsPath:   ".cursor/agents",
+		CommandsPath: "",
+		ConfigPath:   ".cursorrules",
+	},
+	"opencode": {
+		Name:         "OpenCode",
+		SkillsPath:   ".opencode/skills",
+		AgentsPath:   ".opencode/agents",
+		CommandsPath: "",
+		ConfigPath:   "",
+	},
+	"vscode": {
+		Name:         "VS Code (with Claude extension)",
+		SkillsPath:   ".vscode/claude/skills",
+		AgentsPath:   ".vscode/claude/agents",
+		CommandsPath: "",
+		ConfigPath:   "",
+	},
+	"claude-desktop": {
+		Name:         "Claude Desktop (macOS)",
+		SkillsPath:   "",
+		AgentsPath:   "",
+		CommandsPath: "",
+		ConfigPath:   "",
+	},
+}
+
+func main() {
+	rootCmd := &cobra.Command{
+		Use:   "skill-installer",
+		Short: "Install AI coding assistant skills",
+		Long: `A CLI tool to install AI coding assistant skills for various IDEs and tools.
+
+Supported targets:
+  - Claude Code (.claude/skills)
+  - Claude Desktop (macOS — Customize > Skills)
+  - GitHub Copilot (.github/skills)
+  - OpenCode (.opencode/skills)
+  - Cursor (.cursor/skills)
+  - VS Code with Claude extension (.vscode/claude/skills)
+
+Configuration can be stored in .skill-installer.yaml`,
+		RunE: runInstall,
+	}
+
+	// Install flags
+	rootCmd.Flags().BoolVarP(&force, "force", "f", false, "Overwrite existing files")
+	rootCmd.Flags().BoolVarP(&dryRun, "dry-run", "n", false, "Show what would be done without making changes")
+	rootCmd.Flags().BoolVarP(&nonInteract, "yes", "y", false, "Non-interactive mode with defaults")
+	rootCmd.Flags().StringVarP(&targetType, "target", "t", "", "Target: claude, claude-desktop, copilot, opencode, cursor, vscode")
+	rootCmd.Flags().BoolVar(&skipClaude, "skip-claude-md", false, "Skip updating CLAUDE.md")
+	rootCmd.Flags().StringSliceVar(&tags, "tag", nil, "Filter skills by tags")
+	rootCmd.Flags().StringSliceVar(&languages, "lang", nil, "Filter skills by language")
+	rootCmd.Flags().StringVar(&fromSource, "from", "", "Install from source (local path, git URL, or URL)")
+	rootCmd.Flags().StringVarP(&configFile, "config", "c", "", "Config file path")
+	rootCmd.Flags().BoolVar(&skipAgents, "skip-agents", false, "Skip installing agents")
+	rootCmd.Flags().BoolVar(&skipCommands, "skip-commands", false, "Skip installing commands")
+	rootCmd.Flags().BoolVar(&globalInstall, "global", false, "Install to global/user-level directory")
+	rootCmd.Flags().StringVarP(&installMode, "mode", "m", "", "Installation mode: full, config-only, agents-only")
+
+	// Version command
+	versionCmd := &cobra.Command{
+		Use:   "version",
+		Short: "Print the version number",
+		Run: func(cmd *cobra.Command, args []string) {
+			fmt.Printf("skill-installer v%s\n", version)
+		},
+	}
+
+	// List command
+	listCmd := &cobra.Command{
+		Use:   "list",
+		Short: "List available skills",
+		Long: `List available skills with optional filtering.
+
+Examples:
+  skill-installer list                    # List all skills
+  skill-installer list --tag testing      # List skills tagged with 'testing'
+  skill-installer list --lang python      # List Python-compatible skills`,
+		RunE: runList,
+	}
+	listCmd.Flags().StringSliceVar(&tags, "tag", nil, "Filter by tags")
+	listCmd.Flags().StringSliceVar(&languages, "lang", nil, "Filter by language")
+
+	// Init command
+	initCmd := &cobra.Command{
+		Use:   "init [name]",
+		Short: "Create a new skill from template",
+		Long: `Create a new skill file with proper frontmatter.
+
+Examples:
+  skill-installer init my-skill
+  skill-installer init my-skill --model opus --tag quality,review`,
+		Args: cobra.ExactArgs(1),
+		RunE: runInit,
+	}
+	var initModel string
+	var initTags []string
+	var initLangs []string
+	var initDesc string
+	initCmd.Flags().StringVar(&initModel, "model", "sonnet", "Model to use (haiku, sonnet, opus)")
+	initCmd.Flags().StringSliceVar(&initTags, "tag", nil, "Tags for the skill")
+	initCmd.Flags().StringSliceVar(&initLangs, "lang", []string{"any"}, "Languages for the skill")
+	initCmd.Flags().StringVarP(&initDesc, "desc", "d", "", "Description of the skill")
+
+	rootCmd.AddCommand(versionCmd, listCmd, initCmd)
+
+	if err := rootCmd.Execute(); err != nil {
+		os.Exit(1)
+	}
+}
+
+func runInstall(cmd *cobra.Command, args []string) error {
+	reader := bufio.NewReader(os.Stdin)
+
+	// Load config
+	cfg, err := loadConfig()
+	if err != nil {
+		return fmt.Errorf("loading config: %w", err)
+	}
+	applyConfig(cfg)
+
+	// Ask installation mode first (so getTarget can adapt prompts)
+	mode, err := askInstallMode(reader)
+	if err != nil {
+		return err
+	}
+
+	// Get target framework (mode-aware filtering and prompts)
+	target, err := getTarget(reader, mode)
+	if err != nil {
+		return err
+	}
+
+	// Validate contradictory flags
+	if mode == modeConfigOnly && skipClaude {
+		return fmt.Errorf("--mode config-only and --skip-claude-md are contradictory")
+	}
+	if mode == modeAgentsOnly && skipAgents {
+		return fmt.Errorf("--mode agents-only and --skip-agents are contradictory")
+	}
+
+	inst := installer.New(content, installer.Options{
+		Force:  force,
+		DryRun: dryRun,
+	})
+
+	switch mode {
+	case modeConfigOnly:
+		return runConfigOnly(reader, inst, target)
+	case modeAgentsOnly:
+		return runAgentsOnly(reader, inst, target)
+	default:
+		return runFullInstall(reader, inst, target)
+	}
+}
+
+func runFullInstall(reader *bufio.Reader, inst *installer.Installer, target Target) error {
+	scope, err := askScope(reader, target)
+	if err != nil {
+		return err
+	}
+
+	var skillsDest, agentsDest, commandsDest string
+	if scope == "global" {
+		skillsDest = target.GlobalSkillsPath
+		agentsDest = target.GlobalAgentsPath
+	} else {
+		skillsDest = filepath.Join(".", target.SkillsPath)
+		agentsDest = filepath.Join(".", target.AgentsPath)
+		commandsDest = filepath.Join(".", target.CommandsPath)
+	}
+
+	// Claude Desktop: resolve skills path dynamically
+	if target.Name == "Claude Desktop (macOS)" {
+		desktopDir, err := findClaudeDesktopDir()
+		if err != nil {
+			return err
+		}
+		skillsDest = filepath.Join(desktopDir, "skills")
+		agentsDest = ""    // Desktop doesn't support agents
+		commandsDest = ""  // Desktop doesn't support commands
+		scope = "global"   // force global
+	}
+
+	updateConfig := false
+	if scope == "project" && target.ConfigPath != "" && !skipClaude {
+		updateConfig, err = askUpdateConfig(reader, target)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Install skills
+	fmt.Println("\nInstalling skills...")
+	var results []string
+
+	if fromSource != "" {
+		if strings.HasPrefix(fromSource, "http://") || strings.HasPrefix(fromSource, "https://") {
+			if strings.Contains(fromSource, "github.com") || strings.Contains(fromSource, "gitlab.com") {
+				results, err = inst.InstallFromGit(fromSource, skillsDest)
+			} else {
+				results, err = inst.InstallFromURL(fromSource, skillsDest)
+			}
+		} else {
+			results, err = inst.InstallFromLocal(fromSource, skillsDest)
+		}
+	} else {
+		results, err = inst.InstallSkills(skillsDest, tags, languages)
+	}
+
+	if err != nil {
+		return err
+	}
+	for _, r := range results {
+		fmt.Println(r)
+	}
+
+	// Update Claude Desktop manifest
+	if target.Name == "Claude Desktop (macOS)" {
+		if err := updateDesktopManifest(skillsDest, inst); err != nil {
+			fmt.Printf("Warning: Could not update Claude Desktop manifest: %v\n", err)
+		}
+	}
+
+	// Install agents
+	if !skipAgents && agentsDest != "" {
+		overwrite, err := askOverwriteAgents(reader, agentsDest)
+		if err != nil {
+			return err
+		}
+
+		if overwrite {
+			agentInst := inst
+			if !inst.HasForce() {
+				// User confirmed overwrite — use a local installer with Force enabled
+				agentInst = installer.New(content, installer.Options{Force: true, DryRun: dryRun})
+			}
+
+			fmt.Println("\nInstalling agents...")
+			var nameFunc installer.AgentNameFunc
+			if target.Name == "GitHub Copilot" {
+				nameFunc = installer.CopilotAgentName
+			}
+
+			agentResults, err := agentInst.InstallAgents(agentsDest, nameFunc)
+			if err != nil {
+				return err
+			}
+			for _, r := range agentResults {
+				fmt.Println(r)
+			}
+		} else {
+			fmt.Println("\nSkipping agent installation.")
+		}
+	}
+
+	// Install commands (if target supports it and project-scoped)
+	if !skipCommands && commandsDest != "" && scope == "project" {
+		fmt.Println("\nInstalling commands...")
+		cmdResults, err := inst.InstallCommands(commandsDest)
+		if err != nil {
+			return err
+		}
+		for _, r := range cmdResults {
+			fmt.Println(r)
+		}
+	}
+
+	// Generate config file
+	if updateConfig {
+		err = generateConfigFile(inst, target, reader)
+		if err != nil {
+			fmt.Printf("Warning: Could not generate %s: %v\n", target.ConfigPath, err)
+		}
+	}
+
+	// Ensure .gitignore allows .claude/project.json for project-scoped installs
+	if scope == "project" && !dryRun {
+		ensureGitignoreAllowsProjectJSON(reader)
+	}
+
+	// Offer Codebase Memory MCP setup
+	if !dryRun {
+		if err := askCodebaseMemoryMCP(reader); err != nil {
+			fmt.Printf("Warning: Codebase Memory MCP setup skipped: %v\n", err)
+		}
+	}
+
+	if dryRun {
+		fmt.Println("\n(dry run - no files were modified)")
+	} else {
+		fmt.Println("\nDone! Skills and agents installed successfully.")
+	}
+
+	return nil
+}
+
+func generateConfigFile(_ *installer.Installer, target Target, reader *bufio.Reader) error {
+	configPath := filepath.Join(".", target.ConfigPath)
+
+	// Detect project type (safe in dry-run: only reads the filesystem)
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("cannot determine working directory: %w", err)
+	}
+	info := detectProject(cwd)
+	if info.Framework != "" {
+		fmt.Printf("Detected: %s (%s)\n", info.Framework, info.Name)
+	} else {
+		fmt.Printf("Detected: unknown project type (using defaults for %s)\n", info.Name)
+	}
+
+	if dryRun {
+		if fileExists(configPath) {
+			fmt.Printf("WOULD UPDATE: %s\n", configPath)
+		} else {
+			fmt.Printf("WOULD CREATE: %s\n", configPath)
+		}
+		return nil
+	}
+
+	dir := filepath.Dir(configPath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+
+	// Read the base template from embedded FS
+	baseContent, err := fs.ReadFile(content, "templates/CLAUDE-BASE.md")
+	if err != nil {
+		return fmt.Errorf("reading template: %w", err)
+	}
+
+	// For Claude Code, apply project detection directly
+	// For other frameworks, generate a framework-specific config
+	var configContent []byte
+	switch target.Name {
+	case "Claude Code":
+		configContent = applyProjectDetection(baseContent, info, content)
+	default:
+		configContent = generateFrameworkConfig(target, baseContent, info)
+	}
+
+	if fileExists(configPath) {
+		if force {
+			// --force: overwrite without prompting
+		} else if nonInteract {
+			// -y without --force: skip silently
+			fmt.Printf("SKIP: %s (already exists, use --force to overwrite)\n", configPath)
+			return nil
+		} else {
+			// Interactive: ask user
+			fmt.Printf("%s already exists. Overwrite? [y/N]: ", target.ConfigPath)
+			input, err := reader.ReadString('\n')
+			if err != nil {
+				return err
+			}
+			input = strings.TrimSpace(strings.ToLower(input))
+			if input != "y" && input != "yes" {
+				fmt.Printf("SKIP: %s\n", configPath)
+				return nil
+			}
+		}
+	}
+
+	if err := os.WriteFile(configPath, configContent, 0644); err != nil {
+		return err
+	}
+	fmt.Printf("CREATED: %s\n", configPath)
+	return nil
+}
+
+func generateFrameworkConfig(target Target, baseContent []byte, info ProjectInfo) []byte {
+	header := fmt.Sprintf("# %s - AI Agent Configuration\n\n", target.Name)
+	header += fmt.Sprintf("Skills are installed in `%s/`\n", target.SkillsPath)
+	if target.AgentsPath != "" {
+		header += fmt.Sprintf("Agents are installed in `%s/`\n", target.AgentsPath)
+	}
+
+	processed := applyProjectDetection(baseContent, info, content)
+
+	return []byte(header + "\n---\n\n" + string(processed))
+}
+
+func loadConfig() (*config.Config, error) {
+	if configFile != "" {
+		return config.LoadFile(configFile)
+	}
+	return config.Load(".")
+}
+
+func applyConfig(cfg *config.Config) {
+	if cfg == nil {
+		return
+	}
+	if targetType == "" && cfg.Target != "" {
+		targetType = cfg.Target
+	}
+	if len(tags) == 0 && len(cfg.Tags) > 0 {
+		tags = cfg.Tags
+	}
+	if len(languages) == 0 && len(cfg.Languages) > 0 {
+		languages = cfg.Languages
+	}
+	if !skipClaude && cfg.SkipClaudeMD {
+		skipClaude = true
+	}
+	if fromSource == "" && cfg.From != "" {
+		fromSource = cfg.From
+	}
+	if installMode == "" && cfg.Mode != "" {
+		installMode = cfg.Mode
+	}
+}
+
+func getTarget(reader *bufio.Reader, mode string) (Target, error) {
+	allOptions := []string{"claude", "claude-desktop", "copilot", "cursor", "opencode", "vscode"}
+
+	// Filter targets by mode
+	options := filterTargetsByMode(allOptions, mode)
+
+	if targetType != "" {
+		t, ok := targets[targetType]
+		if !ok {
+			return Target{}, fmt.Errorf("unknown target: %s", targetType)
+		}
+		// Validate target supports the requested mode
+		if err := validateTargetForMode(t, mode); err != nil {
+			return Target{}, err
+		}
+		return t, nil
+	}
+
+	if nonInteract {
+		return targets["claude"], nil
+	}
+
+	// Mode-aware prompt text
+	prompt, pathFunc := modePromptInfo(mode)
+	fmt.Println(prompt)
+	fmt.Println()
+	for i, key := range options {
+		t := targets[key]
+		fmt.Printf("  %d) %s (%s)\n", i+1, t.Name, pathFunc(t))
+	}
+	fmt.Println()
+	fmt.Print("Enter choice [1]: ")
+
+	input, err := reader.ReadString('\n')
+	if err != nil {
+		return Target{}, err
+	}
+	input = strings.TrimSpace(input)
+
+	if input == "" {
+		return targets[options[0]], nil
+	}
+
+	choice, err := strconv.Atoi(input)
+	if err != nil || choice < 1 || choice > len(options) {
+		return Target{}, fmt.Errorf("invalid choice: %s", input)
+	}
+
+	return targets[options[choice-1]], nil
+}
+
+// filterTargetsByMode returns only the target keys that support the given mode.
+func filterTargetsByMode(allOptions []string, mode string) []string {
+	var filtered []string
+	for _, key := range allOptions {
+		t := targets[key]
+		switch mode {
+		case modeConfigOnly:
+			if t.ConfigPath == "" {
+				continue
+			}
+		case modeAgentsOnly:
+			if t.AgentsPath == "" {
+				continue
+			}
+		}
+		filtered = append(filtered, key)
+	}
+	return filtered
+}
+
+// validateTargetForMode checks that a target supports the requested mode.
+func validateTargetForMode(t Target, mode string) error {
+	switch mode {
+	case modeConfigOnly:
+		if t.ConfigPath == "" {
+			return fmt.Errorf("config file generation is not supported for %s", t.Name)
+		}
+	case modeAgentsOnly:
+		if t.AgentsPath == "" {
+			return fmt.Errorf("agents are not supported for %s", t.Name)
+		}
+	}
+	return nil
+}
+
+// modePromptInfo returns the prompt text and a function to extract the relevant path for display.
+func modePromptInfo(mode string) (string, func(Target) string) {
+	switch mode {
+	case modeConfigOnly:
+		return "Where would you like to generate the config file?", func(t Target) string {
+			if t.ConfigPath == "" {
+				return "auto-detected"
+			}
+			return t.ConfigPath
+		}
+	case modeAgentsOnly:
+		return "Where would you like to install the agents?", func(t Target) string {
+			if t.AgentsPath == "" {
+				return "auto-detected"
+			}
+			return t.AgentsPath
+		}
+	default:
+		return "Where would you like to install the skills?", func(t Target) string {
+			if t.SkillsPath == "" {
+				return "auto-detected"
+			}
+			return t.SkillsPath
+		}
+	}
+}
+
+func askUpdateConfig(reader *bufio.Reader, target Target) (bool, error) {
+	if target.ConfigPath == "" {
+		return false, nil
+	}
+	if nonInteract {
+		return true, nil
+	}
+	fmt.Printf("\nGenerate %s? [Y/n]: ", target.ConfigPath)
+	input, err := reader.ReadString('\n')
+	if err != nil {
+		return false, err
+	}
+	input = strings.TrimSpace(strings.ToLower(input))
+	return input == "" || input == "y" || input == "yes", nil
+}
+
+func askScope(reader *bufio.Reader, target Target) (string, error) {
+	if target.GlobalSkillsPath == "" {
+		return "project", nil
+	}
+	// Claude Desktop is always global (installed to ~/Library/Application Support/Claude/)
+	if target.Name == "Claude Desktop (macOS)" {
+		return "global", nil
+	}
+	if globalInstall {
+		return "global", nil
+	}
+	if nonInteract {
+		return "project", nil
+	}
+
+	fmt.Println("\nWhere should skills be installed?")
+	fmt.Println("  1) Project-scoped (current directory)")
+	fmt.Println("  2) Global (available to all projects)")
+	fmt.Print("Enter choice [1]: ")
+
+	input, err := reader.ReadString('\n')
+	if err != nil {
+		return "", err
+	}
+	input = strings.TrimSpace(input)
+
+	if input == "2" {
+		return "global", nil
+	}
+	return "project", nil
+}
+
+func askInstallMode(reader *bufio.Reader) (string, error) {
+	// CLI flag takes precedence
+	if installMode != "" {
+		switch installMode {
+		case modeFullInstall, modeConfigOnly, modeAgentsOnly:
+			return installMode, nil
+		default:
+			return "", fmt.Errorf("unknown mode: %s (valid: full, config-only, agents-only)", installMode)
+		}
+	}
+
+	// Non-interactive defaults to full
+	if nonInteract {
+		return modeFullInstall, nil
+	}
+
+	fmt.Println("\nWhat would you like to do?")
+	fmt.Println("  1) Full installation (skills, agents, commands, and config file)")
+	fmt.Println("  2) Generate config file only (e.g., CLAUDE.md)")
+	fmt.Println("  3) Install agents only")
+	fmt.Print("Enter choice [1]: ")
+
+	input, err := reader.ReadString('\n')
+	if err != nil {
+		return "", err
+	}
+	input = strings.TrimSpace(input)
+
+	switch input {
+	case "", "1":
+		return modeFullInstall, nil
+	case "2":
+		return modeConfigOnly, nil
+	case "3":
+		return modeAgentsOnly, nil
+	default:
+		return "", fmt.Errorf("invalid choice: %s", input)
+	}
+}
+
+func runConfigOnly(reader *bufio.Reader, inst *installer.Installer, target Target) error {
+	if target.ConfigPath == "" {
+		return fmt.Errorf("config file generation is not supported for %s", target.Name)
+	}
+
+	fmt.Printf("\nGenerating %s...\n", target.ConfigPath)
+	if err := generateConfigFile(inst, target, reader); err != nil {
+		return fmt.Errorf("could not generate %s: %w", target.ConfigPath, err)
+	}
+
+	if dryRun {
+		fmt.Println("\n(dry run - no files were modified)")
+	} else {
+		fmt.Printf("\nDone! %s generated successfully.\n", target.ConfigPath)
+	}
+	return nil
+}
+
+func runAgentsOnly(reader *bufio.Reader, inst *installer.Installer, target Target) error {
+	if target.AgentsPath == "" {
+		return fmt.Errorf("agents are not supported for %s", target.Name)
+	}
+
+	scope, err := askScope(reader, target)
+	if err != nil {
+		return err
+	}
+
+	var agentsDest string
+	if scope == "global" {
+		if target.GlobalAgentsPath == "" {
+			return fmt.Errorf("global agents are not supported for %s", target.Name)
+		}
+		agentsDest = target.GlobalAgentsPath
+	} else {
+		agentsDest = filepath.Join(".", target.AgentsPath)
+	}
+
+	overwrite, err := askOverwriteAgents(reader, agentsDest)
+	if err != nil {
+		return err
+	}
+
+	agentInst := inst
+	if overwrite && !inst.HasForce() {
+		// User confirmed overwrite — use a local installer with Force enabled
+		agentInst = installer.New(content, installer.Options{Force: true, DryRun: dryRun})
+	}
+
+	if !overwrite {
+		fmt.Println("\nSkipping agent installation.")
+	} else {
+		fmt.Println("\nInstalling agents...")
+		var nameFunc installer.AgentNameFunc
+		if target.Name == "GitHub Copilot" {
+			nameFunc = installer.CopilotAgentName
+		}
+
+		agentResults, err := agentInst.InstallAgents(agentsDest, nameFunc)
+		if err != nil {
+			return err
+		}
+		for _, r := range agentResults {
+			fmt.Println(r)
+		}
+	}
+
+	if dryRun {
+		fmt.Println("\n(dry run - no files were modified)")
+	} else if overwrite {
+		fmt.Println("\nDone! Agents installed successfully.")
+	}
+	return nil
+}
+
+// askOverwriteAgents checks for existing .md files in the destination and prompts
+// the user for confirmation. Returns true if agents should be installed (with force).
+func askOverwriteAgents(reader *bufio.Reader, agentsDest string) (bool, error) {
+	// Check for existing .md files
+	existing, _ := filepath.Glob(filepath.Join(agentsDest, "*.md"))
+	if len(existing) == 0 {
+		return true, nil
+	}
+
+	if force {
+		return true, nil
+	}
+
+	if nonInteract {
+		return false, nil
+	}
+
+	fmt.Printf("\nExisting agent files found in %s:\n", agentsDest)
+	for _, f := range existing {
+		fmt.Printf("  - %s\n", filepath.Base(f))
+	}
+	fmt.Print("Overwrite existing agent files? [y/N]: ")
+
+	input, err := reader.ReadString('\n')
+	if err != nil {
+		return false, err
+	}
+	input = strings.TrimSpace(strings.ToLower(input))
+	return input == "y" || input == "yes", nil
+}
+
+// ensureGitignoreAllowsProjectJSON checks if .gitignore blocks .claude/project.json
+// and prompts the user to add an exception if needed.
+func ensureGitignoreAllowsProjectJSON(reader *bufio.Reader) {
+	gitignorePath := ".gitignore"
+	data, err := os.ReadFile(gitignorePath)
+	if err != nil {
+		return // no .gitignore, nothing to do
+	}
+
+	content := string(data)
+	lines := strings.Split(content, "\n")
+
+	// Check if .claude/* (or .claude/) is in .gitignore
+	hasCloudeGlob := false
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == ".claude/*" || trimmed == ".claude/" {
+			hasCloudeGlob = true
+			break
+		}
+	}
+	if !hasCloudeGlob {
+		return // .claude/ isn't gitignored, project.json will be tracked by default
+	}
+
+	// Check if exception already exists
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "!.claude/project.json" {
+			return // already allowed
+		}
+	}
+
+	// Prompt user
+	if nonInteract {
+		// In non-interactive mode, just do it
+	} else {
+		fmt.Println("\n.gitignore blocks .claude/* but .claude/project.json needs to be tracked")
+		fmt.Println("for project initialization state to persist across sessions.")
+		fmt.Print("Add !.claude/project.json to .gitignore? [Y/n]: ")
+		input, err := reader.ReadString('\n')
+		if err != nil {
+			return
+		}
+		input = strings.TrimSpace(strings.ToLower(input))
+		if input != "" && input != "y" && input != "yes" {
+			fmt.Println("Skipped. You can add !.claude/project.json to .gitignore manually.")
+			return
+		}
+	}
+
+	// Insert the exception right after the .claude/* or .claude/ line
+	var result []string
+	inserted := false
+	for _, line := range lines {
+		result = append(result, line)
+		trimmed := strings.TrimSpace(line)
+		if !inserted && (trimmed == ".claude/*" || trimmed == ".claude/") {
+			result = append(result, "!.claude/project.json")
+			inserted = true
+		}
+	}
+
+	if !inserted {
+		return // shouldn't happen given hasCloudeGlob check, but be safe
+	}
+
+	if err := os.WriteFile(gitignorePath, []byte(strings.Join(result, "\n")), 0644); err != nil {
+		fmt.Printf("Warning: could not update .gitignore: %v\n", err)
+		return
+	}
+	fmt.Println("UPDATED: .gitignore (added !.claude/project.json)")
+}
+
+func runList(cmd *cobra.Command, args []string) error {
+	inst := installer.New(content, installer.Options{})
+
+	skills, err := inst.ListAllSkills()
+	if err != nil {
+		return err
+	}
+
+	// Apply filters
+	var filtered []installer.Skill
+	for _, s := range skills {
+		if len(tags) > 0 {
+			tagMatch := false
+			for _, t := range tags {
+				for _, st := range s.Tags {
+					if strings.EqualFold(st, t) {
+						tagMatch = true
+					}
+				}
+			}
+			if !tagMatch {
+				continue
+			}
+		}
+		filtered = append(filtered, s)
+	}
+
+	if len(filtered) == 0 {
+		fmt.Println("No skills match the specified filters.")
+		return nil
+	}
+
+	fmt.Printf("Available skills (%d):\n\n", len(filtered))
+	for _, s := range filtered {
+		tagsStr := ""
+		if len(s.Tags) > 0 {
+			tagsStr = " [" + strings.Join(s.Tags, ", ") + "]"
+		}
+		fmt.Printf("  %-35s %s%s\n", s.Name, truncate(s.Description, 45), tagsStr)
+	}
+
+	return nil
+}
+
+func runInit(cmd *cobra.Command, args []string) error {
+	name := args[0]
+	model, _ := cmd.Flags().GetString("model")
+	initTags, _ := cmd.Flags().GetStringSlice("tag")
+	initLangs, _ := cmd.Flags().GetStringSlice("lang")
+	desc, _ := cmd.Flags().GetString("desc")
+
+	if desc == "" {
+		desc = fmt.Sprintf("Custom skill for %s", name)
+	}
+	if len(initTags) == 0 {
+		initTags = []string{"custom"}
+	}
+
+	skillContent := installer.GenerateSkillTemplate(name, desc, model, initTags, initLangs)
+
+	skillDir := name
+	filename := filepath.Join(skillDir, "SKILL.md")
+
+	if fileExists(filename) && !force {
+		return fmt.Errorf("%s already exists (use --force to overwrite)", filename)
+	}
+
+	if dryRun {
+		fmt.Printf("WOULD CREATE: %s\n", filename)
+		return nil
+	}
+
+	if err := os.MkdirAll(skillDir, 0755); err != nil {
+		return fmt.Errorf("creating directory %s: %w", skillDir, err)
+	}
+
+	if err := os.WriteFile(filename, []byte(skillContent), 0644); err != nil {
+		return fmt.Errorf("writing %s: %w", filename, err)
+	}
+
+	fmt.Printf("CREATED: %s\n", filename)
+	fmt.Println("\nEdit the file to customize your skill, then move the directory to your skills location.")
+	return nil
+}
+
+// findClaudeDesktopDir locates the Claude Desktop skills-plugin directory.
+// It walks the UUID-based directory structure to find the manifest.json.
+func findClaudeDesktopDir() (string, error) {
+	if runtime.GOOS != "darwin" {
+		return "", fmt.Errorf("Claude Desktop skills installation is currently only supported on macOS")
+	}
+
+	base := filepath.Join(homeDir(), "Library", "Application Support", "Claude",
+		"local-agent-mode-sessions", "skills-plugin")
+	if _, err := os.Stat(base); err != nil {
+		return "", fmt.Errorf("Claude Desktop skills directory not found at %s\nMake sure Claude Desktop is installed and you've opened Customize > Skills at least once", base)
+	}
+
+	var manifestPath string
+	_ = filepath.WalkDir(base, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || manifestPath != "" {
+			return err
+		}
+		if d.Name() == "manifest.json" {
+			manifestPath = path
+			return filepath.SkipAll
+		}
+		return nil
+	})
+
+	if manifestPath == "" {
+		return "", fmt.Errorf("no manifest.json found under %s\nOpen Claude Desktop > Customize > Skills first to initialize", base)
+	}
+
+	return filepath.Clean(filepath.Dir(manifestPath)), nil
+}
+
+// desktopManifest represents the Claude Desktop skills manifest.json.
+type desktopManifest struct {
+	LastUpdated int64                `json:"lastUpdated"`
+	Skills      []desktopSkillEntry `json:"skills"`
+}
+
+// desktopSkillEntry represents a single skill in the manifest.
+type desktopSkillEntry struct {
+	SkillID     string `json:"skillId"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	CreatorType string `json:"creatorType"`
+	UpdatedAt   string `json:"updatedAt"`
+	Enabled     bool   `json:"enabled"`
+}
+
+// updateDesktopManifest reads the manifest.json, adds/updates entries for installed skills,
+// and writes it back. skillsDir is the path to the skills/ directory.
+func updateDesktopManifest(skillsDir string, inst *installer.Installer) error {
+	manifestPath := filepath.Join(filepath.Dir(skillsDir), "manifest.json")
+
+	data, err := os.ReadFile(manifestPath)
+	if err != nil {
+		return fmt.Errorf("reading manifest: %w", err)
+	}
+
+	var manifest desktopManifest
+	if err := json.Unmarshal(data, &manifest); err != nil {
+		return fmt.Errorf("parsing manifest: %w", err)
+	}
+
+	// Build map of existing skills by name
+	existing := make(map[string]int)
+	for i, s := range manifest.Skills {
+		existing[s.Name] = i
+	}
+
+	// Get skill descriptions from embedded content
+	allSkills, _ := inst.ListAllSkills()
+	descMap := make(map[string]string)
+	for _, s := range allSkills {
+		descMap[s.Name] = s.Description
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	// Walk the skills directory to find installed skills
+	entries, err := os.ReadDir(skillsDir)
+	if err != nil {
+		return fmt.Errorf("reading skills directory: %w", err)
+	}
+
+	updated := 0
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		// Verify it has a SKILL.md
+		if _, err := os.Stat(filepath.Join(skillsDir, name, "SKILL.md")); err != nil {
+			continue
+		}
+
+		desc := descMap[name]
+		if desc == "" {
+			desc = "Skill installed via plugin"
+		}
+
+		if idx, ok := existing[name]; ok {
+			// Update existing entry
+			manifest.Skills[idx].Description = desc
+			manifest.Skills[idx].UpdatedAt = now
+			manifest.Skills[idx].Enabled = true
+		} else {
+			// Add new entry
+			manifest.Skills = append(manifest.Skills, desktopSkillEntry{
+				SkillID:     "skill_user_" + name,
+				Name:        name,
+				Description: desc,
+				CreatorType: "user",
+				UpdatedAt:   now,
+				Enabled:     true,
+			})
+		}
+		updated++
+	}
+
+	manifest.LastUpdated = time.Now().UnixMilli()
+
+	if dryRun {
+		fmt.Printf("WOULD UPDATE: %s (%d skills)\n", manifestPath, updated)
+		return nil
+	}
+
+	out, err := json.MarshalIndent(manifest, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshaling manifest: %w", err)
+	}
+
+	if err := os.WriteFile(manifestPath, out, 0600); err != nil {
+		return fmt.Errorf("writing manifest: %w", err)
+	}
+
+	fmt.Printf("UPDATED: %s (%d skills registered)\n", manifestPath, updated)
+	return nil
+}
+
+func fileExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
+}
+
+func truncate(s string, max int) string {
+	if len(s) <= max {
+		return s
+	}
+	return s[:max-3] + "..."
+}
+
+func askCodebaseMemoryMCP(reader *bufio.Reader) error {
+	if nonInteract {
+		return nil
+	}
+
+	binName := cbMemBinName
+	if runtime.GOOS == "windows" {
+		binName += ".exe"
+	}
+	binPath := filepath.Join(homeDir(), ".local", "bin", binName)
+
+	// Check if already fully installed (binary exists AND MCP configured)
+	binaryExists := fileExists(binPath)
+	configExists := mcpServerConfigured(cbMemBinName)
+	if binaryExists && configExists {
+		fmt.Printf("\nCodebase Memory MCP already installed at %s — skipping.\n", binPath)
+		return nil
+	}
+	// If only the config exists (user installed binary elsewhere), skip
+	if configExists {
+		fmt.Println("\nCodebase Memory MCP server already configured — skipping.")
+		return nil
+	}
+
+	if binaryExists {
+		fmt.Printf("\nCodebase Memory MCP binary found at %s but MCP config is missing.\n", binPath)
+		fmt.Print("Would you like to configure it now? [Y/n]: ")
+	} else {
+		fmt.Print("\nWould you like to install the Codebase Memory MCP server for codebase indexing and search? [Y/n]: ")
+	}
+	input, err := reader.ReadString('\n')
+	if err != nil {
+		return err
+	}
+	input = strings.TrimSpace(strings.ToLower(input))
+	if input == "n" || input == "no" {
+		return nil
+	}
+
+	// Ask scope
+	fmt.Println("\nWhere should the MCP server be configured?")
+	fmt.Println("  1) Global — available to all projects (recommended)")
+	fmt.Println("  2) Local — this project only (.mcp.json)")
+	fmt.Print("Enter choice [1]: ")
+	scopeInput, err := reader.ReadString('\n')
+	if err != nil {
+		return err
+	}
+	scopeInput = strings.TrimSpace(scopeInput)
+	isGlobal := scopeInput != "2"
+
+	if !binaryExists {
+		// Detect platform
+		platform := cbMemPlatform()
+		if platform == "" {
+			return fmt.Errorf("unsupported platform: %s/%s — install manually from https://github.com/%s/releases", runtime.GOOS, runtime.GOARCH, cbMemRepo)
+		}
+
+		ext := "tar.gz"
+		if runtime.GOOS == "windows" {
+			ext = "zip"
+		}
+		archiveName := fmt.Sprintf("codebase-memory-mcp-%s.%s", platform, ext)
+		downloadURL := fmt.Sprintf("https://github.com/%s/releases/download/%s/%s", cbMemRepo, cbMemVersion, archiveName)
+		checksumsURL := fmt.Sprintf("https://github.com/%s/releases/download/%s/checksums.txt", cbMemRepo, cbMemVersion)
+
+		fmt.Printf("\nDownloading codebase-memory-mcp %s (%s)...\n", cbMemVersion, platform)
+
+		// Download checksums
+		checksumsData, err := httpGetBytes(checksumsURL)
+		if err != nil {
+			return fmt.Errorf("downloading checksums: %w", err)
+		}
+
+		// Find expected hash
+		expectedHash := findChecksumForFile(string(checksumsData), archiveName)
+		if expectedHash == "" {
+			return fmt.Errorf("checksum not found for %s in checksums.txt", archiveName)
+		}
+
+		// Download archive to temp directory
+		tmpDir, err := os.MkdirTemp("", "cbmem-*")
+		if err != nil {
+			return fmt.Errorf("creating temp dir: %w", err)
+		}
+		defer os.RemoveAll(tmpDir)
+
+		archivePath := filepath.Join(tmpDir, archiveName)
+		if err := httpDownloadFile(downloadURL, archivePath); err != nil {
+			return fmt.Errorf("downloading %s: %w", archiveName, err)
+		}
+
+		// Verify checksum
+		actualHash, err := sha256File(archivePath)
+		if err != nil {
+			return fmt.Errorf("computing checksum: %w", err)
+		}
+		if actualHash != expectedHash {
+			return fmt.Errorf("checksum verification failed!\n  expected: %s\n  got:      %s\nThe download may be corrupted. Try again or install manually from https://github.com/%s/releases", expectedHash, actualHash, cbMemRepo)
+		}
+		fmt.Println("Checksum verified.")
+
+		// Extract binary
+		if err := os.MkdirAll(filepath.Dir(binPath), 0755); err != nil {
+			return fmt.Errorf("creating %s: %w", filepath.Dir(binPath), err)
+		}
+
+		if ext == "zip" {
+			err = extractZipBinary(archivePath, binName, binPath)
+		} else {
+			err = extractTarGzBinary(archivePath, binName, binPath)
+		}
+		if err != nil {
+			return fmt.Errorf("extracting binary: %w", err)
+		}
+
+		if err := os.Chmod(binPath, 0700); err != nil {
+			return fmt.Errorf("setting permissions: %w", err)
+		}
+		fmt.Printf("Installed: %s\n", binPath)
+	}
+
+	// Configure MCP
+	serverConfig := map[string]interface{}{
+		"type":    "stdio",
+		"command": binPath,
+	}
+
+	if isGlobal {
+		if err := addGlobalMCPServer("codebase-memory-mcp", serverConfig); err != nil {
+			return fmt.Errorf("configuring global MCP: %w", err)
+		}
+		fmt.Println("Configured: ~/.claude/settings.json (global)")
+	} else {
+		if err := addLocalMCPServer("codebase-memory-mcp", serverConfig); err != nil {
+			return fmt.Errorf("configuring local MCP: %w", err)
+		}
+		fmt.Println("Configured: .mcp.json (local)")
+	}
+
+	// Check if ~/.local/bin is on PATH
+	binDir := filepath.Dir(binPath)
+	pathDirs := strings.Split(os.Getenv("PATH"), string(os.PathListSeparator))
+	inPath := false
+	for _, d := range pathDirs {
+		if d == binDir {
+			inPath = true
+			break
+		}
+	}
+	if !inPath {
+		fmt.Printf("\nNote: %s is not in your PATH. Add it to use codebase-memory-mcp directly:\n", binDir)
+		fmt.Printf("  export PATH=\"%s:$PATH\"\n", binDir)
+	}
+
+	fmt.Println("\nCodebase Memory MCP installed! Say \"index this project\" in Claude Code to get started.")
+	return nil
+}
+
+func cbMemPlatform() string {
+	goos := runtime.GOOS
+	goarch := runtime.GOARCH
+	switch {
+	case goos == "darwin" && goarch == "arm64":
+		return "darwin-arm64"
+	case goos == "darwin" && goarch == "amd64":
+		return "darwin-amd64"
+	case goos == "linux" && goarch == "amd64":
+		return "linux-amd64"
+	case goos == "linux" && goarch == "arm64":
+		return "linux-arm64"
+	case goos == "windows" && goarch == "amd64":
+		return "windows-amd64"
+	default:
+		return ""
+	}
+}
+
+func mcpServerConfigured(name string) bool {
+	// Check global settings
+	globalPath := filepath.Join(homeDir(), ".claude", "settings.json")
+	if checkMCPConfigFile(globalPath, name) {
+		return true
+	}
+	// Check local .mcp.json
+	return checkMCPConfigFile(".mcp.json", name)
+}
+
+func checkMCPConfigFile(path, serverName string) bool {
+	if !fileExists(path) {
+		return false
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	var cfg map[string]interface{}
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return false
+	}
+	servers, ok := cfg["mcpServers"].(map[string]interface{})
+	if !ok {
+		return false
+	}
+	_, exists := servers[serverName]
+	return exists
+}
+
+const allowedDownloadHost = "github.com"
+
+// validateDownloadURL ensures the URL points to the allowed host to prevent SSRF.
+func validateDownloadURL(rawURL string) error {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return fmt.Errorf("invalid URL: %w", err)
+	}
+	if u.Scheme != "https" {
+		return fmt.Errorf("only HTTPS URLs are allowed, got %s", u.Scheme)
+	}
+	if u.Host != allowedDownloadHost {
+		return fmt.Errorf("downloads are restricted to %s, got %s", allowedDownloadHost, u.Host)
+	}
+	return nil
+}
+
+func httpGetBytes(fetchURL string) ([]byte, error) {
+	if err := validateDownloadURL(fetchURL); err != nil {
+		return nil, err
+	}
+	resp, err := http.Get(fetchURL)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("HTTP %d from %s", resp.StatusCode, fetchURL)
+	}
+	return io.ReadAll(resp.Body)
+}
+
+func httpDownloadFile(fetchURL, destPath string) error {
+	if err := validateDownloadURL(fetchURL); err != nil {
+		return err
+	}
+	destPath = filepath.Clean(destPath)
+	resp, err := http.Get(fetchURL)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+
+	f, err := os.Create(destPath)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	_, err = io.Copy(f, resp.Body)
+	return err
+}
+
+func sha256File(path string) (string, error) {
+	path = filepath.Clean(path)
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+func findChecksumForFile(checksums, filename string) string {
+	for _, line := range strings.Split(checksums, "\n") {
+		parts := strings.Fields(line)
+		if len(parts) == 2 && parts[1] == filename {
+			return parts[0]
+		}
+	}
+	return ""
+}
+
+func extractTarGzBinary(archivePath, binName, destPath string) error {
+	f, err := os.Open(archivePath)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	gz, err := gzip.NewReader(f)
+	if err != nil {
+		return err
+	}
+	defer gz.Close()
+
+	tr := tar.NewReader(gz)
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+
+		if filepath.Base(hdr.Name) == binName && hdr.Typeflag == tar.TypeReg {
+			out, err := os.Create(destPath)
+			if err != nil {
+				return err
+			}
+			_, copyErr := io.Copy(out, io.LimitReader(tr, 100*1024*1024)) // 100MB safety limit
+			closeErr := out.Close()
+			if copyErr != nil {
+				return copyErr
+			}
+			return closeErr
+		}
+	}
+	return fmt.Errorf("%s not found in archive", binName)
+}
+
+func extractZipBinary(archivePath, binName, destPath string) error {
+	r, err := zip.OpenReader(archivePath)
+	if err != nil {
+		return err
+	}
+	defer r.Close()
+
+	for _, zf := range r.File {
+		if filepath.Base(zf.Name) == binName {
+			rc, err := zf.Open()
+			if err != nil {
+				return err
+			}
+			defer rc.Close()
+
+			out, err := os.Create(destPath)
+			if err != nil {
+				return err
+			}
+			_, copyErr := io.Copy(out, io.LimitReader(rc, 100*1024*1024)) // 100MB safety limit
+			closeErr := out.Close()
+			if copyErr != nil {
+				return copyErr
+			}
+			return closeErr
+		}
+	}
+	return fmt.Errorf("%s not found in archive", binName)
+}
+
+func addGlobalMCPServer(name string, serverConfig map[string]interface{}) error {
+	settingsPath := filepath.Join(homeDir(), ".claude", "settings.json")
+
+	var settings map[string]interface{}
+	if fileExists(settingsPath) {
+		data, err := os.ReadFile(settingsPath)
+		if err != nil {
+			return fmt.Errorf("reading %s: %w", settingsPath, err)
+		}
+		if err := json.Unmarshal(data, &settings); err != nil {
+			return fmt.Errorf("parsing %s: %w", settingsPath, err)
+		}
+	} else {
+		settings = map[string]interface{}{}
+	}
+
+	servers, ok := settings["mcpServers"].(map[string]interface{})
+	if !ok {
+		servers = map[string]interface{}{}
+	}
+	servers[name] = serverConfig
+	settings["mcpServers"] = servers
+
+	if err := os.MkdirAll(filepath.Dir(settingsPath), 0755); err != nil {
+		return err
+	}
+
+	data, err := json.MarshalIndent(settings, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(settingsPath, append(data, '\n'), 0600)
+}
+
+func addLocalMCPServer(name string, serverConfig map[string]interface{}) error {
+	mcpPath := ".mcp.json"
+
+	var mcpConfig map[string]interface{}
+	if fileExists(mcpPath) {
+		data, err := os.ReadFile(mcpPath)
+		if err != nil {
+			return fmt.Errorf("reading %s: %w", mcpPath, err)
+		}
+		if err := json.Unmarshal(data, &mcpConfig); err != nil {
+			return fmt.Errorf("parsing %s: %w", mcpPath, err)
+		}
+	} else {
+		mcpConfig = map[string]interface{}{}
+	}
+
+	servers, ok := mcpConfig["mcpServers"].(map[string]interface{})
+	if !ok {
+		servers = map[string]interface{}{}
+	}
+	servers[name] = serverConfig
+	mcpConfig["mcpServers"] = servers
+
+	data, err := json.MarshalIndent(mcpConfig, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(mcpPath, append(data, '\n'), 0600)
+}
+

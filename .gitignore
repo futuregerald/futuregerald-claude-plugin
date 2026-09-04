@@ -1,0 +1,27 @@
+# Go build artifacts
+skill-installer
+*.exe
+
+# Generated archives
+skill-zips/
+
+# Worktrees
+.worktrees/
+
+# OS files
+.DS_Store
+
+# Python caches (skill scripts)
+__pycache__/
+*.pyc
+
+# Implementation plans are working artifacts, never committed
+docs/plans/
+
+# Bootstrapped venvs (e.g. vectorize skill's auto-created uv venv)
+.venv/
+**/.venv/
+
+# Installed by the codebase-memory-mcp binary; overwritten on every update.
+# Not ours to version, and its tracing guidance conflicts with this repo's.
+skills/codebase-memory-*/
