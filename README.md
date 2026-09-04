@@ -293,7 +293,6 @@ If symlinked to `~/.claude/skills` (installed as personal skills), invoke them b
 |-------|-------------|
 | `agent-browser` | Browser automation with Playwright |
 | `datadog-dashboards` | Build and review Datadog dashboards that actually render the data |
-| `structured-logging` | SemanticLogger + Datadog structured logging for Ruby |
 | `team-pulse` | Engineering-manager team status reports |
 | `meeting-debrief` | Strategic meeting analysis from Krisp transcripts |
 
