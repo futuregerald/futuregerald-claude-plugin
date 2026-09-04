@@ -72,17 +72,29 @@ Agent tool:
 
     ## Codebase Context
 
+    Structural facts from this repo's AST index. A row here proves a symbol
+    EXISTS at that file:line. A symbol's ABSENCE proves nothing — the index has
+    no working semantic search, does not resolve Ruby metaprogramming, and files
+    marked GREP-ONLY were not fully parsed.
+
+    **DO NOT infer reachability from this section.** A low or zero fan-in is not
+    evidence that code is unreachable, and therefore never evidence that a
+    vulnerability is not exploitable. Rails reaches code through organizer lists,
+    `send`, `constantize`, callbacks, serializers and string-named jobs, none of
+    which the index sees. Prove reachability with Grep and the route table, or
+    state that you could not.
+
     {CODEBASE_CONTEXT}
 
-    ## Team Review Brief (Cobalt Repos)
+    ## Team Review Brief (when a review corpus is configured)
 
     If this section says "(skipped — review-lens not available)" or
-    "(skipped — not a cobalt repo)", skip to the next section.
+    "(skipped — no review corpus for this repo)", skip to the next section.
 
     The following is a synthesized brief from thousands of real review comments
-    by the team's experienced reviewers (David, Roger, Paul, Mauricio). It
-    tells you what this team actually cares about for security, what they block
-    on, and what they've flagged historically.
+    by this repo's own experienced reviewers. It tells you what the team
+    actually cares about for security, what they block on, and what they have
+    flagged historically.
 
     **How to use this data:** Let it shape your thinking — adopt the team's
     security instincts, catch what they would catch, calibrate severity the
@@ -103,7 +115,7 @@ Agent tool:
 
     {TEAM_REVIEW_BRIEF}
 
-    ## Semantically Similar Past Reviews (Cobalt Repos)
+    ## Semantically Similar Past Reviews (when a review corpus is configured)
 
     If this section says "(skipped — review-lens not available)" or the
     Team Review Brief above was skipped, skip to the next section.
@@ -132,7 +144,7 @@ Agent tool:
 
     {REVIEW_LENS_CONTEXT}
 
-    ## Self-Serve Review Database (Cobalt Repos)
+    ## Self-Serve Review Database (when a review corpus is configured)
 
     If the Team Review Brief above was skipped, skip this section too.
 
@@ -160,7 +172,8 @@ Agent tool:
       configuration, documentation, general
     - `query --category <cat>` — categories: bug, performance, security, testing,
       architecture, style, documentation, general
-    - `query --reviewer <login>` — reviewers: davidgm0, roger-cobalt, Lucianolo, mauricio-reis
+    - `query --reviewer <login>` — run `$REVIEW_LENS query --db $DB --limit 1 --verbose`
+      to see which reviewer logins the configured corpus contains
     - `query --sentiment <s>` — negative, constructive, positive, neutral
     - `search --db $DB "<free text>"` — FTS5 full-text search across all comments
     - Add `--verbose` for full comment bodies, `--limit N` to control result count
@@ -254,7 +267,7 @@ Agent tool:
     - Security events not logged (failed auth, permission denied)
     - Missing audit trail for sensitive operations
     - Error messages leaking internal details
-    - New code paths missing structured logging (see cobalt-structured-logging skill)
+    - New code paths missing structured logging (see the project's structured-logging skill, if installed)
     - String-interpolated logs instead of structured keyword arguments
 
     ## Section B — SQL & Database Performance (conditional)

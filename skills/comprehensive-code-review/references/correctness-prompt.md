@@ -62,20 +62,41 @@ Agent tool:
 
     ## Codebase Context
 
-    The following are actual examples from the codebase relevant to this PR.
-    Use these for pattern comparison — do NOT re-search for these patterns.
+    Structural facts pulled from this repo's AST index, relevant to this PR.
+    Use them for pattern comparison and for the prior-art searches in Section B.
+
+    Read the trust header inside the block and obey it. In short: a row here
+    proves a symbol EXISTS at that file:line. A symbol's ABSENCE here proves
+    nothing — the index has no working semantic search, does not resolve Ruby
+    metaprogramming, and files marked GREP-ONLY were not fully parsed. Never
+    infer reachability, dead code, or caller safety from this section; that is
+    what Grep is for.
 
     {CODEBASE_CONTEXT}
 
-    ## Team Review Brief (Cobalt Repos)
+    ## Repo Conventions
+
+    This repo's own written conventions — ADR titles, and the full text of its
+    guideline documents. These record what the team DECIDED, and they are the
+    closest thing you have to the instincts of a reviewer who has worked here
+    for years. Read them before judging whether the diff fits.
+
+    ADRs are listed by title only. When a title bears on this diff, read it:
+    `sed -n '1,80p' docs/adr/<file>`.
+
+    If this section says "(none — ...)", the repo has no written conventions and
+    Section B rests on code exemplars alone.
+
+    {CONVENTIONS_CONTEXT}
+
+    ## Team Review Brief (when a review corpus is configured)
 
     If this section says "(skipped — review-lens not available)" or
-    "(skipped — not a cobalt repo)", skip to the next section.
+    "(skipped — no review corpus for this repo)", skip to the next section.
 
     The following is a synthesized brief from thousands of real review comments
-    by the team's experienced reviewers (David, Roger, Paul, Mauricio). It
-    tells you what this team actually cares about, what they suggest, and what
-    they block on.
+    by this repo's own experienced reviewers. It tells you what the team
+    actually cares about, what they suggest, and what they block on.
 
     **How to use this data:** Let it shape your thinking — adopt the team's
     best instincts, ask the questions they would ask, catch the things they
@@ -96,7 +117,7 @@ Agent tool:
 
     {TEAM_REVIEW_BRIEF}
 
-    ## Semantically Similar Past Reviews (Cobalt Repos)
+    ## Semantically Similar Past Reviews (when a review corpus is configured)
 
     If this section says "(skipped — review-lens not available)" or the
     Team Review Brief above was skipped, skip to the next section.
@@ -127,7 +148,7 @@ Agent tool:
 
     {REVIEW_LENS_CONTEXT}
 
-    ## Self-Serve Review Database (Cobalt Repos)
+    ## Self-Serve Review Database (when a review corpus is configured)
 
     If the Team Review Brief above was skipped, skip this section too.
 
@@ -157,7 +178,8 @@ Agent tool:
       configuration, documentation, general
     - `query --category <cat>` — categories: bug, performance, security, testing,
       architecture, style, documentation, general
-    - `query --reviewer <login>` — reviewers: davidgm0, roger-cobalt, Lucianolo, mauricio-reis
+    - `query --reviewer <login>` — run `$REVIEW_LENS query --db $DB --limit 1 --verbose`
+      to see which reviewer logins the configured corpus contains
     - `query --sentiment <s>` — negative, constructive, positive, neutral
     - `query --curiosity question` — question-style comments only
     - `search --db $DB "<free text>"` — FTS5 full-text search across all comments
@@ -275,10 +297,52 @@ Agent tool:
        the established pattern is, cite a `file:line` that demonstrates it, and
        show the specific difference.
 
-    Use the search hierarchy: graph tools first (graphify, `trace_path`,
-    `search_graph`, `query_graph`), then Grep for what graphs cannot see
-    (`send`, `constantize`, string dispatch, serializers, callbacks, config-driven
-    references).
+    **Name THE pattern, not a pattern.** `{CODEBASE_CONTEXT}` marks a canonical
+    sibling — the most recently changed file in the same directory, which is the
+    one that most recently passed review. Judge the diff against that file, and
+    compare on all of it: naming, structure, error handling, logging,
+    authorization, dependency wiring, and the shape and location of its tests.
+    Where the neighbours disagree with each other, the newest one wins — and say
+    that you found disagreement, because an inconsistent directory is worth
+    reporting on its own.
+
+    **How to search.** `{PROJECT}` names this repo's AST index. Run these
+    directly — they cost about 1.5s each and need no MCP server:
+
+    ```bash
+    CBM=codebase-memory-mcp
+    command -v $CBM >/dev/null 2>&1 || CBM="$HOME/.local/bin/codebase-memory-mcp"
+
+    # Does a symbol by this name already exist? (regex substring, NOT SQL LIKE —
+    # 'business' matches, '%business%' returns nothing)
+    $CBM cli search_graph --project {PROJECT} --name-pattern 'stem' --detail ids --limit 20
+
+    # Is this concept already implemented N times?
+    $CBM cli query_graph --project {PROJECT} --max-rows 20 \
+      --query "MATCH (m:Method) WHERE m.name CONTAINS 'stem' RETURN m.name AS name, count(*) AS n ORDER BY n DESC"
+
+    # What do the neighbours in this directory look like? (this one DOES take % wildcards)
+    $CBM cli search_graph --project {PROJECT} --file-pattern '%path/to/dir%' --label Method --limit 25
+
+    # Read a candidate before claiming it is equivalent
+    $CBM cli get_code_snippet --project {PROJECT} --qualified-name '<qn from the rows above>'
+    ```
+
+    **Search the body, not just the name.** A duplicate is usually named
+    differently. Pull distinctive tokens out of the new method's body — constants,
+    called methods, model names — and search those too. A new
+    `add_two_business_days` is found by its name; an existing `skip_weekend` that
+    references `Date::DAYNAMES` is only found by the body token `DAYNAMES`.
+
+    **Never use `trace_path`, and never infer reachability from the index.**
+    Measured on this codebase: `trace_path --direction inbound` on
+    an interactor class reports `callers_total: 0` while a real caller sits one
+    file away, naming it as a bare constant in an `Interactor::Organizer` list. `--semantic-query` is dead on these indexes and
+    returns noise. The index proves a symbol EXISTS; it never proves one does not.
+
+    Then Grep for what the graph cannot see (`send`, `constantize`, string
+    dispatch, serializers, callbacks, config-driven references) — that is where
+    reachability questions get answered.
 
     **You may not conclude "no prior art exists" without having searched for it.**
     State which searches you ran. "I didn't find an existing pattern" is only
@@ -293,10 +357,10 @@ Agent tool:
     statements (`Rails.logger`, `logger.`, `log_`, `puts`, `pp`) or
     new interactors, jobs, services, or rescue blocks that should have logging.
     If no logging-related changes are in the diff, skip this section entirely
-    — do NOT invoke the cobalt-structured-logging skill.
+    — do NOT invoke the structured-logging skill.
 
-    If logging IS relevant, invoke Skill tool with skill: "cobalt-structured-logging"
-    and check:
+    If logging IS relevant, invoke the project's structured-logging skill if one
+    is installed, then check:
     - New interactors, jobs, services, and rescue blocks MUST have structured logging
     - Log calls must use the two-argument form: `Rails.logger.info('event_name', key: value)`
     - Flag string-interpolated logs as IMPORTANT — Pattern Deviation
@@ -343,6 +407,54 @@ Agent tool:
     Do NOT suppress deviations because a new pattern seems "better" — report all
     deviations. Note if the new approach appears superior, but flag as MINOR.
     The decision to adopt a new pattern belongs to the human reviewer.
+
+    ### Reuse findings
+
+    When the diff adds something the codebase already has:
+
+    ```
+    **[IMPORTANT] — Reuse — <short title>**
+    - File: `path/to/new.rb:LINE`
+    - Existing: `Orders::ValidateForCreate#start_date_is_business_day?`
+      at `app/interactors/orders/validate_for_create.rb:104`
+    - Evidence: <how you confirmed equivalence — you must have read the body>
+    - Recommendation: <call it / extract it / delete the duplicate>
+    ```
+
+    Evidence bar — this is the finding most likely to be wrong and most annoying
+    when it is, so it carries the strictest rule in this prompt:
+
+    - The existing symbol's `file:line` must come from a search you actually ran.
+    - **You must have read the existing symbol's body before claiming it is
+      equivalent.** Use `get_code_snippet`. A matching name is a coincidence until
+      you have read the code.
+    - Did not read it → downgrade to MINOR and phrase it as a question:
+      "verify whether `X` already covers this."
+    - **No exception. A duplication count never substitutes for reading the
+      code.** The census tells you where to look, never what to report. On this
+      codebase `CONTAINS 'call'` returns 1,376 — every interactor defines
+      `call` — so a raw count measures how common a word is, not duplication.
+      Ignore census rows whose stem is a framework verb (`call`, `create`,
+      `index`, `show`, `update`, `destroy`, `new`, `perform`, `initialize`) or
+      a single short word; a stem worth investigating is specific and
+      multi-word (`business_day`, `invoice_adjustment`).
+
+    ### Convention findings
+
+    When the diff contradicts something the team wrote down in
+    `{CONVENTIONS_CONTEXT}`:
+
+    ```
+    **[IMPORTANT] — Convention — <short title>**
+    - File: `path/to/new.rb:LINE`
+    - Convention: `docs/good-practices.md` — "<quoted rule>"
+    - Deviation: <what the diff does instead>
+    - Recommendation: <the change>
+    ```
+
+    A Convention finding **must quote the document and cite its path**. A rule you
+    believe but cannot cite is not a Convention finding — it is a Pattern
+    Deviation, and needs a `file:line` code exemplar instead.
 
     ## Section C — Simplification
 

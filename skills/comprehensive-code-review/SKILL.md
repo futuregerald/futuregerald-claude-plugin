@@ -47,15 +47,17 @@ For PR reviews, also fetch PR metadata via `gh` CLI or GitHub API.
 | `{PR_DESCRIPTION}` | PR body from `gh pr view --json body` or user-provided context |
 | `{FILE_LIST}`, `{BASE_SHA}`, `{HEAD_SHA}`, `{PR_URL}` | Git commands or PR metadata |
 | `{PLAN_OR_REQUIREMENTS}` | See Requirements Resolution below |
-| `{CODEBASE_CONTEXT}` | See [references/codebase-intelligence.md](references/codebase-intelligence.md) — **must contain actual content** |
+| `{CODEBASE_CONTEXT}` | See [references/codebase-intelligence.md](references/codebase-intelligence.md) Part 1 — **must contain actual content** |
+| `{CONVENTIONS_CONTEXT}` | See [references/codebase-intelligence.md](references/codebase-intelligence.md) Part 2 — the repo's own ADRs and guideline docs |
+| `{PROJECT}` | Index project name, from `codebase-memory-mcp cli list_projects`. `"(unavailable)"` if there is no index |
 | `{EXISTING_REVIEW_COMMENTS}` | See Review Comments below |
 | `{SCHEMA_CONTEXT}` | See Schema Context below (safety sub-agent only) |
 | `{DATABASE_ENGINE}` | Default: PostgreSQL. Check `config/database.yml` or equivalent |
 | `{ORM}` | Default: ActiveRecord if Rails. Check `Gemfile` or `package.json` |
 | `{FAILURE_SEMANTICS_CONTEXT}` | See Failure Semantics below — required for control-flow files |
 | `{FRAMEWORK_CONTEXT}` | See [references/framework-rules.md](references/framework-rules.md) |
-| `{TEAM_REVIEW_BRIEF}` | See Team Review Brief below (cobalt repos only) |
-| `{REVIEW_LENS_CONTEXT}` | See Team Review Brief Step 6 — semantic similarity via review-lens (cobalt repos only) |
+| `{TEAM_REVIEW_BRIEF}` | See Team Review Brief below (only where a review corpus is configured) |
+| `{REVIEW_LENS_CONTEXT}` | See Team Review Brief Step 6 — semantic similarity via review-lens (only where a corpus is configured) |
 
 ### Framework Detection
 
@@ -136,11 +138,18 @@ If not applicable: `"(skipped — no control-flow-sensitive files changed)"`.
 
 ### Codebase Intelligence
 
-Read [references/codebase-intelligence.md](references/codebase-intelligence.md) for agent dispatch patterns. Populate `{CODEBASE_CONTEXT}` with actual search output, never instructions to search.
+Read [references/codebase-intelligence.md](references/codebase-intelligence.md) and run it. It answers the two questions that separate a review from a colleague's review:
 
-### Team Review Brief (Cobalt Repos Only)
+- **Part 1 — does this already exist?** Five structural queries plus a body-token pass over the `codebase-memory-mcp` CLI, which needs no MCP server and behaves the same locally and in CI. Populate `{CODEBASE_CONTEXT}` and `{PROJECT}`.
+- **Part 2 — how do we do this here?** The repo's own `docs/adr/`, `good-practices.md`, `*GUIDELINES*.md` and `*PATTERNS*.md`. Populate `{CONVENTIONS_CONTEXT}`.
 
-**When reviewing cobalt repos** (cobalthq/*), build a Team Review Brief from the review-lens database. Read [references/team-review-brief.md](references/team-review-brief.md) for gathering steps.
+Both placeholders carry actual output, never instructions to search. Both degrade to `"(unavailable — <reason>)"` rather than failing the review.
+
+**Do not put `trace_path` output in either.** The index is authoritative for existence and shape, and wrong about reachability — the reference file records the measurement.
+
+### Team Review Brief (where a review corpus is configured)
+
+**Where the repo has a review-lens corpus available**, build a Team Review Brief from it. Read [references/team-review-brief.md](references/team-review-brief.md) for gathering steps.
 
 The brief gives sub-agents real examples of what the team flags, suggests, blocks on, and asks about — producing findings an LLM wouldn't come up with on its own. Sub-agents also get self-serve query access to calibrate and enrich their own findings during the review.
 
