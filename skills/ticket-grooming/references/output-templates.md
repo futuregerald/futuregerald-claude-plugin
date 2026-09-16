@@ -32,32 +32,51 @@ The sub-agent returns TWO clearly separated blocks:
 
 Write in plain language. A PM should understand the problem, the fix, and the risk without expanding the details section.
 
+Write it exactly like this. **Blank lines are load-bearing** — the converter joins consecutive
+non-blank lines into one paragraph, so a title and timestamp on adjacent lines post as a single
+run-on sentence.
+
 ```
-Triaging Notes
-Groomed: {ISO_TIMESTAMP} (iteration {N})
+# Triaging Notes
 
-What's happening: 1-2 sentences in plain English. What's broken or missing, and who it affects. No jargon.
+_Groomed: {ISO_TIMESTAMP} (iteration {N})_
 
-Root cause: 1-2 sentences explaining WHY. Name the specific mechanism but keep it accessible. Include confidence (high/medium/low).
+**What's happening:** 1-2 sentences in plain English. What's broken or missing, and who it affects. No jargon.
 
-Fix: 1-3 bullets. What to do, in which repo, touching which area. Name files/classes only if essential. No Option B unless there's a real trade-off.
+**Root cause:** 1-2 sentences explaining WHY. Name the specific mechanism but keep it accessible. Include confidence (high/medium/low).
 
-Estimate: {S/M/L/XL} · {days} · {N} SP · Confidence: {level}
+**Fix:** 1-3 bullets. What to do, in which repo, touching which area. Name files/classes only if essential. Don't offer a menu of alternatives where one answer is right — but a *sequence* is fine, and "measure first, then X if it's actually slow" is often the honest answer. Say so rather than inventing certainty.
 
-Risks: Only high/critical. One line each. Omit if none.
+**Estimate:** {S/M/L/XL} · {days} · {N} SP · Confidence: {level}
 
-Priority: P{N} — {one sentence}
+**Risks:** Only high/critical. One line each. Omit if none.
 
-@{PM or reporter} — {open questions, if any. Omit if no questions.}
+**Priority:** P{N} — {one sentence}
+
+@{MENTION} — {open questions, if any. Omit the whole line if there are none.}
 ```
+
+`{N}` in the iteration line is supplied in the dispatch prompt — do not guess it, and do not
+assume 1.
 
 **Rules for the visible summary:**
-- No markdown headers (`##`) — use bold labels instead. Keeps it compact.
+- **One `#` heading only — the `# Triaging Notes` title.** Everything below it uses bold labels,
+  not headings. No `##` or deeper anywhere in the visible block; they make it read like a report
+  instead of a message.
 - No "Key Findings" section — fold anything important into root cause or fix.
 - No GitHub permalinks in the visible summary — those go in the details.
+- `{MENTION}` is supplied in the dispatch prompt — the PM or the reporter. **Do not guess a name**
+  from project files or memory; if the dispatch did not give you one, address the question to
+  "the reporter" and say in your receipt that no name was supplied.
+- `@Name` is **plain text and notifies nobody.** It marks who owes an answer, for human readers. A
+  real Jira notification needs a mention node built from an account id; if the question actually
+  needs to reach someone, tell the user so they can ping them.
 - No code blocks in the visible summary. Inline `code` marks for model/method names are fine.
-- "Fix" field: if 1 item, use a single sentence. If 2-3 items, use a `bulletList` in the ADF (see adf-posting.md).
-- Total visible summary should be **under 15 lines** when rendered.
+- "Fix" field: if 1 item, use a single sentence. If 2-3 items, use a Markdown bullet list — you write Markdown; the posting step converts it.
+- Keep it to **nine blocks or fewer**: the title, the timestamp, and one block each for What's
+  happening, Root cause, Fix, Estimate, Risks, Priority, and the @mention. Blank lines between
+  them are mandatory (the converter needs them) and do not count. Judge length by blocks, not
+  by physical lines.
 
 ### Block 2 — Full investigation details (collapsed)
 
@@ -100,7 +119,7 @@ _Groomed: {ISO_TIMESTAMP} (iteration {N})_
 {Same as short mode — plain language, PM-readable}
 
 ## What we found in the code
-{Same as Block 2 "What we found in the code"}
+{Same as Block 2 "Codebase findings"}
 
 ## History
 {Same as Block 2 "History"}
@@ -175,17 +194,39 @@ _Groomed: {ISO_TIMESTAMP} (iteration {N})_
 
 ## Posting Rules
 
-- **NEVER use HTML `<details>` or `<summary>` tags.** Jira does not render them.
-- **Jira (full mode):** Post via `addCommentToJiraIssue` with `contentFormat: "markdown"`. Omitting `contentFormat` defaults to ADF and breaks rendering.
-- **Jira (short mode):** The expand node requires posting as ADF JSON — NOT markdown. Construct the full ADF document (visible sections + expand node), write to a temp file, and post via `acli --body-file`. See [adf-posting.md](adf-posting.md) for the exact procedure and ADF skeleton template. There are no shortcuts — markdown cannot produce an expand node.
-- **GitHub:** Use markdown as-is.
+Posting is owned by [adf-posting.md](adf-posting.md) — build command, validation, the ADF node
+reference, and the per-tracker commands all live there. Two rules matter while you are writing:
+
+- **Never use HTML `<details>` / `<summary>`.** Jira renders them as raw text.
+- **Write Markdown only.** The collapsed section needs an ADF `expand` node, which Markdown cannot
+  express, so the posting step converts your file. Markdown also silently strips the
+  ``[`code`](url)`` link form, which these notes use heavily — another reason not to hand Jira
+  Markdown in short mode.
 
 ## Iteration Tracking
 
-- Check if a previous "Triaging Notes" comment exists on the ticket.
-- If yes: `_Groomed: {ISO_TIMESTAMP} (iteration N -- supersedes iteration N-1)_`
-- If no: `_Groomed: {ISO_TIMESTAMP} (iteration 1)_`
-- Do NOT edit or delete previous comments.
+**The orchestrator determines the iteration number, not the sub-agent.** The sub-agent never sees
+the ticket's existing comments, so it cannot count them — it uses the `{ITERATION}` value it is
+given.
+
+- Orchestrator: before dispatch, count existing "Triaging Notes" comments on the ticket and pass
+  `{ITERATION}` = count + 1.
+- Iteration 1: `_Groomed: {ISO_TIMESTAMP} (iteration 1)_`
+- Later: `_Groomed: {ISO_TIMESTAMP} (iteration N -- supersedes iteration N-1)_`
+- Never edit or delete previous comments.
+
+## Paths in the posted note
+
+**Repo-relative paths and permalinks only.** Never an absolute local path
+(`/Users/<name>/...`), a scratchpad path, a hostname, or anything else describing the machine the
+investigation ran on. The note is posted to a tracker, which may be public, and the details block
+is the part nobody re-reads before it goes out.
+
+## Code blocks in the details section
+
+Fenced code blocks are supported and preserved verbatim. Use them only where a permalink is not
+enough — see the Writing Style rules above. Fences must open and close on their own lines;
+an unclosed fence swallows the rest of the file.
 
 ## Multi-Ticket Progress
 

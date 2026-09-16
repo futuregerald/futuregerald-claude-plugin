@@ -44,6 +44,12 @@ Include the matched severity row, urgency column, and resulting priority with a 
 
 ## Story Points
 
+These are **printed in the note text**. The skill does not write a story-points field on the
+ticket — most Jira screens do not expose one (a project commonly has a dozen issue types, and a
+field present on Story is often absent on Bug), so promising to set it would silently do nothing.
+If a team wants the field written, that is a deliberate addition, and it must resolve the field
+per issue type rather than per project.
+
 Map T-shirt sizes to story points for sprint planning:
 
 | Size | Story Points |

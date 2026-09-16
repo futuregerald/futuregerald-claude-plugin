@@ -25,3 +25,7 @@ docs/plans/
 # Installed by the codebase-memory-mcp binary; overwritten on every update.
 # Not ours to version, and its tracing guidance conflicts with this repo's.
 skills/codebase-memory-*/
+
+# Local skill config -- may hold real site names, org slugs and paths.
+# The example template is tracked; the filled-in copy never is.
+skills/*/references/config.md

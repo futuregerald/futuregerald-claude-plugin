@@ -1,41 +1,59 @@
 # ADF Posting Reference
 
-How to post triaging notes to Jira. Two modes, two procedures. No alternatives, no shortcuts.
+How to post triaging notes to Jira. One procedure, two modes, no shortcuts.
 
 ## Hard Rules
 
-- **NEVER use HTML `<details>` or `<summary>` tags.** Jira does not render them. They show up as raw text.
-- **NEVER post short-mode comments with `contentFormat: "markdown"`.** Markdown cannot produce an expand node. The investigation section will render flat — not collapsed.
-- **NEVER omit `contentFormat` on MCP calls.** Omitting it defaults to ADF and renders markdown as broken plain text.
+- **NEVER post triaging notes to Jira as Markdown, in either mode.** Jira's Markdown converter
+  silently strips the ``[`code`](url)`` link form — which is what nearly every permalink in the
+  details block is — and it cannot express an `expand` node at all. Both modes go through
+  `scripts/md2adf.py` and post ADF via `acli --body-file`.
+- **NEVER use HTML `<details>` or `<summary>` tags.** Jira renders them as raw text.
+- **NEVER omit `contentFormat` on an MCP call**, if you are posting something other than these
+  notes. Omitting it defaults to ADF and renders markdown as broken plain text.
 
-## Full Mode (no expand)
+## The two modes
 
-One step. Post via MCP with markdown:
+Both take the same two-block `notes.md`. They differ by one flag:
 
-```
-addCommentToJiraIssue(
-  cloudId: "{CLOUD_ID}",
-  issueIdOrKey: "{TICKET_KEY}",
-  commentBody: "{FULL_MARKDOWN_CONTENT}",
-  contentFormat: "markdown"
-)
-```
+| Mode | Command | Result |
+|---|---|---|
+| Short (default) | `md2adf.py notes.md --title "Full Investigation Details"` | Details collapsed behind an expand node |
+| Full (`--full`) | `md2adf.py notes.md --no-expand` | Details inline after a rule; no expand node |
 
-Done.
+GitHub is the exception: it renders Markdown correctly, including the link form Jira strips, so
+`gh issue comment` posts `notes.md` as-is.
 
-## Short Mode (with expand)
+## The expand node
 
 Short mode requires an ADF `expand` node. ADF is JSON — there is no markdown equivalent.
 
 ### Procedure
 
+**Prefer the generator.** `scripts/md2adf.py` converts the sub-agent's `notes.md` into a valid
+document, including the `expand` node and the `code`+`link` mark combination below. Hand-building
+ADF is for the cases the converter does not cover — reach for the skeleton then, not by default.
+
+```
+python3 {SKILL_DIR}/scripts/md2adf.py {SCRATCHPAD}/{TICKET_KEY}/notes.md --title "Full Investigation Details"
+```
+
+Validate the result before posting: assert it is a doc at version 1 containing exactly one `expand`
+node. `jq -e .` alone only proves the file is JSON, not that it is ADF.
+
+---
+
+The manual route, when you need it:
+
 **Step 1:** Build the ADF JSON document following the skeleton below. Replace placeholders with actual content.
 
-**Step 2:** Write the ADF JSON to `/tmp/triaging-notes-{TICKET_KEY}.json`.
+**Step 2:** Write the ADF JSON to `{SCRATCHPAD}/{TICKET_KEY}/notes.adf.json`, where `{SCRATCHPAD}`
+is the session scratchpad directory. Never `/tmp` — it is shared, unscoped, and not cleaned up
+with the session.
 
 **Step 3:** Post via acli:
 ```bash
-acli jira workitem comment create --key {TICKET_KEY} --body-file /tmp/triaging-notes-{TICKET_KEY}.json
+acli jira workitem comment create --key {TICKET_KEY} --body-file {SCRATCHPAD}/{TICKET_KEY}/notes.adf.json
 ```
 
 **If acli is unavailable**, post via MCP with `contentFormat: "adf"` and pass the ADF JSON string as `commentBody`.
@@ -279,5 +297,6 @@ Get the comment ID from the MCP post response (`id` field) or from `acli jira wo
 
 ## Reposting After Deletion
 
-- **Full mode:** Re-post with MCP `contentFormat: "markdown"`.
-- **Short mode:** Re-post with acli `--body-file` using corrected ADF JSON. Do NOT fall back to markdown — it will not have the expand node.
+Correct `notes.md`, regenerate, and re-post with `acli --body-file` — the same path as the
+original post, in both modes. Do NOT fall back to Markdown: short mode loses the expand node, and
+both modes lose every ``[`code`](url)`` permalink.
