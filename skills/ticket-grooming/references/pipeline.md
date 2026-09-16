@@ -20,7 +20,7 @@ If `process-docs`: run Phase 0 and Phase 2 (history only), then Phase 5 using th
 
 ### Step 0: Detect the framework
 
-Before reading any application code, identify the project framework. See [framework-detection.md](framework-detection.md) for detection logic and per-framework investigation rules. The framework determines how to interpret code — skipping this step leads to misdiagnoses.
+Before reading any application code, identify the project framework. Read [frameworks/README.md](frameworks/README.md) for the detection table, then read **only** the rules file for the framework you detected (one per repo in a multi-repo ticket). The framework determines how to interpret code — skipping this step leads to misdiagnoses. If the framework you detect has no rules file, follow the fallback in that README and say so in the notes.
 
 ### Step 1: Read the models FIRST
 
@@ -50,6 +50,14 @@ This is not optional. Do NOT skip to grep/search and start counting "affected fi
 4. Check `db/schema.rb` or `db/structure.sql` and recent migrations
 5. Map the surface area
 
+**Reachability is answered by grep, in both paths.** A call-path/trace tool tells you a symbol
+exists and what it reaches — never who calls it. It cannot see dynamic dispatch: interactor and
+organizer lists, `send`, `public_send`, `constantize`, job classes named by string, serializers,
+delegation, callbacks, config-driven routing. **A zero-caller result from one is not evidence.**
+Any negative or exhaustive claim ("nothing else calls this", "this is dead", "X is the only
+caller") must name the scopes it grepped, and those scopes need index coverage too. A clean
+coverage result means no recorded gap — never proof of completeness.
+
 **Multi-repo (both paths):**
 - For backend tickets: search EVERY repo listed under `Repos:` in the configuration, not just the first. Budget applies per repo.
 - Where the configuration notes that one repo is mid-migration into another, code may exist in both — search both, fix only in the destination.
@@ -69,6 +77,11 @@ Before carrying findings forward, verify each one individually:
 
 **Budget: max 50 git log entries, max 20 Jira results, max 20 PR results.**
 
+0. **Keep the search narrow or it will not fit.** Always pass an explicit `fields` list
+   (`key`, `summary`, `status`, `issuetype`, `updated` is usually enough) — the default returns
+   every field on every hit. Never run a `text ~` query without a `project =` clause: an
+   unscoped one returned 152,076 characters in a single call and had to be spilled to a file.
+   Prefer `summary ~` over `text ~` when you know roughly what you are looking for.
 1. Search past tickets (Jira: `searchJiraIssuesUsingJql`; GitHub: `gh issue list --search`)
 2. Search PRs and commits (`git log --all --grep`, `gh pr list --state all --search`)
 3. `git blame` on the most relevant files from Phase 1
@@ -76,6 +89,22 @@ Before carrying findings forward, verify each one individually:
 5. Search for similar COMPLETED tickets for estimation grounding
 
 **Summarize before proceeding.** Carry forward: related ticket keys with links, relevant PRs, key decisions.
+
+### Step 3: Reach for a domain skill when the subject warrants one
+
+The framework rules cover the *language and framework* — associations, callbacks, enums, dispatch.
+They say nothing about the ticket's actual subject matter. When the ticket turns on a domain with
+its own installed skill, load it:
+
+| Ticket turns on | Load |
+|---|---|
+| Query plans, indexes, slow SQL, schema design | `sql-optimization-patterns` |
+| A bug with a reproducible failure | `systematic-debugging` (phases 1-3 only — investigation, not fixes) |
+| Frontend rendering, state, component structure | whichever frontend skill the repo's conventions name |
+
+This was found by running the same index ticket through two prompts: both produced correct notes on
+Rails mechanics and neither had any guidance on Postgres index selection, which was the entire
+question. A framework rules file is not a substitute for a domain skill.
 
 ## Phase 3: Find the root cause
 
@@ -102,7 +131,11 @@ Using findings from phases 1-3:
 
 Compile findings using the appropriate template from [output-templates.md](output-templates.md). Use estimation and priority tables from [estimation-priority.md](estimation-priority.md).
 
-**The sub-agent returns the formatted notes. It does NOT post them** — the main conversation handles posting after staff review.
+**The sub-agent WRITES the notes to a file and returns a short receipt. It does NOT post them,
+and it does not paste the details block into its final message.** Write Markdown only — never JSON
+or ADF; the orchestrator converts it. The file path and required marker are given in the dispatch
+prompt (see [investigation-prompt.md](investigation-prompt.md)). Posting happens in the main
+conversation after staff review.
 
 ### GitHub Permalinks
 

@@ -1,5 +1,14 @@
 # Configuration
 
+> **See [config-resolution.md](config-resolution.md) for the full precedence order.** This file
+> documents the CLAUDE.md block, which is tier 2 of four.
+>
+> **If no configuration exists at all** — no cache, no CLAUDE.md block, no shipped `config.md` —
+> that is the common case on a first run, not an error. Ask the user for what the ticket actually
+> needs (usually: ticket system, site, and which repos to search), then offer to write a
+> `.ticket-grooming.json` so the question is asked once. Do not guess a repo list from the
+> directories you happen to see, and do not treat a bracketed placeholder as a value.
+
 Add to CLAUDE.md to customize behavior. Replace every bracketed value — the skill treats a
 bracketed placeholder as "not configured" and will ask before running.
 

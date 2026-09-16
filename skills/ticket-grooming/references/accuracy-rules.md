@@ -68,7 +68,7 @@ Never assume what a framework method, convention, or mechanism does — read the
 - **"Missing method" claims:** Check concerns, delegation, `method_missing`, and base classes before claiming a method doesn't exist
 - **"N files affected" claims:** Verify EACH file individually. Never batch-count from grep results — what looks like the same pattern may behave differently due to different model definitions, concerns, or framework configuration.
 
-See [framework-detection.md](framework-detection.md) for per-framework rules.
+See [frameworks/README.md](frameworks/README.md) for the detection table and per-framework rules.
 
 _Added after grooming flagged 8 files as buggy from grep results without reading the model's belongs_to definitions. Most files were correct in their own repo. A "removed column" root cause was fabricated — the actual issue was a wrong association name._
 
@@ -86,3 +86,25 @@ Every HIGH or MEDIUM confidence claim must include a verification trail: what yo
 The verification trail is not optional polish. It is the evidence that distinguishes a verified finding from a guess. Claims without trails WILL be caught and rejected by the staff engineer review.
 
 _Added after "HIGH confidence (verified)" was claimed without having read the model file that would have disproved the hypothesis._
+
+### When the decisive evidence is out of reach
+
+Some questions cannot be settled by reading code. A query plan needs `EXPLAIN`. A race needs a
+running system. A row count needs the database. Investigation is read-only and does not have these.
+
+Do **not** resolve that by downgrading everything to LOW — that throws away real analysis — and do
+not resolve it by asserting the conclusion anyway. Split the claim:
+
+- **The mechanism** is usually readable and can be HIGH. "`status IN (0,1,2)` does not imply
+  `status IN (0,1)`, so Postgres cannot use this partial index" is a fact about the code and the
+  documented engine behaviour.
+- **The consequence** usually is not. "So widening the predicate will speed up that page" is an
+  inference. Grade it MEDIUM, state the counterargument, and make measuring it the first task in
+  the fix rather than a footnote.
+
+Then say plainly, in the notes, what could not be checked and what would settle it. A named,
+unanswerable question is a finding — often the most useful one, because it is what the ticket is
+actually blocked on. Silence about it reads as though you checked.
+
+_Added after an index ticket where the decisive evidence was `EXPLAIN` output no read-only agent
+could produce, and the rules gave no way to grade the result._

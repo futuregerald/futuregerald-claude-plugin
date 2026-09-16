@@ -1,22 +1,7 @@
-# Framework Detection
+# Ruby on Rails investigation rules
 
-Detect the project framework BEFORE dispatching the investigation sub-agent. The framework determines what the runtime guarantees — findings that ignore framework behavior produce misdiagnoses that waste engineers' time and erode trust in grooming notes.
-
-## Detection
-
-Detect from project files:
-
-| File | Framework |
-|------|-----------|
-| `Gemfile` with `rails` | Ruby on Rails (ActiveRecord, Interactors, Pundit, Packwerk) |
-| `package.json` with `next` / `react` | Next.js / React |
-| `package.json` with `express` | Express.js |
-| `requirements.txt` / `pyproject.toml` with `django` | Django |
-| `go.mod` | Go (statically typed) |
-
-Set `{FRAMEWORK_CONTEXT}` to the relevant rules below. Pass to BOTH the investigation sub-agent (full rules) and the staff review sub-agent (compact checklist — see staff-review-prompt.md).
-
-## Ruby on Rails Investigation Rules
+Loaded by the investigation sub-agent after Phase 0 detects the framework.
+See [README.md](README.md) for the detection table.
 
 Understand how Rails actually works before diagnosing root causes or suggesting fixes. Every claim about Rails behavior must be verified against the actual code — not inferred from method names or grep results.
 
@@ -178,19 +163,3 @@ Rails tracks attribute changes on models:
 - `Time.current` is the Rails convention (not `Time.now`)
 - `present?` / `blank?` are Rails core extensions, not custom code
 - `squish` collapses whitespace — it's a Rails method, not custom code
-
-## Go Investigation Rules
-
-- Go is statically typed. Integer values CANNOT contain SQL injection when used with `fmt.Sprintf("%d", val)` or direct interpolation.
-- String values from user input CAN be dangerous in `fmt.Sprintf` SQL construction — flag these.
-- `database/sql` with `?` placeholders is parameterized.
-
-## JavaScript/TypeScript Investigation Rules
-
-- JS has NO integer type — all numbers are IEEE 754 doubles. However, `parseInt(val, 10)` returns NaN for non-numeric strings, not a dangerous value. `NaN` in SQL causes a query error, not injection.
-- Template literals with user strings ARE dangerous in raw SQL.
-- ORMs (Prisma, TypeORM, Knex) parameterize by default when using their query builder APIs. Raw SQL methods (`.raw()`, `.$queryRaw()`) need manual parameterization.
-
-## Adding rules for new frameworks
-
-When encountering a framework not listed above, apply the same principle: **understand what the language runtime and framework guarantee before claiming a vulnerability or bug exists.** Add rules to this file as they are discovered.
