@@ -1,7 +1,13 @@
 # Capacity model
 
-**Window mode only.** If the caller gave no window — no quarter, no date range, no "next N weeks" —
-there is nothing to fit work into. Skip this file entirely and do not invent a window to enable it.
+**Only when the caller asked whether the work fits a window.** No quarter, no date range, no "next
+N weeks" means there is nothing to fit into: skip this file entirely and do not invent a window to
+enable it.
+
+**This file is not how the skill produces a date.** Capacity answers *does the work fit in this
+window*. The **projected landing** — *when does it land* — comes from the critical chain divided by
+the engineers on it (`SKILL.md`, Phase 6), needs no window, and is produced whenever a date is
+wanted. Skipping capacity never means skipping the projection.
 
 Capacity answers a different question from estimation. Estimation asks *how big is this work*.
 Capacity asks *how much work can this team absorb in this window*. Reporting one without the other

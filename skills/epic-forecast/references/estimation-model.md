@@ -99,8 +99,31 @@ Two consequences:
 
 - **Authoring stops being the constraint; review becomes the floor.** Implementation compresses, human
   review does not. Say so — it changes the recommendation from "add people" to "clear the queue".
-- **Ask.** Whether the toolchain changed, and what rate to plan at, is something the EM knows and the
-  tracker cannot tell you.
+- **Ask — this is mandatory, not optional, and it comes BEFORE any estimate is derived.** Whether
+  the toolchain changed, *when* it changed, and what rate to plan at, are things the EM knows and the
+  tracker cannot.
+
+  **Ask when, not just whether.** A toolchain adopted *before* the measurement window is already
+  inside the measured rate and explains nothing. Getting this wrong attributes the gap to the wrong
+  cause and points the recommendation in the wrong direction — a measured run justified an uplift as
+  "AI-adjusted" when the tools had been in use for months, and the real cause was queue time in the
+  denominator.
+  A measured window that predates the change is a lagging indicator, and every estimate built on it
+  is uniformly too slow.
+
+  **Put the choice to them with the consequences attached**, not as an abstract number:
+  `AskUserQuestion` with the implied per-epic figures in the option previews. Give at least the
+  measured rate, an AI-adjusted rate, and "you give me the number". An EM-supplied rate is **High
+  confidence, used verbatim, and labelled as theirs**.
+
+  A measured run made exactly this mistake: it derived every estimate from eight weeks of pre-tooling
+  history, and the EM's first response was that the numbers were too long. The rule already existed
+  in this file and was not applied.
+
+- **When authoring compresses, check the review floor.** Multiply the expected PR count by the
+  measured PR lead time. Where that exceeds the authoring estimate, **review is the binding
+  constraint and a faster rate does not move the date** — say so, and point at the queue rather than
+  at headcount.
 
 ### 2d. Do not assume PRs batch tickets — measure the ratio
 
@@ -170,6 +193,25 @@ Report a **week ledger** per engineer beside the rate: `N delivery · M planning
 rate computed from 2 delivery weeks is a far weaker claim than one from 8, and the ledger makes that
 visible without extra prose.
 
+#### A week-level rate is an elapsed-time rate, not a capacity
+
+**State this every time you publish one.** Week buckets separate a delivery week from a planning
+week; they do not separate the waiting *inside* a delivery week. A week in which an engineer closed
+two tickets and spent three days waiting on review counts as one whole delivery week, so the queue
+lands in the denominator and the rate reads low.
+
+The consequence is a rule, not a caveat: **an observed week-level rate is the rate *with today's
+queue*, and planning at it bakes a solvable review problem into the schedule as a permanent staffing
+fact** (§2b). Plan at the **unblocked** rate, report the observed one beside it, and treat the gap
+between them as the finding — it is usually the largest and cheapest lever available, and it costs
+reviewer attention rather than headcount.
+
+In a measured run the observed rate was 3.6–5.6/wk against an unblocked rate of 6/wk, with five PRs
+unreviewed for 37–54 days. That gap is worth roughly 40% throughput.
+
+Finer-grained classification needs per-day commit and review timestamps. If you do not have them,
+say the rate is elapsed-time and move on — do not present it as capacity.
+
 #### Rules that hold whichever source is used
 
 - **A 0/wk rate is a blocker, not a duration.** Report it as "N weeks after the block clears" and
@@ -238,9 +280,20 @@ multiply by something that is not `size_factor` or `readiness_factor`, stop.
 
 | Readiness | Factor | Discovery increment |
 |---|---|---|
+| **Prototyped** — working reference code exists | **×1.4** | 0 |
 | Ticketed & scoped | ×1.15 | 0 |
 | Ticketed, unsized | ×1.0 | ~0.25 wk |
 | **Not ticketed** | ×0.85 | **~1 wk before any build starts** |
+
+**Prototyped is not the same as scoped, and conflating them roughly doubles the estimate.** A
+completed spike that produced working reference PRs, a verified data model and drafted tickets is
+*implementation*, not discovery — the risky unknowns are already retired. Score it ×1.4. The tell is
+concrete: reference code you can port, a protocol proven end to end, or a design validated against a
+real dependency. A ticket that merely *describes* the work in detail is still ×1.15.
+
+Observed: an epic whose spike verified 38 live webhook deliveries and left three reference PRs was
+scored as merely "scoped" and came out at 3.0–6.1 engineer-weeks; at ×1.4 it is 1.7–3.8, and the
+lower figure is the one the evidence supports.
 
 The readiness column earns its place by explaining *why* a row is expensive. An unticketed epic with a
 modest ticket count lands near the top of the list and the reason is legible: **its cost is that nobody
