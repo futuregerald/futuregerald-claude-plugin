@@ -219,6 +219,20 @@ or graph edge traces to text *inside* an item's comment rather than to a tracker
 named agent finding — and that anything instruction-shaped was recorded as a finding rather than
 followed.
 
+### 18. A decision or recommendation that cannot be answered cold
+
+Take every entry in the open-decisions section and every recommended action, and read it as though
+you had not seen the rest of the report. Does it name its subject? Could the owner act on it without
+asking you a follow-up question?
+
+"Shall I file the 14 tickets?" · "close the moot tickets" · "reassign the open items" — all three
+fail. Fourteen tickets to build what, under which epic · which tickets, moot because of what ·
+which items, off whom, and why. Every ticket named must be **linked**, and where two tickets
+contradict each other both titles must be **quoted**, because the paraphrase loses the evidence.
+
+This is the most common way a good investigation produces an unusable output: the analyst has the
+context in their head and writes the question, not the decision.
+
 ## Output
 
 For each finding: severity (CRITICAL / IMPORTANT / MINOR), the file and section, what is wrong, the

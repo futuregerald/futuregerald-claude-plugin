@@ -210,19 +210,39 @@ number, so show the working.
 What the review caught and what changed as a result. Short, but present — it tells the reader which
 claims were stress-tested.
 
-### 13. Open questions
+### 13. Open decisions — **answerable cold, or they are not written down**
+
 Only what a human can answer: undecided product calls, staffing, priority conflicts, ownership
-disputes. Each with who owns it and what it blocks. A question you could have researched belongs in
-the research, not here.
+disputes.
+
+**The test every entry must pass: could the owner answer it without having read the rest of this
+report, three weeks from now?** A question is not a question without its subject. *"Shall I file the
+14 tickets?"* fails — fourteen tickets for what, under which epic, to build what. *"Close the moot
+tickets"* fails — which tickets, and what makes them moot. *"Reassign the open items"* fails — which
+items, off whom, and why they do not need that person.
+
+Each entry carries, in this order:
+
+| Part | What it is |
+|---|---|
+| **Subject** | A heading naming the decision, not the question. "Slack alerts or Datadog monitors for staffing health?" |
+| **Context** | Two to four sentences: what the thing is, why it is open, what has already been established. Enough that a reader who has never seen the item can form a view |
+| **The question itself**, in bold | The single thing you want answered |
+| **Owner · how long it has been open · what it blocks** | With the blocked work quantified where it can be |
+| **Every ticket it touches, linked** | With a one-word label on each saying which side it is — `ABC-101` Slack, `ABC-102` Datadog |
+
+Where two tickets contradict each other, **quote both titles**. That is usually the whole argument,
+and paraphrasing it loses the evidence: one real pair read *"(Slack, not Datadog monitors)"* against
+*"Author Datadog monitor + dashboard"*, and the contradiction is undeniable only in their own words.
 
 **Fold in every unanswered question found in the trackers' comment threads**, with its age and who
 asked it. Those are already-articulated decision debt — somebody cared enough to ask and nobody
 replied — and they are invisible in every roadmap view because no field changes when a question goes
-unanswered. Sort by age × consequence: an old unanswered question blocking a keystone item is usually
-the cheapest schedule fix in the whole report, because clearing it costs somebody five minutes.
+unanswered. Sort by age × consequence.
 
-Every `decision` node in the dependency graph appears here too, with its owner. A decision that is on
-the critical chain and not in this section has been lost.
+**A recommendation is subject to the same rule.** "Close four moot tickets" is an instruction nobody
+can act on; naming each ticket, what it describes, and the merged PR that deleted that code is one a
+reader can execute or reject in a minute.
 
 ### Linking — every reference is clickable, in both artefacts
 
