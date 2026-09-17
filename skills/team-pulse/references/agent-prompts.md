@@ -55,22 +55,22 @@ After writing the file, return only: "Wrote .updates/jira-{DATE}.md — {brief 1
 
 **Full team, single day:**
 ```
-project = DL AND updated >= "{DATE}" AND updated < "{NEXT_DATE}" ORDER BY updated DESC
+project = {PROJECT_KEY} AND updated >= "{DATE}" AND updated < "{NEXT_DATE}" ORDER BY updated DESC
 ```
 
 **Single person, single day:**
 ```
-project = DL AND assignee = "{JIRA_ACCOUNT_ID}" AND updated >= "{DATE}" AND updated < "{NEXT_DATE}" ORDER BY updated DESC
+project = {PROJECT_KEY} AND assignee = "{ACCOUNT_ID}" AND updated >= "{DATE}" AND updated < "{NEXT_DATE}" ORDER BY updated DESC
 ```
 
 **Single epic/initiative, single day:**
 ```
-project = DL AND (parent = {EPIC_KEY} OR key = {EPIC_KEY}) AND updated >= "{DATE}" AND updated < "{NEXT_DATE}" ORDER BY updated DESC
+project = {PROJECT_KEY} AND (parent = {EPIC_KEY} OR key = {EPIC_KEY}) AND updated >= "{DATE}" AND updated < "{NEXT_DATE}" ORDER BY updated DESC
 ```
 
 **Topic search, single day:**
 ```
-project = DL AND (summary ~ "{TOPIC}" OR labels in ("{TOPIC}")) AND updated >= "{DATE}" AND updated < "{NEXT_DATE}" ORDER BY updated DESC
+project = {PROJECT_KEY} AND (summary ~ "{TOPIC}" OR labels in ("{TOPIC}")) AND updated >= "{DATE}" AND updated < "{NEXT_DATE}" ORDER BY updated DESC
 ```
 
 ---
@@ -144,15 +144,50 @@ After writing the file, return only: "Wrote .updates/meetings-{DATE}.md — {bri
 
 ### Search terms
 
-- **Single person:** use their first name (e.g., "Leandro", "Jorge")
+- **Single person:** use their first name
 - **Full team:** run one search per person, or search for the team lead name and look at attendee lists
-- **Topic:** search for the topic name (e.g., "Flywheel", "CAP", "VulnCheck")
+- **Topic:** search for the topic name — a project codename, an initiative, a vendor
 
-### Important: Krisp is scoped to Gerald's account
+### Important: the meeting tool is scoped to one account
 
-Krisp returns meetings Gerald attended or that were shared with him. It won't show meetings between other team members that Gerald wasn't part of. Note this limitation in findings if relevant.
+It returns only meetings the configured account attended or had shared with it. Meetings between other team members are invisible to it. Note this limitation in findings if relevant.
 
 ---
+
+## Agent F: Epic structure and descriptions (once, NOT per-day)
+
+Dispatch once per run, alongside the per-day agents. Its output is what makes the report
+readable by anyone who does not live in the tracker.
+
+```
+Scope: {program or team}, tracker keys {keys}, labels {labels}.
+Write your digest to {run_dir}/epics.md. Maximum {N} words.
+
+DISCOVER the epics — do not work from a supplied list. Search by label, by summary match, by
+links from known roots, and by the parents of issues that moved this window. Page with
+nextPageToken until isLast is true. A hand-enumerated list can only confirm what someone
+already believed and will silently miss whole workstreams.
+
+For EVERY epic and initiative found, report:
+
+1. ONE PLAIN-LANGUAGE SENTENCE from its `description` field saying what the work actually is,
+   written for someone who has never opened the ticket. Never a restatement of the title.
+   THIS IS THE HIGHEST-PRIORITY FIELD — if budget runs short, deliver these and drop the rest.
+   If the description field is empty, say "no description on the ticket" — that is a finding,
+   not a blank to fill with a guess.
+2. Status, and done/total direct children as raw counts, never a bare percentage.
+3. Assignee AND whether that account's `active` flag is false. Request the assignee field and
+   check the flag explicitly; a departed owner reads as "someone has this" on every board view.
+4. STARTED or NOT STARTED — Backlog/To Do with zero children done is NOT STARTED. Report these
+   in their own section. They are invisible to any activity-based query, so a report built from
+   "what changed" will never contain them.
+5. Whether the epic's own status contradicts its children: a parent reading In Progress while
+   its children are Won't Do or untouched for months is an abandoned plan nobody updated
+   upward. Flag it with the dates.
+
+Facts only. No traffic lights, no ratings, no recommendations — the orchestrator assigns those.
+If a query returns nothing, say so explicitly rather than omitting the section.
+```
 
 ## Agent D: Datadog (Optional — full range, NOT per-day)
 
@@ -164,7 +199,7 @@ Use mcp__datadog__search_datadog_events with:
 - from: "now-{DAYS}d"
 
 Write your digest to `.updates/datadog.md` using the Write tool. Format:
-- Deploys by DL team members (count, services affected)
+- Deploys by team members (count, services affected)
 - Any incidents or alerts triggered
 - Max 200 words
 
@@ -184,7 +219,7 @@ gh search prs --reviewed-by {HANDLE} --owner {ORG} --updated ">={START_DATE}" \
 Write your digest to `.updates/reviews.md` using the Write tool. Format:
 - How many PRs reviewed
 - Whose PRs they reviewed (pattern: reviewing one person vs. spread across team)
-- Any review given on non-DL repos
+- Any review given on repos outside the configured list
 - Max 200 words
 
 After writing the file, return only: "Wrote .updates/reviews.md — {brief 1-line summary}"
