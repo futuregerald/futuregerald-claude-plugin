@@ -1,6 +1,6 @@
 ---
 name: team-pulse
-description: Generate a concise team status report for an engineering manager before calls or check-ins. Covers progress, blockers, risks, individual workloads, PRs in flight, meeting context, and project health assessments. Default scope is the team configured in references/team.md over the last 1.2 weeks. Use when the user says "team pulse", "team status", "what's my team working on", "prep me for standup", "what happened this week", "sprint update", "team report", "how is [project] going", "how is [person] doing", "prep me for 1:1", or any request for a team/project/person activity summary.
+description: Generate a team status report for an engineering manager - traffic lights and a plain-language description per epic, what shipped, what has not started, PRs in flight including work with no ticket at all, per-person assessments, and every blocker linked to the thing blocking it. Covers whole programs or a single person, and can publish a screen-shareable page to talk over on a call. Use when the user says "team pulse", "team update", "team status", "delivery update", "program update", "status update for leadership", "update for the call", "sprint update", "what's my team working on", "what happened this week", "what has my team been doing", "write up the last two weeks", "prep me for standup", "prep me for 1:1", "how is [person] doing", "how is [project] going", or names a program and asks for its update.
 ---
 
 # Team Pulse
@@ -94,11 +94,12 @@ This directory is ephemeral — cleaned up after the report is delivered.
 ## Step 1: Resolve Scope
 
 Parse the user's request for:
-- **Team/project** — default: DL. Could be a Jira project key, epic, initiative, or person name.
+- **Team/project** — default: the project key configured in `references/team.md`. Could be a
+  tracker project key, epic, initiative, or person name.
 - **Time window** — default: 8 days back from today. Convert relative dates to **a list of absolute dates** (e.g., `["2026-06-02", "2026-06-03", ..., "2026-06-09"]`).
 - **Depth** — summary (default) or detailed.
 
-Load team roster from [references/team.md](references/team.md). If scope is non-DL, ask the user for team members and Jira project key.
+Load team roster from [references/team.md](references/team.md). If the scope falls outside the configured project, ask the user for the team members and the project key.
 
 ## Step 2: Dispatch Sub-Agents (Parallel — One Per Day Per Source)
 
@@ -128,6 +129,37 @@ See [references/agent-prompts.md](references/agent-prompts.md) for the exact pro
 | A: Jira Activity | Atlassian MCP | `searchJiraIssuesUsingJql` | Yes — 1 agent per day |
 | B: GitHub PRs | gh CLI | `gh pr list`, `gh search prs` | Yes — 1 agent per day |
 | C: Krisp Meetings | Krisp MCP | `search_meetings`, `search_meeting_content` | Yes — 1 agent per day |
+| **F: Epic structure** | Atlassian MCP | `searchJiraIssuesUsingJql` | **No — once per run** |
+
+Agent F is in [agent-prompts.md](references/agent-prompts.md) and supplies the descriptions,
+child counts, deactivated-assignee flags, and the not-started list. Without it the report is a
+list of ticket numbers.
+
+### Required once, not per-day
+
+**Epic descriptions and structure.** One agent, covering every epic in scope. It must return,
+for each: a one-sentence plain-language description **from the `description` field**, the
+done/total child count, the assignee **and whether that account's `active` flag is false**, and
+whether the epic has started at all.
+
+This is the highest-priority output. If an agent's budget runs short it delivers descriptions
+and drops everything else — a report of ticket numbers with no descriptions is unusable to
+anyone who does not live in the tracker.
+
+**Epics that have NOT started.** Ask for these explicitly: Backlog or To Do with zero children
+done. They are invisible to any activity-based query, so a report built only from "what
+changed" will never contain them, and their absence makes a program look healthier than it is.
+
+**Scope by discovery, not by a hand-written list.** Find the program's epics from labels,
+summary matches, and links — never from a fixed set of keys in config. A hand-enumerated list
+can only confirm what you already believed, and will silently miss whole workstreams.
+
+### Reuse before you re-query
+
+Before dispatching, check the run directory for digests from an earlier pass in this session.
+When one exists, name its path in the agent's prompt, state exactly which facts it already
+carries, and tell the agent to copy those through rather than re-fetch. Tracker queries are the
+slowest part of this skill and a widened second pass overlaps the first by most of its rows.
 
 ### Optional Agents (once, not per-day)
 
@@ -139,6 +171,37 @@ See [references/agent-prompts.md](references/agent-prompts.md) for the exact pro
 ### Why Per-Day?
 
 A single agent querying 8 days of Jira/GitHub data fills its context fast, slows down requests, and is especially painful on local models. One agent per day means each agent handles a small slice — fast queries, tiny context, fast summarization. The parallelism makes the total wall-clock time shorter, not longer.
+
+## Step 2b: Scan PRs against the tracker
+
+Run the script directly — this part is mechanical and must not go to an agent:
+
+```bash
+python3 scripts/pr_scan.py \
+  --org ORG --repos repo-one,repo-two \
+  --since YYYY-MM-DD --keys ABC,XYZ \
+  --roster handle-one,handle-two,handle-three \
+  --stale-days 3 --out "$RUN_DIR"
+```
+
+**`--roster` is not optional.** Repos are shared with other teams, so without it every count is
+repo-wide and wildly overstates the team's output — measured at 83 repo-wide against 22 for the
+team in one real week. Pass the roster's GitHub handles from `references/team.md` and read the
+`*_team` counts (`merged_team`, `open_team`, `stale_team`, `no_ticket_team`), never the bare
+totals. See [report-format.md](references/report-format.md#count-the-team-not-the-repo).
+
+Writes `prs.json` and `prs.md`. Every PR lands in exactly one bucket: `linked_in_scope`,
+`linked_out_of_scope`, `no_ticket`, `declared_no_ticket`.
+
+`no_ticket` is the point of this step — work the tracker cannot see, invisible to any
+Jira-only report. So is a PR approved months ago and never merged while its ticket reads Done.
+
+**If the script exits with `TRUNCATED`, do not proceed.** Narrow the window and rerun. `gh pr
+list` caps at 30 by default and at 1000 on the search path, both silently; a partial scan makes
+the untracked section look complete while being empty.
+
+**The window bounds merged PRs only.** Open PRs report as current state regardless of
+`--since`, because a PR open five weeks is exactly what a status report should surface.
 
 ## Step 3: Synthesize Report
 
@@ -160,10 +223,18 @@ Each daily digest is max 100 words. Read them all — they're tiny. The orchestr
 Follow the format in [references/report-format.md](references/report-format.md). Key rules:
 
 - **Lead with the headline.** One sentence: are we on track or not?
-- **Brevity over completeness.** Skip anything that's fine. Highlight what needs attention.
+- **Every epic carries a one-sentence plain-language description** of what the work is, from
+  its `description` field. Never a restatement of the title. Non-negotiable.
+- **Traffic lights on every epic and every person** — RED / AMBER / GREEN, by the conditions in
+  [report-format.md](references/report-format.md#traffic-lights).
+- **Link the blocker, not just the blocked thing.** When something is blocked, say
+  **"Blocked by:"** and link the specific open question, PR, decision ticket, or dependency.
+  A blocker the reader cannot click is one they have to hunt for, and nobody hunts mid-meeting.
+- **Every light carries a ticket key plus a date or a count.** No citation, no light.
 - **Name names.** "Paul has 2 PRs awaiting review for 4 days" not "some PRs are stale."
-- **Assessments are required.** For each person and each project/epic, give a 1-line assessment.
 - **Link everything.** Jira keys and PR numbers must be clickable.
+- **Report what you could not measure as "not measured", never as zero.** A silent gap reads
+  as a fact.
 - **No filler.** No "here's what I found" or "let me summarize." Just the report.
 - **Meeting context enriches, not replaces.** Use Krisp data to add color (quotes, action items, sentiment) to Jira/GitHub findings. Don't create a separate "meetings" section for team-wide reports — weave it into the person's assessment. For single-person reports, a dedicated Meetings section is fine.
 - **Deduplicate across sources.** If Jira and GitHub both reference the same work, merge into one mention.
@@ -171,6 +242,19 @@ Follow the format in [references/report-format.md](references/report-format.md).
 ## Step 4: Deliver
 
 Output the report directly. If the user asked for Confluence or Slack format, adapt.
+
+**When the report will be shown to other people** — a leadership call, a screen-share, anything
+read aloud rather than read alone — also publish it as an Artifact page and hand back the link.
+Load the `artifact-design` skill first. Keep the same section order; the page earns its place by
+being glanceable, not by being different:
+
+- Traffic lights as a coloured dot **and** the word RED / AMBER / GREEN. Never colour alone —
+  projectors shift hue and roughly 1 in 12 men cannot separate red from green.
+- Each epic's description sits directly under its name, in the resting state, not behind a click.
+- The unstarted pile collapses behind one summary line with its count.
+- Every ticket key and PR number is a link; every blocker links to its blocker.
+- A footer stating sources, window, and generation time. A status page with no provenance gets
+  argued with; one that says where its numbers came from gets acted on.
 
 Clean up intermediates:
 ```bash
@@ -181,12 +265,12 @@ rm -rf .updates
 
 | User Says | Scope To |
 |-----------|----------|
-| "team pulse" | Full DL team, all active work |
-| "team pulse on flywheel" | DL team members working on Flywheel only |
+| "team pulse" | The whole configured team, all active work |
+| "team pulse on <project>" | Only the team members working on that project |
 | "how is Paul doing" | Single person across all their work |
 | "pulse on ABC-123" | Single initiative/epic and everyone assigned |
 | "what did we ship this week" | Merged PRs + completed Jira issues only |
-| "prep me for 1:1 with Molly" | Single person, deeper individual assessment |
+| "prep me for 1:1 with <name>" | Single person, deeper individual assessment |
 
 ## Assessment Scale
 
