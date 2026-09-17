@@ -31,8 +31,9 @@ the arithmetic ever moves into a script — at which point it gets a test like a
 
 ## 2. The skill was not run end to end against a live tracker
 
-**What.** `build_graph.py` has 28 unit tests and was run end to end on a fixture; the capacity gate
-was reconciled against the source document. The full pipeline — Phase 1 baseline through a nine-item
+**What.** `build_graph.py` is covered by `test_build_graph.py` (run `pytest skills/epic-forecast/scripts`
+for the current count) and was run end to end on a fixture; the capacity gate was reconciled against
+the source document. The full pipeline — Phase 1 baseline through a nine-item
 window-mode report and a single-item scope-mode report against live Jira — was not run.
 
 **Why accepted.** An end-to-end run dispatches eight to ten research sub-agents against live tracker

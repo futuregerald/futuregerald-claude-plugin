@@ -1,6 +1,6 @@
 ---
 name: epic-forecast
-description: Verify the true state of one or more epics, initiatives, or roadmap rows and forecast the remaining work with evidence-based optimistic/pessimistic estimates. Produces a Markdown report plus an Excel workbook covering per-item status, who is working on what, 1-engineer vs 2-engineer estimates, a computed dependency graph and critical chain, split suggestions with quantified impact, sequencing, and open questions. Given a window (a quarter, a date range, or "the next N weeks") it also runs the capacity arithmetic and proposes commit tiers. Use when the user asks to "estimate these epics", "how long will this take", "verify the state of this initiative", "sequence this work", "what is the dependency graph", "where could we split this epic", "status and estimates for the roadmap", "go through this tracker and tell me where things really are", "what can we commit to this quarter", "forecast GA", or hands over a single epic or a status spreadsheet and asks what is real.
+description: Verify the true state of one or more epics, initiatives, or roadmap rows, then forecast the remaining work against measured throughput. Produces a Markdown report and an Excel workbook: per-item real status, 1-engineer vs 2-engineer estimates, a computed dependency graph and critical chain, split suggestions with quantified impact, who is working on what, sequencing, and open questions. Given a window — a quarter, a date range, or "the next N weeks" — it also runs the capacity arithmetic and proposes commit tiers; given no window it produces no dates at all. Use when the user asks "how long will this take", "estimate these epics", "verify the state of this initiative", "sequence this work", "what is the dependency graph", "where could we split this epic", "what can we commit to this quarter", "forecast GA", or hands over a single epic or a status spreadsheet and asks what is real.
 ---
 
 # Epic Forecast
@@ -258,6 +258,11 @@ Assemble the `graph` block from the cluster agents' dependency answers, suppleme
 links, and run `scripts/build_graph.py`. It detects cycles first, computes the transitive closure, and
 returns the **critical chain** — the longest path in epic weeks, plus the unweighted gates on it by
 name. **That chain is the date, not the sum of the estimates.** See `references/dependency-graph.md`.
+
+Write its output to `graph.md` and **splice that file's contents into report section 6 verbatim** —
+the Mermaid block, the edge table, the chain, the transitive blocks and the coverage line. Do not
+re-describe the graph in prose beside it: two renderings of the same data drift, and the script's is
+the one with the arithmetic behind it.
 
 ### Then the capacity arithmetic — window mode only
 

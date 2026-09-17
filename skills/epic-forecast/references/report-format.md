@@ -5,24 +5,16 @@ someone will sort, filter, and paste into a deck.
 
 ## Two modes, one template
 
-The report has **conditional sections, not two templates.** Which sections appear depends on whether
-the caller supplied a window.
+**The mode table is in `SKILL.md`** — which sections a mode turns on, and the rule that a window is
+supplied and never inferred. It is not repeated here; one copy cannot drift from itself.
 
-| | **Window mode** | **Scope mode** |
-|---|---|---|
-| Trigger | A window was supplied: a quarter, a date range, or "the next N weeks" | No window given — the default for a bare list of items |
-| Capacity | Yes | **Omitted entirely** |
-| Commit tiers | Yes | Omitted — there is nothing to fit into |
-| Grouping | By target or milestone if one exists | By dependency order |
-| Everything else | Yes | Yes |
+What this file adds is what the modes do to the *report*: **conditional sections, not two
+templates.** Each section below is marked **window mode only** or **both modes**, and the two that
+change shape rather than appearing or disappearing are §3 (grouped by milestone with a window, by
+dependency order without one) and §4's out-of-horizon block (which does not exist in scope mode).
 
-**Never infer a window.** If the caller gave no quarter and no dates, the report contains no dates,
-no quarter, and no target-date framing — and its header says so explicitly, so a reader never reads
-the absence of dates as an oversight. Inferring a quarter from today's date is the single easiest way
-for this skill to publish a commitment nobody made.
-
-One item is a valid input. With one item, sequencing degenerates to its internal order and the graph
-shows its external edges. Say that, rather than emitting empty sections.
+The scope-mode header states the input set and that no window was supplied, so a reader never mistakes
+the absence of dates for an oversight.
 
 ## The Markdown report
 
