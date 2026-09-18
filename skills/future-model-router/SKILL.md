@@ -56,6 +56,16 @@ Resuming a finished sub-agent replays its transcript — there is no way to make
 | Fresh agent | 64,211 | 15.4s |
 | Resumed agent carrying ~98k of prior context | 101,679 (**+58%**) | 20.4s (+32%) |
 
+**Batching beats both.** Fitting all ten measured runs gives a cost model accurate to ~2%:
+
+```
+agent cost ≈ 56,887 + 2,088 × (tool calls)
+```
+
+Starting a new agent therefore costs the same as **~27 extra tool calls inside an existing one**. So pile work onto one agent: a sub-task needing fewer than ~27 tool calls is cheaper batched, every time. Nine questions batched into one agent cost ~113,000 against ~165,000 as two agents — a **31% saving**.
+
+Two things this rules out as worries. Cost is **linear** in tool calls, not quadratic, because prompt caching holds — accumulated context does not compound. And quality did not degrade at ~100,000 tokens of accumulated context: every arm scored 16/16. Set the batch ceiling by the agent's context window and by relevance, not by a cost cliff that does not exist.
+
 **Reuse an agent only when the second task genuinely needs the first task's findings.** The crossover is the dispatch floor: while its accumulated context is under ~57,000 tokens, resuming is cheaper than a fresh agent; past that, it is not. Best of all is neither — give **one** agent a multi-part prompt up front, so the floor is paid once and no transcript is replayed.
 
 **Spend it to keep a long session alive and to finish sooner, never to spend fewer tokens.** Total cost cannot come out ahead: the ~57,000-token floor is paid by the child as well, so every dispatch adds it. Where the session has context to spare and nothing is waiting on latency, inline is cheaper outright.
