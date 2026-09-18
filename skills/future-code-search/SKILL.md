@@ -18,7 +18,7 @@ The two are independent. Work can be isolated without being downgraded.
 | **Isolate (sub-agent)** | Debugging loops, call-chain tracing, spikes, CI log triage, bulk dataset queries | Symbol lookups, "does X exist", flow tracing, log/ticket/metrics sweeps |
 | **Inline (main context)** | Decisions, synthesis over the conversation, writing in the user's voice, gate runs | — |
 
-The top-left cell is the one most setups miss. A debugging loop is tens of thousands of tokens of test output for a one-line root cause; isolating it is worth far more than downgrading it.
+**The table is illustrative; the test governs.** Where a case is not in the table, or the table and the test disagree, apply the two questions above. The top-left cell is the one most setups miss. A debugging loop is tens of thousands of tokens of test output for a one-line root cause; isolating it is worth far more than downgrading it.
 
 ## Axis 1 — Isolate?
 
@@ -48,6 +48,8 @@ The test is **"can I state the shape of a correct answer before dispatching?"**
 | **Sonnet** | Multi-step exploration, tracing a flow, summarizing a long document, first-pass log triage, gathering ticket or PR data |
 | **Opus** | Anything containing a judgment call — root-cause analysis, design questions, synthesis, review |
 
+**Never trade output quality for a cheaper model.** Cost and speed are the tiebreak between options that both produce the answer you need, never a reason to accept a worse one.
+
 **Escalate once, don't retry.** A vague Haiku result goes to Sonnet, a vague Sonnet result comes back to the orchestrator. Never re-dispatch at the same tier.
 
 ## Never delegate
@@ -57,14 +59,16 @@ The test is **"can I state the shape of a correct answer before dispatching?"**
 3. **Gate runs.** Tests, lint, CI — the evidence backing a completion claim has to be in the orchestrator's own transcript. A sub-agent reporting "tests pass" is a claim, not evidence.
 4. **Work that fails the verification carve-out above.**
 
+This list is **duplicated on purpose** in `CLAUDE.md` (the "Delegate by Default" section), because the rule has to fire before any skill loads and config-only installs ship no skills. The two copies must be edited together — changing one alone is a silent drift.
+
 Code review and plan review already run in fresh sub-agents for a different reason — objectivity, not cost. That requirement is unaffected by anything here.
 
 ## Safety: isolated agents hold write tools
 
 An investigation agent with `Edit`, `Write` or `Bash` can mutate the working tree. This has happened — a review agent reverted a worktree mid-session.
 
-- **Prefer a read-only agent type** (`Explore`, `context-finder`). Read-only at the tool level beats read-only by instruction.
-- Where the work genuinely needs `Bash` (running a test suite), layer it: **commit first**, point the agent at a SHA, and forbid `checkout`, `stash`, `reset` and file edits in the prompt.
+- **Know which agent types are actually read-only.** `context-finder` holds no `Bash`, `Edit` or `Write` — it physically cannot mutate anything, and that is a tool-level guarantee. **`Explore` is not read-only**: it drops `Edit`/`Write` but **keeps `Bash`**, so it can still run `git checkout`, `reset --hard` or `rm`. Check the grant before you rely on it.
+- Where the agent has `Bash` at all — `Explore`, or work that genuinely needs to run a test suite — instruction is the only lever left, so layer it: **commit first**, point the agent at a SHA, and forbid `checkout`, `stash`, `reset` and file edits in the prompt, every time.
 
 ## Dispatching
 

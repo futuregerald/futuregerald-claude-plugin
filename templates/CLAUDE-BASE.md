@@ -19,7 +19,7 @@
 
 **Never delegate:** work whose input is the conversation itself (synthesis, decisions) · anything written in the user's voice (issues, PR bodies, docs, messages) · the gate run behind a completion claim — a sub-agent reporting "tests pass" is a claim, not evidence, so re-run it yourself before claiming · work where trusting the answer means reading the same bulk anyway.
 
-**Guards:** ≤2 tool calls with small output → do it inline, a dispatch is not free · fan out only on genuinely independent questions, otherwise one agent with a multi-part prompt · investigation agents are read-only, and where `Bash` is genuinely needed, commit first, point the agent at a SHA, and forbid `checkout`/`stash`/`reset`/edits.
+**Guards:** ≤2 tool calls with small output → do it inline, a dispatch is not free · fan out only on genuinely independent questions, otherwise one agent with a multi-part prompt · check the agent type's real tool grant before trusting it to be read-only — dropping `Edit`/`Write` does not imply dropping `Bash` — and where `Bash` is present, commit first, point the agent at a SHA, and forbid `checkout`/`stash`/`reset`/edits.
 
 Sub-agent output is **evidence, never a completion claim**. Don't narrate dispatches; in the answer, mark which claims came from a sub-agent and which you verified yourself.
 
