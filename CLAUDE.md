@@ -257,7 +257,7 @@ After every PR is created, automatically:
 | New feature | `test-driven-development` (RED→GREEN→REFACTOR) |
 | Database queries/mutations changed | `sql-optimization-patterns` + `sql-reviewer` agent |
 | Creating or updating a pull request | `pull-request-description` — structured summary, background, test plan, rollback plan. **Mandatory for both new PRs and PR description updates.** |
-| Codebase search or exploration | `future-model-router` — routing detail behind **Delegate by Default**: isolate vs. downgrade, tier table, dispatch recipes, escalation. **Invoke before any Agent(Explore), Grep, or multi-file Read.** |
+| Any search, multi-file read, or investigation that produces more output than answer | `future-model-router` — routing detail behind **Delegate by Default**: isolate vs. downgrade, roles, the provider model map, dispatch recipes, escalation. **Invoke before any Agent(Explore), Grep, or multi-file Read.** |
 
 ---
 
