@@ -1,6 +1,6 @@
 ---
 name: future-model-router
-description: Delegation and model routing — decide whether a piece of work runs in a sub-agent, and which model runs it. Covers codebase search and exploration, debugging loops, call-chain tracing, spikes, CI log triage, and bulk queries against tickets, logs or metrics. Invoke before any search, multi-file read, or investigation that will produce far more output than answer.
+description: Delegation and model routing — decide whether a piece of work runs in a sub-agent, and how much reasoning budget it gets. Provider-neutral; the model map is a reference file. Covers codebase search and exploration, debugging loops, call-chain tracing, spikes, CI log triage, and bulk queries against tickets, logs or metrics. Invoke before any search, multi-file read, or investigation that will produce far more output than answer.
 tags: [delegation, model-routing, cost-optimization, search]
 ---
 
@@ -8,12 +8,12 @@ tags: [delegation, model-routing, cost-optimization, search]
 
 **Two decisions, not one.** Conflating them is the common error — "don't delegate debugging" usually means "don't *downgrade* debugging", which is a different claim.
 
-1. **Isolate?** Will doing this in the main context pull in bulk the answer doesn't need? → run it in a sub-agent, **at any model, including Opus**.
-2. **Downgrade?** Can you state the shape of a correct answer *before* dispatching? → Haiku or Sonnet. If you can't, that's judgment, and judgment stays at the orchestrator's model.
+1. **Isolate?** Will doing this in the main context pull in bulk the answer doesn't need? → run it in a sub-agent, **at any role, including the orchestrator's own model**.
+2. **Downgrade?** Can you state the shape of a correct answer *before* dispatching? → **reduce the reasoning budget** — a smaller model, or the same model with less thinking, whichever your provider offers. If you can't state the shape, that's judgment, and judgment stays at the orchestrator role.
 
 The two are independent. Work can be isolated without being downgraded.
 
-|  | Stays at Opus | Downgrade to Haiku/Sonnet |
+|  | Stays at orchestrator | Downgrade |
 |---|---|---|
 | **Isolate (sub-agent)** | Debugging loops, call-chain tracing, spikes, CI log triage, bulk dataset queries | Symbol lookups, "does X exist", flow tracing, log/ticket/metrics sweeps |
 | **Inline (main context)** | Decisions, synthesis over the conversation, writing in the user's voice, gate runs | — |
@@ -40,17 +40,19 @@ Isolate when the work **produces far more output than answer**:
 The test is **"can I state the shape of a correct answer before dispatching?"**
 
 - *"Come back with the file path, line number, and every caller"* → shape is known → downgrade.
-- *"Tell me whether this design holds up"* → no statable shape → keep at Opus.
+- *"Tell me whether this design holds up"* → no statable shape → keep at the orchestrator role.
 
-| Model | Use for |
+| Role | Use for |
 |---|---|
-| **Haiku** | You know the name. Path lookups, symbol definitions, "does X exist", listing, mechanical extraction into a known format |
-| **Sonnet** | Multi-step exploration, tracing a flow, summarizing a long document, first-pass log triage, gathering ticket or PR data |
-| **Opus** | Anything containing a judgment call — root-cause analysis, design questions, synthesis, review |
+| **retriever** | You know the name. Path lookups, symbol definitions, "does X exist", listing, mechanical extraction into a known format |
+| **explorer** | Multi-step exploration, tracing a flow, summarizing a long document, first-pass log triage, gathering ticket or PR data |
+| **orchestrator** | Anything containing a judgment call — root-cause analysis, design questions, synthesis, review |
+
+**Roles, not model names.** Which model fills each role — and whether your provider spends budget by swapping models or by lowering a thinking level — is in `references/model-map.md`. That file is the only place a model name appears, so a lineup change never edits the rules.
 
 **Never trade output quality for a cheaper model.** Cost and speed are the tiebreak between options that both produce the answer you need, never a reason to accept a worse one.
 
-**Escalate once, don't retry.** A vague Haiku result goes to Sonnet, a vague Sonnet result comes back to the orchestrator. Never re-dispatch at the same tier.
+**Escalate once, don't retry.** A vague retriever result goes to the explorer role; a vague explorer result comes back to the orchestrator. Never re-dispatch at the same tier.
 
 ## Never delegate
 
@@ -67,22 +69,25 @@ Code review and plan review already run in fresh sub-agents for a different reas
 
 An investigation agent with `Edit`, `Write` or `Bash` can mutate the working tree. This has happened — a review agent reverted a worktree mid-session.
 
-- **Know which agent types are actually read-only.** `context-finder` holds no `Bash`, `Edit` or `Write` — it physically cannot mutate anything, and that is a tool-level guarantee. **`Explore` is not read-only**: it drops `Edit`/`Write` but **keeps `Bash`**, so it can still run `git checkout`, `reset --hard` or `rm`. Check the grant before you rely on it.
-- Where the agent has `Bash` at all — `Explore`, or work that genuinely needs to run a test suite — instruction is the only lever left, so layer it: **commit first**, point the agent at a SHA, and forbid `checkout`, `stash`, `reset` and file edits in the prompt, every time.
+- **Check the agent type's real tool grant before trusting it to be read-only.** Dropping `Edit`/`Write` does not imply dropping `Bash`, and an agent with `Bash` can still run `git checkout`, `reset --hard` or `rm`. Per-harness grants are in `references/model-map.md`; in Claude Code, `context-finder` is the real guarantee and `Explore` is **not** read-only.
+- Where the agent holds `Bash` at all — or the work genuinely needs to run a test suite — instruction is the only lever left, so layer it: **commit first**, point the agent at a SHA, and forbid `checkout`, `stash`, `reset` and file edits in the prompt, every time.
+- Where the harness gives subagents their own isolated workspace, this hazard is weaker — but commit-first costs nothing and still protects a subagent pointed at the shared tree.
 
 ## Dispatching
 
-**Write self-contained prompts.** The sub-agent has zero conversation context. State what you want, why, and the exact output format — paths, line numbers, signatures, call chains.
+**Write self-contained prompts.** The sub-agent has zero conversation context, and it does not necessarily inherit your MCP servers either — a child without a tool must not call it or claim it did. State what you want, why, the evidence you already have, and the exact output format: paths, line numbers, signatures, call chains.
+
+The prompt shape below is portable; the call syntax is Claude Code's. Your harness's dispatch syntax is in `references/model-map.md`.
 
 ```
-// Isolated but NOT downgraded — bulk work, hard reasoning
+// Isolated, NOT downgraded — bulk work, judgment required → orchestrator role
 Agent({ model: "opus", subagent_type: "Explore",
   prompt: "The spec at spec/interactors/x_spec.rb:40 fails with NoMethodError.
            Run it, read the failure, trace the cause. Report ONLY: the root cause
            as file:line, the failing assertion, and a one-paragraph explanation.
            Do not edit any file. Do not run git checkout, stash, or reset." })
 
-// Isolated AND downgraded — known answer shape
+// Isolated AND downgraded — answer shape is stated up front → retriever role
 Agent({ model: "haiku", subagent_type: "Explore",
   prompt: "Find the definition of InvoiceSerializer. Report the file path and line number only." })
 ```
