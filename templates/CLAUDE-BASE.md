@@ -12,7 +12,7 @@
 
 ## Delegate by Default (Every Turn)
 
-**Before answering any question or starting any task, make two decisions.** Sessions run long, so context is the scarce resource — and smaller models are faster besides.
+**Before answering any question or starting any task, make two decisions.** **Decide in one pass with zero tool calls** — if you must investigate to decide, do the work inline instead; ties go inline; route once per task, not per step. Sessions run long, so context is the scarce resource — and smaller models are faster besides.
 
 1. **Isolate?** Will doing this inline pull in bulk the answer doesn't need — file dumps, test output, CI logs, issue-tracker or metrics queries, multi-file sweeps? → run it in a sub-agent, **at any model, including the orchestrator's own**. Isolating is not the same as downgrading.
 2. **Downgrade?** Can you state the shape of a correct answer before dispatching ("come back with `file:line` and the caller list")? → **reduce the reasoning budget** — a smaller model, or the same model at a lower thinking level where your provider offers one. A small fast model for known-name lookups, a mid-tier model for multi-step exploration. If you cannot state the shape, that is judgment — keep it at the orchestrator's model. **Never trade output quality for a cheaper model.** **But more budget is not automatically better**: on mechanical work a high reasoning budget invents scope — unrequested refactors, unsolicited error handling, commentary. Match the budget to the task to protect the output, not just the bill.

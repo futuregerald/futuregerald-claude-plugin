@@ -20,6 +20,16 @@ The two are independent. Work can be isolated without being downgraded.
 
 **The table is illustrative; the test governs.** Where a case is not in the table, or the table and the test disagree, apply the two questions above. The top-left cell is the one most setups miss. A debugging loop is tens of thousands of tokens of test output for a one-line root cause; isolating it is worth far more than downgrading it.
 
+## The routing decision has a budget
+
+**Two questions, answered from what you already know, with zero tool calls.** If you have to investigate to decide whether to delegate, the investigation *is* the work — do it inline and stop routing.
+
+- **One pass, no deliberation.** Routing at high effort is the over-thinking failure this document warns about, applied to itself. If the answer is not obvious in one pass, it is a tie.
+- **Ties go inline.** The costs are asymmetric: guessing wrong toward inline wastes some context, while guessing wrong toward delegation costs a full dispatch round trip *plus* the verification of whatever comes back.
+- **Decide once per task, not per step.** Re-routing at every sub-step is where the tax compounds. Route when the task arrives; revisit only if its shape changes materially.
+
+A routing decision that takes longer than the work it was routing has cost more than it saved, and nothing in the system will tell you that happened.
+
 ## Axis 1 — Isolate?
 
 Isolate when the work **produces far more output than answer**:
