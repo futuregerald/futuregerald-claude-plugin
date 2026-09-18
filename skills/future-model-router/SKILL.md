@@ -36,14 +36,27 @@ A routing decision that takes longer than the work it was routing has cost more 
 
 **It is a context and latency optimization, not a token-cost saving.** Measured A/B on a six-part codebase investigation (n=3 inline, forced routing with five sub-agents):
 
-| | Inline (n=3) | Routed, 5 sub-agents (n=2) |
-|---|---|---|
-| Orchestrator context | 100,841 tokens | 72,519 (**−28%**) |
-| Wall clock | 76.1s | 62.0s (**−19%**, parallel dispatch) |
-| Total tokens, all agents | 100,841 | **~400,000 (≈4x)** |
-| Answer quality, scored | 16/16 | 16/16 |
+| | Inline + pipes (n=3) | 1 dispatch (n=2) | 5 dispatches (n=2) |
+|---|---|---|---|
+| Orchestrator context | 100,841 | 97,110 (−3.7%) | 72,519 (−28%) |
+| Total tokens, all agents | **100,841** | ~157,000 (1.6x) | ~400,000 (4x) |
+| Wall clock | 76.1s | 78.8s | 62.0s (−19%) |
+| Answer quality, scored | 16/16 | 16/16 | 16/16 |
+
+Context reclaimed per extra token spent: **0.066** for one dispatch, **0.095** for five. Both are terrible trades. Filtering at the shell reclaims the same bulk for approximately nothing.
 
 Run-to-run spread was 3.8% inline and 1.3% routed, so the gap is well outside noise.
+
+### Reusing an agent instead of spawning another
+
+Resuming a finished sub-agent replays its transcript — there is no way to make it clear or compact on demand. Measured on identical follow-up work with identical answers:
+
+| | Tokens | Wall |
+|---|---|---|
+| Fresh agent | 64,211 | 15.4s |
+| Resumed agent carrying ~98k of prior context | 101,679 (**+58%**) | 20.4s (+32%) |
+
+**Reuse an agent only when the second task genuinely needs the first task's findings.** The crossover is the dispatch floor: while its accumulated context is under ~57,000 tokens, resuming is cheaper than a fresh agent; past that, it is not. Best of all is neither — give **one** agent a multi-part prompt up front, so the floor is paid once and no transcript is replayed.
 
 **Spend it to keep a long session alive and to finish sooner, never to spend fewer tokens.** Total cost cannot come out ahead: the ~57,000-token floor is paid by the child as well, so every dispatch adds it. Where the session has context to spare and nothing is waiting on latency, inline is cheaper outright.
 
@@ -60,10 +73,32 @@ Isolate when the work **produces far more output than answer**:
 
 **Thresholds, both directions.** The two rules need to be equally concrete, or the inline rule wins every tie by default:
 
-- **Isolate** when a single tool call would return more than roughly **2,000 lines or 50 KB** — a full test run, an unfiltered log, a file over ~1,500 lines. Measure the *output*, not the effort: `npm test` is one easy command that returns ~170 KB.
-- **Inline** when **two tool calls with small output** would answer it. Don't spawn an agent for what one grep answers.
+**A dispatch costs ~64,000 tokens.** Measured on this harness: a sub-agent that used no tools and replied with one word still cost **56,887 tokens** — the fixed price of its system prompt and tool definitions — plus ~7,000 for the dispatch prompt and the returned result. That is the floor, before it does any work.
 
-**A dispatch is not free, and it is not cheap.** Measured on this harness, a sub-agent that used no tools at all and replied with one word still cost **~57,000 tokens** — the fixed price of its system prompt and tool definitions. That is the floor under every dispatch, before any work happens.
+So the trade on isolating output of size **S** is: **you reclaim S tokens of your own context and spend ~64,000 total.** Which makes the rule arithmetic, not taste:
+
+| Isolating… | Context reclaimed | Tokens spent | Worth it? |
+|---|---|---|---|
+| A grep (~3k) | 3k | 64k | **No** — 5% return |
+| A 1,500-line file (~15k) | 15k | 64k | **No** — 23% return |
+| A full test run (~43k) | 43k | 64k | Marginal |
+| A 300 KB file or log (~78k) | 78k | 64k | **Yes** — 120% return |
+
+**Before you consider isolating, filter at the source.** This is the rule that makes most dispatches unnecessary, and it is free:
+
+| Instead of | Do | Cost |
+|---|---|---|
+| `npm test` (~43,000 tokens) | `npm test 2>&1 \| tail -20` | ~200 tokens |
+| reading a 8,500-line file | `grep -n "pattern" file` | ~200 tokens |
+| reading a file for one function | `sed -n '1520,1550p' file` | ~400 tokens |
+| "how many X are there" | `grep -c "X" file` | ~10 tokens |
+
+**A pipe beats a dispatch by two to three orders of magnitude.** In the measured A/B, the arm told to delegate the test run saved only 3.7% of context versus the arm that simply piped it, while spending 56% more tokens — because the inline arms had already filtered at the shell and there was nothing left to save.
+
+- **Isolate** only when the bulk must be **understood rather than sliced** — a model has to read it and judge, and no pipe can extract the answer — **and** it exceeds roughly **40,000 tokens**. A debugging loop qualifies: the answer depends on reading failures and forming a hypothesis. A test result count does not: `tail` gets it.
+- **Inline** everything else.
+
+**The floor is charged per dispatch, so consolidate.** Five sub-agents pay it five times; one sub-agent answering five questions pays it once. When several questions clear the threshold, send **one** agent with a multi-part prompt unless they genuinely must run in parallel for latency. In the measured A/B below, five dispatches cost ~4x the inline baseline where one would have cost ~1.3x.
 
 **Verification carve-out.** If trusting the answer would require reading the same bulk the agent read, isolating saved nothing. Do it inline, or change the question to one whose answer is checkable on its own (a `file:line`, a count, a diff).
 
@@ -158,7 +193,7 @@ Agent({ model: "<retriever>", subagent_type: "context-finder",
 
 The retriever example uses `context-finder` rather than `Explore` deliberately: `Explore` retains `Bash`, and a symbol lookup has no reason to hold it.
 
-**Parallelize only genuinely independent questions.** Agents cannot see each other's work, so three agents over overlapping paths read the same files three times. When several questions share a subject, send **one** agent with a multi-part prompt instead of N agents.
+**Consolidate before you parallelize.** Each extra agent costs another ~64,000 tokens, and agents cannot see each other's work, so three agents over overlapping paths pay three floors *and* read the same files three times. Default to **one** agent with a multi-part prompt. Fan out only when the questions are genuinely independent **and** you need the wall-clock saving enough to pay a floor per branch.
 
 ## After a sub-agent returns
 
