@@ -25,15 +25,15 @@ The orchestrator role is also whatever model is driving the session. Isolating w
 
 | Role | Anthropic | Google |
 |---|---|---|
-| retriever | Haiku 4.5 | Gemini 3.7 or 3.6 — non-reasoning, literal, no deliberation latency **[reported]** |
-| explorer | Sonnet 5 | Gemini 3.8 Flash, thinking `low` or `medium` (default) |
+| retriever | Haiku 4.5 | Gemini 3.7 or 3.6 at thinking `low` — more literal, less prone to inventing scope **[reported]** |
+| explorer | Sonnet 5 | Gemini 3.8 Flash at thinking `low` or `medium` (default) |
 | orchestrator | Opus 5 (Fable 5.1 for planning and synthesis) | Gemini 3.8 Flash, thinking `high` |
 
 **The two platforms lean on different levers, and that is deliberate.** On Anthropic the model changes per role. On Google the primary lever is the thinking level on one model — 3.8 Flash covers explorer and orchestrator by itself.
 
 **Do not reach for Flash-Lite. [reported]** It is not in Antigravity's chat model selector. Antigravity uses it under the hood for its own lightweight background subagents, but as a chat model it is too weak at tool-calling and code quality to orchestrate anything. If the goal is speed or quota, 3.8 Flash at `low` is the answer, not a weaker model.
 
-**The retriever row is the exception to "hold the model". [reported]** 3.7 and 3.6 still earn their place for mechanical work: they are direct and literal, they hold strict output formats without breaking out to explain themselves, and they stream immediately because there is no thinking trace to compute first. For a format extraction, a regex, or a rename, that is better behaviour than 3.8 at `low` — not merely cheaper.
+**The retriever row is the exception to "hold the model". [reported]** 3.7 and 3.6 also expose thinking levels, so **always name a level when you name one of them** — they are a different model, not a non-reasoning one. At `low` they earn their place for mechanical work: more literal, better at holding a strict output format instead of breaking out to explain themselves, and quicker to first token. For a format extraction, a regex, or a rename, that is better behaviour than 3.8 at `low` — not merely cheaper.
 
 ### Two levers, on both platforms
 
@@ -65,7 +65,7 @@ The same prompt can produce a few hundred output tokens at `low` and five figure
 | Model | Best for | Why |
 |---|---|---|
 | 3.8 Flash | Feature work, bug finding, multi-file changes | Best reasoning, configurable thinking budget |
-| 3.7 / 3.6 | Mechanical transforms, script generation, strict format extraction | Direct and literal, holds output contracts, no deliberation latency, will not over-engineer |
+| 3.7 / 3.6 (name a thinking level) | Mechanical transforms, script generation, strict format extraction | Direct and literal, holds output contracts, quicker to first token, less likely to over-engineer |
 | Claude / GPT frontier | A second opinion, architecture review, quota fallback | Separate quota pool, different training biases when stuck |
 
 That last row is a real reason to switch that is neither isolating nor downgrading: a separate quota pool routes around congestion or a drained limit on your primary provider. Treat it as an operational fallback, not a routing rule.

@@ -80,7 +80,7 @@ Match effort to the same test: a statable answer shape means low effort will rea
 
 Where a harness sets effort per agent definition rather than per dispatch, set it there — an agent whose whole job is mechanical retrieval should not be defined at high effort.
 
-**A non-reasoning model is a third option.** Where the lineup still offers an older model that does not deliberate at all, it can beat the newest model at its lowest setting for strict-format work — mechanical transforms, format extraction, regex, anything where breaking out of the output contract to explain itself is the failure mode. See `references/model-map.md`.
+**An earlier model at a low setting is a third option.** For strict-format work — mechanical transforms, format extraction, regex, anything where breaking out of the output contract to explain itself is the failure mode — an older model can beat the newest one even at its lowest setting, because the difference is behavioural rather than a matter of depth. Where a provider's older models also expose effort levels, **name the level as well as the model**: a model name alone does not specify a budget. See `references/model-map.md`.
 
 **Escalate once, don't retry.** A vague retriever result goes to the explorer role; a vague explorer result comes back to the orchestrator. Never re-dispatch at the same tier.
 
