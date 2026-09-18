@@ -32,6 +32,21 @@ Tracing appears on both sides because the discriminator is the **deliverable**, 
 
 A routing decision that takes longer than the work it was routing has cost more than it saved, and nothing in the system will tell you that happened.
 
+## What isolating actually buys
+
+**It is a context and latency optimization, not a token-cost saving.** Measured A/B on a six-part codebase investigation (n=3 inline, forced routing with five sub-agents):
+
+| | Inline (n=3) | Routed, 5 sub-agents (n=2) |
+|---|---|---|
+| Orchestrator context | 100,841 tokens | 72,519 (**−28%**) |
+| Wall clock | 76.1s | 62.0s (**−19%**, parallel dispatch) |
+| Total tokens, all agents | 100,841 | **~400,000 (≈4x)** |
+| Answer quality, scored | 16/16 | 16/16 |
+
+Run-to-run spread was 3.8% inline and 1.3% routed, so the gap is well outside noise.
+
+**Spend it to keep a long session alive and to finish sooner, never to spend fewer tokens.** Total cost cannot come out ahead: the ~57,000-token floor is paid by the child as well, so every dispatch adds it. Where the session has context to spare and nothing is waiting on latency, inline is cheaper outright.
+
 ## Axis 1 — Isolate?
 
 Isolate when the work **produces far more output than answer**:
@@ -43,7 +58,12 @@ Isolate when the work **produces far more output than answer**:
 - Queries over large external datasets — tickets, logs, metrics, warehouse tables.
 - Reading a large file or directory to answer a narrow question about it.
 
-**Floor cost.** A dispatch is not free: it costs a prompt plus the agent's own reasoning. If **two tool calls with small output** would answer it, do it inline. Don't spawn an agent for what a single grep answers.
+**Thresholds, both directions.** The two rules need to be equally concrete, or the inline rule wins every tie by default:
+
+- **Isolate** when a single tool call would return more than roughly **2,000 lines or 50 KB** — a full test run, an unfiltered log, a file over ~1,500 lines. Measure the *output*, not the effort: `npm test` is one easy command that returns ~170 KB.
+- **Inline** when **two tool calls with small output** would answer it. Don't spawn an agent for what one grep answers.
+
+**A dispatch is not free, and it is not cheap.** Measured on this harness, a sub-agent that used no tools at all and replied with one word still cost **~57,000 tokens** — the fixed price of its system prompt and tool definitions. That is the floor under every dispatch, before any work happens.
 
 **Verification carve-out.** If trusting the answer would require reading the same bulk the agent read, isolating saved nothing. Do it inline, or change the question to one whose answer is checkable on its own (a `file:line`, a count, a diff).
 
