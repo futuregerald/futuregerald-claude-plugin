@@ -9,14 +9,14 @@ tags: [delegation, model-routing, cost-optimization, search]
 **Two decisions, not one.** Conflating them is the common error — "don't delegate debugging" usually means "don't *downgrade* debugging", which is a different claim.
 
 1. **Isolate?** Will doing this in the main context pull in bulk the answer doesn't need? → run it in a sub-agent, **at any role, including the orchestrator's own model**.
-2. **Downgrade?** Can you state the shape of a correct answer *before* dispatching? → **reduce the reasoning budget** — a smaller model, or the same model with less thinking, whichever your provider offers. If you can't state the shape, that's judgment, and judgment stays at the orchestrator role.
+2. **Downgrade?** Can you state the shape of a correct answer *before* dispatching? → **reduce the reasoning budget**. Two levers, usable together: a **smaller model**, and a **lower effort level** on whatever model you pick. If you can't state the shape, that's judgment, and judgment keeps its budget.
 
 The two are independent. Work can be isolated without being downgraded.
 
 |  | Stays at orchestrator | Downgrade |
 |---|---|---|
 | **Isolate (sub-agent)** | Debugging loops, call-chain tracing, spikes, CI log triage, bulk dataset queries | Symbol lookups, "does X exist", flow tracing, log/ticket/metrics sweeps |
-| **Inline (main context)** | Decisions, synthesis over the conversation, writing in the user's voice, gate runs | — |
+| **Inline (main context)** | Decisions, synthesis over the conversation, writing in the user's voice, gate runs | Lower the effort level — the one downgrade available without leaving the context |
 
 **The table is illustrative; the test governs.** Where a case is not in the table, or the table and the test disagree, apply the two questions above. The top-left cell is the one most setups miss. A debugging loop is tens of thousands of tokens of test output for a one-line root cause; isolating it is worth far more than downgrading it.
 
@@ -51,6 +51,17 @@ The test is **"can I state the shape of a correct answer before dispatching?"**
 **Roles, not model names.** Which model fills each role — and whether your provider spends budget by swapping models or by lowering a thinking level — is in `references/model-map.md`. That file is the only place a model name appears, so a lineup change never edits the rules.
 
 **Never trade output quality for a cheaper model.** Cost and speed are the tiebreak between options that both produce the answer you need, never a reason to accept a worse one.
+
+### Effort is the second lever
+
+Effort — reasoning budget, thinking level, whatever the harness calls it — is set independently of the model, and it behaves differently from swapping models in two ways worth knowing:
+
+- **It works inline.** You cannot change your own model mid-session, but you can spend less deliberation on a routine turn. It is the only downgrade available without dispatching.
+- **It is itself a context cost.** Reasoning tokens accumulate in the transcript that produced them. High effort on a mechanical task inflates a sub-agent's own context as well as its bill, and a bloated sub-agent hits its limits sooner and returns worse work.
+
+Match effort to the same test: a statable answer shape means low effort will reach it. Reserve high effort for the judgment calls that keep their full budget anyway.
+
+Where a harness sets effort per agent definition rather than per dispatch, set it there — an agent whose whole job is mechanical retrieval should not be defined at high effort.
 
 **Escalate once, don't retry.** A vague retriever result goes to the explorer role; a vague explorer result comes back to the orchestrator. Never re-dispatch at the same tier.
 

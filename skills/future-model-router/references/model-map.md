@@ -18,17 +18,22 @@ The orchestrator role is also whatever model is driving the session. Isolating w
 
 | Role | Anthropic | Google |
 |---|---|---|
-| retriever | Haiku 4.5 | Gemini Flash-Lite |
-| explorer | Sonnet 5 | Gemini 3.8 Flash, thinking level `low` or `medium` |
-| orchestrator | Opus 5 (Fable 5.1 for planning and synthesis) | Gemini 3 Pro, or 3.8 Flash at thinking level `high` |
+| retriever | Haiku 4.5 | Gemini 3.8 Flash, thinking `low` |
+| explorer | Sonnet 5 | Gemini 3.8 Flash, thinking `medium` (default) |
+| orchestrator | Opus 5 (Fable 5.1 for planning and synthesis) | Gemini 3 Pro, or 3.8 Flash at thinking `high` |
 
-### Two levers, not one
+**The two platforms lean on different levers, and that is deliberate.** On Anthropic the model changes per role. On Google the guidance is to hold the model at 3.8 Flash and move the thinking level instead — so the Google column is one model at three budgets. Dropping to Flash-Lite is the exception, not the default step down.
 
-**Anthropic** spends reasoning budget mainly by swapping the model.
+### Two levers, on both platforms
 
-**Google** gives you two independent levers, because Gemini 3.8 Flash exposes three thinking levels (`low`, `medium`, `high`; default `medium`). You can drop to a smaller model *or* keep the model and cut its thinking level. Prefer cutting the thinking level first when the task is well-scoped but non-trivial — it keeps the larger model's knowledge while spending less on deliberation.
+Model and effort are set independently, and both platforms expose both — they just default to different ones. Prefer cutting effort first when the task is well-scoped but non-trivial: it keeps the larger model's knowledge while spending less on deliberation.
 
-This is why the skill says **"reduce the reasoning budget"** rather than "use a smaller model". The rule is the same; only how you spend it differs.
+| Platform | Model lever | Effort lever |
+|---|---|---|
+| Anthropic / Claude Code | `model:` on the dispatch, or in the agent definition | Reasoning effort in the agent definition's frontmatter (`.claude/agents/*.md`) — supported by the harness, and easy to leave unset by accident |
+| Google / Antigravity | Model selectable per agent | Thinking level on Gemini 3.8 Flash: `low`, `medium`, `high`; default `medium` |
+
+This is why the skill says **"reduce the reasoning budget"** rather than "use a smaller model".
 
 ## Dispatch by harness
 
