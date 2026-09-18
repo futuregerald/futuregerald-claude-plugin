@@ -83,7 +83,16 @@ Isolate when the work **produces far more output than answer**:
 
 **Thresholds, both directions.** The two rules need to be equally concrete, or the inline rule wins every tie by default:
 
-**A dispatch costs ~64,000 tokens.** Measured on this harness: a sub-agent that used no tools and replied with one word still cost **56,887 tokens** — the fixed price of its system prompt and tool definitions — plus ~7,000 for the dispatch prompt and the returned result. That is the floor, before it does any work.
+**A dispatch costs ~64,000 tokens — and most of that is a setting you control.** Measured on this harness, a sub-agent that used no tools and replied with one word still cost **56,887 tokens**, plus ~7,000 for the dispatch prompt and returned result.
+
+**Over half of that floor is tool definitions.** The same null task, same model, differing only in the agent's declared tool grant:
+
+| Agent | Declared tools | Null-task cost |
+|---|---|---|
+| Inherits everything (`tools:` omitted) | all of them | **56,887** |
+| Explicit list | 14 | **24,561** |
+
+**Restricting the grant cuts the dispatch floor by 57%.** An agent definition with no `tools:` line inherits every tool the session has loaded — with a large MCP surface, that is tens of thousands of tokens of schema re-sent on every dispatch, for tools the agent will never call. Declare the minimum each agent needs. It is the cheapest optimization available here, it makes the break-even arithmetic below roughly twice as favourable, and it is the same control that makes an agent genuinely read-only.
 
 So the trade on isolating output of size **S** is: **you reclaim S tokens of your own context and spend ~64,000 total.** Which makes the rule arithmetic, not taste:
 
