@@ -52,16 +52,21 @@ The test is **"can I state the shape of a correct answer before dispatching?"**
 
 **Never trade output quality for a cheaper model.** Cost and speed are the tiebreak between options that both produce the answer you need, never a reason to accept a worse one.
 
+**But more budget is not automatically better output.** On mechanical work, a high reasoning budget degrades the result: the model refactors code you did not ask it to touch, adds unsolicited error handling and commentary, and second-guesses a request that was already unambiguous. "Rename this variable" does not improve with deliberation — it gets embellished. Matching the budget to the task protects the output, not just the bill.
+
 ### Effort is the second lever
 
 Effort — reasoning budget, thinking level, whatever the harness calls it — is set independently of the model, and it behaves differently from swapping models in two ways worth knowing:
 
 - **It works inline.** You cannot change your own model mid-session, but you can spend less deliberation on a routine turn. It is the only downgrade available without dispatching.
-- **It is itself a context cost.** Reasoning tokens accumulate in the transcript that produced them. High effort on a mechanical task inflates a sub-agent's own context as well as its bill, and a bloated sub-agent hits its limits sooner and returns worse work.
+- **It is itself a context and quota cost.** Reasoning tokens are output tokens: they accumulate in the transcript that produced them and they count against rate limits. The spread between the lowest and highest setting is an order of magnitude or more on the same prompt, so this is the largest single multiplier in the whole system — larger than the choice of model.
+- **It changes behaviour, not just depth.** A low setting is more literal and more likely to do exactly what was asked. A high setting deliberates, and deliberation on an unambiguous request turns into scope it invented.
 
-Match effort to the same test: a statable answer shape means low effort will reach it. Reserve high effort for the judgment calls that keep their full budget anyway.
+Match effort to the same test: a statable answer shape means low effort will reach it, and will reach it more faithfully. Reserve high effort for the judgment calls that keep their full budget anyway — genuine root-cause work, concurrency, architecture.
 
 Where a harness sets effort per agent definition rather than per dispatch, set it there — an agent whose whole job is mechanical retrieval should not be defined at high effort.
+
+**A non-reasoning model is a third option.** Where the lineup still offers an older model that does not deliberate at all, it can beat the newest model at its lowest setting for strict-format work — mechanical transforms, format extraction, regex, anything where breaking out of the output contract to explain itself is the failure mode. See `references/model-map.md`.
 
 **Escalate once, don't retry.** A vague retriever result goes to the explorer role; a vague explorer result comes back to the orchestrator. Never re-dispatch at the same tier.
 

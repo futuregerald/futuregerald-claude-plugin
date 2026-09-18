@@ -2,7 +2,7 @@
 
 The rules in `SKILL.md` name **roles**, never models. This file is the only place a model name appears, so a new lineup is a one-file edit that never touches the reasoning.
 
-**Verify before relying on a row.** Lineups change every few months. Last checked: 2026-09-18.
+**Verify before relying on a row.** Lineups change every few months. Last checked: 2026-09-18. The Google rows reflect vendor guidance for the Google AI Ultra tier.
 
 ## Roles
 
@@ -18,11 +18,15 @@ The orchestrator role is also whatever model is driving the session. Isolating w
 
 | Role | Anthropic | Google |
 |---|---|---|
-| retriever | Haiku 4.5 | Gemini 3.8 Flash, thinking `low` |
-| explorer | Sonnet 5 | Gemini 3.8 Flash, thinking `medium` (default) |
-| orchestrator | Opus 5 (Fable 5.1 for planning and synthesis) | Gemini 3 Pro, or 3.8 Flash at thinking `high` |
+| retriever | Haiku 4.5 | Gemini 3.7 or 3.6 — non-reasoning, literal, no deliberation latency |
+| explorer | Sonnet 5 | Gemini 3.8 Flash, thinking `low` or `medium` (default) |
+| orchestrator | Opus 5 (Fable 5.1 for planning and synthesis) | Gemini 3.8 Flash, thinking `high` |
 
-**The two platforms lean on different levers, and that is deliberate.** On Anthropic the model changes per role. On Google the guidance is to hold the model at 3.8 Flash and move the thinking level instead — so the Google column is one model at three budgets. Dropping to Flash-Lite is the exception, not the default step down.
+**The two platforms lean on different levers, and that is deliberate.** On Anthropic the model changes per role. On Google the primary lever is the thinking level on one model — 3.8 Flash covers explorer and orchestrator by itself.
+
+**Do not reach for Flash-Lite.** It is not in Antigravity's chat model selector at all. Antigravity uses it under the hood for its own lightweight background subagents, but as a chat model it is too weak at tool-calling and code quality to orchestrate anything. If the goal is speed or quota, 3.8 Flash at `low` is the answer, not a weaker model.
+
+**The retriever row is the exception to "hold the model".** 3.7 and 3.6 still earn their place for mechanical work: they are direct and literal, they hold strict output formats without breaking out to explain themselves, and they stream immediately because there is no thinking trace to compute first. For a format extraction, a regex, or a rename, that is better behaviour than 3.8 at `low` — not merely cheaper.
 
 ### Two levers, on both platforms
 
@@ -34,6 +38,28 @@ Model and effort are set independently, and both platforms expose both — they 
 | Google / Antigravity | Model selectable per agent | Thinking level on Gemini 3.8 Flash: `low`, `medium`, `high`; default `medium` |
 
 This is why the skill says **"reduce the reasoning budget"** rather than "use a smaller model".
+
+### What the effort lever actually costs
+
+Thinking tokens are **output tokens**. They count against rate limits and rolling quotas, and the input price does not change between settings — only the volume generated does. Approximate, for Gemini 3.8 Flash:
+
+| Level | Typical thinking tokens | Relative burn |
+|---|---|---|
+| `low` | ~250 – 1,000 | 1x |
+| `medium` (default) | ~1,000 – 4,000 | 2–4x |
+| `high` | ~8,000 – 16,000+ | 5–15x+ |
+
+The same prompt can produce 500 output tokens at `low` and 10,000+ at `high`. **That spread is the largest single multiplier in this document — bigger than the choice of model.** When a rolling limit is draining faster than expected during a long session, this is the first thing to check.
+
+### Gemini lineup, by what it is good at
+
+| Model | Best for | Why |
+|---|---|---|
+| 3.8 Flash | Feature work, bug finding, multi-file changes | Best reasoning, configurable thinking budget |
+| 3.7 / 3.6 | Mechanical transforms, script generation, strict format extraction | Direct and literal, holds output contracts, no deliberation latency, will not over-engineer |
+| Claude / GPT frontier | A second opinion, architecture review, quota fallback | Separate quota pool, different training biases when stuck |
+
+That last row is a real reason to switch that is neither isolating nor downgrading: a separate quota pool routes around congestion or a drained limit on your primary provider. Treat it as an operational fallback, not a routing rule.
 
 ## Dispatch by harness
 
