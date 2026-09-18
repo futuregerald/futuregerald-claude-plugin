@@ -296,9 +296,13 @@ If symlinked to `~/.claude/skills` (installed as personal skills), invoke them b
 | `team-pulse` | Engineering-manager team status reports |
 | `meeting-debrief` | Strategic meeting analysis from Krisp transcripts |
 
-### Agents (10)
+### Agents (10 dispatchable)
 
-Agents are specialized sub-agents dispatched via the Task tool. They run with fresh context and no knowledge of the parent conversation.
+Agents are specialized sub-agents dispatched via the Agent tool. They run with fresh context and no knowledge of the parent conversation.
+
+**Tool grants matter.** An agent definition with no `tools:` line inherits every tool the session has loaded, which on a large MCP surface costs tens of thousands of tokens of schema on every dispatch. The agents below marked *restricted* declare an explicit minimum — measured at roughly half the dispatch cost of an unrestricted one — and the ones without `Bash` cannot mutate your working tree at all.
+
+`codebase-searcher`, `debugger`, `implementer` and `spec-reviewer` are **prompt templates, not registered agents** — they have no frontmatter and are used as prompt text under `general-purpose` by `subagent-driven-development`. They cannot be passed as a `subagent_type`.
 
 | Agent | Description |
 |-------|-------------|
@@ -312,6 +316,10 @@ Agents are specialized sub-agents dispatched via the Task tool. They run with fr
 | `security-reviewer` | OWASP-aligned security audit: injection, auth, IDOR, SSRF, cryptographic failures, data exposure |
 | `spec-reviewer` | Reviews specifications and plans |
 | `sql-reviewer` | Ruthless SQL performance, security, and defensive coding audit |
+| `investigator` | *restricted* — Read/Grep/Glob only. Literal-string and unindexed-repo search. No shell, no writes |
+| `reviewer` | *restricted* — Read/Grep/Glob plus codebase-index tools, on Opus. Fresh-context review; cannot run git, so pass it a diff file |
+| `runner` | *restricted* — adds `Bash`. Runs suites and triages logs, reports the verdict not the output. Can mutate: dispatch against a committed SHA |
+| `writer` | *restricted* — adds `Edit`/`Write`. The only one that changes files |
 
 ### Language Templates
 
@@ -491,7 +499,7 @@ futuregerald-claude-plugin/
 │       ├── inbox.md             # /project:inbox
 │       └── cleanup.md           # /project:cleanup
 ├── skills/                      # 51 skill directories, each with SKILL.md
-├── agents/                      # 12 agent markdown files
+├── agents/                      # 14 files: 10 dispatchable agents + 4 prompt templates
 ├── templates/
 │   ├── CLAUDE-BASE.md           # Base template for generated CLAUDE.md files
 │   └── languages/               # Framework-specific template snippets

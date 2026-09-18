@@ -36,8 +36,8 @@ Quick-check for `graphify-out/` (`Glob graphify-out/**`). If present, **Read** `
 
 ### 2 — Code index (codebase-memory)
 Call `index_status` first — and `list_projects` if there's any ambiguity. **Confirm the indexed project's path matches the current repo root** (and, for cross-repo questions, that a project covers the repo you need).
-- **Indexed & matching:** use `search_code`, `search_graph`/`query_graph` (entities + relationships), `trace_call_path` (call chains), `get_architecture` (overview), `get_code_snippet`. This is your primary tool for "where" and "how".
-  - **Caller and dead-code questions are the exception.** A call graph does not see reflection, dynamic dispatch, registry maps, config-driven wiring, or class names held as strings — on Rails it returns zero callers for symbols reached through an `Interactor::Organizer` list. Corroborate every caller claim with grep, and **label each one with the tool that produced it** so the orchestrator can weigh it. A graph's silence is not evidence.
+- **Indexed & matching:** use `search_code`, `search_graph`/`query_graph` (entities + relationships), `get_architecture` (overview), `get_code_snippet`. This is your primary tool for "where" and "how".
+  - **Caller and dead-code questions are the exception, and you have no call-graph tool for them by design.** A call graph does not see reflection, dynamic dispatch, registry maps, config-driven wiring, or class names held as strings — on Rails it returns zero callers for symbols reached through an `Interactor::Organizer` list. Corroborate every caller claim with grep, and **label each one with the tool that produced it** so the orchestrator can weigh it. A graph's silence is not evidence.
 - **Not indexed, or the index covers a DIFFERENT project than the current repo:** say so explicitly (never query the wrong project's index and pass it off as this repo's), and fall through to grep. Optionally note that indexing this repo would speed future searches.
 
 ### 3 — Session memory (prism), conditional

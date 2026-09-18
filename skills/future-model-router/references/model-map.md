@@ -41,7 +41,7 @@ Model and effort are set independently, and both platforms expose both — they 
 
 | Platform | Model lever | Effort lever |
 |---|---|---|
-| Anthropic / Claude Code | `model:` on the dispatch, or in the agent definition | Reasoning effort in the agent definition's frontmatter (`.claude/agents/*.md`) — supported by the harness, and easy to leave unset by accident |
+| Anthropic / Claude Code | `model:` on the dispatch, or in the agent definition | Reasoning effort comes from the agent definition alongside `model` and `tools`. **[unverified]** — the harness documents it as definition-level, but the exact frontmatter key was not confirmed here, so check before relying on it |
 | Google / Antigravity | Model selectable per agent | Thinking level on Gemini 3.8 Flash: `low`, `medium`, `high`; default `medium` |
 
 This is why the skill says **"reduce the reasoning budget"** rather than "use a smaller model".
@@ -84,11 +84,17 @@ Several `Agent` calls in one message run concurrently.
 
 **Tool grants differ and this matters for safety** (see the safety section in `SKILL.md`):
 
-| Agent type | Provided by | `Bash` | `Edit`/`Write` |
-|---|---|---|---|
-| `context-finder` | **this plugin** (`agents/context-finder.md`) | no | no |
-| `Explore` | the harness | **yes** | no |
-| `general-purpose` | the harness | yes | yes |
+| Agent type | Provided by | `Bash` | `Edit`/`Write` | Network |
+|---|---|---|---|---|
+| `context-finder` | **this plugin** | no | no | no |
+| `investigator` | **this plugin** | no | no | no |
+| `reviewer` | **this plugin** | no | no | no |
+| `runner` | **this plugin** | **yes** | no | forbidden by prompt only |
+| `writer` | **this plugin** | **yes** | **yes** | forbidden by prompt only |
+| `Explore` | the harness | **yes** | no | — |
+| `general-purpose` | the harness | **yes** | **yes** | — |
+
+`runner` and `writer` hold `Bash`, so their restrictions on destructive git, `rm` and network access are **instructions, not enforcement**. Treat them as the mitigation layer, not the control.
 
 **[verified]** against `agents/context-finder.md` and the harness agent roster.
 

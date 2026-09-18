@@ -20,6 +20,25 @@ The two are independent. Work can be isolated without being downgraded.
 
 Tracing appears on both sides because the discriminator is the **deliverable**, not the activity: a caller list is checkable output, a safety judgment is not.
 
+## The order of operations
+
+The rules below are a sequence, not a menu. Work down it and stop at the first step that
+answers the question — almost everything stops at 1 or 2.
+
+1. **Can a pipe or a ranged read get it?** `| tail`, `grep -c`, `sed -n 'A,Bp'`, `Read` with
+   an offset. Costs ~200 tokens. If yes, do that and stop. This resolves most cases.
+2. **Is it on the never-delegate list?** Conversation-input work, the user's voice, the gate
+   behind a completion claim, anything carrying secrets. If yes, inline, full stop.
+3. **Does the residue exceed your dispatch floor?** ~64k unrestricted, ~31k restricted. If
+   not, inline — you would spend more than you reclaim.
+4. **Can you check the answer without re-reading the bulk?** If not, isolating saved nothing.
+5. **Only now dispatch** — one agent with a multi-part prompt, at the smallest role whose
+   answer shape you can state in advance. Fan out only for genuine independence plus a real
+   latency need.
+
+**The table above is the output of this gate, not an alternative to it.** Where the table and
+the gate disagree, the gate wins.
+
 **The table is illustrative; the test governs.** Where a case is not in the table, or the table and the test disagree, apply the two questions above. The top-left cell is the one most setups miss. A debugging loop is tens of thousands of tokens of test output for a one-line root cause; isolating it is worth far more than downgrading it.
 
 ## The routing decision has a budget
@@ -45,7 +64,7 @@ A routing decision that takes longer than the work it was routing has cost more 
 
 Context reclaimed per extra token spent: **0.066** for one dispatch, **0.095** for five. Both are terrible trades. Filtering at the shell reclaims the same bulk for approximately nothing.
 
-Run-to-run spread was 3.8% inline and 1.3% routed, so the gap is well outside noise.
+**Read the middle column as zero.** Run-to-run spread was 3.8% inline, so a 3.7% saving is *indistinguishable from noise* — one dispatch bought nothing measurable and cost 56% more tokens. Only the −28% five-dispatch result is outside variance, and it costs 4x. These are n=2 and n=3 on one task: enough to rule out the middle column as a good trade, not enough to put a confidence interval on any of them.
 
 ### Reusing an agent instead of spawning another
 
@@ -56,17 +75,19 @@ Resuming a finished sub-agent replays its transcript — there is no way to make
 | Fresh agent | 64,211 | 15.4s |
 | Resumed agent carrying ~98k of prior context | 101,679 (**+58%**) | 20.4s (+32%) |
 
-**Batching beats both.** Fitting all ten measured runs gives a cost model accurate to ~2%:
+**Batching beats both, and by a lot.** Measured: nine questions answered by **one** agent cost **76,993 tokens**, against **165,052** for the same nine split across two agents — a **53% saving**. The batched run was also cheaper than a single agent answering only six of them (100,841), because it paid one floor instead of two.
+
+A rough cost model over nine runs, useful for intuition and nothing more:
 
 ```
-agent cost ≈ 56,887 + 2,088 × (tool calls)
+agent cost ≈ 56,887 + ~2,100 × (small-output tool calls)
 ```
 
-Starting a new agent therefore costs the same as **~27 extra tool calls inside an existing one**. So pile work onto one agent: a sub-task needing fewer than ~27 tool calls is cheaper batched, every time. Nine questions batched into one agent cost ~113,000 against ~165,000 as two agents — a **31% saving**.
+**Its limits, stated plainly.** It fits seven of nine runs within ~4%, but over-predicted the batched run by 28%, and it prices only *small-output* calls — a single call returning a 300 KB log costs far more than the constant, which is the whole premise of the isolate axis. Use it to see that a new agent costs roughly what **~27 extra small tool calls** cost, and stop there.
 
 Two things this rules out as worries. Cost is **linear** in tool calls, not quadratic, because prompt caching holds — accumulated context does not compound. And quality did not degrade at ~100,000 tokens of accumulated context: every arm scored 16/16. Set the batch ceiling by the agent's context window and by relevance, not by a cost cliff that does not exist.
 
-**Reuse an agent only when the second task genuinely needs the first task's findings.** The crossover is the dispatch floor: while its accumulated context is under ~57,000 tokens, resuming is cheaper than a fresh agent; past that, it is not. Best of all is neither — give **one** agent a multi-part prompt up front, so the floor is paid once and no transcript is replayed.
+**Reuse an agent only when the second task genuinely needs the first task's findings.** Not to save money — it will not. A finished agent's context already *includes* the ~57,000-token floor, so it is never below it, and resuming always replays more than a fresh agent would pay. The rule is therefore simple rather than conditional: **resume for continuity, spawn fresh for independence.** Best of all is neither — give **one** agent a multi-part prompt up front, so the floor is paid once and no transcript is replayed.
 
 **Spend it to keep a long session alive and to finish sooner, never to spend fewer tokens.** Total cost cannot come out ahead: the ~57,000-token floor is paid by the child as well, so every dispatch adds it. Where the session has context to spare and nothing is waiting on latency, inline is cheaper outright.
 
@@ -92,32 +113,42 @@ Isolate when the work **produces far more output than answer**:
 | Inherits everything (`tools:` omitted) | all of them | **56,887** |
 | Explicit list | 14 | **24,561** |
 
-**Restricting the grant cuts the dispatch floor by 57%.** An agent definition with no `tools:` line inherits every tool the session has loaded — with a large MCP surface, that is tens of thousands of tokens of schema re-sent on every dispatch, for tools the agent will never call. Declare the minimum each agent needs. It is the cheapest optimization available here, it makes the break-even arithmetic below roughly twice as favourable, and it is the same control that makes an agent genuinely read-only.
+**Restricting the grant cuts the dispatch floor by 57%.** An agent definition with no `tools:` line inherits every tool the session has loaded — with a large MCP surface, that is tens of thousands of tokens of schema re-sent on every dispatch, for tools the agent will never call. Declare the minimum each agent needs; it roughly halves the dispatch floor, which is what moves several rows in the table below from a bad trade to a good one.
+
+**Trim by blast radius first, tokens second — they do not correlate.** `Bash` is a tiny schema with total blast radius; a handful of MCP read tools are large schemas with none. Someone optimising purely for tokens removes the harmless-but-large tools and keeps `Bash`, getting the saving and none of the safety. Someone adding `Bash` back for capability gets no cost signal that they just removed the boundary. **Whether an agent holds `Bash`, `Edit` or `Write` is a safety decision and never a cost one.**
 
 So the trade on isolating output of size **S** is: **you reclaim S tokens of your own context and spend ~64,000 total.** Which makes the rule arithmetic, not taste:
 
-| Isolating… | Context reclaimed | Tokens spent | Worth it? |
+| Isolating… | Context reclaimed | Unrestricted grant (~64k) | Restricted grant (~31k) |
 |---|---|---|---|
-| A grep (~3k) | 3k | 64k | **No** — 5% return |
-| A 1,500-line file (~15k) | 15k | 64k | **No** — 23% return |
-| A full test run (~43k) | 43k | 64k | Marginal |
-| A 300 KB file or log (~78k) | 78k | 64k | **Yes** — 120% return |
+| A grep (~3k) | 3k | **No** — 5% | **No** — 10% |
+| A 1,500-line file (~15k) | 15k | **No** — 23% | **No** — 48% |
+| A full test run (~43k) | 43k | **No** — 67% | **Yes** — 139% |
+| A 300 KB file or log (~78k) | 78k | **Yes** — 122% | **Yes** — 252% |
+
+**The threshold is your own dispatch floor, not a fixed number.** Isolate when the output you would avoid exceeds what the dispatch costs — ~64,000 tokens with an unrestricted agent, ~31,000 with a restricted one. Restricting the grant is what moves a test run from a bad trade to a good one, which is why it is the first thing to fix.
 
 **Before you consider isolating, filter at the source.** This is the rule that makes most dispatches unnecessary, and it is free:
 
 | Instead of | Do | Cost |
 |---|---|---|
-| `npm test` (~43,000 tokens) | `npm test 2>&1 \| tail -20` | ~200 tokens |
+| `npm test` (~43,000 tokens) | `npm test > /tmp/t.log 2>&1; rc=$?; tail -20 /tmp/t.log; echo $rc` | ~200 tokens |
 | reading a 8,500-line file | `grep -n "pattern" file` | ~200 tokens |
 | reading a file for one function | `sed -n '1520,1550p' file` | ~400 tokens |
 | "how many X are there" | `grep -c "X" file` | ~10 tokens |
 
+**Capture the exit code before you pipe.** A pipeline reports its *last* stage's status, so
+`cmd | tail` exits 0 even when `cmd` failed, and `cmd | grep -E "FAIL"` inverts it — 1 when
+everything passed, 0 when it did not. Filtering naively turns a red suite green. Either
+capture the status first as above, or `set -o pipefail`. This matters most for exactly the
+commands worth filtering.
+
 **A pipe beats a dispatch by two to three orders of magnitude.** In the measured A/B, the arm told to delegate the test run saved only 3.7% of context versus the arm that simply piped it, while spending 56% more tokens — because the inline arms had already filtered at the shell and there was nothing left to save.
 
-- **Isolate** only when the bulk must be **understood rather than sliced** — a model has to read it and judge, and no pipe can extract the answer — **and** it exceeds roughly **40,000 tokens**. A debugging loop qualifies: the answer depends on reading failures and forming a hypothesis. A test result count does not: `tail` gets it.
+- **Isolate** only when the bulk must be **understood rather than sliced** — a model has to read it and judge, and no pipe can extract the answer — **and** it exceeds your dispatch floor above. A debugging loop qualifies: the answer depends on reading failures and forming a hypothesis. A test result count does not: `tail` gets it.
 - **Inline** everything else.
 
-**The floor is charged per dispatch, so consolidate.** Five sub-agents pay it five times; one sub-agent answering five questions pays it once. When several questions clear the threshold, send **one** agent with a multi-part prompt unless they genuinely must run in parallel for latency. In the measured A/B below, five dispatches cost ~4x the inline baseline where one would have cost ~1.3x.
+**The floor is charged per dispatch, so consolidate.** Five sub-agents pay it five times; one sub-agent answering five questions pays it once. When several questions clear the threshold, send **one** agent with a multi-part prompt unless they genuinely must run in parallel for latency. In the measured A/B above, five dispatches cost ~4x the inline baseline; one dispatch cost ~1.6x and reclaimed nothing measurable.
 
 **Verification carve-out.** If trusting the answer would require reading the same bulk the agent read, isolating saved nothing. Do it inline, or change the question to one whose answer is checkable on its own (a `file:line`, a count, a diff).
 
@@ -176,7 +207,7 @@ An investigation agent with `Edit`, `Write` or `Bash` can mutate the working tre
 
 **Use the strongest lever available, in this order. A prompt is the weakest and should never be the only one.**
 
-1. **Restrict the grant.** An agent definition's `tools:` list is enforced by the harness, not requested. An agent with no `Bash` cannot mutate anything regardless of what it decides to do. This plugin's `context-finder` is built this way.
+1. **Restrict the grant.** An agent definition's `tools:` list is enforced by the harness, not requested. An agent with no `Bash` cannot mutate anything regardless of what it decides to do. This plugin ships five agents built this way — `context-finder`, `investigator` and `reviewer` hold no `Bash`; `runner` and `writer` do, deliberately. See the grant table in `references/model-map.md`.
 2. **Deny the command.** `permissions.deny` entries in `settings.json` (for example `Bash(git reset:*)`) are enforced by the harness and survive a prompt the agent ignores.
 3. **Isolate the workspace.** A `git worktree` gives the agent a tree whose destruction costs nothing — see the `using-git-worktrees` skill.
 4. **Then instruct.** Commit first, point the agent at a SHA, and forbid `checkout`, `stash`, `reset`, `clean`, `restore`, `rm`, `branch -D`, force-push and in-place file rewrites. Treat this as mitigation, not a control: when it is ignored the tree is already mutated and nothing reports it.
@@ -210,7 +241,7 @@ Agent({ model: "<retriever>", subagent_type: "context-finder",
   prompt: "Find the definition of ExampleSerializer. Report the file path and line number only." })
 ```
 
-The retriever example uses `context-finder` rather than `Explore` deliberately: `Explore` retains `Bash`, and a symbol lookup has no reason to hold it.
+The retriever example uses `context-finder` rather than `Explore` deliberately: `Explore` retains `Bash`, and a symbol lookup has no reason to hold it. `investigator` is the equivalent choice for an unindexed repo, and `runner` is the one to use when the work genuinely must execute something.
 
 **Consolidate before you parallelize.** Each extra agent costs another ~64,000 tokens, and agents cannot see each other's work, so three agents over overlapping paths pay three floors *and* read the same files three times. Default to **one** agent with a multi-part prompt. Fan out only when the questions are genuinely independent **and** you need the wall-clock saving enough to pay a floor per branch.
 
