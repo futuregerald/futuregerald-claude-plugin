@@ -2,7 +2,14 @@
 
 The rules in `SKILL.md` name **roles**, never models. This file is the only place a model name appears, so a new lineup is a one-file edit that never touches the reasoning.
 
-**Verify before relying on a row.** Lineups change every few months. Last checked: 2026-09-18. The Google rows reflect vendor guidance for the Google AI Ultra tier.
+**Verify before relying on a row.** Lineups change every few months. Last checked: 2026-09-18.
+
+**Sourcing.** Rows are marked by how well they are established:
+- **[verified]** — confirmed directly against a tool grant, config file or API doc.
+- **[vendor]** — stated by the vendor or its guidance. Plausible, not independently tested.
+- **[reported]** — observed or relayed behaviour with no citation. Treat as a working assumption; if you act on it and it does not hold, fix the row.
+
+The Google rows reflect vendor guidance for the Google AI Ultra tier and are **[vendor]** unless marked otherwise.
 
 ## Roles
 
@@ -18,15 +25,15 @@ The orchestrator role is also whatever model is driving the session. Isolating w
 
 | Role | Anthropic | Google |
 |---|---|---|
-| retriever | Haiku 4.5 | Gemini 3.7 or 3.6 — non-reasoning, literal, no deliberation latency |
+| retriever | Haiku 4.5 | Gemini 3.7 or 3.6 — non-reasoning, literal, no deliberation latency **[reported]** |
 | explorer | Sonnet 5 | Gemini 3.8 Flash, thinking `low` or `medium` (default) |
 | orchestrator | Opus 5 (Fable 5.1 for planning and synthesis) | Gemini 3.8 Flash, thinking `high` |
 
 **The two platforms lean on different levers, and that is deliberate.** On Anthropic the model changes per role. On Google the primary lever is the thinking level on one model — 3.8 Flash covers explorer and orchestrator by itself.
 
-**Do not reach for Flash-Lite.** It is not in Antigravity's chat model selector at all. Antigravity uses it under the hood for its own lightweight background subagents, but as a chat model it is too weak at tool-calling and code quality to orchestrate anything. If the goal is speed or quota, 3.8 Flash at `low` is the answer, not a weaker model.
+**Do not reach for Flash-Lite. [reported]** It is not in Antigravity's chat model selector. Antigravity uses it under the hood for its own lightweight background subagents, but as a chat model it is too weak at tool-calling and code quality to orchestrate anything. If the goal is speed or quota, 3.8 Flash at `low` is the answer, not a weaker model.
 
-**The retriever row is the exception to "hold the model".** 3.7 and 3.6 still earn their place for mechanical work: they are direct and literal, they hold strict output formats without breaking out to explain themselves, and they stream immediately because there is no thinking trace to compute first. For a format extraction, a regex, or a rename, that is better behaviour than 3.8 at `low` — not merely cheaper.
+**The retriever row is the exception to "hold the model". [reported]** 3.7 and 3.6 still earn their place for mechanical work: they are direct and literal, they hold strict output formats without breaking out to explain themselves, and they stream immediately because there is no thinking trace to compute first. For a format extraction, a regex, or a rename, that is better behaviour than 3.8 at `low` — not merely cheaper.
 
 ### Two levers, on both platforms
 
@@ -49,7 +56,9 @@ Thinking tokens are **output tokens**. They count against rate limits and rollin
 | `medium` (default) | ~1,000 – 4,000 | 2–4x |
 | `high` | ~8,000 – 16,000+ | 5–15x+ |
 
-The same prompt can produce 500 output tokens at `low` and 10,000+ at `high`. **That spread is the largest single multiplier in this document — bigger than the choice of model.** When a rolling limit is draining faster than expected during a long session, this is the first thing to check.
+The same prompt can produce a few hundred output tokens at `low` and five figures at `high`. The bracket midpoints imply closer to 15–20x than the 5–15x quoted alongside them, so treat both as order-of-magnitude, not arithmetic.
+
+**Scope of the claim:** where one model is held across several budgets — the Google column — effort is the dominant multiplier. It is *not* larger than the model lever on a platform whose tiers are separate models with different unit prices; there the two are spent differently and are not comparable on one scale. When a rolling limit drains faster than expected in a long session, effort is still the first thing to check, because it moves without you choosing it.
 
 ### Gemini lineup, by what it is good at
 
@@ -75,11 +84,15 @@ Several `Agent` calls in one message run concurrently.
 
 **Tool grants differ and this matters for safety** (see the safety section in `SKILL.md`):
 
-| Agent type | `Bash` | `Edit`/`Write` |
-|---|---|---|
-| `context-finder` | no | no |
-| `Explore` | **yes** | no |
-| `general-purpose` | yes | yes |
+| Agent type | Provided by | `Bash` | `Edit`/`Write` |
+|---|---|---|---|
+| `context-finder` | **this plugin** (`agents/context-finder.md`) | no | no |
+| `Explore` | the harness | **yes** | no |
+| `general-purpose` | the harness | yes | yes |
+
+**[verified]** against `agents/context-finder.md` and the harness agent roster.
+
+**`context-finder` does not exist for everyone.** It ships with this plugin, so a config-only install — or an install into another tool's skills directory — has no such agent. Safety advice that names it silently fails there. Where it is absent, fall back to restricting the grant in your own agent definition rather than assuming a read-only type is available.
 
 ### Google Antigravity
 
@@ -89,11 +102,13 @@ The model is selectable **per agent**, which is what makes the role mapping abov
 
 `/agents` opens the Agent Manager panel to browse custom agents and watch active or finished background subagents.
 
-Because subagents get workspace isolation rather than merely a separate context, the tree-mutation hazard in `SKILL.md` is weaker here than in Claude Code — but commit-first still costs nothing and still protects you when a subagent is pointed at the shared workspace.
+The vendor describes subagents as having "workspace isolation". **[vendor, unverified]** — whether that isolates the *filesystem* or only the *context* is not established here, and only the former weakens the tree-mutation hazard. Do not downgrade the guardrails in `SKILL.md` on the strength of that phrase until you have confirmed which it means.
 
 ### Harnesses without subagents
 
-If a harness has no way to spawn a separate context that reports back, **only the downgrade axis applies**. The isolate axis needs a subagent primitive; without one, use the carve-outs and the reasoning-budget rules and ignore the rest. Nothing in the skill degrades unsafely — you simply lose the context savings.
+If a harness has no way to spawn a separate context that reports back, **only the downgrade axis applies**. The isolate axis needs a subagent primitive; without one, use the carve-outs and the reasoning-budget rules and ignore the rest.
+
+Most of what you lose is context savings. One thing you lose is a **control**, not a saving: fresh-sub-agent code review and plan review exist for objectivity, and on such a harness they cannot run at all. Say so rather than treating a self-review as equivalent.
 
 ## Sources
 
