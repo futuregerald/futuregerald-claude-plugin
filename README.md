@@ -255,7 +255,7 @@ If symlinked to `~/.claude/skills` (installed as personal skills), invoke them b
 | `using-git-worktrees` | Isolated git worktrees for feature work |
 | `pull-request-description` | Structured PR summary, background, test plan, and rollback plan |
 | `ticket-grooming` | Investigate and groom tickets; post structured triage notes |
-| `future-code-search` | Decide whether work runs in a sub-agent, and which model runs it |
+| `future-model-router` | Decide whether work runs in a sub-agent, and which model runs it |
 | `graphify` | Build and maintain a knowledge graph of any input |
 | `handoff` | Compact the conversation into a handoff doc for the next session |
 | `teach` | Teach a new skill or concept within the workspace |

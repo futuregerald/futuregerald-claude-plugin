@@ -23,7 +23,7 @@
 
 Sub-agent output is **evidence, never a completion claim**. Don't narrate dispatches; in the answer, mark which claims came from a sub-agent and which you verified yourself.
 
-*Routing detail — tier table, dispatch recipes, escalation path — lives in the `future-code-search` skill if it is installed. The rule above stands on its own without it.*
+*Routing detail — tier table, dispatch recipes, escalation path — lives in the `future-model-router` skill if it is installed. The rule above stands on its own without it.*
 
 ---
 
@@ -254,7 +254,7 @@ Read `CONTRIBUTING.md` for branching, testing and deployment; the `docs/adr/` ti
 
 | Trigger | Skill |
 |---------|-------|
-| Any search, multi-file read, or investigation that produces more output than answer | `future-code-search` — routing detail behind **Delegate by Default**: isolate vs. downgrade, tier table, dispatch recipes, escalation |
+| Any search, multi-file read, or investigation that produces more output than answer | `future-model-router` — routing detail behind **Delegate by Default**: isolate vs. downgrade, tier table, dispatch recipes, escalation |
 | Bug investigation | `systematic-debugging` |
 | New feature | `superpowers:test-driven-development` (RED→GREEN→REFACTOR) |
 | Database queries/mutations changed | `sql-optimization-patterns` + `sql-reviewer` agent |

@@ -1,5 +1,5 @@
 ---
-name: future-code-search
+name: future-model-router
 description: Delegation and model routing — decide whether a piece of work runs in a sub-agent, and which model runs it. Covers codebase search and exploration, debugging loops, call-chain tracing, spikes, CI log triage, and bulk queries against tickets, logs or metrics. Invoke before any search, multi-file read, or investigation that will produce far more output than answer.
 tags: [delegation, model-routing, cost-optimization, search]
 ---
