@@ -1,96 +1,95 @@
 ---
 name: future-code-search
-description: Model routing rules for codebase search. Delegates search/exploration to cheaper models (Haiku/Sonnet) while keeping Opus as the orchestrator. Invoke this skill before any codebase search or exploration task.
-tags: [search, cost-optimization, model-routing]
+description: Delegation and model routing — decide whether a piece of work runs in a sub-agent, and which model runs it. Covers codebase search and exploration, debugging loops, call-chain tracing, spikes, CI log triage, and bulk queries against tickets, logs or metrics. Invoke before any search, multi-file read, or investigation that will produce far more output than answer.
+tags: [delegation, model-routing, cost-optimization, search]
 ---
 
-# Future Code Search — Tiered Model Routing
+# Delegation & Model Routing
 
-**Never use Opus for raw codebase exploration.** When you need to search, explore, or read code to gather context, delegate to a cheaper model via the `Agent` tool. Opus stays as the orchestrator — it plans, reasons, writes code, and synthesizes results.
+**Two decisions, not one.** Conflating them is the common error — "don't delegate debugging" usually means "don't *downgrade* debugging", which is a different claim.
 
-## Routing Table
+1. **Isolate?** Will doing this in the main context pull in bulk the answer doesn't need? → run it in a sub-agent, **at any model, including Opus**.
+2. **Downgrade?** Can you state the shape of a correct answer *before* dispatching? → Haiku or Sonnet. If you can't, that's judgment, and judgment stays at the orchestrator's model.
 
-| Task | Model | When to use |
-|------|-------|-------------|
-| Simple file/symbol lookup | `haiku` | You know the name — just need the path or definition |
-| Multi-step codebase exploration | `sonnet` | Tracing flows, understanding features, exploring patterns |
-| Architecture overview / broad search | `sonnet` | Cross-package dependencies, high-level structure questions |
-| Planning, reasoning, code writing | `opus` (default) | Implementation, PR review, debugging decisions, synthesis |
+The two are independent. Work can be isolated without being downgraded.
 
-## How to Dispatch
+|  | Stays at Opus | Downgrade to Haiku/Sonnet |
+|---|---|---|
+| **Isolate (sub-agent)** | Debugging loops, call-chain tracing, spikes, CI log triage, bulk dataset queries | Symbol lookups, "does X exist", flow tracing, log/ticket/metrics sweeps |
+| **Inline (main context)** | Decisions, synthesis over the conversation, writing in the user's voice, gate runs | — |
 
-### Simple lookup (Haiku)
+The top-left cell is the one most setups miss. A debugging loop is tens of thousands of tokens of test output for a one-line root cause; isolating it is worth far more than downgrading it.
 
-```
-Agent({
-  model: "haiku",
-  subagent_type: "Explore",
-  prompt: "Find all files matching **/finding_serializer*.rb and report their paths and line counts"
-})
-```
+## Axis 1 — Isolate?
 
-### Deep exploration (Sonnet)
+Isolate when the work **produces far more output than answer**:
 
-```
-Agent({
-  model: "sonnet",
-  subagent_type: "Explore",
-  prompt: "Trace how a finding is created: from the API controller through any interactors to the database. Report the full call chain with file paths and key method names."
-})
-```
+- Debugging and test-failure iteration — run, read, hypothesize, re-run. The answer is "root cause is X at `file:line`".
+- Call-chain tracing for an impact analysis — dozens of files read, a caller list returned.
+- Spikes — throwaway code in a scratchpad that proves one fact.
+- CI and build-log triage.
+- Queries over large external datasets — tickets (JQL), logs, metrics, warehouse tables.
+- Reading a large file or directory to answer a narrow question about it.
 
-### Parallel searches (multiple agents)
+**Floor cost.** A dispatch is not free: it costs a prompt plus the agent's own reasoning. If **two tool calls with small output** would answer it, do it inline. Don't spawn an agent for what a single grep answers.
 
-When you need multiple independent pieces of context, dispatch them in parallel in a single message:
+**Verification carve-out.** If trusting the answer would require reading the same bulk the agent read, isolating saved nothing. Do it inline, or change the question to one whose answer is checkable on its own (a `file:line`, a count, a diff).
 
-```
-// Both in one message — they run concurrently
-Agent({ model: "haiku", subagent_type: "Explore", prompt: "Find the InvoiceSerializer definition..." })
-Agent({ model: "sonnet", subagent_type: "Explore", prompt: "Trace the invoice creation flow..." })
-```
+## Axis 2 — Downgrade?
 
-## Rules
+The test is **"can I state the shape of a correct answer before dispatching?"**
 
-1. **Write specific, self-contained prompts** — the sub-agent has zero conversation context. Include what you're looking for, why, and what format you want the answer in.
+- *"Come back with the file path, line number, and every caller"* → shape is known → downgrade.
+- *"Tell me whether this design holds up"* → no statable shape → keep at Opus.
 
-2. **Use Grep/Glob directly for trivial lookups** — if you already know the file name or exact symbol, don't spawn an agent. Just grep for it. Agents are for multi-step exploration.
+| Model | Use for |
+|---|---|
+| **Haiku** | You know the name. Path lookups, symbol definitions, "does X exist", listing, mechanical extraction into a known format |
+| **Sonnet** | Multi-step exploration, tracing a flow, summarizing a long document, first-pass log triage, gathering ticket or PR data |
+| **Opus** | Anything containing a judgment call — root-cause analysis, design questions, synthesis, review |
 
-3. **Escalate on insufficient results** — if a Haiku agent returns vague or incomplete context, re-dispatch with Sonnet before trying the same tier again.
+**Escalate once, don't retry.** A vague Haiku result goes to Sonnet, a vague Sonnet result comes back to the orchestrator. Never re-dispatch at the same tier.
 
-4. **Opus reads files directly when it knows the target** — if you already have the exact path and line range (from a previous search or the user), use `Read` directly. No agent needed for targeted reads.
+## Never delegate
 
-5. **Parallelize independent searches** — if you need 3 different pieces of context, dispatch 3 agents in one message. Don't serialize them.
+1. **Work whose input is the conversation.** Synthesis, decisions, "what should we do". A sub-agent starts at zero; re-supplying the context costs more than doing the work.
+2. **Anything written in the user's voice.** Tickets, PR bodies, docs, messages. Sub-agents drift toward generic phrasing.
+3. **Gate runs.** Tests, lint, CI — the evidence backing a completion claim has to be in the orchestrator's own transcript. A sub-agent reporting "tests pass" is a claim, not evidence.
+4. **Work that fails the verification carve-out above.**
 
-6. **Include output format in the prompt** — tell the agent exactly what to return: file paths, line numbers, method signatures, call chains. Structured output is easier to synthesize.
+Code review and plan review already run in fresh sub-agents for a different reason — objectivity, not cost. That requirement is unaffected by anything here.
 
-## Do NOT Delegate to Cheaper Models
+## Safety: isolated agents hold write tools
 
-These tasks require Opus-level reasoning and must stay with the orchestrator:
+An investigation agent with `Edit`, `Write` or `Bash` can mutate the working tree. This has happened — a review agent reverted a worktree mid-session.
 
-- Code writing or editing
-- Code review, security review, SQL review
-- Planning or architectural reasoning
-- Synthesizing results from multiple searches into a decision
-- Debugging decisions (root cause analysis)
-- Writing commit messages, PR descriptions, or documentation
+- **Prefer a read-only agent type** (`Explore`, `context-finder`). Read-only at the tool level beats read-only by instruction.
+- Where the work genuinely needs `Bash` (running a test suite), layer it: **commit first**, point the agent at a SHA, and forbid `checkout`, `stash`, `reset` and file edits in the prompt.
 
-## Escalation Path
+## Dispatching
+
+**Write self-contained prompts.** The sub-agent has zero conversation context. State what you want, why, and the exact output format — paths, line numbers, signatures, call chains.
 
 ```
-Can't find it? ──> Was it Haiku? ──yes──> Retry with Sonnet
-                        │
-                       no (already Sonnet)
-                        │
-                        v
-               Opus reads files directly
-               (fall back to manual search)
+// Isolated but NOT downgraded — bulk work, hard reasoning
+Agent({ model: "opus", subagent_type: "Explore",
+  prompt: "The spec at spec/interactors/x_spec.rb:40 fails with NoMethodError.
+           Run it, read the failure, trace the cause. Report ONLY: the root cause
+           as file:line, the failing assertion, and a one-paragraph explanation.
+           Do not edit any file. Do not run git checkout, stash, or reset." })
+
+// Isolated AND downgraded — known answer shape
+Agent({ model: "haiku", subagent_type: "Explore",
+  prompt: "Find the definition of InvoiceSerializer. Report the file path and line number only." })
 ```
 
-## Quality Check
+**Parallelize only genuinely independent questions.** Agents cannot see each other's work, so three agents over overlapping paths read the same files three times. When several questions share a subject, send **one** agent with a multi-part prompt instead of N agents.
 
-After receiving search results from a sub-agent, the orchestrator (Opus) should:
+## After a sub-agent returns
 
-1. Verify the results make sense given what you already know
-2. Check that file paths mentioned actually exist (quick Glob if uncertain)
-3. Read key files directly if the summary seems incomplete
-4. Only then proceed with planning/implementation
+Sub-agent output is **evidence, never a completion claim**.
+
+1. Check the result against what you already know.
+2. Spot-check that cited paths and line numbers exist.
+3. Read the key file directly if the summary looks thin.
+4. In the answer to the user, mark which claims came from a sub-agent and which you verified yourself.

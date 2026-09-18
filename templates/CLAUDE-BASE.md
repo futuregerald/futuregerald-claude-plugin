@@ -10,6 +10,23 @@
 
 ---
 
+## Delegate by Default (Every Turn)
+
+**Before answering any question or starting any task, make two decisions.** Sessions run long, so context is the scarce resource — and smaller models are faster besides.
+
+1. **Isolate?** Will doing this inline pull in bulk the answer doesn't need — file dumps, test output, CI logs, issue-tracker or metrics queries, multi-file sweeps? → run it in a sub-agent, **at any model, including the orchestrator's own**. Isolating is not the same as downgrading.
+2. **Downgrade?** Can you state the shape of a correct answer before dispatching ("come back with `file:line` and the caller list")? → a small fast model for known-name lookups, a mid-tier model for multi-step exploration. If you cannot state the shape, that is judgment — keep it at the orchestrator's model. **Never trade output quality for a cheaper model.**
+
+**Never delegate:** work whose input is the conversation itself (synthesis, decisions) · anything written in the user's voice (issues, PR bodies, docs, messages) · the gate run behind a completion claim — a sub-agent reporting "tests pass" is a claim, not evidence, so re-run it yourself before claiming · work where trusting the answer means reading the same bulk anyway.
+
+**Guards:** ≤2 tool calls with small output → do it inline, a dispatch is not free · fan out only on genuinely independent questions, otherwise one agent with a multi-part prompt · investigation agents are read-only, and where `Bash` is genuinely needed, commit first, point the agent at a SHA, and forbid `checkout`/`stash`/`reset`/edits.
+
+Sub-agent output is **evidence, never a completion claim**. Don't narrate dispatches; in the answer, mark which claims came from a sub-agent and which you verified yourself.
+
+*Routing detail — tier table, dispatch recipes, escalation path — lives in the `future-code-search` skill if it is installed. The rule above stands on its own without it.*
+
+---
+
 ## Development Lifecycle (MASTER WORKFLOW)
 
 **MANDATORY: Create a todo list using TaskCreate for every non-trivial task.**
@@ -237,6 +254,7 @@ Read `CONTRIBUTING.md` for branching, testing and deployment; the `docs/adr/` ti
 
 | Trigger | Skill |
 |---------|-------|
+| Any search, multi-file read, or investigation that produces more output than answer | `future-code-search` — routing detail behind **Delegate by Default**: isolate vs. downgrade, tier table, dispatch recipes, escalation |
 | Bug investigation | `systematic-debugging` |
 | New feature | `superpowers:test-driven-development` (RED→GREEN→REFACTOR) |
 | Database queries/mutations changed | `sql-optimization-patterns` + `sql-reviewer` agent |
