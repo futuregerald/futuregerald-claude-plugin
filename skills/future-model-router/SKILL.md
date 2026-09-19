@@ -57,7 +57,30 @@ A routing decision that takes longer than the work it was routing has cost more 
 
 ## What isolating actually buys
 
-**It is a context and latency optimization, not a token-cost saving.** Measured A/B on a six-part codebase investigation (n=3 inline, forced routing with five sub-agents):
+**Three things, and only two of them are measured here.**
+
+1. **Context relief** — measured below, and smaller than you would hope.
+2. **Latency** — measured below; a wide fan-out is genuinely faster.
+3. **A clean context, which is a correctness control.** Not measured here, and do not let the
+   numbers below crowd it out. A sub-agent starts empty: it holds only what its prompt gave it,
+   so it cannot blur the thing you asked about with unrelated material it happens to be carrying,
+   and it cannot be steered by text further up a transcript it never saw. Where the work is
+   **attribution** — which person, which day, which ticket, which service — an agent whose
+   context physically excludes the neighbouring slices cannot confuse them. One agent holding
+   eight days of mixed activity can, and nothing in the output will flag that it did.
+
+**This is the reason a fan-out can be correct where the token arithmetic says it is wasteful.**
+The floor is a real cost and the sections below quantify it. A wrong name against a piece of
+work, or a confident summary assembled from two sources the model has merged, is a cost the
+arithmetic does not see at all. **Where the risk is getting the facts crossed rather than
+running out of room, pay for the extra agents.** Say which of the three you are buying when you
+dispatch — they justify different shapes.
+
+Isolation is also what keeps attacker-influenceable bulk — CI logs, ticket text, scraped pages —
+out of the context that holds `Edit`, `Write` and `Bash`. That is a containment property, not an
+optimization, and it does not appear in any cost table.
+
+**On cost specifically: it is a context and latency optimization, not a token-cost saving.** Measured A/B on a six-part codebase investigation (n=3 inline, forced routing with five sub-agents):
 
 | | Inline + pipes (n=3) | 1 dispatch (n=2) | 5 dispatches (n=2) |
 |---|---|---|---|

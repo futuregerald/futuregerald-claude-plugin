@@ -122,8 +122,10 @@ Load team roster from [references/team.md](references/team.md). If the scope fal
 
 ## Step 2: Dispatch Sub-Agents (Parallel — One Per Source)
 
-**Key pattern: one agent per source, covering the whole window.** Three required sources means
-**three agents**, not one per source per day. Each agent queries its own source across the full
+**Default pattern: one agent per source, covering the whole window.** Three required sources
+means **three agents**. Fan out per day instead when attribution accuracy or speed matters more
+than tokens — see the trade table below; the prompts in `references/agent-prompts.md` take a
+date range, so a per-day agent is the same prompt with `{START_DATE} == {END_DATE}`. Each agent queries its own source across the full
 date range and writes a single digest.
 
 Launch ALL agents in a **single message with multiple Agent tool calls**. Each agent prompt must
@@ -276,7 +278,9 @@ rm -rf .updates
 ## Anti-Patterns
 
 - Do NOT query data sources directly from the orchestrator. Always use sub-agents.
-- Do NOT fan out one agent per day. One per source, restricted grant — see "Why one per source".
+- Do NOT fan out per day by reflex — and do not refuse to when attribution matters. One per
+  source is the default; per day is the deliberate choice for 1:1s, performance conversations,
+  and anything needing speed. See the trade table.
 - Do NOT dispatch an agent without a `tools:` grant. It doubles the floor for no benefit.
 - Do NOT read large tool results in the orchestrator. Dispatch a sub-agent to summarize.
 - Do NOT dump raw tracker, GitHub or meeting data. Synthesize.
