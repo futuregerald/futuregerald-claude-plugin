@@ -184,7 +184,7 @@ The weaker model was **2.03x more expensive in context and 1.86x slower**, at id
 
 **The statable-shape test survives this. The saving it was supposed to buy does not.** Shape still tells you whether downgrading is *safe* — quality held at 100% on both arms, which is the claim worth keeping. It does not tell you that downgrading is *cheaper*, and here it was not. Downgrade for the price per token if that is what you are optimising; do not downgrade expecting context relief or speed.
 
-**The direction is platform-specific, so measure yours before writing it into a rule.** The identical three questions run on another vendor's CLI gave the opposite result: its lighter model was 3.0x cheaper in tokens and roughly 9x faster than its heavier one — while being less accurate. Two platforms, two directions, same task. `references/model-map.md` carries both sets of numbers.
+**The direction is a property of the specific pair, not of the rule.** The identical three questions run on another vendor's CLI gave the opposite result for *its* lighter model — cheaper and faster, though less accurate. So a downgrade can go either way on cost, and which way is not predictable from the rule. **Measure the pair you actually intend to use.** Note what that second measurement is not: that vendor's lighter model is not offered in its IDE's model selector, so the number describes a model pair, not a routing option anyone has. The lever that platform *does* expose — a thinking level on one model — is **not reachable from its CLI at all** (no flag, no settings key), so it remains unmeasured. `references/model-map.md` has the detail.
 
 ### Effort is the second lever
 

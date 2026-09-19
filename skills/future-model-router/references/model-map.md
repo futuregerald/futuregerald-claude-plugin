@@ -38,10 +38,19 @@ The orchestrator role is also whatever model is driving the session. Isolating w
 
 **The two platforms lean on different levers, and that is deliberate.** On Anthropic the model changes per role. On Google the primary lever is the thinking level on one model — 3.8 Flash covers explorer and orchestrator by itself.
 
-### Measured: the Gemini downgrade axis runs the OTHER way
+### Measured on Gemini CLI — read the scope before the numbers
 
 Three retriever-shaped questions, same repo and same ground truth used for the Anthropic
 numbers in `SKILL.md`, run through Gemini CLI 0.58.0 read-only, n=2 per arm. **[verified]**
+
+**Scope, stated first because it limits what these numbers mean.** This is the **CLI**, not
+Antigravity, and the two arms are Flash and **Flash-Lite — which is not in Antigravity's model
+selector**. So this is *not* a measurement of the downgrade lever an Antigravity user has.
+**The lever Antigravity does expose — the thinking level on one model — could not be measured
+at all:** Gemini CLI 0.58.0 has no thinking/effort flag and `~/.gemini/settings.json` has no
+model block, so there is no way to set it from here. **The Google side of the downgrade axis
+remains unmeasured.** What the runs below do establish is the *correctness* behaviour of the
+Flash arm, which is a model Antigravity users actually run.
 
 | Arm | Total tokens | Tool calls | API latency | Score |
 |---|---|---|---|---|
@@ -49,10 +58,13 @@ numbers in `SKILL.md`, run through Gemini CLI 0.58.0 read-only, n=2 per arm. **[
 | `gemini-3.5-flash-lite` | ~658,000 | 26 | ~19s | 17/19 |
 
 The lighter model was **3.0x cheaper in tokens and roughly 9x faster** — the opposite direction
-from the Anthropic arms, where the lighter model cost 2.03x more and ran 1.86x slower. **The
-downgrade axis has no platform-neutral direction. Measure it on the platform you are on.**
+from the Anthropic arms, where the lighter model cost 2.03x more and ran 1.86x slower. Taken
+together with those, this says only that **a lighter model can go either way on cost, so the
+direction is a property of the pair rather than of the rule.** It is not a recommendation to
+use Flash-Lite, which is unavailable in Antigravity anyway — see the row below.
 
-Three further things that showed up and that any Gemini routing advice has to account for:
+Three further things that showed up, all of them on the **Flash** arm as well, and all of which
+any Gemini routing advice has to account for:
 
 1. **Neither Gemini arm could count.** Asked how many times one token appears in one file
    (true answer 331, confirmed five ways), the four runs answered 349, 338, 247 and 139. Both
@@ -68,11 +80,12 @@ Three further things that showed up and that any Gemini routing advice has to ac
 
 **Do not reach for Flash-Lite. [reported]** It is not in Antigravity's chat model selector. Antigravity uses it under the hood for its own lightweight background subagents, but as a chat model it is too weak at tool-calling and code quality to orchestrate anything. If the goal is speed or quota, 3.8 Flash at `low` is the answer, not a weaker model.
 
-**Do not reach for Flash-Lite. [reported; partially corroborated]** The measurements above are
-consistent with the quality half of this: the flash-lite arm put the handler for a channel in
-the wrong file entirely in one of two runs, and was the only arm to get a line number wrong.
-What they contradict is any assumption that it is the *expensive* option — it was markedly
-cheaper and faster. Reject it on accuracy, which is the right reason, not on cost.
+**Do not reach for Flash-Lite — and note it is not on offer in the IDE anyway. [reported;
+accuracy half corroborated]** The measurements above support the quality argument: the
+Flash-Lite arm put a channel's handler in the wrong file entirely in one of two runs, and was
+the only arm to get a line number wrong. They say nothing in its favour as a routing choice,
+because it is not selectable in Antigravity. Reject it on accuracy; do not reject it on cost,
+which is not where it loses.
 
 **The retriever row is the exception to "hold the model". [reported]** 3.7 and 3.6 also expose thinking levels, so **always name a level when you name one of them** — they are a different model, not a non-reasoning one. At `low` they earn their place for mechanical work: more literal, better at holding a strict output format instead of breaking out to explain themselves, and quicker to first token. For a format extraction, a regex, or a rename, that is better behaviour than 3.8 at `low` — not merely cheaper.
 
@@ -83,7 +96,7 @@ Model and effort are set independently, and both platforms expose both — they 
 | Platform | Model lever | Effort lever |
 |---|---|---|
 | Anthropic / Claude Code | `model:` on the dispatch, or in the agent definition | **`effort:`** in the agent definition — `low`, `medium`, `high`, `xhigh`, `max`, overriding the session level; and **`claude --effort <level>`** for a whole session. **[verified]** — named in the subagent frontmatter reference and exercised through both routes |
-| Google / Antigravity | Model selectable per agent | Thinking level on Gemini 3.8 Flash: `low`, `medium`, `high`; default `medium` |
+| Google / Antigravity | Model selectable per agent | Thinking level on Gemini 3.8 Flash: `low`, `medium`, `high`; default `medium`. **[vendor, unmeasured]** — and not settable from Gemini CLI 0.58.0, which has no thinking/effort flag and no model block in `settings.json`, so it cannot be benchmarked from a terminal |
 
 This is why the skill says **"reduce the reasoning budget"** rather than "use a smaller model".
 
