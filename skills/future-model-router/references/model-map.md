@@ -4,6 +4,13 @@ The rules in `SKILL.md` name **roles**, never models. This file is the only plac
 
 **Verify before relying on a row.** Lineups change every few months. Last checked: 2026-09-18.
 
+**A lineup discrepancy you will hit immediately.** The Google rows below name 3.8 Flash and
+3.7/3.6. The Gemini CLI on the machine where these numbers were taken (v0.58.0) exposes
+`gemini-3.5-flash`, `gemini-3.5-flash-lite` and `gemini-3.1-flash-lite`; `gemini-3.5-pro` and
+`gemini-3-pro` both return `ModelNotFoundError`, and `-m gemini-3.1-flash` silently resolves to
+`gemini-3.5-flash`. So the chat/IDE lineup and the CLI lineup are **not the same set**. Check
+what your entry point actually accepts before copying a model name out of this file.
+
 **Sourcing.** Rows are marked by how well they are established:
 - **[verified]** — confirmed directly against a tool grant, config file or API doc.
 - **[vendor]** — stated by the vendor or its guidance. Plausible, not independently tested.
@@ -31,7 +38,41 @@ The orchestrator role is also whatever model is driving the session. Isolating w
 
 **The two platforms lean on different levers, and that is deliberate.** On Anthropic the model changes per role. On Google the primary lever is the thinking level on one model — 3.8 Flash covers explorer and orchestrator by itself.
 
+### Measured: the Gemini downgrade axis runs the OTHER way
+
+Three retriever-shaped questions, same repo and same ground truth used for the Anthropic
+numbers in `SKILL.md`, run through Gemini CLI 0.58.0 read-only, n=2 per arm. **[verified]**
+
+| Arm | Total tokens | Tool calls | API latency | Score |
+|---|---|---|---|---|
+| `gemini-3.5-flash` | ~1,950,000 | 38 | ~170s | 18/19 |
+| `gemini-3.5-flash-lite` | ~658,000 | 26 | ~19s | 17/19 |
+
+The lighter model was **3.0x cheaper in tokens and roughly 9x faster** — the opposite direction
+from the Anthropic arms, where the lighter model cost 2.03x more and ran 1.86x slower. **The
+downgrade axis has no platform-neutral direction. Measure it on the platform you are on.**
+
+Three further things that showed up and that any Gemini routing advice has to account for:
+
+1. **Neither Gemini arm could count.** Asked how many times one token appears in one file
+   (true answer 331, confirmed five ways), the four runs answered 349, 338, 247 and 139. Both
+   Anthropic arms answered 331, every run. Gemini leaned on a match-*listing* search tool
+   (17–29 calls a run) and counted the results by eye; it ran a shell command at all in only
+   one run of four. **The filter-at-the-source rule in `SKILL.md` is therefore a correctness
+   control here, not just a cost one.** Say "run `grep -c`", not "count the matches".
+2. **`-m` does not pin the serving model.** Both `gemini-3.5-flash` runs silently served part
+   of the work from `gemini-3-flash-preview` — 9 of 43 requests in one run.
+3. **It went off-task.** One run made two web searches while answering questions about a local
+   file; both flash-lite runs made unrelated `update_topic` calls. No Anthropic arm made an
+   off-task call.
+
 **Do not reach for Flash-Lite. [reported]** It is not in Antigravity's chat model selector. Antigravity uses it under the hood for its own lightweight background subagents, but as a chat model it is too weak at tool-calling and code quality to orchestrate anything. If the goal is speed or quota, 3.8 Flash at `low` is the answer, not a weaker model.
+
+**Do not reach for Flash-Lite. [reported; partially corroborated]** The measurements above are
+consistent with the quality half of this: the flash-lite arm put the handler for a channel in
+the wrong file entirely in one of two runs, and was the only arm to get a line number wrong.
+What they contradict is any assumption that it is the *expensive* option — it was markedly
+cheaper and faster. Reject it on accuracy, which is the right reason, not on cost.
 
 **The retriever row is the exception to "hold the model". [reported]** 3.7 and 3.6 also expose thinking levels, so **always name a level when you name one of them** — they are a different model, not a non-reasoning one. At `low` they earn their place for mechanical work: more literal, better at holding a strict output format instead of breaking out to explain themselves, and quicker to first token. For a format extraction, a regex, or a rename, that is better behaviour than 3.8 at `low` — not merely cheaper.
 
@@ -41,10 +82,18 @@ Model and effort are set independently, and both platforms expose both — they 
 
 | Platform | Model lever | Effort lever |
 |---|---|---|
-| Anthropic / Claude Code | `model:` on the dispatch, or in the agent definition | Reasoning effort comes from the agent definition alongside `model` and `tools`. **[unverified]** — the harness documents it as definition-level, but the exact frontmatter key was not confirmed here, so check before relying on it |
+| Anthropic / Claude Code | `model:` on the dispatch, or in the agent definition | **`effort:`** in the agent definition — `low`, `medium`, `high`, `xhigh`, `max`, overriding the session level; and **`claude --effort <level>`** for a whole session. **[verified]** — named in the subagent frontmatter reference and exercised through both routes |
 | Google / Antigravity | Model selectable per agent | Thinking level on Gemini 3.8 Flash: `low`, `medium`, `high`; default `medium` |
 
 This is why the skill says **"reduce the reasoning budget"** rather than "use a smaller model".
+
+**Harness gotcha, measured:** a subagent definition dropped into the agents directory
+mid-session is **not** picked up — the registry loads at session start, and a dispatch to the
+new type fails with "Agent type not found" listing only the types that existed then. To
+exercise a new definition without restarting, run it headless: `claude -p "<task>" --agent
+<name> --output-format json`, which also reports `num_turns`, `duration_ms`,
+`total_cost_usd` and `usage.output_tokens_details.thinking_tokens` — the instrumentation these
+measurements were taken with.
 
 ### What the effort lever actually costs
 
@@ -57,6 +106,13 @@ Thinking tokens are **output tokens**. They count against rate limits and rollin
 | `high` | ~8,000 – 16,000+ | 5–15x+ |
 
 The same prompt can produce a few hundred output tokens at `low` and five figures at `high`. The bracket midpoints imply closer to 15–20x than the 5–15x quoted alongside them, so treat both as order-of-magnitude, not arithmetic.
+
+**Measured against those brackets.** On a mechanical single-parameter rename, thinking tokens
+came back at **0–215 across eight runs**, at `low` *and* at `high`, on both the session flag
+and the agent field. The brackets above describe what a task with genuine deliberation in it
+costs; they are not what an unambiguous task costs at a high setting. Effort cannot spend a
+budget on a question that has nothing to think about, so the burn table is an upper envelope,
+not a per-turn expectation.
 
 **Scope of the claim:** where one model is held across several budgets — the Google column — effort is the dominant multiplier. It is *not* larger than the model lever on a platform whose tiers are separate models with different unit prices; there the two are spent differently and are not comparable on one scale. When a rolling limit drains faster than expected in a long session, effort is still the first thing to check, because it moves without you choosing it.
 

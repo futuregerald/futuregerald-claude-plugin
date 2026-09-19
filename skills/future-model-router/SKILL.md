@@ -143,6 +143,8 @@ everything passed, 0 when it did not. Filtering naively turns a red suite green.
 capture the status first as above, or `set -o pipefail`. This matters most for exactly the
 commands worth filtering.
 
+**Filtering is a correctness control, not only a cost one.** Measured against a count of **331** confirmed five independent ways: every arm that reached for a counting primitive (`grep -c`, or a search tool in count mode) returned 331 — eight times out of eight, first try. Four runs on another vendor's CLI, which reached for a match-*listing* search tool instead and counted the hits by eye, answered 349, 338, 247 and 139. **A tool that returns matches is not a tool that returns a count**, and a model reading a wall of matches will estimate it — badly, and differently every time. The pipe is not just cheaper than reading the bulk; on a counting question it is the difference between right and wrong.
+
 **A pipe beats a dispatch by two to three orders of magnitude.** In the measured A/B, the arm told to delegate the test run saved only 3.7% of context versus the arm that simply piped it, while spending 56% more tokens — because the inline arms had already filtered at the shell and there was nothing left to save.
 
 - **Isolate** only when the bulk must be **understood rather than sliced** — a model has to read it and judge, and no pipe can extract the answer — **and** it exceeds your dispatch floor above. A debugging loop qualifies: the answer depends on reading failures and forming a hypothesis. A test result count does not: `tail` gets it.
@@ -171,7 +173,18 @@ The falsifier, because a template can be invented for almost anything: **would e
 
 **Never trade output quality for a cheaper model.** Cost and speed are the tiebreak between options that both produce the answer you need, never a reason to accept a worse one.
 
-**But more budget is not automatically better output.** On mechanical work, a high reasoning budget degrades the result: the model refactors code you did not ask it to touch, adds unsolicited error handling and commentary, and second-guesses a request that was already unambiguous. "Rename this variable" does not improve with deliberation — it gets embellished. Matching the budget to the task protects the output, not just the bill.
+**And do not assume the cheaper model is cheaper.** Measured on three retriever-shaped questions with the answer shape stated up front, n=2 per arm, every arm scoring 100% against ground truth:
+
+| Arm | Own context | Tool calls | Wall |
+|---|---|---|---|
+| retriever model | 61,776 | 10 | 34.4s |
+| explorer model | **30,384** | **4** | **18.5s** |
+
+The weaker model was **2.03x more expensive in context and 1.86x slower**, at identical correctness. The mechanism is tool-call count, not per-call size: it searched, narrowed and re-searched where the stronger model went straight there, and every extra round trip re-sends the accumulated context. **The dispatch floor is charged once; flailing is charged every turn.**
+
+**The statable-shape test survives this. The saving it was supposed to buy does not.** Shape still tells you whether downgrading is *safe* — quality held at 100% on both arms, which is the claim worth keeping. It does not tell you that downgrading is *cheaper*, and here it was not. Downgrade for the price per token if that is what you are optimising; do not downgrade expecting context relief or speed.
+
+**The direction is platform-specific, so measure yours before writing it into a rule.** The identical three questions run on another vendor's CLI gave the opposite result: its lighter model was 3.0x cheaper in tokens and roughly 9x faster than its heavier one — while being less accurate. Two platforms, two directions, same task. `references/model-map.md` carries both sets of numbers.
 
 ### Effort is the second lever
 
@@ -179,9 +192,13 @@ Effort — reasoning budget, thinking level, whatever the harness calls it — i
 
 - **It works inline.** You cannot change your own model mid-session, but you can spend less deliberation on a routine turn. It is the only downgrade available without dispatching.
 - **It is itself a context and quota cost.** Reasoning tokens are output tokens: they accumulate in the transcript that produced them and they count against rate limits. Where a provider holds one model across several budgets, this is the dominant multiplier — see `references/model-map.md` for measured ranges.
-- **It changes behaviour, not just depth.** A low setting is more literal and more likely to do exactly what was asked. A high setting deliberates, and deliberation on an unambiguous request turns into scope it invented.
+- **On mechanical work it did not change behaviour at all.** Measured: eight runs of a single-parameter rename, on a file deliberately seeded with refactor bait — a `JSON.parse` with no `try`/`catch`, a magic number, a C-style loop — at `low` and at `high`, through both the session flag and the agent-definition field. **All eight produced the identical four-line diff and touched none of the bait.** Cost and latency did not separate the levels either: the `high` arm's own two runs differed more from each other (2.4x wall clock) than the two levels differed from each other.
 
-Match effort to the same test: a statable answer shape means low effort will reach it, and will reach it more faithfully. Reserve high effort for the judgment calls that keep their full budget anyway — genuine root-cause work, concurrency, architecture.
+The reason is visible in the token counts: thinking tokens were at or near zero at *both* levels. A task this unambiguous contains no deliberation, so effort has nothing to reduce. **Effort is a lever on deliberation, and mechanical work has none.** That — not a fear of the model embellishing the artifact — is why it is safe to turn down. On this evidence it would not have embellished anything.
+
+Reserve high effort for the judgment calls that keep their full budget anyway — genuine root-cause work, concurrency, architecture — and set it low elsewhere for the bill and the rate limit, not to protect the output.
+
+**A tight output contract does more than the effort dial.** In the same fixture, adding "change nothing else" and "reply with exactly the word DONE" flattened every difference between the levels to nothing. Where you are worried about a model doing more than you asked, write the contract rather than reaching for the dial.
 
 Where a harness sets effort per agent definition rather than per dispatch, set it there — an agent whose whole job is mechanical retrieval should not be defined at high effort.
 
