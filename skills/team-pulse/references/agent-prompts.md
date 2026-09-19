@@ -1,38 +1,52 @@
 # Sub-Agent Prompt Templates
 
-Use these templates when dispatching sub-agents. The orchestrator resolves the date range and dispatches **one agent per day per source**. Replace `{VARIABLES}` with resolved values from Step 1.
+Use these templates when dispatching sub-agents. The orchestrator resolves the date range and dispatches **one agent per source, covering the whole range**. Replace `{VARIABLES}` with resolved values from Step 1.
 
-## Per-Day Dispatch Pattern
+## Dispatch Pattern
 
-For an 8-day window with 3 required sources, the orchestrator dispatches 24 agents in a single message:
+Three required sources means **three agents**, launched in a single message:
 
 ```
-Day 1: Agent A (Jira, Jun 2) + Agent B (GitHub, Jun 2) + Agent C (Meetings, Jun 2)
-Day 2: Agent A (Jira, Jun 3) + Agent B (GitHub, Jun 3) + Agent C (Meetings, Jun 3)
-...
-Day 8: Agent A (Jira, Jun 9) + Agent B (GitHub, Jun 9) + Agent C (Meetings, Jun 9)
-+ Optional: Agent D (Datadog, full range) + Agent E (Reviews, full range)
+Agent A (Tracker,  {START_DATE} .. {END_DATE})
+Agent B (GitHub,   {START_DATE} .. {END_DATE})
+Agent C (Meetings, {START_DATE} .. {END_DATE})
++ Optional: Agent D (Metrics) + Agent E (Reviews)
 ```
 
-Each agent receives a **single date** (`{DATE}`) and the **next date** (`{NEXT_DATE}`) to bound its query. The orchestrator computes these — agents never calculate dates themselves.
+Each agent receives the **full range** — `{START_DATE}` and `{END_DATE}`. The orchestrator
+computes these; agents never calculate dates themselves.
+
+**Give every agent a `tools:` grant if your harness supports it.** `tools:` is a field in an
+agent *definition file*, not something you can pass on a dispatch — so this requires defining
+agent types for these sources and naming them as `subagent_type`. This skill ships none, so by
+default each agent inherits the session's whole tool surface and pays the unrestricted
+~57,000-token floor. A sub-agent also does not necessarily inherit the parent's MCP servers, so
+any definition you write must grant them explicitly.
+
+**Do not split a source by day.** The digest volume is the same either way, but every extra agent
+pays the floor again — 24 agents cost roughly 1,365,000 tokens of floor against ~171,000 for 3
+with inherited grants. Batching multiplies each agent's raw *input* by the window length, so it
+is safe only where the query can cap the response, as every template below does. If one source
+cannot be capped, split it in halves — never into days — and write numbered digests
+(`.updates/<source>-1.md`, `-2.md`) so the halves do not overwrite each other.
 
 ## Context Efficiency Contract (applies to ALL agents)
 
 Every sub-agent MUST follow these rules to keep context usage minimal:
 
-1. **Single-day scope** — each agent queries exactly one day. The date is passed by the orchestrator.
+1. **Whole-range scope** — each agent queries its own source across `{START_DATE}`..`{END_DATE}`, passed by the orchestrator. **Both bounds are INCLUSIVE** — `{END_DATE}` is the last day of the window and must appear in your results. An exclusive upper bound drops the most recent day, which is the one that matters most.
 2. **Scoped queries only** — filter by date, author, project at the API/CLI level. Never fetch everything and filter in-context.
 3. **Summarize incrementally** — process one PR, ticket, or meeting at a time. Never load all results into context simultaneously.
-4. **Write digest to disk** — write your compressed findings to `.updates/<source>-<date>.md` using the Write tool.
-5. **Word limit scales with team size** — `50 words per person` in scope. The orchestrator passes `{WORD_LIMIT}` in your prompt. Stay within it.
+4. **Write digest to disk** — write your compressed findings to `.updates/<source>.md` using the Write tool.
+5. **Word limit scales with team size and window** — the orchestrator computes `50 x people x days` and passes it as `{WORD_LIMIT}`. It already accounts for the full range you are covering. Stay within it; do not scale it down yourself.
 6. **No raw data** — never include raw JSON, full API responses, or unprocessed tool output in the digest.
 7. **Return a 1-line summary** — after writing the file, return only a brief confirmation (e.g., "Wrote .updates/jira-2026-06-03.md — 3 tickets moved, 1 blocker").
-8. **Empty days are fine** — if no activity found, write "No activity." to the file and return. Don't waste context searching harder.
+8. **Empty ranges are fine** — if no activity found, write "No activity." to the file and return. Don't waste context searching harder.
 
-## Agent A: Jira Activity (per day)
+## Agent A: Tracker Activity (whole range)
 
 ```
-Search Jira for {SCOPE_DESCRIPTION} on {DATE} using Atlassian MCP tools.
+Search the tracker for {SCOPE_DESCRIPTION} between {START_DATE} and {END_DATE} using the tracker MCP tools.
 
 Cloud ID: {CLOUD_ID}   # from references/team.md
 
@@ -40,67 +54,67 @@ Run this JQL:
 {JQL_QUERY}
 Fields: summary, status, issuetype, assignee, priority, updated, labels
 
-CONTEXT EFFICIENCY: This agent covers ONE DAY only ({DATE}). Process results incrementally —
-summarize each ticket as you encounter it. If no results, write "No activity." and return.
+CONTEXT EFFICIENCY: Process results incrementally across the range —
+summarize each ticket as you encounter it, then discard it. If no results, write "No activity." and return.
 
-Write your digest to `.updates/jira-{DATE}.md` using the Write tool. Format:
+Write your digest to `.updates/jira.md` using the Write tool. Format:
 - Group by person: what they completed, what's in progress, what's stuck
 - Flag: issues In Progress >5 days, unassigned work, blocked items
 - Max {WORD_LIMIT} words
 
-After writing the file, return only: "Wrote .updates/jira-{DATE}.md — {brief 1-line summary}"
+After writing the file, return only: "Wrote .updates/jira.md — {brief 1-line summary}"
 ```
 
-### JQL Templates (single day)
+### JQL Templates (whole range)
 
-**Full team, single day:**
+**Full team, whole range:**
 ```
-project = DL AND updated >= "{DATE}" AND updated < "{NEXT_DATE}" ORDER BY updated DESC
-```
-
-**Single person, single day:**
-```
-project = DL AND assignee = "{JIRA_ACCOUNT_ID}" AND updated >= "{DATE}" AND updated < "{NEXT_DATE}" ORDER BY updated DESC
+project = {PROJECT_KEY} AND updated >= "{START_DATE}" AND updated <= "{END_DATE} 23:59" ORDER BY updated DESC
 ```
 
-**Single epic/initiative, single day:**
+**Single person, whole range:**
 ```
-project = DL AND (parent = {EPIC_KEY} OR key = {EPIC_KEY}) AND updated >= "{DATE}" AND updated < "{NEXT_DATE}" ORDER BY updated DESC
+project = {PROJECT_KEY} AND assignee = "{JIRA_ACCOUNT_ID}" AND updated >= "{START_DATE}" AND updated <= "{END_DATE} 23:59" ORDER BY updated DESC
 ```
 
-**Topic search, single day:**
+**Single epic/initiative, whole range:**
 ```
-project = DL AND (summary ~ "{TOPIC}" OR labels in ("{TOPIC}")) AND updated >= "{DATE}" AND updated < "{NEXT_DATE}" ORDER BY updated DESC
+project = {PROJECT_KEY} AND (parent = {EPIC_KEY} OR key = {EPIC_KEY}) AND updated >= "{START_DATE}" AND updated <= "{END_DATE} 23:59" ORDER BY updated DESC
+```
+
+**Topic search, whole range:**
+```
+project = {PROJECT_KEY} AND (summary ~ "{TOPIC}" OR labels in ("{TOPIC}")) AND updated >= "{START_DATE}" AND updated <= "{END_DATE} 23:59" ORDER BY updated DESC
 ```
 
 ---
 
-## Agent B: GitHub PRs (per day)
+## Agent B: GitHub PRs (whole range)
 
 ```
-Search GitHub for PR activity by {SCOPE_DESCRIPTION} on {DATE} (from {DATE} to {NEXT_DATE}).
+Search GitHub for PR activity by {SCOPE_DESCRIPTION} from {START_DATE} to {END_DATE}.
 
 Team GitHub handles: {HANDLES_LIST}
 Repos: {ORG}/{REPO} for each repo listed in references/team.md
 
-CONTEXT EFFICIENCY: This agent covers ONE DAY only ({DATE}). Use --limit and --search filters
+CONTEXT EFFICIENCY: Process results incrementally across the range. Use --limit and --search filters
 to scope at the source. Process each repo independently — summarize before moving to the next.
 
 For each repo, run:
 gh pr list --repo {ORG}/{REPO} --state all {AUTHOR_FLAG} --limit 20 \
   --json number,title,author,state,createdAt,mergedAt,reviewDecision,additions,deletions,headRefName \
-  --search "created:{DATE}..{NEXT_DATE} OR merged:{DATE}..{NEXT_DATE}" | cat
+  --search "created:{START_DATE}..{END_DATE} OR merged:{START_DATE}..{END_DATE}" | cat
 
 Summarize this repo's results immediately, then move to the next repo.
 If no results across all repos, write "No activity." and return.
 
-Write your digest to `.updates/github-{DATE}.md` using the Write tool. Format:
+Write your digest to `.updates/github.md` using the Write tool. Format:
 - PRs merged (with +/- lines)
 - PRs opened or updated
-- Stale PRs touched this day (>3 days without review) — flag explicitly
+- Stale PRs in the range (>3 days without review) — flag explicitly
 - Max {WORD_LIMIT} words
 
-After writing the file, return only: "Wrote .updates/github-{DATE}.md — {brief 1-line summary}"
+After writing the file, return only: "Wrote .updates/github.md — {brief 1-line summary}"
 ```
 
 ### Author flag
@@ -110,70 +124,75 @@ After writing the file, return only: "Wrote .updates/github-{DATE}.md — {brief
 
 ---
 
-## Agent C: Krisp Meetings (per day)
+## Agent C: Meetings (whole range)
 
 ```
-Search Krisp for meetings on {DATE} involving {PERSON_OR_TEAM}.
+Search the meeting source for meetings between {START_DATE} and {END_DATE} involving {PERSON_OR_TEAM}.
 
-CONTEXT EFFICIENCY: This agent covers ONE DAY only ({DATE}). Process one meeting at a time.
-Use search_meetings (structured data) first — you likely don't need full transcripts for a
-single day's meetings. If no meetings found, write "No meetings." and return.
+CONTEXT EFFICIENCY: Process one meeting at a time, summarising as you go — never load them
+all at once. Use search_meetings (structured data) first; you rarely need full transcripts.
+If no meetings found, write "No meetings." and return.
 
 1. Search meetings:
    Use mcp__krisp__search_meetings with:
    - search: "{SEARCH_TERM}"
-   - after: "{DATE}"
-   - before: "{NEXT_DATE}"
-   - limit: 10
+   - after: "{START_DATE}"
+   - before: "{END_DATE}"
+   - limit: {WINDOW_MEETING_LIMIT}   # orchestrator passes 10 x days in window; default 80
    - fields: ["name", "date", "attendees", "speakers", "key_points", "action_items", "detailed_summary"]
 
    Summarize each meeting's findings as you process it. Move on.
+
+   **If the number of results equals the limit, the window is truncated** — say so explicitly in
+   the digest so the orchestrator knows the report covers only part of the range.
 
 2. Full transcripts — ONLY if a meeting needs deeper context:
    Use mcp__krisp__get_multiple_documents with the specific meeting ID.
    Process, extract, summarize, discard.
 
-Write your digest to `.updates/meetings-{DATE}.md` using the Write tool. Extract:
+Write your digest to `.updates/meetings.md` using the Write tool. Extract:
 - What was discussed and committed to
 - Action items with owners
 - Blockers or concerns raised
 - Max {WORD_LIMIT} words
 
-After writing the file, return only: "Wrote .updates/meetings-{DATE}.md — {brief 1-line summary}"
+After writing the file, return only: "Wrote .updates/meetings.md — {brief 1-line summary}"
 ```
 
 ### Search terms
 
-- **Single person:** use their first name (e.g., "Leandro", "Jorge")
+- **Single person:** use their first name
 - **Full team:** run one search per person, or search for the team lead name and look at attendee lists
-- **Topic:** search for the topic name (e.g., "Flywheel", "CAP", "VulnCheck")
+- **Topic:** search for the topic or project name
 
-### Important: Krisp is scoped to Gerald's account
+### Important: the meeting source is scoped to one account
 
-Krisp returns meetings Gerald attended or that were shared with him. It won't show meetings between other team members that Gerald wasn't part of. Note this limitation in findings if relevant.
+It returns only meetings the account holder attended or that were shared with them — not
+meetings between other team members. Note this limitation in the findings when it matters.
 
 ---
 
-## Agent D: Datadog (Optional — full range, NOT per-day)
+## Agent D: Metrics (Optional)
 
 ```
-Search Datadog for recent deploy and incident activity related to {SCOPE}.
+Search the metrics source for recent deploy and incident activity related to {SCOPE}.
 
 Use mcp__datadog__search_datadog_events with:
 - query: "source:deploy OR source:incident {SERVICE_FILTER}"
-- from: "now-{DAYS}d"
+- from: "{START_DATE}"
+- to: "{END_DATE}"
 
-Write your digest to `.updates/datadog.md` using the Write tool. Format:
-- Deploys by DL team members (count, services affected)
+Write your digest to `.updates/metrics.md` using the Write tool. Format:
+- Deploys by team members (count, services affected)
 - Any incidents or alerts triggered
 - Max 200 words
 
-After writing the file, return only: "Wrote .updates/datadog.md — {brief 1-line summary}"
+After writing the file, return only: "Wrote .updates/metrics.md — {brief 1-line summary}"
 ```
 
 ---
 
-## Agent E: GitHub Reviews Given (Optional — full range, NOT per-day)
+## Agent E: GitHub Reviews Given (Optional)
 
 ```
 Search GitHub for PRs reviewed by {HANDLE} across the configured repos since {START_DATE}.
@@ -184,7 +203,7 @@ gh search prs --reviewed-by {HANDLE} --owner {ORG} --updated ">={START_DATE}" \
 Write your digest to `.updates/reviews.md` using the Write tool. Format:
 - How many PRs reviewed
 - Whose PRs they reviewed (pattern: reviewing one person vs. spread across team)
-- Any review given on non-DL repos
+- Any review given on repos outside the configured list
 - Max 200 words
 
 After writing the file, return only: "Wrote .updates/reviews.md — {brief 1-line summary}"

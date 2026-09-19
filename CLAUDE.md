@@ -17,10 +17,11 @@
 **Work down this ladder and stop at the first step that answers it.** Most work stops at 1 or 2.
 
 1. **Can a pipe or ranged read get it?** `| tail`, `grep -c`, `sed -n 'A,Bp'`, a ranged read. ~200 tokens. Capture the exit code *before* piping — `cmd | tail` exits 0 even when `cmd` failed. **For a count, use a counting primitive** (`grep -c`, a search tool in count mode) — a tool that returns matches is not a tool that returns a count, and a model reading a wall of matches estimates it badly. Measured against a true 331: every run that counted got 331; four runs that eyeballed the match list answered 349, 338, 247 and 139. If yes, do this and stop.
-2. **Is it on the never-delegate list below?** If yes, inline, full stop.
-3. **Does the leftover bulk exceed your dispatch floor?** A sub-agent costs ~57k tokens before doing anything, or ~31k if its `tools:` grant is restricted. Below that you spend more than you reclaim — inline.
-4. **Can you check the answer without re-reading the bulk?** If not, isolating saved nothing.
-5. **Only now dispatch** — one agent with a multi-part prompt, at the smallest role whose answer shape you can state in advance. Fan out only for genuine independence plus a real latency need.
+2. **Is it a tool result you cannot pipe?** An MCP call's whole response lands in context and you cannot read its first 50 lines first. Filter at the *query* instead — name the fields, cap the count, bound the dates — and prefer a CLI (`gh --json ... --jq`) over an MCP server for anything bulky, because a CLI keeps the pipe. Where the size genuinely cannot be bounded, isolating is buying insurance against an irreversible surprise, not a measured saving; say which one you mean.
+3. **Is it on the never-delegate list below?** If yes, inline, full stop.
+4. **Does the leftover bulk exceed your dispatch floor?** A sub-agent costs ~57k tokens before doing anything, or ~31k if its `tools:` grant is restricted. Below that you spend more than you reclaim — inline.
+5. **Can you check the answer without re-reading the bulk?** If not, isolating saved nothing.
+6. **Only now dispatch** — one agent with a multi-part prompt, at the smallest role whose answer shape you can state in advance. Fan out only for genuine independence plus a real latency need.
 
 **Never delegate:** work whose input is the conversation itself (synthesis, decisions) · anything written in the user's voice (issues, PR bodies, docs, messages) · the gate run behind a completion claim — a sub-agent reporting "tests pass" is a claim, not evidence, so re-run it yourself before claiming · work where trusting the answer means reading the same bulk anyway.
 

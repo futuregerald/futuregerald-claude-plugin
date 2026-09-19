@@ -27,12 +27,16 @@ answers the question — almost everything stops at 1 or 2.
 
 1. **Can a pipe or a ranged read get it?** `| tail`, `grep -c`, `sed -n 'A,Bp'`, `Read` with
    an offset. Costs ~200 tokens. If yes, do that and stop. This resolves most cases.
-2. **Is it on the never-delegate list?** Conversation-input work, the user's voice, the gate
+2. **Is it a tool result you cannot pipe?** An MCP call has no shell to filter through — the
+   response arrives whole. Filter at the *query* instead, and prefer a CLI where one exists.
+   See "Tool results you cannot pipe" below.
+3. **Is it on the never-delegate list?** Conversation-input work, the user's voice, the gate
    behind a completion claim, anything carrying secrets. If yes, inline, full stop.
-3. **Does the residue exceed your dispatch floor?** ~64k unrestricted, ~31k restricted. If
-   not, inline — you would spend more than you reclaim.
-4. **Can you check the answer without re-reading the bulk?** If not, isolating saved nothing.
-5. **Only now dispatch** — one agent with a multi-part prompt, at the smallest role whose
+4. **Does the residue exceed your dispatch floor?** ~64k unrestricted, ~31k restricted. If
+   not, inline — you would spend more than you reclaim. The one exception is step 2: a
+   response you cannot bound in advance is worth isolating below the floor, as insurance.
+5. **Can you check the answer without re-reading the bulk?** If not, isolating saved nothing.
+6. **Only now dispatch** — one agent with a multi-part prompt, at the smallest role whose
    answer shape you can state in advance. Fan out only for genuine independence plus a real
    latency need.
 
@@ -75,7 +79,7 @@ Resuming a finished sub-agent replays its transcript — there is no way to make
 | Fresh agent | 64,211 | 15.4s |
 | Resumed agent carrying ~98k of prior context | 101,679 (**+58%**) | 20.4s (+32%) |
 
-**Batching beats both, and by a lot.** Measured: nine questions answered by **one** agent cost **76,993 tokens**, against **165,052** for the same nine split across two agents — a **53% saving**. The batched run was also cheaper than a single agent answering only six of them (100,841), because it paid one floor instead of two.
+**Batching beats both, and by a lot.** Measured: nine questions answered by **one** agent cost **76,993 tokens**, against **165,052** for the same nine split across two agents — a **53% saving**. The batched run also cost less than a single agent answering only six of the nine (100,841) — more questions for fewer tokens, because the floor is paid per agent and the extra questions were nearly free once it was paid.
 
 A rough cost model over nine runs, useful for intuition and nothing more:
 
@@ -143,11 +147,54 @@ everything passed, 0 when it did not. Filtering naively turns a red suite green.
 capture the status first as above, or `set -o pipefail`. This matters most for exactly the
 commands worth filtering.
 
+### Tool results you cannot pipe
+
+**Step 1 of the ladder assumes a shell.** `| tail`, `grep -c` and `sed -n` work on a command's
+output. They do not exist for an MCP tool call — a tracker search, a metrics query, a
+meeting-notes lookup. **The whole response lands in your context, and unlike a file you cannot
+read the first 50 lines and decide.** You find out how big it was after you are holding it.
+
+**Check whether your harness caps MCP output before relying on that.** Some cap tool results and
+truncate rather than dumping, and some servers paginate — if a cap exists and sits *below* your
+restricted dispatch floor, the surprise is already bounded at less than a dispatch costs, and
+absorbing it inline is the cheaper move. This was not measured here; check your own setting.
+
+Three consequences, in the order you should apply them:
+
+**1. Filter at the query, which is the only filter you get.** This is step 1's equivalent and it
+is where almost all the saving is:
+
+| Instead of | Do |
+|---|---|
+| a broad issue search, then reading it | name the fields you need, cap the result count, bound the dates |
+| "fetch everything, filter in context" | push every predicate into the query — project, assignee, date, label |
+| paging through results to count them | ask the API for the count if it offers one |
+
+**2. Prefer a CLI over an MCP server for anything bulky.** `gh --json ... --jq` is a shell
+command, so it keeps the whole ladder available — pipes, counts, ranged reads. An equivalent
+MCP tool does not. Where both exist for the same data, prefer the CLI — not
+because it is measured faster, but because filtering happens before the result reaches your
+context at all, which is the difference between step 1 applying and not applying.
+
+**3. Unknown response size is itself a reason to isolate — below the floor.** Everywhere else
+this document tells you to isolate only above the dispatch floor, because you can predict the
+bulk. Here you cannot, and the mistake is irreversible: a query that returns far more than
+expected has already spent your context by the time you know. So for a query whose size you
+genuinely cannot bound, a sub-agent is buying **insurance**, not compression — the agent eats
+the surprise and returns a digest. Say so when you make that call, rather than implying a
+measured saving.
+
+**The per-dispatch floor still governs the fan-out.** Isolating bulk queries does not license one
+agent per slice. One agent per *source*, covering the whole range, not one per source per day —
+the digest volume is identical either way, and each extra agent pays another floor. A
+three-source sweep split across eight days is 24 floors, roughly 1,365,000 tokens, to move the
+same digest 3 restricted agents move for about 74,000.
+
 **Filtering is a correctness control, not only a cost one.** Measured against a count of **331** confirmed five independent ways: every arm that reached for a counting primitive (`grep -c`, or a search tool in count mode) returned 331 — eight times out of eight, first try. Four runs on another vendor's CLI, which reached for a match-*listing* search tool instead and counted the hits by eye, answered 349, 338, 247 and 139. **A tool that returns matches is not a tool that returns a count**, and a model reading a wall of matches will estimate it — badly, and differently every time. The pipe is not just cheaper than reading the bulk; on a counting question it is the difference between right and wrong.
 
 **A pipe beats a dispatch by two to three orders of magnitude.** In the measured A/B, the arm told to delegate the test run saved only 3.7% of context versus the arm that simply piped it, while spending 56% more tokens — because the inline arms had already filtered at the shell and there was nothing left to save.
 
-- **Isolate** only when the bulk must be **understood rather than sliced** — a model has to read it and judge, and no pipe can extract the answer — **and** it exceeds your dispatch floor above. A debugging loop qualifies: the answer depends on reading failures and forming a hypothesis. A test result count does not: `tail` gets it.
+- **Isolate** only when the bulk must be **understood rather than sliced** — a model has to read it and judge, and no pipe can extract the answer — **and** it exceeds your dispatch floor above. The single exception is a tool response whose size you cannot bound in advance, above. A debugging loop qualifies: the answer depends on reading failures and forming a hypothesis. A test result count does not: `tail` gets it.
 - **Inline** everything else.
 
 **The floor is charged per dispatch, so consolidate.** Five sub-agents pay it five times; one sub-agent answering five questions pays it once. When several questions clear the threshold, send **one** agent with a multi-part prompt unless they genuinely must run in parallel for latency. In the measured A/B above, five dispatches cost ~4x the inline baseline; one dispatch cost ~1.6x and reclaimed nothing measurable.
