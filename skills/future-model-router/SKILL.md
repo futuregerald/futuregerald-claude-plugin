@@ -50,10 +50,63 @@ the gate disagree, the gate wins.
 **Two questions, answered from what you already know, with zero tool calls.** If you have to investigate to decide whether to delegate, the investigation *is* the work — do it inline and stop routing.
 
 - **One pass, no deliberation.** Routing at high effort is the over-thinking failure this document warns about, applied to itself. If the answer is not obvious in one pass, it is a tie.
-- **Ties go inline.** The costs are asymmetric: guessing wrong toward inline wastes some context, while guessing wrong toward delegation costs a full dispatch round trip *plus* the verification of whatever comes back.
+- **Ties go inline — but check you are pricing the whole thing first.** A tie means the tokens are close, and on tokens alone inline wins, because a wasted dispatch costs a full round trip plus verifying what comes back. What can break the tie is *not* a token count: where the deliverable is a judgment someone will act on rather than a fact you will check, see *What being wrong costs* below before settling it.
 - **Decide once per task, not per step.** Re-routing at every sub-step is where the tax compounds. Route when the task arrives; revisit only if its shape changes materially.
 
 A routing decision that takes longer than the work it was routing has cost more than it saved, and nothing in the system will tell you that happened.
+
+## What being wrong costs
+
+**Every threshold in this document prices tokens. Tokens are not the only cost, and often not
+the largest.** A wrong answer that reaches a plan, a diff or a report is paid for in another
+prompt to notice it, another to fix it, another review round, and the user's attention — which
+no token count contains.
+
+**The one number here that is measured:** a dispatch costs ~57,000 tokens (~31,000 restricted),
+and one adversarial review pass over a change this size cost **98,745 tokens** and found 2
+CRITICAL and 12 IMPORTANT defects. **So a single detection pass cost more than a dispatch** —
+and detection is the cheapest stage; fixing, re-verifying and re-reading follow.
+
+**Rounds are the expensive unit, and they probably compound.** Re-entering work already held in
+a context cost **101,679 tokens against 64,211 fresh for the same work, +58%**, because the
+transcript is replayed before anything new happens. That was measured on *resuming a sub-agent*,
+not on multi-round rework in a main session, so read it as the mechanism rather than the
+coefficient — the replay is real, the exact multiplier for your case is not established. It is
+the same reason the escalation rule below says *escalate once, never retry at the same tier*.
+
+**What follows, and what does not.**
+
+The break-even is arithmetic you can do: at a ~57,000-token floor against a ~98,745-token
+detection pass, a dispatch pays for itself if it prevents rather more than one defect in two, on
+the first round alone. **What this document cannot give you is the other half of that sum — no
+measurement here establishes that dispatching lowers the defect rate.** The evidence runs both
+ways and is thin either side:
+
+- **For:** a fresh reviewer found 14 defects the context that wrote them had missed. That is a
+  real result, but it is about *review objectivity*, which was never in dispute and is already a
+  standing rule.
+- **Against:** on eight deliberately confusable lookups, one batched agent matched eight split
+  agents exactly — 8/8 twice, zero cross-attribution. **For retrieval, splitting bought no
+  correctness at 4.5x the cost.**
+
+**So: do not read this section as "dispatch more".** Read it as *the token thresholds elsewhere
+are a floor on the decision, not the whole of it* — they are correct where the deliverable is
+checkable and `P(wrong)` is consequently low, and they are incomplete where the deliverable is a
+judgment someone will act on. Where you believe a split lowers the defect rate, say why, because
+this document has not shown that it does.
+
+### Splitting decisions apart — reasoned, not measured
+
+One case is worth naming because the floor argues hard against it and the floor is not the whole
+cost: **two judgments made in the same context can anchor each other.** A framing chosen for the
+first carries into the second, consistency pressure smooths over a genuine difference between
+them, and the second answer is shaped partly by the first rather than only by its own evidence.
+Nothing in the output reveals it — both answers look considered.
+
+**This is reasoning by analogy to the review rule, and it is untested here.** The batching result
+above shows no such effect for *lookups*, and does not extend to judgments either way. Treat it
+as a reason to split two consequential, potentially-interfering decisions and to accept the
+second floor — not as a measured finding, and not as licence to fan out by default.
 
 ## What isolating actually buys
 
@@ -138,7 +191,7 @@ Cost is **linear** in tool calls, not quadratic, because prompt caching holds �
 
 **Reuse an agent only when the second task genuinely needs the first task's findings.** Not to save money — it will not. A finished agent's context already *includes* the ~57,000-token floor, so it is never below it, and resuming always replays more than a fresh agent would pay. The rule is therefore simple rather than conditional: **resume for continuity, spawn fresh for independence.** Best of all is neither — give **one** agent a multi-part prompt up front, so the floor is paid once and no transcript is replayed.
 
-**Spend it to keep a long session alive and to finish sooner, never to spend fewer tokens.** Total cost cannot come out ahead: the ~57,000-token floor is paid by the child as well, so every dispatch adds it. Where the session has context to spare and nothing is waiting on latency, inline is cheaper outright.
+**Spend it to keep a long session alive, to finish sooner, or to keep a context clean — never expecting fewer tokens.** Token cost cannot come out ahead on the task itself: the ~57,000-token floor is paid by the child as well, so every dispatch adds it. Where the session has context to spare, nothing is waiting on latency, and the answer is one you will check, inline is cheaper outright. The exception is rework, which is not part of this table — see *What being wrong costs*.
 
 ## Axis 1 — Isolate?
 
