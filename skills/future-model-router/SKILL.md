@@ -1,10 +1,20 @@
 ---
 name: future-model-router
-description: Delegation and model routing — decide whether a piece of work runs in a sub-agent, and how much reasoning budget it gets. Provider-neutral; the model map is a reference file. Covers codebase search and exploration, debugging loops, call-chain tracing, spikes, CI log triage, and bulk queries against tickets, logs or metrics. Invoke before any search, multi-file read, or investigation that will produce far more output than answer.
+description: Measurements behind delegation and model routing — whether to run work in a sub-agent, and at what reasoning budget. Load it to settle a routing question: is a cheaper model actually cheaper, does a lower effort level change the output, is it safe to batch these questions onto one agent, what does a dispatch really cost, when does filtering become a correctness control. Provider-neutral; model names live in the model map. Not a per-turn rule — the habits that fire every turn are the short delegation block in CLAUDE.md.
 tags: [delegation, model-routing, cost-optimization, search]
 ---
 
 # Delegation & Model Routing
+
+> **What this is, and how much of it to believe.** A measurement report with a rule set
+> attached. Every number below is traceable to a run in the benchmark harness, and several of the
+> rules that used to be here were **deleted because the measurements contradicted them** — that is
+> what this document is for.
+>
+> **Read it to check a routing intuition. Do not read it every turn.** The habits worth firing on
+> every turn are the short block in `CLAUDE.md`; they were cut down to that size deliberately, on
+> the evidence in *Does this document earn its place?* below.
+
 
 **Two decisions, not one.** Conflating them is the common error — "don't delegate debugging" usually means "don't *downgrade* debugging", which is a different claim.
 
@@ -364,6 +374,45 @@ The tell is whether the model has to *locate* the material or merely *process* i
 
 **Escalate once, don't retry.** A vague retriever result goes to the explorer role; a vague explorer result comes back to the orchestrator. Never re-dispatch at the same tier.
 
+## Does this document earn its place?
+
+**The control that should have run first, and did not.** Two sessions measured how agents behave
+*given* this policy before anyone checked what they do *without* it. Same six-question task, same
+model, same repo; the only variable is whether the agent is handed the policy.
+
+| Arm | Policy? | Test-suite command it chose | Own tokens | Score |
+|---|---|---|---|---|
+| control-3 | **no** | **`npm test`** — raw, 172,299 chars into context | 78,644 | **16/16** |
+| control-4 | **no** | **`npm test`** — raw | 99,399 | **16/16** |
+| policy-2 | yes | `npm test > /tmp/t.log 2>&1; rc=$?; … tail -80` | 109,434 | 15/16 |
+| policy-3 | yes | same shape | 105,073 | 16/16 |
+
+**What it buys, and it is exactly one thing.** Without the policy, **2 of 2** dumped the whole
+test log and captured no exit code. With it, **2 of 2** redirected to a file and captured `$?`
+before the tail, unprompted. That is a clean binary across four runs, and it is the only
+behavioural change this harness can demonstrate.
+
+**What it does not buy.** The no-policy arms were **cheaper and scored better** — 16/16 twice,
+both independently catching two items the original ground truth had missed. There is no quality
+argument for the policy here.
+
+**Do not quote the cost difference as a finding.** No-policy mean 89,022 against policy 107,254
+looks like a 20% penalty, but the two no-policy runs differ from *each other* by 26% on an
+identical prompt. The gap is inside the noise at n=2. The defensible statement is narrower:
+**filtering should have saved ~43,000 tokens on one call and no saving appeared**, because the
+policy text itself plus run-to-run variance absorbed it.
+
+**The conclusion that was acted on.** On a single task with context to spare, a 43,000-token dump
+is survivable, and a long inline policy costs more than the waste it prevents. So the per-turn
+block was cut to the few habits with measurements behind them, and this document became something
+you load to settle a question rather than something that runs every turn.
+
+**What would change that.** The case for more rests entirely on conditions this task cannot see:
+a long session where that dump is one of many, or output far larger than a test log. That is the
+long-session premise — **still unmeasured**, and now carrying the whole argument rather than
+serving as a nice-to-have confirmation. Anyone restoring the longer inline rule should measure it
+first.
+
 ## Never delegate
 
 1. **Work whose input is the conversation.** Synthesis, decisions, "what should we do". A sub-agent starts at zero; re-supplying the context costs more than doing the work.
@@ -372,7 +421,7 @@ The tell is whether the model has to *locate* the material or merely *process* i
 4. **Work that fails the verification carve-out above.**
 5. **Anything whose prompt would carry secrets or personal data.** A sub-agent prompt is a data transfer — see Dispatching.
 
-This list is **duplicated on purpose** into `templates/CLAUDE-BASE.md` (and therefore into every generated `CLAUDE.md`), because the rule has to fire before any skill loads and config-only installs ship no skills at all. Every copy must be edited together — changing one alone is a silent drift.
+This list is **duplicated on purpose** into `templates/CLAUDE-BASE.md` (and therefore into every generated `CLAUDE.md`), because it has to fire before any skill loads and config-only installs ship no skills at all. That inline copy is deliberately short — see *Does this document earn its place?* — and carries only the rules with measurements behind them. Edit both together; changing one alone is a silent drift.
 
 Code review and plan review already run in fresh sub-agents for a different reason — objectivity, not cost. That requirement is unaffected by anything here, and it does not survive on a harness without sub-agents: it is a control that is simply unavailable there, not a saving you forgo.
 
