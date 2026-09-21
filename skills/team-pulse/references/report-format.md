@@ -30,7 +30,7 @@
 
 ### Risks & Blockers
 
-- {Numbered list of items that need Gerald's attention}
+- {Numbered list of items that need the EM's attention}
 - {Include: stale PRs, stuck tickets, unassigned work, cross-team dependencies}
 
 ### Bottom Line
@@ -58,10 +58,10 @@ Use inline text badges:
 ## Example Snippet
 
 ```
-## Team Pulse: Delivery Domain (May 26 - Jun 3, 2026)
+## Team Pulse: Platform Team (May 26 - Jun 3, 2026)
 
-**Headline:** On track overall, but Flywheel tester compensation has no code
-pushed yet despite tickets showing "In Progress" — flag with Paul.
+**Headline:** On track overall, but the billing payout work has no code pushed
+yet despite tickets showing "In Progress" — flag with Dev Two.
 
 ### Active Work
 
@@ -79,7 +79,7 @@ pushed yet despite tickets showing "In Progress" — flag with Paul.
 
 ### People
 
-**Paul Ursache** — Needs Attention
+**Dev Two** — Needs Attention
 ABC-100 owner. ADR and A1 schema story in code review but no branches
 pushed to repo. Clarify if work is local or if status needs updating.
 
@@ -89,12 +89,12 @@ Shipped #412 (pagination fix). Picked up ABC-104 slim serializer. Active reviewe
 ### Risks & Blockers
 
 1. ABC-100 has 4 unassigned stories — need sprint planning
-2. No feature branches for compensation work — verify with Paul
-3. Flywheel effort algorithm handoff from Data team has no tracking ticket
+2. No feature branches for the payout work — verify with Dev Two
+3. Estimation-model handoff from the data team has no tracking ticket
 
 ### Bottom Line
 
-Team is productive on BAU work. Flywheel compensation is the concern —
+Team is productive on BAU work. The payout work is the concern —
 stories exist but no code is flowing. Raise in next standup. Consider
 assigning ABC-119 and ABC-120 this sprint.
 ```

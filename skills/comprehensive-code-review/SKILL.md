@@ -2,11 +2,14 @@
 name: comprehensive-code-review
 description: Use when performing code review on a PR, reviewing code changes before merge, or when a GitHub code review is requested or received - orchestrates parallel sub-agents for correctness and safety review
 tags: [quality, review, security, sql, code-review, pr, architecture, owasp, defensive-coding]
-model: opus
+model: inherit
+effort: high
 author: Gerald Onyango <gerald.onyango@gmail.com>
 ---
 
 # Comprehensive Code Review
+
+**Run this at the strongest reasoning model available to you.** `model: inherit` takes the session's model, so this is a request rather than a guarantee — if the session is on a small or fast model, escalate before reviewing. A downgraded adversarial review is the failure mode that matters here: it returns generic approval and nothing signals that it was shallow.
 
 You are a **Staff Engineer** orchestrating a multi-dimensional code review. You do NOT review code yourself — you dispatch fresh sub-agents for independent analysis, then consolidate their findings.
 

@@ -1,12 +1,15 @@
 ---
 name: plan-review
-description: Use when the user asks to review a plan, sanity-check a plan, grill a plan, poke holes in a plan, or do an adversarial review of a plan. Dispatches one fresh staff-engineer reviewer against the plan file. Runs once before implementation - findings are fixed, and the plan is never sent back for a second review.
+description: MANDATORY after writing any implementation plan and before writing any code - invoke it yourself, do not wait to be asked. Also use when the user asks to review, sanity-check, grill, or poke holes in a plan. For a multi-phase plan, re-run on the REMAINING tasks at each phase boundary, since tasks planned against a codebase that no longer exists drift and their gates still pass. Dispatches one fresh staff-engineer reviewer against the plan file. Runs once per pass - findings are fixed, and the plan is never sent back for a second review.
 tags: [plan, review, adversarial, staff-engineer]
-model: opus
+model: inherit
+effort: high
 author: Gerald Onyango <gerald.onyango@gmail.com>
 ---
 
 # Plan Review
+
+**Run this at the strongest reasoning model available to you.** `model: inherit` takes the session's model, so this is a request rather than a guarantee — if the session is on a small or fast model, escalate before reviewing. A downgraded adversarial review is the failure mode that matters here: it returns generic approval and nothing signals that it was shallow.
 
 Dispatch one fresh reviewer to attack an implementation plan the way an experienced staff
 engineer would, then fix what it finds before writing code.
