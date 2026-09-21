@@ -112,7 +112,29 @@ agent cost ≈ 56,887 + ~2,100 × (small-output tool calls)
 
 **Its limits, stated plainly.** It fits seven of nine runs within ~4%, but over-predicted the batched run by 28%, and it prices only *small-output* calls — a single call returning a 300 KB log costs far more than the constant, which is the whole premise of the isolate axis. Use it to see that a new agent costs roughly what **~27 extra small tool calls** cost, and stop there.
 
-Two things this rules out as worries. Cost is **linear** in tool calls, not quadratic, because prompt caching holds — accumulated context does not compound. And quality did not degrade at ~100,000 tokens of accumulated context: every arm scored 16/16. Set the batch ceiling by the agent's context window and by relevance, not by a cost cliff that does not exist.
+Cost is **linear** in tool calls, not quadratic, because prompt caching holds — accumulated context does not compound. So there is no cost cliff to set a batch ceiling by.
+
+### What limits a batch is not its size
+
+**The worry is that one agent holding more material will cross-contaminate it — attribute one thing's property to another.** That is the same clean-context argument that justifies isolating in the first place, pointed at batching, and it deserves a real answer rather than a cost table.
+
+**Measured, on material chosen to provoke exactly that.** Eight sibling handlers, same file, same name prefix, adjacent line numbers — ask one agent for all eight line numbers at once and a merge would be easy and invisible:
+
+| Arm | Score | Cross-attribution | Tokens |
+|---|---|---|---|
+| One agent, all 8 | **8/8**, twice | **zero**, twice | 50,587 |
+| One agent per item | correct | — | ~228,000 projected |
+
+**No contamination, and batching was 4.5x cheaper.** But the *reason* is what generalises, and it is not "batching is safe":
+
+**The batched agent used three tool calls to answer eight questions.** One grep returned all eight rows. It never held eight things and disambiguated them — it read a table. Every answer had a **unique key**, the channel string, tying it to exactly one line, so a wrong answer would mean mis-pairing two rows it was looking straight at.
+
+**So the discriminator is per-claim keying, not volume:**
+
+- **Batch freely** when the output is N lookups, each separately keyed and separately checkable. Size does not matter here.
+- **Do not batch** when the output is one narrative synthesised over homogeneous material with no key per claim — "what did each person do this week" across many people and many days of prose. Nothing structurally ties a sentence to its author or its day, so a merge leaves no trace in the output and the reader cannot spot it.
+
+**The second case is untested** — the experiment above covers the safe shape and explains why it is safe. Treat the restriction as reasoning, not measurement, and prefer splitting when the output is a synthesis and being wrong about *who* or *when* is the expensive failure.
 
 **Reuse an agent only when the second task genuinely needs the first task's findings.** Not to save money — it will not. A finished agent's context already *includes* the ~57,000-token floor, so it is never below it, and resuming always replays more than a fresh agent would pay. The rule is therefore simple rather than conditional: **resume for continuity, spawn fresh for independence.** Best of all is neither — give **one** agent a multi-part prompt up front, so the floor is paid once and no transcript is replayed.
 

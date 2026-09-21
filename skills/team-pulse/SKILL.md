@@ -169,10 +169,38 @@ See [references/agent-prompts.md](references/agent-prompts.md) for the exact pro
 | D: Metrics | Metrics MCP | event search | User asks about deploys, incidents, reliability |
 | E: GitHub Reviews | `gh` CLI | `gh search prs --reviewed-by` | Single-person deep dives |
 
-### Why one per source, and not one per day
+### One per source is the default. Per day is a supported choice.
 
-The instinct to split by day is that a single agent covering 8 days will fill its context. It
-will not, and the split is expensive.
+**The per-day split bought something real, and it was not context headroom.** It bought
+**attribution isolation.** An agent that holds only Tuesday cannot report Tuesday's work under
+Wednesday, cannot merge two people's tickets into one summary, and cannot carry a stray detail
+from an adjacent day into a sentence about this one. An agent holding eight days for seven people
+can do all three, and **nothing downstream will flag it** — the digest will be fluent,
+well-formed, and wrong in a way only the person it describes would catch.
+
+| | One per source (default) | One per source per day |
+|---|---|---|
+| Dispatch floors | 3 | 24 |
+| Tokens | ~171,000 | ~1,365,000 |
+| Wall clock | slower | faster — fan-out parallelises |
+| Raw input per agent | 8x larger | bounded at one day |
+| Attribution risk | **real, and silent** | structurally prevented |
+
+**Default to one per source.** Take the per-day fan-out when the report will be acted on
+personally — a 1:1, a performance conversation, anything where a name attached to the wrong piece
+of work is the expensive failure — or when you need the report fast.
+
+**Why this skill is the risky shape, when batching is usually safe.** Batching many *lookups*
+onto one agent is measured safe even on deliberately confusable material: eight sibling handlers
+with adjacent line numbers came back 8/8 with zero cross-attribution, twice, because every answer
+had a unique key tying it to one source line. **These digests have no such key.** The agent reads
+prose about seven people across eight days and emits a narrative; nothing structurally binds a
+sentence to its author or its date, so a merge leaves no trace. That is the difference between
+"list these eight line numbers" and "summarise what everyone did", and it is why the fan-out
+stays on the table here even though the token arithmetic dislikes it.
+
+The instinct to split by day is usually stated as context headroom. That is the wrong worry —
+misattribution is the right one.
 
 **The digest volume is identical either way.** At 50 words per person per day, a 7-person,
 8-day window produces ~2,800 words per source whether one agent writes it or eight do. What
@@ -206,16 +234,21 @@ token saving deliberately.** If you need the report in the next sixty seconds mo
 the tokens, fan out and accept the cost. Answer quality did not degrade at ~100,000 tokens of
 accumulated context, so the batched agent's larger context is not the concern.
 
-**When to split a source anyway.** The trigger is not team size or window length, which you know
-in advance — it is **any source whose response you cannot cap at the query**, and a normal week
-that simply turns out to be unusually busy. The agent's first defence is rule 3 in
-`agent-prompts.md`: summarise one item at a time and discard it, never accumulate. Where that is
-not enough, split that one source into halves or thirds, **never into days** — each split costs
-another floor.
+**When to split a source anyway.** Two different triggers, and they want different splits:
 
-**A split source must write numbered digests** — `.updates/<source>-1.md`, `.updates/<source>-2.md`
-— or the second agent silently overwrites the first and Step 3 reports on half the window from a
-file that looks complete.
+- **For capacity** — the source's response cannot be capped at the query, or a normal week turns
+  out unusually busy. The agent's first defence is rule 3 in `agent-prompts.md`: summarise one
+  item at a time and discard it, never accumulate. Where that is not enough, split into **halves
+  or thirds**. Days are the wrong unit here; each split costs another floor and capacity does not
+  need that granularity.
+- **For attribution** — the report will be acted on personally and a name against the wrong work
+  is the expensive failure. Here **days are exactly the right unit**, because the boundary you
+  want the agent unable to cross is the day. See the trade table above.
+
+Whichever the trigger, **a split source must write numbered digests** —
+`.updates/<source>-1.md`, `.updates/<source>-2.md`, or `.updates/<source>-<date>.md` for a
+per-day split. Otherwise the second agent silently overwrites the first and Step 3 reports on
+part of the window from a file that looks complete.
 
 ## Step 3: Synthesize Report
 
