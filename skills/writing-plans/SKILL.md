@@ -2,11 +2,15 @@
 name: writing-plans
 description: Use when you have a spec or requirements for a multi-step task, before touching code
 tags: [workflow]
+model: inherit
+effort: medium
 ---
 
 # Writing Plans
 
 ## Overview
+
+**Thinking budget:** Use **Medium thinking** by default to stay grounded in reading real code, lockfiles, and schemas rather than speculating. Bump to **HIGH thinking** only when architecting net-new subsystems, complex distributed state machines, or zero-downtime database migrations.
 
 Write comprehensive implementation plans assuming the engineer has zero context for our
 codebase and questionable taste. Document everything they need: which files to touch for each
