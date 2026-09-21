@@ -32,7 +32,7 @@ The orchestrator role is also whatever model is driving the session. Isolating w
 
 | Role | Anthropic | Google |
 |---|---|---|
-| retriever | Haiku 4.5 | Flash-Lite for narrow lookups you will verify — selectable per subagent, ~3x cheaper and ~9x faster, but measured naming the wrong file in 1 run of 2. Otherwise 3.7 or 3.6 at thinking `low` **[reported]** |
+| retriever | Haiku 4.5 | 3.7 or 3.6 at thinking `low`. **Not Flash-Lite — it is for processing input you hand it, not for finding things**; see its row below **[reported]** |
 | explorer | Sonnet 5 | Gemini 3.8 Flash at thinking `low` or `medium` (default) |
 | orchestrator | Opus 5 (Fable 5.1 for planning and synthesis) | Gemini 3.8 Flash, thinking `high` |
 
@@ -99,21 +99,54 @@ measured]** It is selectable for Antigravity subagents and is genuinely much che
 As a *chat* or orchestrating model it stays too weak at tool-calling and code quality — that half
 of the original guidance holds.
 
-**Use it when both hold:** the answer's shape is stated up front, **and** you will verify what
-comes back rather than forward it unread. Right size for "does this symbol exist", "list the
-exports", "which files mention X".
+**The line is processing versus finding, and it is finer than "simple work".** Flash-Lite is for
+bounded, mechanical work on material *you hand it*, where the output shape is rigid and cheap to
+check. It is not for going and looking.
 
-**Do not use it when a wrong answer propagates** — anything whose `file:line` feeds a plan, an
-edit, a ticket or a caller list. Measured, it named the wrong file in one run of two. **And never
-hand it a counting question**: tell it to run a counting primitive and report the number, never to
-count what it sees.
+**Use it for:**
+
+- **Distilling output you already captured** — pulling the failing specs, their `file:line` and
+  error messages out of a 2,000-line test log. It does not need to know *why* they failed.
+- **Deterministic reshaping** — structured data into a table, a changelog, a fixed schema.
+- **Boilerplate from an exemplar you point at** — "using this spec as the template, generate the
+  cases listed in that file".
+- **Binary checks across named files** — "is this flag true or false in each of these five".
+- **Non-technical summarising and translation**, where nothing turns on code causality.
+
+**Do not use it for:** code discovery or "where is X defined"; adversarial review, where it
+rubber-stamps with generic praise **[reported]**; writing implementation code; or root-cause
+debugging, where it fixates on the symptom. **And never hand it a counting question** — tell it to
+run a counting primitive and report the number, never to count what it sees.
+
+**Three questions before you dispatch it.** All three must be yes:
+
+1. **Can you pre-feed it the exact input?** If it has to hunt, use the bigger model.
+2. **Is the output format strictly mechanical?** Table, list, key-value, extracted lines.
+3. **Can you verify the result without re-reading the raw input?** If checking it means redoing
+   the work, isolating to a cheap model saved nothing.
+
+Question 3 is the verification carve-out from `SKILL.md`, reached independently — which is some
+evidence the carve-out is the real constraint and not a stylistic preference.
+
+**Why "no code discovery" is the firm one:** measured, its errors were both *location* errors —
+a line number off by two, and a handler placed in the wrong file entirely — while every stronger
+model was perfect on the same questions. A wrong path is the deliverable, and it propagates into
+whatever plan, edit or ticket consumes it.
 
 **What changed, and what did not. [reported + measured]** The original guidance rejected
 Flash-Lite partly on availability and partly on capability. **Availability is no longer a
-reason** — it is selectable for subagents. **Cost is not a reason either**: it is the cheaper and
-faster arm by a wide margin. What survives is capability, and only in one place — it is not an
-orchestrator, and its `file:line` accuracy is the thing to watch. Reject it for judgment work and
-for retrieval you will not check; take the saving on narrow, verified lookups.
+reason** — it is selectable for subagents — and **cost is not a reason either**, since it is the
+cheaper and faster arm. What survives is capability, sharpened: not an orchestrator, not a finder,
+fine as a processor of input you hand it.
+
+**One divergence worth recording, because it runs against the operator guidance.** That guidance
+says Flash-Lite burns 8–10 tool rounds where Flash takes 2, making it *slower* in practice. The
+runs here measured the opposite on Gemini: Flash-Lite used **26** tool calls to Flash's **38**,
+and finished roughly 9x faster. The 2.5x-more-rounds pattern *was* observed — but on the other
+platform, where the smaller model took 10 calls to the larger model's 4. So "the cheap model
+flails and costs you more" is real, and is not universal. **It is a property of the pair.**
+Flash-Lite's problem in these runs was not effort spent; it was confident wrong answers, cheaply
+and quickly.
 
 **The retriever row is the exception to "hold the model". [reported]** 3.7 and 3.6 also expose thinking levels, so **always name a level when you name one of them** — they are a different model, not a non-reasoning one. At `low` they earn their place for mechanical work: more literal, better at holding a strict output format instead of breaking out to explain themselves, and quicker to first token. For a format extraction, a regex, or a rename, that is better behaviour than 3.8 at `low` — not merely cheaper.
 
@@ -156,6 +189,44 @@ budget on a question that has nothing to think about, so the burn table is an up
 not a per-turn expectation.
 
 **Scope of the claim:** where one model is held across several budgets — the Google column — effort is the dominant multiplier. It is *not* larger than the model lever on a platform whose tiers are separate models with different unit prices; there the two are spent differently and are not comparable on one scale. When a rolling limit drains faster than expected in a long session, effort is still the first thing to check, because it moves without you choosing it.
+
+### Choosing medium vs high on Gemini Flash **[reported]**
+
+Operator guidance, not measured here. Recorded because it fills the gap the CLI could not reach
+— the thinking level is unsettable from a terminal, so this is the only account of that lever.
+
+**Stay on `medium` by default; it is the right baseline for roughly 85% of work.** Reach for
+`high` only where the question is *"what did we fail to consider?"*
+
+| Stay on `medium` | Switch to `high` |
+|---|---|
+| Executing an approved plan — TDD tasks, implementing to a spec | **Adversarial plan review** — imagining invisible failure modes: dynamic dispatch, unindexed callers, concurrency traps, contract changes existing tests still pass |
+| Mechanical refactoring — extract, rename, restructure, split | **Root-cause work on subtle bugs** — races, deadlocks, transaction-isolation quirks, state corruption surfacing three services downstream |
+| Targeted discovery — file reads, greps, graph queries, glue scripts | **Architecture, migrations, zero-downtime schema changes** — ordering constraints, locks, backward compatibility, severe rollback risk |
+| Interactive pairing, where latency is the point | **Intricate algorithmic or parser logic** — where one branch condition or off-by-one breaks everything |
+
+Time-to-first-token is reported as 2–4x faster on `medium`, which is most of why it is the
+default for conversational work.
+
+**This is the skill's own test, arrived at independently.** The rule of thumb offered — *use
+`medium` when the shape of the solution is already known; go `high` when the question is what
+you failed to consider* — is the statable-answer-shape test from `SKILL.md`, applied to the
+effort lever on a different platform. That convergence is the main reason this section is worth
+keeping: two routes to the same discriminator.
+
+**One corroboration and one divergence against what was measured here.**
+
+- **Corroborates:** the guidance states that on mechanical work a higher effort setting yields
+  the identical code diff. That is exactly what eight runs of a seeded rename found on the other
+  platform — identical four-line diff at `low` and `high`, refactor bait untouched. Two
+  platforms, two instruments, same result. This is the strongest evidence in this document that
+  **effort does not change mechanical output**, and it is why that claim was removed from
+  `SKILL.md` rather than merely softened.
+- **Diverges:** the guidance says high roughly *doubles latency* on mechanical work. The runs
+  here found no reliable latency difference — the `high` arm's own two runs differed by 2.4x,
+  more than the two levels differed from each other. Both can hold: where one model spans
+  several budgets, effort is the dominant multiplier, whereas separate model tiers spend it
+  differently. Do not carry a latency figure across platforms.
 
 ### Gemini lineup, by what it is good at
 

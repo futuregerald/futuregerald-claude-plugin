@@ -272,9 +272,18 @@ The reason is visible in the token counts: thinking tokens were at or near zero 
 
 Reserve high effort for the judgment calls that keep their full budget anyway — genuine root-cause work, concurrency, architecture — and set it low elsewhere for the bill and the rate limit, not to protect the output.
 
+**The sharpest form of the test is a question.** Stay low when the *shape of the solution is already known*; go high when the question is *"what did we fail to consider?"* Executing an approved plan, renaming, extracting, running a search — the shape is known. Red-teaming a plan, tracing a race, auditing a migration for rollback safety, writing parser logic where one branch breaks everything — it is not. Operator guidance for another provider's thinking level reached this same discriminator independently, which is weak but real evidence that the test travels across both levers.
+
 **A tight output contract does more than the effort dial.** In the same fixture, adding "change nothing else" and "reply with exactly the word DONE" flattened every difference between the levels to nothing. Where you are worried about a model doing more than you asked, write the contract rather than reaching for the dial.
 
 Where a harness sets effort per agent definition rather than per dispatch, set it there — an agent whose whole job is mechanical retrieval should not be defined at high effort.
+
+**The smallest models are for processing, not for finding.** This is the line that decides whether a cheap model helps or hurts, and it is finer than "simple work":
+
+- **Hand it bounded input and ask for a deterministic transform** — distilling a log you already captured into the failing cases, reshaping structured data into a table, generating variations from an exemplar you point at, checking a binary condition across named files. It never leaves the material you gave it.
+- **Do not send it hunting.** Code discovery, "where is X defined", tracing a call chain. Its measured failure mode is naming the wrong file or a wrong line while sounding certain — and that is exactly the deliverable, so a cheap wrong answer propagates.
+
+The tell is whether the model has to *locate* the material or merely *process* it. Same rigid output contract either way; only one is safe.
 
 **An earlier model at a low setting is a third option.** For strict-format work — mechanical transforms, format extraction, regex, anything where breaking out of the output contract to explain itself is the failure mode — an older model can beat the newest one even at its lowest setting, because the difference is behavioural rather than a matter of depth. Where a provider's older models also expose effort levels, **name the level as well as the model**: a model name alone does not specify a budget. See `references/model-map.md`.
 
