@@ -32,25 +32,28 @@ The orchestrator role is also whatever model is driving the session. Isolating w
 
 | Role | Anthropic | Google |
 |---|---|---|
-| retriever | Haiku 4.5 | Gemini 3.7 or 3.6 at thinking `low` — more literal, less prone to inventing scope **[reported]** |
+| retriever | Haiku 4.5 | Flash-Lite for narrow lookups you will verify — selectable per subagent, ~3x cheaper and ~9x faster, but measured naming the wrong file in 1 run of 2. Otherwise 3.7 or 3.6 at thinking `low` **[reported]** |
 | explorer | Sonnet 5 | Gemini 3.8 Flash at thinking `low` or `medium` (default) |
 | orchestrator | Opus 5 (Fable 5.1 for planning and synthesis) | Gemini 3.8 Flash, thinking `high` |
 
-**The two platforms lean on different levers, and that is deliberate.** On Anthropic the model changes per role. On Google the primary lever is the thinking level on one model — 3.8 Flash covers explorer and orchestrator by itself.
+**The two platforms lean on different levers, and that is deliberate.** On Anthropic the model changes per role. On Google the thinking level on one model covers explorer and orchestrator by itself — **and the model lever is available too, for subagents**, where Flash-Lite is selectable. So the retriever role there can drop a model tier rather than only a thinking level. Both platforms expose both levers; they differ in which one is the default reach.
 
 ### Measured on Gemini CLI — read the scope before the numbers
 
 Three retriever-shaped questions, same repo and same ground truth used for the Anthropic
 numbers in `SKILL.md`, run through Gemini CLI 0.58.0 read-only, n=2 per arm. **[verified]**
 
-**Scope, stated first because it limits what these numbers mean.** This is the **CLI**, not
-Antigravity, and the two arms are Flash and **Flash-Lite — which is not in Antigravity's model
-selector**. So this is *not* a measurement of the downgrade lever an Antigravity user has.
-**The lever Antigravity does expose — the thinking level on one model — could not be measured
-at all:** Gemini CLI 0.58.0 has no thinking/effort flag and `~/.gemini/settings.json` has no
-model block, so there is no way to set it from here. **The Google side of the downgrade axis
-remains unmeasured.** What the runs below do establish is the *correctness* behaviour of the
-Flash arm, which is a model Antigravity users actually run.
+**Scope, stated first because it bounds what these numbers mean.** The two arms are Flash and
+**Flash-Lite**, and **Flash-Lite is selectable for Antigravity subagents [reported]** — so this
+pair *is* a routing option there, which makes the accuracy findings below the operative ones
+rather than the cost ones.
+
+Two caveats on transferring the numbers. First, this is the **CLI's** Flash-Lite, not
+Antigravity's: different harness, different scaffolding, and a model's tool-calling behaviour is
+shaped by both. Treat the direction as transferable and the magnitudes as not. Second, **the
+thinking-level lever is still unmeasured** — Gemini CLI 0.58.0 has no thinking/effort flag and
+`~/.gemini/settings.json` has no model block, so it cannot be set from a terminal. The Google
+column therefore has one lever measured (model swap) and one not (thinking level).
 
 | Arm | Total tokens | Tool calls | API latency | Score |
 |---|---|---|---|---|
@@ -58,10 +61,23 @@ Flash arm, which is a model Antigravity users actually run.
 | `gemini-3.5-flash-lite` | ~658,000 | 26 | ~19s | 17/19 |
 
 The lighter model was **3.0x cheaper in tokens and roughly 9x faster** — the opposite direction
-from the Anthropic arms, where the lighter model cost 2.03x more and ran 1.86x slower. Taken
-together with those, this says only that **a lighter model can go either way on cost, so the
-direction is a property of the pair rather than of the rule.** It is not a recommendation to
-use Flash-Lite, which is unavailable in Antigravity anyway — see the row below.
+from the Anthropic arms, where the lighter model cost 2.03x more and ran 1.86x slower. So **a
+lighter model can go either way on cost: the direction is a property of the pair, not of the
+rule.** Measure the pair you intend to use.
+
+**Where Flash-Lite lost its points matters more than the total, and the total hides it.** Both
+arms dropped the counting question, so set that aside and look at the rest:
+
+| Run | Location answers (`file:line`) |
+|---|---|
+| flash, both runs | **perfect** |
+| flash-lite run 1 | one line number off by 2 (`1911` for `1913`) |
+| flash-lite run 2 | **handler placed in the wrong file entirely** — `main.js:1298` for `ipcHandlers.js:6957` |
+
+**Flash-Lite erred in exactly the deliverable a retriever exists to produce.** Flash erred only on
+the count. 17-versus-18 reads as a rounding difference; "names the wrong file, confidently, in one
+run out of two" does not. It also fails in the worst way for this role — a wrong path is checkable
+in seconds by anyone who looks, and silently wrong to anyone who does not.
 
 Three further things that showed up, all of them on the **Flash** arm as well, and all of which
 any Gemini routing advice has to account for:
@@ -78,14 +94,26 @@ any Gemini routing advice has to account for:
    file; both flash-lite runs made unrelated `update_topic` calls. No Anthropic arm made an
    off-task call.
 
-**Do not reach for Flash-Lite. [reported]** It is not in Antigravity's chat model selector. Antigravity uses it under the hood for its own lightweight background subagents, but as a chat model it is too weak at tool-calling and code quality to orchestrate anything. If the goal is speed or quota, 3.8 Flash at `low` is the answer, not a weaker model.
+**Flash-Lite: usable as a narrow retriever subagent, never as an orchestrator. [reported +
+measured]** It is selectable for Antigravity subagents and is genuinely much cheaper and faster.
+As a *chat* or orchestrating model it stays too weak at tool-calling and code quality — that half
+of the original guidance holds.
 
-**Do not reach for Flash-Lite — and note it is not on offer in the IDE anyway. [reported;
-accuracy half corroborated]** The measurements above support the quality argument: the
-Flash-Lite arm put a channel's handler in the wrong file entirely in one of two runs, and was
-the only arm to get a line number wrong. They say nothing in its favour as a routing choice,
-because it is not selectable in Antigravity. Reject it on accuracy; do not reject it on cost,
-which is not where it loses.
+**Use it when both hold:** the answer's shape is stated up front, **and** you will verify what
+comes back rather than forward it unread. Right size for "does this symbol exist", "list the
+exports", "which files mention X".
+
+**Do not use it when a wrong answer propagates** — anything whose `file:line` feeds a plan, an
+edit, a ticket or a caller list. Measured, it named the wrong file in one run of two. **And never
+hand it a counting question**: tell it to run a counting primitive and report the number, never to
+count what it sees.
+
+**What changed, and what did not. [reported + measured]** The original guidance rejected
+Flash-Lite partly on availability and partly on capability. **Availability is no longer a
+reason** — it is selectable for subagents. **Cost is not a reason either**: it is the cheaper and
+faster arm by a wide margin. What survives is capability, and only in one place — it is not an
+orchestrator, and its `file:line` accuracy is the thing to watch. Reject it for judgment work and
+for retrieval you will not check; take the saving on narrow, verified lookups.
 
 **The retriever row is the exception to "hold the model". [reported]** 3.7 and 3.6 also expose thinking levels, so **always name a level when you name one of them** — they are a different model, not a non-reasoning one. At `low` they earn their place for mechanical work: more literal, better at holding a strict output format instead of breaking out to explain themselves, and quicker to first token. For a format extraction, a regex, or a rename, that is better behaviour than 3.8 at `low` — not merely cheaper.
 

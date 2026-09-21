@@ -254,7 +254,11 @@ The weaker model was **2.03x more expensive in context and 1.86x slower**, at id
 
 **The statable-shape test survives this. The saving it was supposed to buy does not.** Shape still tells you whether downgrading is *safe* — quality held at 100% on both arms, which is the claim worth keeping. It does not tell you that downgrading is *cheaper*, and here it was not. Downgrade for the price per token if that is what you are optimising; do not downgrade expecting context relief or speed.
 
-**The direction is a property of the specific pair, not of the rule.** The identical three questions run on another vendor's CLI gave the opposite result for *its* lighter model — cheaper and faster, though less accurate. So a downgrade can go either way on cost, and which way is not predictable from the rule. **Measure the pair you actually intend to use.** Note what that second measurement is not: that vendor's lighter model is not offered in its IDE's model selector, so the number describes a model pair, not a routing option anyone has. The lever that platform *does* expose — a thinking level on one model — is **not reachable from its CLI at all** (no flag, no settings key), so it remains unmeasured. `references/model-map.md` has the detail.
+**The direction is a property of the specific pair, not of the rule.** The identical three questions run on another vendor's models gave the opposite result for *its* lighter model — about 3x cheaper and 9x faster. So a downgrade can go either way on cost, and which way is not predictable from the rule. **Measure the pair you actually intend to use.**
+
+**But cost was never the interesting half.** That cheaper model was also the only arm that got a *location* wrong — one run put a symbol two lines off, another named the wrong file entirely for a handler it was asked to locate. The stronger models on both platforms were perfect on every location question. Totals hide this: a 17-out-of-19 reads like rounding, while "names the wrong file in one run of two" is the thing that decides whether you can use it.
+
+**So the downgrade test needs its second half stated.** A statable answer shape tells you a downgrade is *safe to attempt*. It does not tell you the cheap model will fill the shape correctly — and a `file:line` is checkable in seconds by whoever looks, and silently wrong to whoever does not. **Downgrade where you will verify the answer; keep the budget where it will be forwarded unread.** `references/model-map.md` has the per-model detail.
 
 ### Effort is the second lever
 
