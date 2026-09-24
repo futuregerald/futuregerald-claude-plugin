@@ -279,9 +279,9 @@ func runFullInstall(reader *bufio.Reader, inst *installer.Installer, target Targ
 			return err
 		}
 		skillsDest = filepath.Join(desktopDir, "skills")
-		agentsDest = ""    // Desktop doesn't support agents
-		commandsDest = ""  // Desktop doesn't support commands
-		scope = "global"   // force global
+		agentsDest = ""   // Desktop doesn't support agents
+		commandsDest = "" // Desktop doesn't support commands
+		scope = "global"  // force global
 	}
 
 	updateConfig := false
@@ -1014,7 +1014,7 @@ func findClaudeDesktopDir() (string, error) {
 
 // desktopManifest represents the Claude Desktop skills manifest.json.
 type desktopManifest struct {
-	LastUpdated int64                `json:"lastUpdated"`
+	LastUpdated int64               `json:"lastUpdated"`
 	Skills      []desktopSkillEntry `json:"skills"`
 }
 
@@ -1552,4 +1552,3 @@ func addLocalMCPServer(name string, serverConfig map[string]interface{}) error {
 	}
 	return os.WriteFile(mcpPath, append(data, '\n'), 0600)
 }
-
