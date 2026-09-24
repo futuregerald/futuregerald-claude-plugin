@@ -138,15 +138,33 @@ check that proves the removal was repaired; the link checker only catches link r
 
 ## Verifying the skill actually loads
 
-`~/.claude/skills` may be a symlink to a *different* checkout of this repository, in
-which case invoking the skill loads that copy, not the one you just changed. To test
-a worktree's copy:
+Two checks, because they prove different things.
+
+**Discovery and frontmatter parsing**, against the real embedded tree rather than the
+installer's synthetic test fixtures:
+
+```bash
+go build -o /tmp/skill-installer . && /tmp/skill-installer list | grep huashu
+```
+
+The row must print, and its description must be the one you just vendored. This is the
+cheapest real end-to-end check available; the Go test suite does not exercise it.
+
+**Whether an agent actually loads it.** `~/.claude/skills` may be a symlink to a
+*different* checkout of this repository, in which case invoking the skill loads that
+copy, not the one you just changed — a green result that proves nothing. To point a
+session at a worktree's copy:
 
 ```bash
 mkdir -p .claude/skills
 ln -sfn ../../skills/huashu-design .claude/skills/huashu-design
-grep -qxF '.claude/' .git/info/exclude || echo '.claude/' >> .git/info/exclude
 ```
 
-Then start a session with that worktree as the working directory. Remove `.claude/`
-afterwards.
+Then start a session with that worktree as the working directory, and delete
+`.claude/` afterwards.
+
+Do **not** reach for `.git/info/exclude` to hide it: inside a worktree `.git` is a
+*file* (a gitdir pointer), so that path does not exist and the append fails with
+`Not a directory`. `git rev-parse --git-path info/exclude` resolves correctly, but it
+resolves to the **main** checkout's shared exclude file and therefore affects every
+worktree — not worth it for a directory you are about to delete. Just delete it.
