@@ -16,6 +16,17 @@
 | **Net Code Impact** | {{CODE_IMPACT_VALUE}} | {{CODE_IMPACT_CONTEXT}} |
 | **Review Bottlenecks** | {{REVIEW_BOTTLENECKS_VALUE}} | {{REVIEW_BOTTLENECKS_CONTEXT}} |
 
+<!--
+Single-person (1:1) scope: replace the rows above with this week's numbers only, each value
+linked to the query that produced it, and add below the table:
+"Epic progress below covers the whole epic, not just this week."
+| **Overall** | {Badge} | {1 sentence} |
+| **PRs this week** | [N merged](search) · [N opened](search) | {window} |
+| **Open PRs now** | [N open](search) | {oldest, stale, unreviewed, and any old drafts, each linked} |
+| **Tickets done this week** | [N done](query) | {which epics} |
+| **Reviews given this week** | [N reviews](search) | {how it compares with teammates} |
+-->
+
 ---
 
 ## 01. Executive Summary & Strategic Context
