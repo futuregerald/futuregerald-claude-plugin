@@ -52,13 +52,29 @@ Cloud ID: {CLOUD_ID}   # from references/team.md
 
 Run this JQL:
 {JQL_QUERY}
-Fields: summary, status, issuetype, assignee, priority, updated, labels
+Fields: summary, status, issuetype, assignee, priority, updated, labels, parent
+
+EPIC COMPLETION AGGREGATION:
+For each active epic with activity, also query its child issues:
+- Jira Cloud: `parent in ({ACTIVE_EPIC_KEYS})`
+- Jira Server/DC fallback: `"Epic Link" in ({ACTIVE_EPIC_KEYS})`
+Fields: summary, status, issuetype, parent, resolution
+
+PAGINATION & MATH RULES:
+- Read `total` from response metadata for the denominator. If results are capped, use `total`, never `results.length`.
+- If `Total == 0`, report `N/A (No child issues logged)`.
+- Exclude cancelled/won't do issues from both numerator and denominator (`resolution not in ('Won\'t Do', 'Declined', 'Cancelled')`).
+- Compute: `% Complete = (Done delivering issues) / (Total active scope issues) * 100`.
 
 CONTEXT EFFICIENCY: Process results incrementally across the range —
 summarize each ticket as you encounter it, then discard it. If no results, write "No activity." and return.
 
 Write your digest to `.updates/jira.md` using the Write tool. Format:
 - Group by person: what they completed, what's in progress, what's stuck
+- Active Epics Progress Breakdown:
+  - Quantitative progress: Total issues, Done count, In-Progress count, and % complete.
+  - Exactly Why It Needs Attention / At Risk: Root cause, upstream dependency, failure mode, or idle duration if not On Track. (If tracker is silent, note empirical observation: e.g. "No code pushed or ticket movement for N days").
+  - What's Left (TL;DR): Select 2–4 items strictly prioritized by: (1) In-review PRs, (2) Active assigned in-progress tasks, (3) Next unblocked milestone tickets. If >4 items remain, summarize as "- [Top 3 items] and N other open tickets".
 - Flag: issues In Progress >5 days, unassigned work, blocked items
 - Max {WORD_LIMIT} words
 

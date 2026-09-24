@@ -3,7 +3,8 @@
 **This file ships empty. Fill it in on first run — the skill will offer to.**
 
 Everything below is a template. Delete the bracketed placeholders and replace them with your
-own team. Nothing here is shared or uploaded; it stays in your local plugin checkout.
+own team. Nothing here is shared or uploaded; it stays in your local plugin checkout (or save
+to `references/team.local.md` which is git-ignored).
 
 If a section does not apply to you, delete it rather than leaving placeholders — the skill
 treats a bracketed value as "not configured" and will ask again.
