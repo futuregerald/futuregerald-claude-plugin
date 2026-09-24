@@ -293,7 +293,7 @@ If symlinked to `~/.claude/skills` (installed as personal skills), invoke them b
 |-------|-------------|
 | `agent-browser` | Browser automation with Playwright |
 | `datadog-dashboards` | Build and review Datadog dashboards that actually render the data |
-| `team-pulse` | Engineering-manager team status reports |
+| `team-pulse` | Engineering-manager team status reports (pulse) and epic/roadmap forecasts (forecast) |
 | `meeting-debrief` | Strategic meeting analysis from Krisp transcripts |
 
 ### Agents (10 dispatchable)

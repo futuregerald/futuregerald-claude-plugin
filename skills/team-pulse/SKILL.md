@@ -1,29 +1,53 @@
 ---
 name: team-pulse
-description: Generate a concise team status report for an engineering manager before calls or check-ins. Covers progress, blockers, risks, individual workloads, PRs in flight, meeting context, and project health assessments. Default scope is the team configured in references/team.md over the last 1.2 weeks. Use when the user says "team pulse", "team status", "what's my team working on", "prep me for standup", "what happened this week", "sprint update", "team report", "how is [project] going", "how is [person] doing", "prep me for 1:1", or any request for a team/project/person activity summary.
+description: Engineering-manager reports in two modes. PULSE — a scannable status report before calls or check-ins, covering progress, blockers, risks, individual workloads, PRs in flight and meeting context, for a team, project, epic or one person (1:1 prep). FORECAST — verify the true state of epics or roadmap rows against the tracker and code, then forecast remaining work against measured throughput, giving 1-engineer vs 2-engineer estimates, dependency ordering and critical chain, projected landing, and, given a window, capacity arithmetic and commit tiers ("what fits in Q4"). Use for "team pulse", "team status", "what's my team working on", "prep me for standup", "prep me for 1:1", "how is [person] doing", "how is [project] going", "sprint update", and also "forecast", "how long will this take", "estimate these epics", "does this fit in Q4", "what can we commit to this quarter", "when will X land", "sequence this work", "verify the state of this initiative".
 ---
 
 # Team Pulse
 
-Generate a scannable status report an EM can read in 2 minutes before a call.
+Two modes. **Pulse:** a scannable status report an EM can read in 2 minutes before a call. **Forecast:** a verified state-and-estimate report for epics or a roadmap, including whether a list fits in a window.
+
+## Pick the Mode First
+
+| The request | Mode | Follow |
+|---|---|---|
+| Status, activity, "what happened", standup or 1:1 prep | **Pulse** | This file |
+| "How long", "when will it land", "does it fit in <window>", "what can we commit to", estimates, sequencing, splits, "what is really the state of these epics" | **Forecast** | `references/forecast/method.md`, entirely |
+
+If it is unclear which mode, ask.
+
+**Forecast mode follows its own method.** It has its own phases (baseline, measured pace, WIP,
+clustered research, adversarial review, estimates, delivery), its own agent prompts and its own report
+format, all under `references/forecast/`. The pulse sections below (map-reduce digests, word budgets,
+the pulse report format) do not apply to it. What the two modes share: the roster and tracker
+configuration in the team config, the linking and plain-language rules, and the
+visual style. A forecast's HTML page is built on `assets/forecast.html`.
+
+A pulse can point at a forecast ("the checkout rebuild is at risk — see the forecast") but never runs
+the forecast method inline: a full forecast costs several research agents, and a pulse is meant to
+be read in two minutes.
 
 ## First Run: Configure Your Team
 
 `references/team.md` **ships empty on purpose** — this skill is published in a public repo, so
-it carries no roster.
+it carries no roster. Local team configurations live in git-ignored `references/team.local.md`.
 
-Before doing anything else, read `references/team.md`. If any value is still a bracketed
-placeholder (`[your-org]`, `[Your Name]`, …), the skill is not configured yet. Stop and offer
-to set it up:
+**The team config** is `references/team.local.md` when it exists, else `references/team.md`. Every
+other section of this file says "the team config" and means whichever of the two applies.
+
+Before doing anything else, check the team config. If neither file exists or any value is still a
+bracketed placeholder (`[your-org]`, `[Your Name]`, …), the skill is not configured yet. Stop and
+offer to set it up:
 
 > "team-pulse isn't configured yet — I need your tracker, GitHub org, repos, and roster before
 > I can build a report. Want me to set that up now? I can read most of it off your git remotes
 > and recent tickets, then show you the file to correct."
 
 If they say yes, fill it in from what you can observe — `git remote -v` for the org and repos,
-recent PR authors and ticket assignees for a first-draft roster — then **show the file and ask
-them to correct it.** Never guess a person's role, and never invent a teammate. A wrong roster
-produces a confidently wrong status report about real people.
+recent PR authors and ticket assignees for a first-draft roster — then save to `references/team.local.md`
+and **show the file and ask them to correct it.** Never guess a person's role, and never invent a
+teammate. A wrong roster produces a confidently wrong status report about real people. Never write
+a real roster into the tracked `references/team.md`.
 
 If they say no, or ask you to continue anyway, run against whatever scope they name in the
 request and say plainly in the report that the roster was not configured.
@@ -34,13 +58,16 @@ Once configured, skip this section entirely.
 
 | Setting | Default | Override |
 |---------|---------|----------|
-| Team scope | The team in `references/team.md` | User specifies team, project, epic, or person |
+| Team scope | The team in the team config | User specifies team, project, epic, or person |
 | Time window | 1.2 weeks (~8 days) | User specifies "last week", "last 2 weeks", "since Monday", etc. |
 | Depth | Summary | User asks for "detailed" or "deep dive" |
 
 ## Architecture: Map-Reduce with Disk Intermediates
 
-**The orchestrator (you) NEVER queries data sources directly.** All data gathering is delegated to sub-agents. The orchestrator stays lean — it resolves scope, dispatches agents, reads small digest files, and synthesizes.
+**The orchestrator (you) NEVER queries data sources directly — except Step 2b.** Step 2b runs
+`pr_scan.py`, a deterministic script, not a query into context; every other data gathering step is
+delegated to sub-agents. The orchestrator stays lean — it resolves scope, dispatches agents, reads
+small digest files, and synthesizes.
 
 ### Why This Architecture
 
@@ -49,10 +76,11 @@ Many small agent contexts beat one mega-prompt. Each sub-agent keeps its own con
 - Summarizing incrementally (one item at a time, not all at once)
 - Writing a compressed digest to disk (not returning raw data via tool results)
 
-This keeps the orchestrator small. **On a local model, read the batching argument below with
-care:** its saving is measured in tokens, which are free locally, while the binding constraint
-there is the context window — and batching makes each agent's window 8x larger. On a local
-model, split sources aggressively or keep the window short.
+This keeps the orchestrator small. **On a local model, read the batching argument in
+[references/batching-rationale.md](references/batching-rationale.md) with care:** its saving is
+measured in tokens, which are free locally, while the binding constraint there is the context
+window — and batching makes each agent's window 8x larger. On a local model, split sources
+aggressively or keep the window short.
 
 ### Flow
 
@@ -99,16 +127,31 @@ mkdir -p .updates
 
 This directory is ephemeral — cleaned up after the report is delivered.
 
+**Two files persist across runs**, in the reports directory (Step 4), never in `.updates/`:
+
+- `.doc-cache.json`: one entry per document, keyed by doc id plus its last-modified time, holding
+  the digest Agent G wrote. An unchanged doc is never read twice.
+- `.source-prefs.json`: which tool worked for each kind of source (wiki, docs, sheets), and which
+  failed and how. Agent G reads it first and updates it at the end.
+
+Both are local conveniences and hold no secrets; if either is missing or unreadable, start empty.
+
 ## Step 1: Resolve Scope
 
 Parse the user's request for:
-- **Team/project** — default: the team in `references/team.md`. Could be a tracker project key, epic, initiative, or person name.
+- **Team/project** — default: the team in the team config. Could be a tracker project key, epic, initiative, or person name.
 - **Time window** — default: 8 days back from today. Resolve to an absolute **start and end date** (e.g., `2026-06-02` to `2026-06-09`) and pass that range to each agent.
 - **Depth** — summary (default) or detailed.
 - **Word budget** — compute `{WORD_LIMIT} = 50 x (people in scope) x (days in window)` and pass
-  it to every required agent. Optional agents D and E take a flat 200.
+  it to every required agent. Optional agent D takes a flat 200; optional agent E takes 200 and
+  agent F takes `{WORD_LIMIT_F}` (below).
 - **Meeting result cap** — compute `{WINDOW_MEETING_LIMIT} = 10 x (days in window)` and pass it to
   Agent C, so batching does not shrink its capacity below what per-day agents had.
+- **Epic start, for Agent F** — when Agent F is dispatched, compute `{EPIC_START}`: the earliest
+  `created` date among the epics in scope. Agent F's queries describe the epic's own work, not the
+  reporting window, so they need the epic's start date, not `{START_DATE}`.
+- **Word budget for Agent F** — compute `{WORD_LIMIT_F} = 250 x (epics in scope)` and pass it
+  instead of `{WORD_LIMIT}`.
 
 **Date convention — both bounds are INCLUSIVE.** `{START_DATE}` is the first day of the window
 and `{END_DATE}` is the last, so an 8-day window ending today is `2026-06-02`..`2026-06-09`.
@@ -118,19 +161,22 @@ it desynchronises the tracker from GitHub so today's PRs appear with no matching
 — which reads exactly like the "code shipped, tickets not moved" red flag the report format
 treats as a finding.
 
-Load team roster from [references/team.md](references/team.md). If the scope falls outside the configured team, ask the user for its members and tracker project key.
+Load the team roster from the team config. If the scope falls outside the configured team, ask the user for its members and tracker project key.
 
 ## Step 2: Dispatch Sub-Agents (Parallel — One Per Source)
 
-**Default pattern: one agent per source, covering the whole window.** Three required sources
-means **three agents**. Fan out per day instead when attribution accuracy or speed matters more
-than tokens — see the trade table below; the prompts in `references/agent-prompts.md` take a
-date range, so a per-day agent is the same prompt with `{START_DATE} == {END_DATE}`. Each agent queries its own source across the full
-date range and writes a single digest.
+**Default: always one agent per source, covering the whole window — including 1:1s.** Three
+required sources means **three agents**. Fan out per day only when the user explicitly asks for
+it, and only for agents A–C: see
+[references/batching-rationale.md](references/batching-rationale.md) for the trade-off. The
+prompts in `references/agent-prompts.md` take a date range, so a per-day agent is the same prompt
+with `{START_DATE} == {END_DATE}`, and each per-day agent writes its own dated digest
+(`.updates/<source>-<YYYY-MM-DD>.md`) so the files do not overwrite each other. Otherwise, each
+agent queries its own source across the full date range and writes a single digest.
 
 Launch ALL agents in a **single message with multiple Agent tool calls**. Each agent prompt must
 include: team roster, GitHub handles, the **full date range** it covers, and exact queries scoped
-to that range.
+to that range. **The one exception is Agent G (Docs)**: it needs Agent A's doc links, so dispatch it as soon as A returns.
 
 **Restrict each agent's tool grant if your harness lets you.** `tools:` is a field in an *agent
 definition file*, not a dispatch parameter — you cannot pass it on an `Agent(...)` call. So this
@@ -148,6 +194,8 @@ C need definitions that explicitly grant theirs.
 .updates/meetings.md
 .updates/metrics.md     (if dispatched)
 .updates/reviews.md     (if dispatched)
+.updates/breakdown.md   (if Agent F dispatched)
+.updates/docs.md        (Agent G, second wave, after A)
 ```
 
 The orchestrator does NOT read the tool results for data — it reads the files in Step 3.
@@ -162,93 +210,77 @@ See [references/agent-prompts.md](references/agent-prompts.md) for the exact pro
 | B: GitHub PRs | `gh` CLI | `gh pr list`, `gh search prs` | `Bash` + `Write` |
 | C: Meetings | Meeting-notes MCP | meeting + content search | that MCP server + `Write` |
 
+If the meeting source needs re-authentication, do not authenticate from a sub-agent: write
+"Meeting source unavailable" to the digest and say so in the report.
+
 ### Optional Agents
 
 | Agent | Source | Tool | When? |
 |-------|--------|------|-------|
 | D: Metrics | Metrics MCP | event search | User asks about deploys, incidents, reliability |
-| E: GitHub Reviews | `gh` CLI | `gh search prs --reviewed-by` | Single-person deep dives |
+| E: GitHub Reviews | `gh` CLI | `gh search prs --reviewed-by` | Single-person scope (always, for 1:1s) |
+| F: Work Breakdown | Tracker MCP + `gh` CLI | epic children, PR bodies | Single-person or single-epic scope only |
+| G: Docs | Whatever wiki, doc and spreadsheet tools the session has | metadata first, then read only what changed | Every run where agent A found doc links or the team config lists standing docs; forecast mode always |
 
-### One per source is the default. Per day is a supported choice.
+**Agent G is cheap by design, and gets cheaper each run.** It never searches first. Its candidates
+are the doc links agent A found on in-scope epics plus any standing docs in the team config. It
+checks each doc's last-modified time and reads only docs changed inside the window, at most 8, on
+the cheapest model, 60 words per doc. Summaries are cached by doc id and modified time, so an
+unchanged doc costs one metadata call. Search is a fallback for epics with no linked docs, capped
+at 5 results by title and date. A run where nothing changed costs a few thousand tokens.
 
-**The per-day split bought something real, and it was not context headroom.** It bought
-**attribution isolation.** An agent that holds only Tuesday cannot report Tuesday's work under
-Wednesday, cannot merge two people's tickets into one summary, and cannot carry a stray detail
-from an adjacent day into a sentence about this one. An agent holding eight days for seven people
-can do all three, and **nothing downstream will flag it** — the digest will be fluent,
-well-formed, and wrong in a way only the person it describes would catch.
+**It picks its own tools.** Do not name a connector in the prompt. The agent uses whatever doc,
+wiki and spreadsheet tools the session exposes, and when more than one could serve the same
+source (two accounts, two connectors), it tries them and records which one returned the
+document. That choice is saved in the source preferences file (Step 0) and tried first next time.
+A source that is not connected, or needs a login, is reported as "not checked"; the agent never
+authenticates or retries.
 
-| | One per source (default) | One per source per day |
-|---|---|---|
-| Dispatch floors | 3 | 24 |
-| Tokens | ~171,000 | ~1,365,000 |
-| Wall clock | slower | faster — fan-out parallelises |
-| Raw input per agent | 8x larger | bounded at one day |
-| Attribution risk | **real, and silent** | structurally prevented |
+### Batching vs Fan-Out
 
-**Default to one per source.** Take the per-day fan-out when the report will be acted on
-personally — a 1:1, a performance conversation, anything where a name attached to the wrong piece
-of work is the expensive failure — or when you need the report fast.
+- **Default: One agent per source across the full window** (3 agents total), always — including
+  1:1s. Scoped queries cap raw input.
+- **Fan-out by day (24 agents), for agents A–C only:** Use only when the user explicitly asks for
+  it — not by default for 1:1s or performance reviews. See
+  [references/batching-rationale.md](references/batching-rationale.md) for full benchmarks and
+  trade-off analysis.
 
-**Why this skill is the risky shape, when batching is usually safe.** Batching many *lookups*
-onto one agent is measured safe even on deliberately confusable material: eight sibling handlers
-with adjacent line numbers came back 8/8 with zero cross-attribution, twice, because every answer
-had a unique key tying it to one source line. **These digests have no such key.** The agent reads
-prose about seven people across eight days and emits a narrative; nothing structurally binds a
-sentence to its author or its date, so a merge leaves no trace. That is the difference between
-"list these eight line numbers" and "summarise what everyone did", and it is why the fan-out
-stays on the table here even though the token arithmetic dislikes it.
+## Step 2b: Scan PRs Against the Tracker
 
-The instinct to split by day is usually stated as context headroom. That is the wrong worry —
-misattribution is the right one.
+Run the script directly, alongside the agents. This is the named exception to "the orchestrator
+never queries data sources directly" — `pr_scan.py` is a deterministic script, not a query into
+context, so it is mechanical and must not go to an agent:
 
-**The digest volume is identical either way.** At 50 words per person per day, a 7-person,
-8-day window produces ~2,800 words per source whether one agent writes it or eight do. What
-changes is how many times you pay the startup cost.
+```bash
+python3 <skill-dir>/scripts/pr_scan.py \
+  --org ORG --repos repo-one,repo-two \
+  --since {START_DATE} --until {END_DATE} --keys ABC,XYZ \
+  --roster handle-one,handle-two,handle-three \
+  --stale-days 3 --out .updates
+```
 
-**What batching genuinely costs, stated plainly: each agent's raw INPUT multiplies by the window
-length.** The digest is the output; the tool responses the agent reads to produce it are not, and
-eight per-day agents bounded that pull at one day each. **So batching is safe exactly where the
-source lets you cap the response at the query — a result limit, a field list, a date bound — and
-only there.** Every template in `references/agent-prompts.md` does cap its query, which is what
-makes this change safe; if you add a source that cannot, do not batch it.
+`<skill-dir>` is this skill's base directory (the directory containing this `SKILL.md`).
 
-**That cost is per agent, not per token.** A dispatch costs ~57,000 tokens before the agent does
-anything — mostly tool-definition schema — or ~31,000 with a restricted `tools:` grant. So:
+**`--roster` is not optional.** Repos are shared with other teams, so without it every count is
+repo-wide and overstates the team's output, measured at 83 repo-wide against 22 for the team in
+one real week. Pass the roster's GitHub handles from the team config and read the `*_team`
+counts (`merged_team`, `open_team`, `stale_unreviewed_team`, `no_ticket_team`), never the bare
+totals. See "Count the team, not the repo" in [report-format.md](references/report-format.md).
 
-| Shape | Agents | Floor paid |
-|---|---|---|
-| One per source per day (what this skill used to do) | 24 | ~1,365,000 |
-| One per source, grants inherited — **what you get by default** | 3 | ~171,000 |
-| One per source, with restricted agent definitions | 3 | ~74,000 (3 x the measured 24,561 null-task cost) |
+It writes `prs.json` and `prs.md`. Every PR lands in exactly one bucket: `linked_in_scope`,
+`linked_out_of_scope`, `no_ticket`, `declared_no_ticket`. `no_ticket` is the point of the step:
+work the tracker cannot see, invisible to any tracker-only report. So is a PR approved months ago
+and never merged while its ticket reads Done.
 
-Read the middle row as the actual payoff of this change: **8x**, from batching alone. The third
-row needs agent definitions this skill does not ship, and its extra saving is the grant change,
-not the batching — do not credit one with the other.
+**If the script exits with `TRUNCATED`, do not proceed.** Narrow the window and rerun. `gh pr list`
+caps results silently, and a partial scan makes the untracked section look complete while empty.
 
-**Batching is a token saving, not a latency one — and it is a latency cost.** Nine questions
-answered by one agent cost 76,993 tokens against 165,052 split across two agents. But the only
-wall-clock A/B in the router skill has a five-way fan-out finishing 19% faster than doing the
-work inline, so a wide fan-out is genuinely quicker. **This skill trades that latency for the
-token saving deliberately.** If you need the report in the next sixty seconds more than you need
-the tokens, fan out and accept the cost. Answer quality did not degrade at ~100,000 tokens of
-accumulated context, so the batched agent's larger context is not the concern.
+**If the script exits with `INCOMPLETE: <repos>`, stop the same way.** One or more repos could not
+be read. Report those repos' counts as "not measured", never as zero — a silent gap reads as a
+fact.
 
-**When to split a source anyway.** Two different triggers, and they want different splits:
-
-- **For capacity** — the source's response cannot be capped at the query, or a normal week turns
-  out unusually busy. The agent's first defence is rule 3 in `agent-prompts.md`: summarise one
-  item at a time and discard it, never accumulate. Where that is not enough, split into **halves
-  or thirds**. Days are the wrong unit here; each split costs another floor and capacity does not
-  need that granularity.
-- **For attribution** — the report will be acted on personally and a name against the wrong work
-  is the expensive failure. Here **days are exactly the right unit**, because the boundary you
-  want the agent unable to cross is the day. See the trade table above.
-
-Whichever the trigger, **a split source must write numbered digests** —
-`.updates/<source>-1.md`, `.updates/<source>-2.md`, or `.updates/<source>-<date>.md` for a
-per-day split. Otherwise the second agent silently overwrites the first and Step 3 reports on
-part of the window from a file that looks complete.
+**The window bounds merged PRs only.** Open PRs report as current state regardless of `--since`,
+because a PR open five weeks is exactly what a status report should surface.
 
 ## Step 3: Synthesize Report
 
@@ -257,33 +289,54 @@ Read ONLY the digest files from `.updates/`. List them first:
 ls .updates/
 ```
 
-You'll see files like:
-```
-jira.md    github.md    meetings.md    metrics.md    reviews.md
-```
-
-Each digest is capped at `50 x people x days` words. For a 7-person, 8-day window that is up to
-~2,800 words per source — roughly 3,500 tokens, so three sources is ~10,000 tokens of synthesis
-context. Read them all. The orchestrator's context is these digests plus the report format,
-never raw data. This total is the same whether the digests arrived from 3 agents or 24; only
-the number of dispatch floors paid differs.
-
 Follow the format in [references/report-format.md](references/report-format.md). Key rules:
 
 - **Lead with the headline.** One sentence: are we on track or not?
+- **Quantitative epic progress.** Report exact completion percentage (`Done / Total` non-cancelled issues) for every active epic. If `Total == 0`, report `N/A`.
+- **Explain exactly why when flagged.** If an epic, initiative, or teammate is rated *Needs Attention*, *At Risk*, or *Blocked*, explicitly detail **exactly why** (specific root cause, dependency, failure mode, or idle duration). If tracker commentary is silent, use empirical fallback (e.g. "No commits/transitions for N days").
+- **What's Left (TL;DR).** Every active epic must include a 2–4 bullet list of remaining tasks and PRs required to reach 100%, prioritized by in-review PRs and active assigned tasks.
+- **Link the blocker, not just the blocked thing.** When something is blocked, write
+  **"Blocked by:"** and link the specific open question, PR, decision ticket or dependency. When the
+  blocker is a person who has not answered, name who asked whom, what, and how long ago, stated as
+  fact, never as blame.
+- **Every assessment carries a ticket key plus a date or a count.** "Slipping" is not a citation;
+  "1/14 stories done, epic opened 09-01" is. No citation, no rating.
+- **Report what you could not measure as "not measured", never as zero.** A silent gap reads as a
+  fact.
+- **Count the team, not the repo.** PR numbers come from `pr_scan.py`'s `*_team` counts.
 - **Brevity over completeness.** Skip anything that's fine. Highlight what needs attention.
 - **Name names.** "<person> has 2 PRs awaiting review for 4 days" not "some PRs are stale."
 - **Assessments are required.** For each person and each project/epic, give a 1-line assessment.
-- **Link everything.** Jira keys and PR numbers must be clickable.
+- **Match the detail to the scope.** Team and multi-initiative reports stay short: one line
+  per epic for the frontend/backend split, no per-PR tables. Single-person and single-epic
+  reports add section 02b (per-PR tables, remaining work described). See "Detail Depends on
+  Scope" in `references/report-format.md`.
+- **Say what each epic is.** Every epic card carries one sentence from its description, its
+  priority and its linked parent initiative.
+- **Date every PR.** PR tables carry Opened and Merged columns.
+- **Link every count, person and repo** as well as every ticket and PR: a count links to the
+  query that produced it.
+- **Link 100% of tickets and PRs.** Every single ticket key (e.g. ABC-123) and PR reference (e.g. #xxxx) must be hyperlinked across all surfaces (card titles, card metadata, bullet text, table titles, action items, why callouts, what's left lists, and person cards) — no plain-text references where a reader would have to manually search.
 - **No filler.** No "here's what I found" or "let me summarize." Just the report.
 - **Meeting context enriches, not replaces.** Use meeting data to add color (action items, decisions, sentiment) to tracker and GitHub findings. **Do not quote transcripts and do not name the meeting tool in the report** — say "on a call". Don't create a separate "meetings" section for team-wide reports — weave it into the person's assessment. For single-person reports, a dedicated Meetings section is fine.
 - **Deduplicate across sources.** If Jira and GitHub both reference the same work, merge into one mention.
 
 ## Step 4: Deliver
 
-Output the report directly. If the user asked for Confluence or Slack format, adapt.
+**Reports hold per-person data, so they default to a directory outside any git repository** — for
+example `~/team-pulse-reports/` — rather than the current working tree. Create it if it does not
+exist, and use it for both files below unless the user names another location.
 
-Clean up intermediates:
+1. Output the scannable markdown report directly in chat.
+2. Save a publication-grade markdown document (`team-pulse-<END_DATE>.md`) using the bundled template at `assets/template.md` (ready to paste into GitHub issues, Jira tickets, or Confluence docs with 100% hyperlinked keys, Unicode progress meters, and callouts).
+3. Generate a publication-grade standalone HTML dashboard (`team-pulse-<END_DATE>.html`) using the bundled template at `assets/template.html` (zero external CDN or font dependencies, offline-safe, matching the design system in [references/report-format.md](references/report-format.md)).
+4. Open the dashboard in default browser (macOS / Linux, safe in headless):
+```bash
+open team-pulse-<END_DATE>.html 2>/dev/null || xdg-open team-pulse-<END_DATE>.html 2>/dev/null || true
+```
+5. Always print the clickable local file links in the chat response: `file://<report-dir>/team-pulse-<END_DATE>.md` and `file://<report-dir>/team-pulse-<END_DATE>.html`.
+6. If the user asked for Confluence or Slack format, adapt chat output accordingly.
+7. Clean up intermediates:
 ```bash
 rm -rf .updates
 ```
@@ -292,12 +345,12 @@ rm -rf .updates
 
 | User Says | Scope To |
 |-----------|----------|
-| "team pulse" | Full team from `references/team.md`, all active work |
+| "team pulse" | Full team from the team config, all active work |
 | "team pulse on <project>" | Team members working on that project only |
 | "how is <person> doing" | Single person across all their work |
 | "pulse on ABC-123" | Single initiative/epic and everyone assigned |
 | "what did we ship this week" | Merged PRs + completed Jira issues only |
-| "prep me for 1:1 with <person>" | Single person, deeper individual assessment |
+| "prep me for 1:1 with <person>" | Single person, full depth: agents A, B, C, E and F; statistics for the window only (default: the past week); epic progress covers the whole epic; wins, reviews given, talking points and questions |
 
 ## Assessment Scale
 
@@ -308,13 +361,48 @@ rm -rf .updates
 | At Risk | Significant blocker, timeline threat, or capacity issue |
 | Blocked | Cannot proceed without external input/decision |
 
+Assign by these conditions, in order; first match wins. Decisions outrank technical symptoms: an
+EM's red items are usually unmade decisions, and saying so tells the reader the team is waiting on
+a person, not stuck on code.
+
+**The threshold for an open decision is 5 working days with no answer.** Past that, the item is
+Blocked if it cannot proceed without that decision, and At Risk if work can continue around it.
+
+- **Blocked** (cannot proceed without external input/decision):
+  - a decision has been open past the 5-working-day threshold with no answer, and no other work on
+    the item can proceed until it is answered
+  - every child of the epic is Blocked
+  - work is In Progress and assigned to a **deactivated account**; check the assignee's `active`
+    flag, not just the name
+- **At Risk** (significant blocker, timeline threat, or capacity issue, but work can continue):
+  - a decision has been open past the 5-working-day threshold with no answer, but other work on the
+    item is still moving
+  - a customer-facing defect is unassigned
+  - an epic is marked Done but its acceptance criteria do not hold, or its PR never merged
+- **Needs Attention:**
+  - real progress, but a load-bearing question is unanswered
+  - under 25% complete against a committed date
+  - an open PR that is `stale_unreviewed` (stale, with nobody reviewing it — see
+    [report-format.md](references/report-format.md)); an approved-but-unmerged PR is reported
+    separately and does not by itself trigger this
+  - scope cut without written rationale
+  - stalled: no status change in the window and under 25% of children done
+- **On Track:** work merged in the window and no open decision. An initiative with no activity and
+  no open decision is On Track, not absent. Say "no movement in N weeks" in its line.
+
+Always show the word as well as the colour. Projectors shift hue, and about 1 in 12 men cannot
+separate red from green.
+
 ## Anti-Patterns
 
-- Do NOT query data sources directly from the orchestrator. Always use sub-agents.
-- Do NOT fan out per day by reflex — and do not refuse to when attribution matters. One per
-  source is the default; per day is the deliberate choice for 1:1s, performance conversations,
-  and anything needing speed. See the trade table.
-- Do NOT dispatch an agent without a `tools:` grant. It doubles the floor for no benefit.
+- Do NOT query data sources directly from the orchestrator, except Step 2b (`pr_scan.py`) — a
+  deterministic script, not a query into context. Everything else goes through sub-agents.
+- Do NOT fan out per day by reflex, including for 1:1s. One agent per source, covering the whole
+  window, is always the default. Per-day fan-out, for agents A–C only, is a deliberate choice made
+  only when the user explicitly asks for it. See
+  [references/batching-rationale.md](references/batching-rationale.md).
+- Prefer agent definitions with a restricted `tools:` grant where you have them; without them,
+  dispatch anyway and accept the higher per-agent cost.
 - Do NOT read large tool results in the orchestrator. Dispatch a sub-agent to summarize.
 - Do NOT dump raw tracker, GitHub or meeting data. Synthesize.
 - Do NOT include tickets that are Done unless user asks "what did we ship."

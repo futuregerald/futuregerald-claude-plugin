@@ -2,8 +2,11 @@
 
 **This file ships empty. Fill it in on first run — the skill will offer to.**
 
-Everything below is a template. Delete the bracketed placeholders and replace them with your
-own team. Nothing here is shared or uploaded; it stays in your local plugin checkout.
+This file is tracked in a public repo. **Copy it to `references/team.local.md` (git-ignored) and
+fill that copy in — do not edit this tracked file with your real roster.** Everything below is a
+template: delete the bracketed placeholders and replace them with your own team in your local
+copy. Nothing in `references/team.local.md` is shared or uploaded; it stays in your local plugin
+checkout.
 
 If a section does not apply to you, delete it rather than leaving placeholders — the skill
 treats a bracketed value as "not configured" and will ask again.
@@ -19,6 +22,16 @@ treats a bracketed value as "not configured" and will ask again.
 
 - **Org:** [your-org]
 - **Primary repos:** [repo-one, repo-two, repo-three]
+- **Frontend repos:** [repo-one]
+- **Backend repos:** [repo-two, repo-three]
+
+## Standing documents (optional)
+
+Docs worth checking every run even when no epic links them: a roadmap sheet, a decision log, the
+team's wiki space. Links only; Agent G checks their modified date and reads only what changed.
+
+- [Roadmap sheet URL]
+- [Decision log URL]
 
 ## Roster
 

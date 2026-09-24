@@ -29,3 +29,5 @@ skills/codebase-memory-*/
 # Local skill config -- may hold real site names, org slugs and paths.
 # The example template is tracked; the filled-in copy never is.
 skills/*/references/config.md
+skills/*/references/*.local.md
+skills/*/references/team.local.md
