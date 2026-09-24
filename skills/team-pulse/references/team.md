@@ -25,6 +25,14 @@ treats a bracketed value as "not configured" and will ask again.
 - **Frontend repos:** [repo-one]
 - **Backend repos:** [repo-two, repo-three]
 
+## Standing documents (optional)
+
+Docs worth checking every run even when no epic links them: a roadmap sheet, a decision log, the
+team's wiki space. Links only; Agent G checks their modified date and reads only what changed.
+
+- [Roadmap sheet URL]
+- [Decision log URL]
+
 ## Roster
 
 One row per person. The **Notes** column is free-form and genuinely useful — put standing

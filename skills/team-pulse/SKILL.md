@@ -127,6 +127,15 @@ mkdir -p .updates
 
 This directory is ephemeral — cleaned up after the report is delivered.
 
+**Two files persist across runs**, in the reports directory (Step 4), never in `.updates/`:
+
+- `.doc-cache.json`: one entry per document, keyed by doc id plus its last-modified time, holding
+  the digest Agent G wrote. An unchanged doc is never read twice.
+- `.source-prefs.json`: which tool worked for each kind of source (wiki, docs, sheets), and which
+  failed and how. Agent G reads it first and updates it at the end.
+
+Both are local conveniences and hold no secrets; if either is missing or unreadable, start empty.
+
 ## Step 1: Resolve Scope
 
 Parse the user's request for:
@@ -167,7 +176,7 @@ agent queries its own source across the full date range and writes a single dige
 
 Launch ALL agents in a **single message with multiple Agent tool calls**. Each agent prompt must
 include: team roster, GitHub handles, the **full date range** it covers, and exact queries scoped
-to that range.
+to that range. **The one exception is Agent G (Docs)**: it needs Agent A's doc links, so dispatch it as soon as A returns.
 
 **Restrict each agent's tool grant if your harness lets you.** `tools:` is a field in an *agent
 definition file*, not a dispatch parameter — you cannot pass it on an `Agent(...)` call. So this
@@ -186,6 +195,7 @@ C need definitions that explicitly grant theirs.
 .updates/metrics.md     (if dispatched)
 .updates/reviews.md     (if dispatched)
 .updates/breakdown.md   (if Agent F dispatched)
+.updates/docs.md        (Agent G, second wave, after A)
 ```
 
 The orchestrator does NOT read the tool results for data — it reads the files in Step 3.
@@ -210,6 +220,21 @@ If the meeting source needs re-authentication, do not authenticate from a sub-ag
 | D: Metrics | Metrics MCP | event search | User asks about deploys, incidents, reliability |
 | E: GitHub Reviews | `gh` CLI | `gh search prs --reviewed-by` | Single-person scope (always, for 1:1s) |
 | F: Work Breakdown | Tracker MCP + `gh` CLI | epic children, PR bodies | Single-person or single-epic scope only |
+| G: Docs | Whatever wiki, doc and spreadsheet tools the session has | metadata first, then read only what changed | Every run where agent A found doc links or the team config lists standing docs; forecast mode always |
+
+**Agent G is cheap by design, and gets cheaper each run.** It never searches first. Its candidates
+are the doc links agent A found on in-scope epics plus any standing docs in the team config. It
+checks each doc's last-modified time and reads only docs changed inside the window, at most 8, on
+the cheapest model, 60 words per doc. Summaries are cached by doc id and modified time, so an
+unchanged doc costs one metadata call. Search is a fallback for epics with no linked docs, capped
+at 5 results by title and date. A run where nothing changed costs a few thousand tokens.
+
+**It picks its own tools.** Do not name a connector in the prompt. The agent uses whatever doc,
+wiki and spreadsheet tools the session exposes, and when more than one could serve the same
+source (two accounts, two connectors), it tries them and records which one returned the
+document. That choice is saved in the source preferences file (Step 0) and tried first next time.
+A source that is not connected, or needs a login, is reported as "not checked"; the agent never
+authenticates or retries.
 
 ### Batching vs Fan-Out
 

@@ -102,6 +102,11 @@ against — not because the method depends on them.
 
 Establish what you are forecasting and get an independent baseline before any agent runs.
 
+- **Read the written sources through Agent G** (team-pulse `references/agent-prompts.md`): the
+  roadmap sheet or source document is always read, and PRDs linked from in-scope epics feed the
+  scope-readiness factor. It uses its cache and source preferences, so a re-run reads only what
+  changed.
+
 - **Resolve the window.** Did the caller give a window? A quarter, a date range, "the next 6 weeks",
   or a target date all count; a list of epics does not. Record the answer and the exact words it came
   from — every conditional section downstream keys off it. If a window was given, also ask for the
