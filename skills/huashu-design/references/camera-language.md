@@ -360,7 +360,6 @@ duration = 0.55 × |ln(zoom₂ / zoom₁)| / ln 2      clamp 到 [0.30, 0.94] �
 | `animation-pitfalls.md` | 踩坑清单 | 镜头专属坑（scale 发糊 / perspective 被打断 / pan 露边）§3.3-3.4 已覆盖设计侧，pitfalls 收技术侧复现 |
 | `hyperframes-backend.md` | 渲染后端契约 | CSS zoom 技法在离线逐帧渲染下的适用性见 §3.4 |
 | `voiceover-pipeline.md` | 解说驱动长视频 | move on pause（§6.3）的静默点数据从 narration 分句间隙来 |
-| `ai-video-review.md` | 成片评审 | 评审 checklist 的转场分类按 §7 三层词汇扩展 |
 
 **调用顺序**：导演稿 / 分镜阶段读 §0-§2 定预算和词汇 → 写 timeline 前读 §3-§7 定实现约定
 与接缝 → 交付前过 §10 清单。

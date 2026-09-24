@@ -5,7 +5,7 @@
 #   bash mix-voiceover.sh <video.mp4> --voiceover=<voice.mp3> [options]
 #
 # Required:
-#   --voiceover=<path>    Path to voiceover mp3 (人声主轨, 来自 narrate-pipeline.mjs)
+#   --voiceover=<path>    Path to voiceover mp3 (人声主轨, 自备)
 #
 # Optional:
 #   --bgm=<path>          BGM mp3 path (overrides --bgm-mood)

@@ -393,7 +393,7 @@ const NarrationStageLib = (() => {
    * 自动从当前 scene.chunks 取活动 chunk，按 splitChunkToLines 切成短行，
    * 按字数比例分配 chunk 时间窗给每行显示。
    *
-   * 必需：timeline.scenes[].chunks[]（narrate-pipeline.mjs 已默认输出）
+   * 必需：timeline.scenes[].chunks[]（自备 timeline 时需包含）
    *
    * Props（可覆盖默认样式）：
    *   bottom    距底部像素，默认 90（不贴边）
@@ -404,7 +404,7 @@ const NarrationStageLib = (() => {
    *
    * 深底场景：把 color 改成 '#fff'，haloColor 改成 'rgba(0,0,0,0.85)' 即可。
    *
-   * 卡拉OK模式（字级高亮，需 timeline chunks 里带 words——narrate-pipeline.mjs 默认输出）：
+   * 卡拉OK模式（字级高亮，需 timeline chunks 里带 words）：
    *   karaoke       true 开启，默认 false。整行显示，读到哪个字哪个字变色
    *   karaokeColor  已读字的颜色，默认品牌橙 '#e8590c'
    *   chunk 没有 words 数据时自动回落到普通 chunk 模式，调用方不用做判断。

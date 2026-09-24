@@ -70,7 +70,7 @@ if [ -z "$HTML" ] || [ ! -f "$HTML" ]; then
   exit 1
 fi
 if [ -z "$TIMELINE" ] || [ ! -f "$TIMELINE" ]; then
-  echo "✗ 缺 --timeline=<path>（timeline.json 由 narrate-pipeline.mjs 生成）" >&2
+  echo "✗ 缺 --timeline=<path>（timeline.json 自备，schema 见 references/voiceover-pipeline.md）" >&2
   exit 1
 fi
 

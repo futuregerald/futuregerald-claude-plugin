@@ -5,6 +5,12 @@
 >
 > 配套 `references/animation-best-practices.md` 使用——本文件管 **怎么把解说和画面对上**，
 > animation-best-practices 管 **每一帧画面怎么动**。
+>
+> **本 plugin 的差异**：上游的云端 TTS 脚本和它的驱动脚本未随附，本 plugin 不含任何需要
+> key 的出站代码。解说音频与 timeline 自备——用任意 TTS 生成 `voiceover.mp3`，并按下文
+> 「timeline.json schema」手写 `timeline.json`（每个 cue 的实测起止秒数）。本文件其余内容
+> （铁律、hero morph、move on pause、Subtitles）全部照常适用，`mix-voiceover.sh` 与
+> `render-narration.sh` 也照常可用。完整差异清单见仓库 `docs/huashu-design-provenance.md`。
 
 ---
 
@@ -166,7 +172,7 @@ const App = () => (
                 │  [[cue:xx]] 标关键句）   │
                 └──────────────┬───────────┘
                                │
-                  narrate-pipeline.mjs
+                      自备 TTS
                                │
                                ▼
             ┌──────────────────────────────┐
@@ -191,7 +197,7 @@ const App = () => (
 ```markdown
 ---
 title: 什么是 LLM
-voice: S_JSdgdWk22   # 可选，覆盖 .env 默认音色
+voice: S_JSdgdWk22   # 可选，记录你用的音色，便于复现
 speed: 1.0           # 可选，0.5-2.0
 gap: 0.4             # 段间静音秒数，默认 0.3
 ---
@@ -296,7 +302,7 @@ const { NarrationStage, Subtitles } = NarrationStageLib;
 <Subtitles karaoke karaokeColor="#0a84ff" />   {/* 自定义高亮色 */}
 ```
 
-- 依赖 timeline chunks 里的 `words` 字级时间戳（narrate-pipeline.mjs 默认输出；豆包 TTS v3 `enable_subtitle`，需 2.0 资源，仅中英文）
+- 依赖 timeline chunks 里的 `words` 字级时间戳（自备 timeline 时需自行填充；多数 TTS 的字级时间戳接口可直接产出，仅中英文）
 - 整行显示、逐字变色，行切分复用 ≤maxLen + 不跨句号规则（由 words 拼行，与发音严格对齐）
 - chunk 没有 words 时自动回落普通 chunk 模式，调用方无需判断
 
@@ -356,43 +362,17 @@ NarrationStage 自动检测 `window.__recording`：
 - **实播模式**（默认）：跟随 audio 元素的 currentTime，用户暂停/拖动 seek 都能同步
 - **录视频模式**（render-video.js 设置 `window.__recording = true`）：rAF wall-clock 自驱动从 0 开始，暴露 `window.__seek(t)` 给 render-video.js 复位
 
-## 三个脚本
+## 两个脚本
 
 | 脚本 | 输入 | 输出 |
 |---|---|---|
-| `scripts/cloud/tts-doubao.mjs` | 单段文本 | 单个 mp3 + 实测时长 |
-| `scripts/narrate-pipeline.mjs` | 解说稿 .md | voiceover.mp3 + timeline.json |
 | `scripts/mix-voiceover.sh` | 视频 + voiceover.mp3 [+ BGM] | 带音频的 MP4 |
 | `scripts/render-narration.sh` | 解说 HTML + timeline.json | 最终 MP4（录制 + 混音一条龙）|
-
-## .env 配置
-
-> ⚠️ TTS 是可选云能力：解说稿文本会发送到豆包 TTS 官方接口（openspeech.bytedance.com），
-> 使用你自己的 key。脚本首次调用需 `--yes` 或 `HUASHU_CLOUD_OK=1` 显式确认，
-> endpoint 强制校验字节官方域名白名单。数据流向声明见仓库根 `SECURITY.md`。
-
-skill 根目录下 `.env`（已 gitignore）：
-
-```
-DOUBAO_TTS_API_KEY=<your_api_key>
-DOUBAO_TTS_VOICE_ID=zh_female_xiaohe_uranus_bigtts
-DOUBAO_TTS_ENDPOINT=https://openspeech.bytedance.com/api/v3/tts/unidirectional
-```
-
-也可使用控制台的 App ID + Access Token 鉴权：
-
-```
-DOUBAO_APP_ID=<your_app_id>
-DOUBAO_ACCESS_KEY=<your_access_token>
-DOUBAO_TTS_VOICE_ID=zh_female_xiaohe_uranus_bigtts
-```
-
-`DOUBAO_TTS_RESOURCE_ID` 默认按音色自动推断：`S_` 克隆音色使用 `seed-icl-1.0`，`uranus` 官方音色使用 `seed-tts-2.0`，其他官方音色使用 `seed-tts-1.0`。
 
 ## 标准工作流（10 步）
 
 1. **写解说稿**：解说稿是源代码。先把整段口播写完整，标段标题 `## scene-id`，关键句前加 `[[cue:xx]]`
-2. **跑 narrate-pipeline**：`node scripts/narrate-pipeline.mjs --script script.md --out-dir _narration --yes`（`--yes`=确认文本发送豆包TTS）
+2. **备好人声与 timeline**：用任意 TTS 生成 `_narration/voiceover.mp3`，并写出 `_narration/timeline.json`（schema 见上文）。cue 时间必须来自音频实测，不能按字符估算
 3. **听整段 voiceover.mp3**：节奏不对回去改稿。**这一步决定整片质量上限**
 4. **🛑 设计前先回答铁律**：hero element 是什么？它在每段是什么状态？跨场景怎么 morph？答不上不要写代码
 5. **写动画 HTML**：用 NarrationStage + 一个或几个 hero element 跨 scene 演戏
@@ -406,7 +386,6 @@ DOUBAO_TTS_VOICE_ID=zh_female_xiaohe_uranus_bigtts
 
 | 问题 | 解决 |
 |---|---|
-| TTS API 报错 | 检查 .env 里 `DOUBAO_TTS_API_KEY`，或 `DOUBAO_APP_ID` + `DOUBAO_ACCESS_KEY` 是否正确 |
 | 某段音频明显比脚本长/短 | 该段文本里有奇怪标点或 emoji，TTS 解析异常 → 改稿 |
 | cue absoluteTime 不准 | 段内子段拼接时 ffmpeg 有问题 → 检查 mp3 编码一致性 |
 | 录视频结果有黑屏 | render-video.js 没拿到 `window.__ready` 信号 → 检查 NarrationStage 是否正常挂载 |
