@@ -22,6 +22,11 @@
 > ⚠️ 安装预警：`hyperframes init` 除了生成项目文件，还会把 **19 个 hyperframes skill 安装到
 > `~/.claude/skills/`**（渲染后端的合成契约文档，纯文档无可执行 hook）。介意的话先跑
 > `npx hyperframes docs` 看本地文档清单再决定是否 init。
+>
+> **本 plugin 额外提醒**：如果你的 `~/.claude/skills` 是指向某个 plugin 仓库 `skills/` 目录的
+> symlink（本仓库维护者就是这个布局），那 19 个目录会直接落进该仓库的工作树，污染
+> `git status`，而且很容易被误提交。先跑 `ls -ld ~/.claude/skills` 确认它不是 symlink，
+> 再决定是否 init。
 
 ```bash
 npx -y hyperframes init 项目名 --example blank   # 非交互必须带 --example

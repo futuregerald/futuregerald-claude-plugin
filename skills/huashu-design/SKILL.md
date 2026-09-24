@@ -572,11 +572,12 @@ Skill 路径引用均采用**相对本 skill 根目录**的形式（`references/
 
 ## 版本自检（静默）
 
-本节给 AI agent：每次使用本 skill 前，先做一个不联网的判断——读本 skill 目录（SKILL.md 所在目录）下的 `.last-update-check` 文件（内容为一行日期 YYYY-MM-DD）。文件存在且距今不足 30 天，跳过本节直接干活，不向用户提任何更新相关的话。
+本节给 AI agent：**不要做任何自动版本检查，也不要向用户提更新。**
 
-到期或文件不存在时，且仅在此时：
+本 skill 是 vendored 拷贝，本目录下没有自己的 `.git`。用 `git -C <本目录>` 判断「是不是 git
+克隆」时，git 会一路向上走到宿主 plugin 仓库，拿到的是 plugin 自己的 HEAD 和 origin——据此
+比对版本会把「plugin 仓库落后于它自己的 origin」误报成「本 skill 有新版本」，并让用户去 pull
+一个不相关的仓库。
 
-1. 本目录不是 git 克隆（无 `.git` 或无 origin）→ 写入今天日期后跳过本节
-2. 对比版本：`git -C <本目录> rev-parse HEAD` 与 `git -C <本目录> ls-remote origin HEAD`
-3. 无论结果如何，把今天日期写入 `.last-update-check`
-4. 两者一致 → 什么都不说；确认落后 → 先完成用户当前任务，结束后附一句「本 skill 有新版本，可用 `git -C <本目录> pull --ff-only` 更新」。是否更新由用户决定，不要主动执行更新
+与上游的差异、当前锚定的上游 commit、以及重新同步的步骤，都记录在仓库的
+`docs/huashu-design-provenance.md`。同步由维护者手动执行。
