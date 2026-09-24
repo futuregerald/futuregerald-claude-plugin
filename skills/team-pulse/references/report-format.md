@@ -192,25 +192,23 @@ Populate `assets/template.html` by replacing its semantic placeholders:
 
 ### Visual Design System
 
-- **Typography (with Offline System Font Fallbacks):**
-  - Serif: `"Newsreader", Georgia, Cambria, serif` (weights 400, 500, 600; with `font-display: swap`)
-  - Sans-serif: `"Bricolage Grotesque", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif` (weights 500, 600, 700, 800)
-  - Monospace: `"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace` (weights 400, 500, 600)
-- **Color Palette & Dark Mode Support:**
-  - CSS variables for light/dark mode (`--ground`, `--surface`, `--sunk`, `--ink`, `--ink2`, `--ink3`, `--line`, `--soft`, `--acc`, `--accbg`, `--good`, `--warn`, `--crit`) with `@media (prefers-color-scheme: dark)`.
-- **Key Dashboard Components:**
-  1. **Header & Metric Tiles:** Overall Health tile, PR Velocity tile (merged / in-flight), Net Code Impact tile, Review Bottlenecks tile.
-  2. **Executive Summary & Strategic Context:** High-level narrative, leadership/reorg changes, scope ceilings.
-  3. **Active Initiatives Grid (`.card-grid`):**
-     - Epic title linked to tracker
-     - Visual progress bar (`.prog-bar`, `.prog-fill`) with quantitative completion `%` (`Done / Total` issues)
-     - Explicit `.why-box` warning/danger callout for any epic not On Track
-     - Scannable `.whats-left` block detailing remaining deliverables
-  4. **Interactive PR Table:** PR link, author, opened date, age, status badge, lines (+/-), and required action. Stale PRs styled in warm warning background.
-  5. **People Grid:** Roster cards with role, summary, stats, and explicit "Why Needs Attention" micro-callouts when flagged. Dedicated EM card.
-  6. **Risks & Blockers Register:** Prioritized P0/P1/P2 cards with direct issue links.
-  7. **Bottom Line Callout:** Highlighted synthesis card for executive readouts.
-  8. **100% Hyperlinked References:** Every mention of a Jira key (`ABC-123`, `OPS-45`) and GitHub PR (`#xxxx`) anywhere in prose, table titles, action items, why boxes, what's left lists, or card metadata MUST be rendered as clickable hyperlinks. Never leave a bare identifier that forces the reader to search manually.
+The look is a dark instrument panel: graphite ground, one amber accent, narrow bold uppercase
+headings, monospace numbers, bordered cards with no shadows. Both `assets/template.html` (pulse) and
+`assets/forecast.html` (forecast) carry the same tokens, so every report reads as one family.
+
+- **Type (offline-safe, system fallbacks):** display `"Archivo Narrow", "Arial Narrow", "Roboto Condensed", system sans`;
+  body `"Archivo", system sans`; numbers and labels `"JetBrains Mono", ui-monospace`. No web-font
+  links: the named faces are used when installed and the fallbacks otherwise.
+- **Tokens:** `--ground #0F1113`, `--surface #171A1E`, `--sunk #1E2227`, `--line #2B3139`,
+  `--ink #ECEFF2`, `--ink2 #B3BCC6`, `--ink3 #8B96A2`, `--acc #FFB020` (links `#FFC857`).
+- **Status colours differ in lightness, not only hue:** on track `--good #5AB8FF` (blue), needs
+  attention `--warn #FFB020` (amber), at risk `--crit #FF7A59` (orange-red), each with a dark tint
+  background (`--goodbg`, `--warnbg`, `--critbg`). Never red against green.
+- **Light and print:** `<html data-theme="light">` switches to a light palette with darker accents,
+  and `@media print` applies it automatically, so a printed or PDF'd report is legible.
+- **Components:** section numbers print as `[02]` in the accent; headings are uppercase; cards are
+  6px-radius with a 1px border; pills are fully rounded; the bottom line is an amber-bordered panel.
+- **Every reference is a link** — tickets, PRs, people, repos, and every count.
 
 ## Length Guidelines
 

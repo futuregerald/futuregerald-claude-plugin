@@ -4,7 +4,6 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{REPORT_TITLE}}</title>
-  <!-- Fully self-contained styling with zero external network requests or CDN dependencies -->
   <style>
     :root {
       --ground: #0F1113;
@@ -572,120 +571,118 @@
       margin: 0;
       line-height: 1.6;
     }
+  
+    .question { font-family: var(--mono); font-size: 12px; color: var(--ink3); margin-top: 14px; }
+    .question strong { color: var(--acc); font-weight: 600; }
+    section.opt:has(> .slot:empty) { display: none; }
+    .lede { font-size: 22px; line-height: 1.45; font-weight: 500; max-width: 1060px; margin: 0; }
+    .callout { border-left: 3px solid var(--acc); padding: 4px 0 4px 18px; color: var(--ink2); max-width: 1060px; margin-top: 18px; }
+    .two-up { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; margin-top: 20px; }
+    .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 22px; }
+    .panel-label { font-family: var(--mono); font-size: 11px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--ink3); margin-bottom: 14px; }
+    .gauge { position: relative; height: 96px; margin: 18px 10px 34px; }
+    .gauge .tick { position: absolute; top: 0; bottom: 0; border-left: 1px dashed var(--line); }
+    .gauge .tick span { position: absolute; top: 100%; margin-top: 8px; transform: translateX(-50%); font-family: var(--mono); font-size: 11px; color: var(--ink3); }
+    .gauge .band { position: absolute; top: 0; bottom: 0; background: var(--goodbg); border-left: 2px solid var(--good); border-right: 2px solid var(--good); }
+    .gauge .band-label { position: absolute; top: -4px; transform: translateY(-100%); font-family: var(--mono); font-size: 11px; color: var(--good); white-space: nowrap; }
+    .gauge .demand { position: absolute; top: 38px; height: 20px; border-radius: 3px; background: linear-gradient(90deg, var(--warn), var(--crit)); }
+    .gauge .end { position: absolute; top: 64px; font-family: var(--mono); font-size: 12px; white-space: nowrap; }
+    .run { position: relative; height: 14px; background: var(--sunk); border-radius: 3px; min-width: 160px; }
+    .run .band { position: absolute; top: -3px; bottom: -3px; background: var(--goodbg); border-left: 1px solid var(--good); border-right: 1px solid var(--good); }
+    .run .pess, .run .opt { position: absolute; left: 0; height: 100%; border-radius: 3px; }
+    .run .pess { opacity: .35; }
+    .run.fits .opt, .run.fits .pess { background: var(--good); }
+    .run.tight .opt, .run.tight .pess { background: var(--warn); }
+    .run.over .opt, .run.over .pess { background: var(--crit); }
+    .run-label { font-family: var(--mono); font-size: 11px; color: var(--ink3); margin-top: 4px; }
+    .rank { font-family: var(--sans); font-size: 24px; font-weight: 700; color: var(--acc); }
+    .num { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .item { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; margin-bottom: 24px; }
+    .item-head { display: grid; grid-template-columns: 64px minmax(0, 1fr) 280px; gap: 20px; padding: 24px; align-items: start; }
+    .item-rank { font-family: var(--sans); font-size: 48px; font-weight: 700; line-height: .9; color: var(--acc); }
+    .item-title { margin: 0; font-family: var(--sans); font-size: 26px; font-weight: 700; }
+    .item-est { text-align: right; }
+    .item-est .range { display: block; font-family: var(--mono); font-size: 36px; font-weight: 600; }
+    .item-est .unit, .item-est .scen { display: block; font-family: var(--mono); font-size: 12px; color: var(--ink3); }
+    .item-est .scen { color: var(--ink2); margin-top: 8px; line-height: 1.6; }
+    .item-body { padding: 0 24px 20px; display: flex; flex-direction: column; gap: 14px; }
+    .ground { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .gbox { background: var(--sunk); border-left: 3px solid var(--good); padding: 14px 16px; border-radius: 4px; font-size: 14px; }
+    .gbox.need { border-left-color: var(--warn); }
+    .item-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; padding: 20px 24px; border-top: 1px solid var(--line); }
+    .item-cols ul { margin: 0; padding: 0; list-style: none; font-size: 14px; }
+    .item-cols li { margin-bottom: 8px; }
+    .item-cols li.sev::before { content: "▲ "; color: var(--crit); }
+    .verdict-strip { padding: 12px 24px; background: var(--sunk); border-top: 1px solid var(--line); font-family: var(--mono); font-size: 12px; color: var(--ink3); }
+    .stack { position: relative; height: 26px; background: var(--sunk); border-radius: 3px; }
+    .stack .seg { position: absolute; top: 0; height: 100%; border-right: 2px solid var(--surface); }
+    .stack .seg.fits { background: var(--good); }
+    .stack .seg.tight { background: var(--warn); }
+    .stack .frame { position: absolute; top: -6px; bottom: -6px; border: 2px solid var(--ink); border-radius: 2px; }
   </style>
 </head>
 <body>
 <div class="wrap">
 
   <header>
-    <div class="badge-top">Executive Pulse &amp; Operational Review</div>
+    <div class="badge-top">{{KICKER}}</div>
     <h1>{{REPORT_HEADING}}</h1>
-    <div class="meta-bar">
-      <span><strong>Window:</strong> {{DATE_RANGE}}</span>
-      <span><strong>Engineering Manager:</strong> {{MANAGER_NAME}}</span>
-      <span><strong>Primary Repos:</strong> {{PRIMARY_REPOS}}</span>
-      <span><strong>Tracking:</strong> {{TRACKER_INFO}}</span>
-    </div>
+    <div class="meta-bar">{{META}}</div>
+    <div class="question"><strong>Question answered:</strong> {{QUESTION_ANSWERED}} · <strong>Omitted:</strong> {{OMITTED_SECTIONS}}</div>
   </header>
 
-  <!-- Metric Tiles -->
-  <div class="tiles">
-    {{METRIC_TILES}}
-  </div>
-
-  <!-- Section 1: Strategic Context & Headline -->
-  <div class="sechead">
-    <span class="secnum">01</span>
-    <h2>Executive Summary &amp; Strategic Context</h2>
-  </div>
-  <p style="font-size: 18px; color: var(--ink2); margin-top: 0;">
-    <strong>Headline:</strong> {{HEADLINE}}
-  </p>
-  <div style="background: var(--surface); border: 1px solid var(--line); padding: 18px 22px; border-radius: 6px; box-shadow: var(--sh); font-size: 15px; color: var(--ink2); line-height: 1.55;">
-    {{STRATEGIC_CONTEXT}}
-  </div>
-
-  <!-- Section 2: Active Initiatives -->
-  <div class="sechead">
-    <span class="secnum">02</span>
-    <h2>Active Initiatives &amp; Epics Status</h2>
-  </div>
-  <div class="sec-desc">Live progress, completion percentage, failure mode breakdown, and what's left to ship.</div>
-
-  <div class="card-grid">
-    {{ACTIVE_EPICS_CARDS}}
-  </div>
-
-  <!-- Section 2b: Work Breakdown (single-person and single-epic scopes; empty string for team scope) -->
-  <section id="work-breakdown">
-    <div class="sechead">
-      <span class="secnum">02b</span>
-      <h2>Work Breakdown by Epic</h2>
-    </div>
-    <div class="sec-desc">Frontend vs backend, done vs left, one line per PR.</div>
-    <div class="bd-wrap">{{WORK_BREAKDOWN}}</div>
+  <section class="opt">
+    <div class="sechead"><span class="secnum">01</span><h2>What changed since the source</h2></div>
+    <div class="slot">{{WHAT_CHANGED}}</div>
   </section>
 
-  <!-- Section 3: PRs in Flight Table -->
-  <div class="sechead">
-    <span class="secnum">03</span>
-    <h2>PRs in Flight &amp; Review Backlog</h2>
-  </div>
-  <div class="sec-desc">{{PR_SUMMARY_LINE}}</div>
+  <section>
+    <div class="sechead"><span class="secnum">02</span><h2>Headline</h2></div>
+    <p class="lede">{{HEADLINE}}</p>
+  </section>
 
-  <div class="tscroll">
-    <table>
-      <thead>
-        <tr>
-          <th>Repo / PR</th>
-          <th>Title</th>
-          <th>Author</th>
-          <th>Opened</th>
-          <th>Age</th>
-          <th>Status</th>
-          <th>Lines</th>
-          <th>Action Required</th>
-        </tr>
-      </thead>
-      <tbody>
-        {{PR_TABLE_ROWS}}
-      </tbody>
-    </table>
-  </div>
+  <section class="opt">
+    <div class="sechead"><span class="secnum">03</span><h2>Does it fit</h2></div>
+    <div class="slot">{{CAPACITY}}</div>
+  </section>
 
-  <!-- Section 4: People -->
-  <div class="sechead">
-    <span class="secnum">04</span>
-    <h2>Team Roster &amp; Individual Workloads</h2>
-  </div>
-  <div class="sec-desc">Assessment and progress summary for all team members.</div>
+  <section>
+    <div class="sechead"><span class="secnum">04</span><h2>At a glance</h2></div>
+    <div class="sec-desc">{{GLANCE_SUMMARY}}</div>
+    <div class="tscroll"><table>
+      <thead><tr>{{GLANCE_HEAD}}</tr></thead>
+      <tbody>{{GLANCE_ROWS}}</tbody>
+    </table></div>
+  </section>
 
-  <div class="people-grid">
-    {{PEOPLE_CARDS}}
-  </div>
+  <section>
+    <div class="sechead"><span class="secnum">05</span><h2>Item by item</h2></div>
+    {{ITEM_CARDS}}
+  </section>
 
-  <!-- Dedicated EM Section -->
-  <div style="margin-top: 24px;">
-    {{EM_CARD}}
-  </div>
+  <section class="opt">
+    <div class="sechead"><span class="secnum">06</span><h2>Projected landing</h2></div>
+    <div class="slot">{{PROJECTION}}</div>
+  </section>
 
-  <!-- Section 5: Risks & Blockers -->
-  <div class="sechead">
-    <span class="secnum">05</span>
-    <h2>Master Risks &amp; Blockers Register</h2>
-  </div>
-  <div class="sec-desc">Prioritized operational, security, and architectural issues requiring immediate action.</div>
+  <section class="opt">
+    <div class="sechead"><span class="secnum">07</span><h2>What to commit to</h2></div>
+    <div class="slot">{{COMMIT_TIERS}}</div>
+  </section>
 
-  <div class="risk-list">
-    {{RISK_ITEMS}}
-  </div>
+  <section class="opt">
+    <div class="sechead"><span class="secnum">08</span><h2>Decisions needed</h2></div>
+    <div class="slot">{{DECISIONS}}</div>
+  </section>
 
-  <!-- Section 6: Bottom Line Callout -->
+  <section>
+    <div class="sechead"><span class="secnum">09</span><h2>How these numbers were calculated</h2></div>
+    {{METHOD}}
+  </section>
+
   <div class="bottom-line">
-    <h3>Engineering Manager Bottom Line</h3>
-    <p>
-      {{BOTTOM_LINE}}
-    </p>
+    <h3>Bottom line</h3>
+    <p>{{BOTTOM_LINE}}</p>
   </div>
 
 </div>

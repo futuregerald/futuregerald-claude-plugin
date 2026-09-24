@@ -1,11 +1,29 @@
 ---
 name: team-pulse
-description: Generate a concise team status report for an engineering manager before calls or check-ins. Covers progress, blockers, risks, individual workloads, PRs in flight, meeting context, and project health assessments. Default scope is the team configured in references/team.md over the last 1.2 weeks. Use when the user says "team pulse", "team status", "what's my team working on", "prep me for standup", "what happened this week", "sprint update", "team report", "how is [project] going", "how is [person] doing", "prep me for 1:1", or any request for a team/project/person activity summary.
+description: Engineering-manager reports in two modes. PULSE — a scannable status report before calls or check-ins, covering progress, blockers, risks, individual workloads, PRs in flight and meeting context, for a team, project, epic or one person (1:1 prep). FORECAST — verify the true state of epics or roadmap rows against the tracker and code, then forecast remaining work against measured throughput, giving 1-engineer vs 2-engineer estimates, dependency ordering and critical chain, projected landing, and, given a window, capacity arithmetic and commit tiers ("what fits in Q4"). Use for "team pulse", "team status", "what's my team working on", "prep me for standup", "prep me for 1:1", "how is [person] doing", "how is [project] going", "sprint update", and also "forecast", "how long will this take", "estimate these epics", "does this fit in Q4", "what can we commit to this quarter", "when will X land", "sequence this work", "verify the state of this initiative".
 ---
 
 # Team Pulse
 
-Generate a scannable status report an EM can read in 2 minutes before a call.
+Two modes. **Pulse:** a scannable status report an EM can read in 2 minutes before a call. **Forecast:** a verified state-and-estimate report for epics or a roadmap, including whether a list fits in a window.
+
+## Pick the Mode First
+
+| The request | Mode | Follow |
+|---|---|---|
+| Status, activity, "what happened", standup or 1:1 prep | **Pulse** | This file |
+| "How long", "when will it land", "does it fit in <window>", "what can we commit to", estimates, sequencing, splits, "what is really the state of these epics" | **Forecast** | `references/forecast/method.md`, entirely |
+
+**Forecast mode follows its own method.** It has its own phases (baseline, measured pace, WIP,
+clustered research, adversarial review, estimates, delivery), its own agent prompts and its own report
+format, all under `references/forecast/`. The pulse sections below (map-reduce digests, word budgets,
+the pulse report format) do not apply to it. What the two modes share: the roster and tracker
+configuration in `references/team.local.md` / `team.md`, the linking and plain-language rules, and the
+visual style. A forecast's HTML page is built on `assets/forecast.html`.
+
+A pulse can point at a forecast ("Security Signals is at risk — see the forecast") but never runs
+the forecast method inline: a full forecast costs several research agents, and a pulse is meant to
+be read in two minutes.
 
 ## First Run: Configure Your Team
 
