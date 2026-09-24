@@ -9,8 +9,8 @@ This plugin includes three complementary design skills. This guide explains when
 | | **Impeccable** | **Huashu Design** | **UI Implementer** |
 |---|---|---|---|
 | **Focus** | Design *vocabulary* — teaches the AI better design language so existing code output improves | Design *workflow* — turns the AI into a full design tool that produces deliverables | Design *implementation* — translates a visual reference into pixel-perfect production code |
-| **Output** | Better-designed code in your existing stack (React, HTML, CSS, etc.) | Standalone HTML prototypes, slide decks (PPTX), animations (MP4/GIF), infographics (PDF/SVG) | Production components in React 19, Vue 3.5+, or Svelte 5 matching a design reference |
-| **How it works** | Injects 7 domain-specific reference files (typography, color, spatial, motion, interaction, responsive, UX writing) + 20 slash commands | 20 design philosophies in 5 schools + auto-selects 3 and generates parallel demos when requests are vague | Auto-detects framework from package.json, dispatches a UI Developer agent, then validates output via screenshot comparison against the design reference |
+| **Output** | Better-designed code in your existing stack (React, HTML, CSS, etc.) | Standalone HTML prototypes, slide decks (editable PPTX, converted from a rendered deck with no rework), animations (MP4/GIF, deterministic 60fps), infographics (PDF/SVG) | Production components in React 19, Vue 3.5+, or Svelte 5 matching a design reference |
+| **How it works** | Injects 7 domain-specific reference files (typography, color, spatial, motion, interaction, responsive, UX writing) + 20 slash commands | 20 design philosophies in 5 schools; every new design starts with three direction drafts to choose from — a hard gate with no exemptions, so naming a style or a brand does not skip it | Auto-detects framework from package.json, dispatches a UI Developer agent, then validates output via screenshot comparison against the design reference |
 | **Anti-slop** | Bans generic AI patterns via design vocabulary precision | Explicit rules banning purple gradients, emoji-as-icons, excessive border-radius, unmotivated serif fonts; uses OKLCH color space | Stagnation detection halts repeated identical changes; CRITICAL regression checks prevent visual regressions |
 | **Best for** | Improving the design quality of production code you're already building | Creating standalone design artifacts — prototypes, presentations, motion graphics | Implementing a specific design (Figma URL, screenshot, mockup) as production code with verified fidelity |
 | **Agent support** | 54 agents (Claude Code, Cursor, Codex, Gemini CLI, etc.) | Claude Code, Cursor, Codex | Claude Code (adaptive switching between UI Developer and UI Developer Codex) |
@@ -21,7 +21,7 @@ This plugin includes three complementary design skills. This guide explains when
 **Neither skill is invoked automatically.** Both require explicit invocation:
 
 - **Impeccable**: Use `/impeccable` slash commands (e.g., `/impeccable craft`, `/impeccable shape`, `/impeccable teach`). The skill description tells the AI *when* to suggest it, but it won't activate without a slash command or explicit user request.
-- **Huashu Design**: Use trigger words like "prototype", "design demo", "UI mockup", "make slides", "animation demo", "design exploration", or explicitly invoke `/huashu-design`. It activates when the AI detects design-related intent in your request.
+- **Huashu Design**: Use trigger words like "prototype", "design demo", "UI mockup", "make slides", "animation demo", "design exploration", "export MP4", "review this design", or explicitly invoke `/huashu-design`. It activates when the AI detects design-related intent in your request.
 
 ## When to Use Which
 
@@ -36,7 +36,19 @@ This plugin includes three complementary design skills. This guide explains when
 - You want to explore multiple design directions in parallel before committing
 - You're producing visual assets like infographics or motion graphics
 - You want to prototype in HTML without touching your production codebase
-- You need to export to PPTX, MP4/GIF, or PDF
+- You need to export to editable PPTX, MP4/GIF, or PDF
+
+**Expect a three-direction step first.** Every new design returns three
+direction drafts for you to choose from before anything is built. This is a
+hard gate with no exemptions — naming a style or a brand up front does not
+skip it. If you want one specific thing built immediately, say so explicitly,
+or use Impeccable or UI Implementer instead.
+
+**Not vendored in this plugin:** upstream's cloud scripts (TTS narration and
+AI video review) are omitted, so this copy contains no outbound code that
+takes a credential. The narrated-video route still works, but you supply the
+voiceover audio and its timeline yourself. See
+`docs/huashu-design-provenance.md`.
 
 ## When to Use UI Implementer
 
