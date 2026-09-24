@@ -232,7 +232,7 @@ rm -rf .updates
 | "how is <person> doing" | Single person across all their work |
 | "pulse on ABC-123" | Single initiative/epic and everyone assigned |
 | "what did we ship this week" | Merged PRs + completed Jira issues only |
-| "prep me for 1:1 with <person>" | Single person, full depth: agents A, B, C, E and F; 30-day trend beside the window; wins, reviews given, talking points and questions |
+| "prep me for 1:1 with <person>" | Single person, full depth: agents A, B, C, E and F; statistics for the window only (default: the past week); epic progress covers the whole epic; wins, reviews given, talking points and questions |
 
 ## Assessment Scale
 

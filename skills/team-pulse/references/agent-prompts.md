@@ -134,6 +134,7 @@ Write your digest to `.updates/github.md` using the Write tool. Format:
 - PRs merged (with +/- lines, opened date and merged date)
 - PRs opened or updated (with opened date)
 - PRs closed without merging (with closed date)
+- Every PR open right now, whatever its age, including drafts: an old open PR is easy to forget
 - Every PR as a link, with its tracker key if the title or branch names one
 - Stale PRs in the range (>3 days without review) — flag explicitly
 - Max {WORD_LIMIT} words

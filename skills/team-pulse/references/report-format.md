@@ -10,6 +10,12 @@ The same skeleton serves every scope; how deep each section goes does not.
 | **Single person (1:1 prep)** | Same | **Full section 02b:** per epic, frontend and backend tables with one line per PR, remaining work described, and sibling work the epic depends on | Wins, 30-day trend, reviews given, talking points, questions to ask |
 | **Single epic or initiative** | Same | Full section 02b for that epic only | 1–3 sentences each |
 
+**In a 1:1, statistics cover the window only (default: the past week).** The scorecard, PR
+counts, tickets done and reviews given are all for that week. Epic progress is the exception:
+it covers the whole epic, because where the epic stands is worth discussing whatever the
+window. The section 02b tables may go back further, since they describe the epic's work, not
+the person's week.
+
 A team report with per-PR tables is too long to read before a standup. A 1:1 report without them
 leaves the manager unable to say what the person actually built.
 
@@ -124,7 +130,7 @@ The pulse is delivered both as a concise summary in chat, and as a complete, pub
 * **Summary:** {1-3 sentences: focus area, merged PRs, active work}
 {Single-person scope adds:}
 * **Wins to recognise:** {specific merged work, with links}
-* **30-day trend:** {[N tickets resolved](query) · [N PRs merged](search) · median open-to-merge · median time to first review}
+* **This week:** {[N PRs merged](search) · [N opened](search) · [N tickets done](query) · [N reviews given](search)}. Statistics cover the window only; do not add a longer trend
 * **Reviews given:** {[N reviews](search), and whose work they concentrate on}
 * **Talking points:** {numbered, each tied to linked evidence}
 * **Questions to ask:** {2–4 open questions}
