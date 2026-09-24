@@ -360,6 +360,75 @@ bash convert-formats.sh input.mp4 --minterpolate
 
 这条坑的隐蔽性在于——**没有 bug 报警**。只有人眼或 OCR 能发现。
 
+## 17. 离线/无 CDN 的真·自包含 —— React/Babel 全内联，且引擎也要 transpile
+
+**踩的坑（2026-05 觅游宣传动画）**：动画 HTML 用 `<script src="https://unpkg.com/react...">` + `<script src=".../@babel/standalone">` 走 CDN。本机有全局代理，Playwright 录制时 chromium 连 unpkg / Google Fonts 全部 `net::ERR_CONNECTION_CLOSED`：
+
+1. React/ReactDOM 没加载 → `window.React undefined`
+2. Babel 没加载 → `<script type="text/babel">` 里的 JSX 当普通 JS 跑 → `Unexpected token '<'`
+
+修了 React/Babel 后又踩第二个坑：**把 `animations.jsx` 引擎当普通 `<script>` 内联，依然报 `Unexpected token '<'` → `window.Animations is undefined`**。根因：**`animations.jsx` 引擎本身含 JSX**（`Stage`/`Sprite` 组件 `return (<div>...)`），它原设计是用 `<script type="text/babel">` 由 Babel 转译加载的。只 transpile 了 app 代码、忘了 transpile 引擎 → 引擎那段 JSX 没被编译。
+
+**规则**（要做「双击即开 / 离线 / 能被 Playwright 录」的真自包含单文件时）：
+
+- **React + ReactDOM 本地内联**：`curl` 下载 `react.production.min.js`（~10KB）+ `react-dom.production.min.js`（~131KB）到本地，inline 进 `<script>`，不走 CDN
+- **构建期 Babel 预编译，运行期不带 Babel**：用 `@babel/standalone`（下载一次，仅构建用）在 node 里 `Babel.transform(src,{presets:['react']}).code`，把 JSX → `React.createElement`。**app 和 `animations.jsx` 引擎两段都要过 transform**——引擎含 JSX，漏了它必报 `Unexpected token '<'`
+- **字体改系统字体**：Google Fonts CDN 同样会被代理掐断。中文动画用 `'PingFang SC'`（sans）/ `'Songti SC'`（serif）系统字体，不依赖网络。`document.fonts.ready` 对系统字体立即 resolve，录制不卡
+- **base64 内联图片素材**：`<img src="png/x.png">` 相对路径在 `file://` 能渲染，但要真便携（移动文件不丢图）就 base64 data URL 内联；背景大图先转 JPEG 压一下再 base64
+- **构建模板化**：HTML 模板留 `__REACT__/__REACTDOM__/__ASSETS__/__ENGINE__` token + 一段 `type="text/jsx-source"` 的 app 源码，node 构建脚本读 token 注入（vendor 原样、引擎+app 过 Babel）→ 写出最终单文件。改动画只改模板重跑构建
+
+**验证**：Playwright `page.evaluate(()=>({React:typeof window.React, Animations:typeof window.Animations}))`——两个都该是 `object`。任一 `undefined` → 对应 `<script>` 抛了错（多半是没 transpile 的 JSX）。
+
+**和坑 #15 的关系**：#15 讲「单文件别用 `src=` 外链 `.jsx`（file:// CORS）」；本坑更进一步——连 React/Babel/字体的**远程 CDN 在受限网络下也会断**，要做到真自包含必须全内联 + 构建期 transpile。
+
+## 18. 【HyperFrames】CSS transition + class 切换在 seek 渲染下不确定
+
+CSS `transition` 走的是墙钟，不是时间轴。逐帧 seek 渲染时每帧都是独立截图，transition 的中间态取决于「seek 到这帧时过了多久墙钟时间」——完全不确定，可能永远停在起始值，也可能随机停在中间。c3 迁移实测（2026-07-17）：`.watermark-br` 用 `transition: opacity 0.6s` + class 切换，seek 渲染下透明度不听话。
+
+**修法**：渲染路径上的一切状态变化都用 tween 或 t 的纯函数表达。迁移老 demo 时全文搜 `transition:`，逐个改成 `render(t)` 里的 lerp；新写合成从一开始就不写 transition。hover 等交互态的 transition 无所谓（渲染时不触发）。
+
+## 19. 【HyperFrames】代理 tween 首帧不触发 —— 手动补 `render(0)`
+
+用代理 tween 把 `render(t)` 挂进 GSAP timeline 时（老 demo 适配器路线），timeline 停在 t=0 的状态下 `onUpdate` 不一定被调用——首帧可能是 HTML 的静态未初始化状态而非 `render(0)` 的画面。
+
+**修法**：注册 timeline 后手动同步调一次 `render(0)`。配方全文见 `references/hyperframes-backend.md`。
+
+## 20. 【HyperFrames】contrast 门与暗色电影风冲突 —— 用 `--no-contrast`，其余四门必须 0 error
+
+`npm run check` 的 contrast 门按 WCAG AA 4.5:1 检查所有文字。暗色 cinematic 设计里 16-40% 透明度的水印、mono 标签、装饰性文字是**刻意的**低对比（电影感的一部分），会成片报错，且框架没有逐元素豁免机制。c3 实测 42 个 contrast error 全部是设计本意。
+
+**修法**：暗色电影风产出用 `npx hyperframes check --no-contrast`，lint/runtime/layout/motion 四门仍必须 0 error。**亮底信息型产出不要跳 contrast**——那种场景下的报错通常是真的可读性问题（可读性硬底线见 SKILL.md Fallback 节）。
+
+## 21. 【HyperFrames/GSAP】fromTo 的 immediateRender 幻影 —— 元素提前数秒出现
+
+GSAP 的 `fromTo()` 默认 `immediateRender: true`：build timeline 时就把 from 态渲染到元素上。如果 from 态本身可见（`autoAlpha > 0`），元素会在它的 tween 开始前就出现在画面里——火花、点击圈、涟漪、扬尘这类「短促特效」最容易中招（B00 实测一次踩了 4 处：特效在归位时刻前几秒就挂在画面上）。
+
+**修法**：所有 from 态可见的 `fromTo()` 显式加 `immediateRender: false`；或改成「set 初始隐藏 + to」。自查方式：渲染后抽每幕开头帧，看有没有「不该在场的特效元素」。
+
+## 22. 【镜头】3D/放大模式下文字发糊 —— 放大走 CSS zoom 不走 transform scale
+
+**症状**：用 `transform: scale()` 推近页面（尤其 3D perspective 模式下），文字发糊，倍率越高越糊，2x 以上不可交付。
+
+**根因**：Chromium 按元素的**布局尺寸**栅格化，再把位图放大。scale 只放大位图。
+
+**解法**（shotcraft 判例，全库最贵知识）：相机层的放大走 **CSS `zoom` 属性**（布局级缩放，按放大后尺寸重新 layout 并栅格化，文字任意倍率锐利）。坐标换算和完整公式见 `camera-language.md` §3.4、`gsap-recipes.md` §9.2。注意：`zoom` 每帧触发 re-layout，是「禁 tween 布局属性」的唯一合法例外，只许用在 `#world` 相机层；离线逐帧渲染下渲染时长变慢属正常，产物质量优先。配套：全页截图 2x 起，特写另备 4x 切片在推进期 6f 交叉淡入。
+
+## 23. 【镜头】perspective 被中间层打断 —— 3D 瞬间变平
+
+**症状**：设好了 `perspective` + `preserve-3d`，渲出来完全没有 3D 感，所有层平贴。
+
+**根因**：`#camera` 与 3D 子元素之间的**任何中间层**加了 `overflow: hidden`、`filter`、`opacity < 1`、`clip-path` 之一，都会创建新 stacking context，flatten 掉 preserve-3d。
+
+**解法**：3D 模式下滤镜/透明度效果只加在**最内层元素**上；容器链上逐层检查上述四类属性。排查口诀：从 `#camera` 到出问题的元素，中间每一层都 `getComputedStyle` 查一遍这四项。
+
+## 24. 【镜头】pan 露边 —— 平移时露出画布外空白
+
+**症状**：镜头平移/摇镜时画面边缘露出白边或黑边。
+
+**根因**：`#world` 尺寸只做到和视口一样大，镜头一动就出界。
+
+**解法**：`#world` 四周外扩 bleed ≥ 最大 pan 振幅 + 8% 安全边距（camera-language §3.3）。背景层/氛围层要跟着铺满 bleed 区，别只铺视口。自查：把 timeline seek 到每段 pan 的两个端点截图，看四边。
+
 ## 快速自查清单（开工前 5 秒）
 
 - [ ] 每个 `position: absolute` 的父元素都有 `position: relative`？
@@ -378,3 +447,11 @@ bash convert-formats.sh input.mp4 --minterpolate
 - [ ] 涉及具体品牌（Stripe/Anthropic/Lovart/...）：走完了「品牌资产协议」（SKILL.md §1.a 五步）？有没有写 `brand-spec.md`？
 - [ ] 单文件交付的 HTML：`animations.jsx` 是内联的，不是 `src="..."`？（file:// 下 external .jsx 会 CORS 黑屏）
 - [ ] 跨 scene 出现的元素（chapter 标签/水印/scene 编号）没有硬编码颜色？在每个 scene 底色下都可见？
+- [ ] 要离线/真自包含：React+ReactDOM 本地内联、**app 和 `animations.jsx` 引擎都过 Babel transpile**、字体用系统字体？（见坑 #17；引擎含 JSX，漏 transpile 必报 `Unexpected token '<'`）
+- [ ] 【HyperFrames】渲染路径上没有 CSS `transition`？状态变化全是 tween 或 t 的纯函数？（坑 #18）
+- [ ] 【HyperFrames】代理 tween 场景注册后补了 `render(0)`？（坑 #19）
+- [ ] 【HyperFrames】check 过了？暗色电影风用 `--no-contrast`，其余四门 0 error？（坑 #20）
+- [ ] 【HyperFrames/GSAP】from 态可见的 `fromTo()` 全部加了 `immediateRender:false`？（坑 #21，B00 实测 4 处幻影）
+- [ ] 【镜头】3D/放大特写走了 CSS `zoom`，没有 scale 放大发糊？（坑 #22）
+- [ ] 【镜头】`#camera` 到 3D 元素的中间层没有 overflow/filter/opacity/clip-path？（坑 #23）
+- [ ] 【镜头】`#world` 外扩了 bleed，pan 端点截图四边无露白？（坑 #24）

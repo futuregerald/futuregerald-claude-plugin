@@ -2,6 +2,40 @@
 
 一些 design-agent 原生环境（如 Claude.ai Artifacts）有内置的 `fork_verifier_agent` 起 subagent 用 iframe 截图检查。大部分 agent 环境（Claude Code / Codex / Cursor / Trae / 等）里没有这个内置能力——用 Playwright 手动做就能覆盖相同的验证场景。
 
+## 🔴 第 0 条：先验证你的验证工具
+
+**在相信任何渲染结果之前，先确认这个渲染器本身能正确渲染。** 这条排在所有验证之前，
+因为工具不可信时，后面每一步都在给你假的绿灯。
+
+两个实测翻车（2026-09，一次带甲方模板的 PPTX 交付）：
+
+- **macOS `qlmanage -t` 生成的缩略图放过了 4 个会导致文字重叠的 bug**。它走的是简化
+  渲染路径，对行距的处理比真 PowerPoint 宽容得多——20 页逐页看过去全对，用户在 WPS 里
+  一打开就是文字压文字。**缩略图不是渲染，别拿它当验收依据。**
+- **LibreOffice 在 macOS 上渲染中文 PPTX 全是豆腐块**，一度让人以为是文件坏了。
+
+**怎么判断是工具的问题还是产物的问题：做对照实验。**
+把一个**已知正确的同类文件**丢给同一个渲染器——上面第二例里，把甲方的官方模板原件
+拿去渲染，它的中文同样全部消失，当场就能判定这是环境问题、不是你的文件问题。
+这一步能省掉几小时在错误方向上的排查。
+
+**可信度排序（macOS）**：
+
+| 工具 | 能不能信 |
+|---|---|
+| `qlmanage -t` 缩略图 | ❌ 不能当验收依据 |
+| LibreOffice headless | ⚠️ 版面可信，字体/中文可能整体丢失 |
+| Keynote + AppleScript 导 PDF | ✅ 可自动化的首选，真排版引擎 |
+| 目标软件本体（PowerPoint / WPS）打开 | ✅ 最终确认，人工看 |
+
+⚠️ **不要用 System Events 注入按键**去驱动 GUI 翻页截图——按键会打到用户当前正在
+输入的窗口里去。要么用 AppleScript 的文档级 API（如 Keynote 的 `export`），要么人工看。
+
+**再配一道不依赖任何渲染器的机械校验**：文字逐字比对（源数据 vs 产物，
+`re.sub(r'\s+','')` 后必须完全相等）、元素数量逐页比对。渲染器骗得了眼睛，骗不过计数。
+
+---
+
 ## 验证清单
 
 每次产出HTML后，按这个清单做一遍：
@@ -21,7 +55,7 @@ open -a "Google Chrome" "/path/to/your/design.html"
 HTML文件里最常见的问题是JS报错导致白屏。用Playwright跑一遍：
 
 ```bash
-python ~/.claude/skills/claude-design/scripts/verify.py path/to/design.html
+python ~/.claude/skills/huashu-design/scripts/verify.py path/to/design.html
 ```
 
 这个脚本会：
@@ -120,13 +154,7 @@ open screenshot.png
 
 ### 上传图床分享链接
 
-如果需要给远程协作者看（比如 Slack/飞书/微信），让用户用自己的图床工具或 MCP 上传：
-
-```bash
-python ~/Documents/写作/tools/upload_image.py screenshot.png
-```
-
-返回ImgBB的永久链接，可以粘贴到任何地方。
+如果需要给远程协作者看（比如 Slack/飞书/微信），让用户用自己的图床工具或 MCP 上传截图，拿到一个永久链接，可以粘贴到任何地方。
 
 ## 验证出错时
 
@@ -187,3 +215,20 @@ python verify.py design.html --output ./screenshots/
 # headless=false，打开真实浏览器给你看
 python verify.py design.html --show
 ```
+
+## 视频产物硬校验（verify-video.sh）
+
+渲染出的 MP4/成片不靠肉眼过，用脚本硬校验（HTML 合成侧的校验由 `hyperframes check` 五门审计负责，这个脚本只管产物侧）：
+
+```bash
+# 成品（默认要求有音轨）
+bash scripts/verify-video.sh final.mp4 --duration=22 --fps=60 --width=1920 --height=1080
+
+# 无声中间产物
+bash scripts/verify-video.sh raw.mp4 --duration=10 --fps=60 --no-audio
+
+# 刻意黑场开场的电影风
+bash scripts/verify-video.sh film.mp4 --duration=30 --fps=60 --allow-black-open
+```
+
+检查项：分辨率/帧率、时长误差（±2%）、audio stream 存在性（无音轨=半成品铁律的机器执行）、首尾黑帧（blackdetect，录制起点偏移/loop 回跳的典型症状）、LUFS 响度（成品目标 -14±4）。exit code 非 0 就不许交付。
