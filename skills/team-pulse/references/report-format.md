@@ -21,6 +21,31 @@ leaves the manager unable to say what the person actually built.
 
 ## Rules for Every Scope
 
+- **Link the blocker, always.** "Blocked by:" links the thing doing the blocking, not just the
+  blocked ticket.
+  - ✗ "ABC-2764 is blocked on a product decision"
+  - ✓ "**Blocked by:** [Open question #1 on ABC-2764](url): does the filter ship empty for V1? Holds
+    [ABC-2769](url) and [ABC-2766](url) from merging."
+- **When the blocker is a person, name them, factually.** Read the comment threads on blocked and
+  stalled items and report who asked whom, what, and how long ago.
+  - ✗ "XYZ-195 is open and unassigned"
+  - ✓ "**Blocked by: [Name]**. [Colleague] asked on 08-27 whether the discount applies per test or
+    evenly. No reply in 20 days."
+  Never as blame: the person may not know they are the blocker, and the report is read in front of
+  people.
+- **Not started gets its own list.** Epics in Backlog or To Do with zero children done, each with its
+  description and how long it has sat. Leaving them out makes a program look smaller and healthier
+  than it is.
+- **Count the team, not the repo.** Repos are shared: in one real week, 83 PRs merged repo-wide
+  against 22 by the team. Use `pr_scan.py`'s `*_team` counts; the repo-wide figure is at most one line
+  of context. A PR is the team's when its author is on the roster (use for "who has a stale PR") or
+  its key is in scope (use for "what work on our epics is in flight"). Say which you used.
+- **PRs in flight come in three kinds worth reporting:** stale (oldest first, bots excluded), no
+  ticket at all (human authors only; bots counted, never listed), and another team's key. Frame
+  untracked work as a question ("should this be tracked?"), not an accusation.
+- **The citation rule.** Every rating and claim carries a ticket key plus a date or a count. What
+  could not be measured is reported as "not measured", never as zero.
+
 - **Link everything a reader might want to open.** Ticket keys, PRs, people (their profile),
   repos, and **every count**: "34 tickets resolved" links to the tracker query that returns
   those 34, "48 reviews" links to the GitHub search that returns them. A number without a link
@@ -225,16 +250,16 @@ headings, monospace numbers, bordered cards with no shadows. Both `assets/templa
 ```
 ## Team Pulse: Platform Team (May 26 - Jun 3, 2026)
 
-**Headline:** On track overall, but the billing payout work has no code pushed
+**Headline:** On track overall, but the billing work has no code pushed
 yet despite tickets showing "In Progress" — flag with Dev Two.
 
 ### Active Work
 
 **Billing Overhaul** (ABC-100) — Needs Attention · **35% Complete** (7/20 issues)
 - ADR (ABC-121) and schema migration (ABC-118) both in code review.
-- Initial payout models merged to main.
+- Initial billing models merged to main.
 
-> ⚠️ **Why It Needs Attention:** No feature branches exist in repo for active payout stories — "Code Review" status is misleading and 4 stories have no assignee.
+> ⚠️ **Why It Needs Attention:** No feature branches exist in repo for active billing stories — "Code Review" status is misleading and 4 stories have no assignee.
 
 **What's Left (TL;DR):**
 - Unblock ABC-121 ADR signoff.
@@ -263,5 +288,5 @@ Shipped #412. Picked up ABC-104. Active reviewer across the team.
 
 ### Bottom Line
 
-Team is productive on BAU work. The payout work is the concern — stories exist but no code is flowing. Raise in standup today.
+Team is productive on BAU work. The billing work is the concern — stories exist but no code is flowing. Raise in standup today.
 ```

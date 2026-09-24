@@ -21,7 +21,7 @@ the pulse report format) do not apply to it. What the two modes share: the roste
 configuration in `references/team.local.md` / `team.md`, the linking and plain-language rules, and the
 visual style. A forecast's HTML page is built on `assets/forecast.html`.
 
-A pulse can point at a forecast ("Security Signals is at risk — see the forecast") but never runs
+A pulse can point at a forecast ("the checkout rebuild is at risk — see the forecast") but never runs
 the forecast method inline: a full forecast costs several research agents, and a pulse is meant to
 be read in two minutes.
 
@@ -195,6 +195,35 @@ If the meeting source needs re-authentication, do not authenticate from a sub-ag
 - **Default: One agent per source across the full window** (3 agents total). Scoped queries cap raw input.
 - **Fan-out by day (24 agents):** Use when personal attribution isolation or wall-clock speed is paramount (e.g. 1:1s, performance reviews). See [references/batching-rationale.md](references/batching-rationale.md) for full benchmarks and trade-off analysis.
 
+## Step 2b: Scan PRs Against the Tracker
+
+Run the script directly, alongside the agents. This part is mechanical and must not go to an agent:
+
+```bash
+python3 scripts/pr_scan.py \
+  --org ORG --repos repo-one,repo-two \
+  --since {START_DATE} --keys ABC,XYZ \
+  --roster handle-one,handle-two,handle-three \
+  --stale-days 3 --out .updates
+```
+
+**`--roster` is not optional.** Repos are shared with other teams, so without it every count is
+repo-wide and overstates the team's output, measured at 83 repo-wide against 22 for the team in
+one real week. Pass the roster's GitHub handles from `references/team.md` and read the `*_team`
+counts (`merged_team`, `open_team`, `stale_team`, `no_ticket_team`), never the bare totals. See
+"Count the team, not the repo" in [report-format.md](references/report-format.md).
+
+It writes `prs.json` and `prs.md`. Every PR lands in exactly one bucket: `linked_in_scope`,
+`linked_out_of_scope`, `no_ticket`, `declared_no_ticket`. `no_ticket` is the point of the step:
+work the tracker cannot see, invisible to any tracker-only report. So is a PR approved months ago
+and never merged while its ticket reads Done.
+
+**If the script exits with `TRUNCATED`, do not proceed.** Narrow the window and rerun. `gh pr list`
+caps results silently, and a partial scan makes the untracked section look complete while empty.
+
+**The window bounds merged PRs only.** Open PRs report as current state regardless of `--since`,
+because a PR open five weeks is exactly what a status report should surface.
+
 ## Step 3: Synthesize Report
 
 Read ONLY the digest files from `.updates/`. List them first:
@@ -208,6 +237,15 @@ Follow the format in [references/report-format.md](references/report-format.md).
 - **Quantitative epic progress.** Report exact completion percentage (`Done / Total` non-cancelled issues) for every active epic. If `Total == 0`, report `N/A`.
 - **Explain exactly why when flagged.** If an epic, initiative, or teammate is rated *Needs Attention*, *At Risk*, or *Blocked*, explicitly detail **exactly why** (specific root cause, dependency, failure mode, or idle duration). If tracker commentary is silent, use empirical fallback (e.g. "No commits/transitions for N days").
 - **What's Left (TL;DR).** Every active epic must include a 2–4 bullet list of remaining tasks and PRs required to reach 100%, prioritized by in-review PRs and active assigned tasks.
+- **Link the blocker, not just the blocked thing.** When something is blocked, write
+  **"Blocked by:"** and link the specific open question, PR, decision ticket or dependency. When the
+  blocker is a person who has not answered, name who asked whom, what, and how long ago, stated as
+  fact, never as blame.
+- **Every assessment carries a ticket key plus a date or a count.** "Slipping" is not a citation;
+  "1/14 stories done, epic opened 09-01" is. No citation, no rating.
+- **Report what you could not measure as "not measured", never as zero.** A silent gap reads as a
+  fact.
+- **Count the team, not the repo.** PR numbers come from `pr_scan.py`'s `*_team` counts.
 - **Brevity over completeness.** Skip anything that's fine. Highlight what needs attention.
 - **Name names.** "<person> has 2 PRs awaiting review for 4 days" not "some PRs are stale."
 - **Assessments are required.** For each person and each project/epic, give a 1-line assessment.
@@ -260,6 +298,28 @@ rm -rf .updates
 | Needs Attention | Minor risk, slipping, or blocked but recoverable |
 | At Risk | Significant blocker, timeline threat, or capacity issue |
 | Blocked | Cannot proceed without external input/decision |
+
+Assign by these conditions, in order; first match wins. Decisions outrank technical symptoms: an
+EM's red items are usually unmade decisions, and saying so tells the reader the team is waiting on
+a person, not stuck on code.
+
+- **At Risk / Blocked:**
+  - a decision has been open past the threshold with no answer
+  - every child of the epic is Blocked
+  - a customer-facing defect is unassigned
+  - an epic is marked Done but its acceptance criteria do not hold, or its PR never merged
+  - work is In Progress and assigned to a **deactivated account**; check the assignee's `active` flag, not just the name
+- **Needs Attention:**
+  - real progress, but a load-bearing question is unanswered
+  - under 25% complete against a committed date
+  - an open PR past the stale threshold with nobody reviewing it
+  - scope cut without written rationale
+  - stalled: no status change in the window and under 25% of children done
+- **On Track:** work merged in the window and no open decision. An initiative with no activity and
+  no open decision is On Track, not absent. Say "no movement in N weeks" in its line.
+
+Always show the word as well as the colour. Projectors shift hue, and about 1 in 12 men cannot
+separate red from green.
 
 ## Anti-Patterns
 

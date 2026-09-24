@@ -21,6 +21,17 @@ jobs:
       - name: Run tests
         run: go test -v ./...
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python test deps
+        run: pip install pytest
+
+      - name: Run skill script tests
+        run: pytest -q skills/*/scripts
+
       - name: Build
         run: go build -o skill-installer .
 

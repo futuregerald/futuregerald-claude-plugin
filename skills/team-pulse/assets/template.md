@@ -108,7 +108,7 @@ Example row format:
 <!-- Repeat for each prioritized risk -->
 <!--
 ### {🔴 P0 | 🟡 P1 | 🔵 P2} — {Risk Title} ([`{Key}`]({Jira URL}))
-* **Risk & Impact:** {Description of failure mode, security/auth/payout implications}
+* **Risk & Impact:** {Description of failure mode, security, auth or billing implications}
 * **Immediate Action:** {Explicit owner and action item for today's standup}
 -->
 {{RISK_ITEMS_BLOCKS}}

@@ -60,9 +60,25 @@ For each active epic with activity, also query its child issues:
 - Jira Server/DC fallback: `"Epic Link" in ({ACTIVE_EPIC_KEYS})`
 Fields: summary, status, issuetype, parent, resolution
 
-For each active epic, also fetch the epic itself (fields: summary, description, priority, parent)
-and record: one plain sentence on what it delivers, its priority, and its parent initiative's
-key and name. For each open child, record one line on what it is, from its description.
+For each active epic, also fetch the epic itself (fields: summary, description, priority, parent,
+assignee) and record:
+- ONE plain sentence on what it delivers, from its `description` field, written for someone who has
+  never opened the ticket. Never a restatement of the title. This is the highest-priority field: if
+  budget runs short, deliver these and drop the rest. An empty description is a finding; say "no
+  description on the ticket" rather than guessing.
+- Its priority, and its parent initiative's key and name.
+- Its assignee AND whether that account's `active` flag is false. A departed owner reads as
+  "someone has this" on every board view.
+- Whether its own status contradicts its children: a parent reading In Progress while its children
+  are Won't Do or untouched for months is an abandoned plan. Flag it with dates on both levels.
+For each open child, record one line on what it is, from its description.
+
+DISCOVER the epics in scope rather than working only from a supplied list: search by label, by
+summary match, by links from known roots, and by the parents of issues that moved this window. A
+hand-enumerated list can only confirm what someone already believed.
+
+List epics that have NOT STARTED (Backlog or To Do with zero children done) in their own section,
+with how long each has sat. They are invisible to any activity-based query.
 
 PAGINATION & MATH RULES:
 - Read `total` from response metadata for the denominator. If results are capped, use `total`, never `results.length`.
