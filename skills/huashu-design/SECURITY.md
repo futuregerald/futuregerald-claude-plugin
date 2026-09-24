@@ -2,30 +2,28 @@
 
 This document exhaustively declares every network destination, credential touchpoint, subprocess, and deletion this skill can perform, so that users and automated security reviewers can verify the claims against the code.
 
-**TL;DR: the core pipeline (HTML design → render → MP4/PDF/PPTX export) runs 100% locally with zero network calls and zero API keys. All cloud-touching code is isolated in `scripts/cloud/`, is strictly optional, uses only keys you supply, sends data only to the corresponding vendor's official API, and refuses to run without explicit consent (`--yes` flag or `HUASHU_CLOUD_OK=1`). There is no telemetry. No data is ever sent to any server controlled by the skill author.**
+**TL;DR: this vendored copy contains no outbound code that takes a credential. Upstream's cloud scripts are not included in this plugin, so there is no consent gate and no vendor API call. The only outbound request any script makes is an image search against the official Wikimedia Commons API (`scripts/fetch_images.py`). There is no telemetry. No data is ever sent to any server controlled by the skill author. The divergence from upstream is recorded in the repository's `docs/huashu-design-provenance.md`.**
 
 ## Complete list of network destinations
 
 | Host | Where | What is sent | When |
 |---|---|---|---|
-| `ark.cn-beijing.volces.com` (Volcengine Ark, ByteDance official API) | `scripts/cloud/ai-review-video.py` | Compressed segments of **your own rendered video**, for AI quality review, authenticated with **your own** `ARK_API_KEY` | Only when you run it, and only after the consent gate |
-| `openspeech.bytedance.com` (ByteDance official TTS API) | `scripts/cloud/tts-doubao.mjs` (also invoked by `scripts/narrate-pipeline.mjs`) | The narration text you want synthesized, with **your own** key. The endpoint is validated against a hardcoded hostname allowlist (`*.bytedance.com` / `*.volces.com`) — a tampered `.env` cannot redirect your key or text elsewhere | Only when you run it, and only after the consent gate |
 | `commons.wikimedia.org` (official Wikimedia API) | `scripts/fetch_images.py` | Image search keywords; downloads CC/public-domain images with license info printed for review | Only when the agent fetches stock imagery for a content design |
 | Brand official websites, `simpleicons.org`, Google favicon service | `references/brand-asset-protocol.md` (instructions, no script) | Plain GET requests to download publicly served logos/brand assets | Only when you ask for a brand-specific design |
 | `fonts.googleapis.com`, `unpkg.com` and similar CDNs | Static `<link>`/`<script>` tags inside demo/output HTML | Standard browser font/library fetches when *you* open a generated HTML file | Browser-side only; render scripts work offline-first |
 
 That is the entire list. `grep -rn "https://" --include="*.py" --include="*.mjs" --include="*.js" --include="*.sh" scripts/` to verify.
 
+> **This copy diverges from upstream.** The cloud TTS script, the AI video-review script,
+> their driver, that script's reference doc and the environment-variable template are not
+> vendored here. Upstream ships them consent-gated and hostname-pinned; this plugin omits
+> them so the repository carries no outbound-credential code at all. The exact path list
+> and the re-sync recipe are in the repository's `docs/huashu-design-provenance.md`.
+
 ## API keys
 
-- No key is hardcoded anywhere; the repo ships only `.env.example` placeholders (`.env` is gitignored).
-- Keys are read from the **skill's own root `.env`** or process environment — never from files elsewhere on your machine. `ai-review-video.py` extracts only the single `ARK_API_KEY` variable; it does not load the rest of the file into the environment.
-- Keys are transmitted exclusively to the corresponding vendor's official endpoint listed above, over HTTPS, as auth headers.
-- `references/react-setup.md` option B (pasting an Anthropic key into a demo page input) is explicitly marked local-demo-only and not recommended; the default options require no key at all.
-
-## Explicit consent gate
-
-Both cloud scripts print exactly what will be sent to which host and exit before any network call unless you pass `--yes` or set `HUASHU_CLOUD_OK=1`. Everything else in this skill never needs the gate because it never leaves your machine.
+- No key is hardcoded anywhere, and **no script in this copy reads or transmits a credential.**
+- One credential touchpoint remains, and it is a document rather than a script: `references/react-setup.md` option B asks you to paste an Anthropic key into a demo page input, which the page then sends to `api.anthropic.com` from your browser. Upstream marks it local-demo-only and not recommended, and the default options require no key at all. It is declared here because this file promises to declare every credential touchpoint — not because anything runs it for you.
 
 ## Subprocesses
 
@@ -45,7 +43,7 @@ Mainstream registry packages only (`playwright`, `sharp`, `pptxgenjs`, `pdf-lib`
 
 ## Proxy handling note
 
-`fetch_images.py` and `ai-review-video.py` disable inheriting proxy environment variables (`trust_env = False` / clearing `ALL_PROXY` etc.) for their own requests. This exists to survive stale local proxy configurations that break TLS — not to evade monitoring. If you need these requests to go through your proxy, set it explicitly in the script invocation.
+`fetch_images.py` disables inheriting proxy environment variables (`trust_env = False` / clearing `ALL_PROXY` etc.) for its own requests. This exists to survive stale local proxy configurations that break TLS — not to evade monitoring. If you need these requests to go through your proxy, set it explicitly in the script invocation.
 
 ## Reporting
 

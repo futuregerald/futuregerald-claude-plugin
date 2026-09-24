@@ -239,7 +239,7 @@ Claude Design is a **better graphics tool**. Huashu-design makes **the graphics-
 
 ## Security & Data Flow
 
-The core pipeline (design → render → MP4/PDF/PPTX export) runs **100% locally — zero network calls, zero API keys**. Cloud features (Doubao TTS narration, AI video review) are isolated in `scripts/cloud/`, fully optional: your own keys, official vendor APIs only, and an explicit `--yes` consent gate before anything leaves your machine. No telemetry; nothing is ever sent to any author-controlled server. Every outbound host, credential touchpoint, and deletion boundary is exhaustively declared in [SECURITY.md](SECURITY.md) — point your agent at it and verify against the code.
+The core pipeline (design → render → MP4/PDF/PPTX export) runs **100% locally — zero network calls, zero API keys**. Upstream's cloud features (TTS narration, AI video review) are **not vendored in this plugin**, so this copy contains no outbound code that takes a credential; the only outbound request any script makes is an image search against the official Wikimedia Commons API (`scripts/fetch_images.py`). No telemetry; nothing is ever sent to any author-controlled server. Every outbound host, credential touchpoint, subprocess and deletion boundary is declared in [SECURITY.md](SECURITY.md), and the divergence from upstream in the repository's `docs/huashu-design-provenance.md` — point your agent at both and verify against the code.
 
 ---
 
