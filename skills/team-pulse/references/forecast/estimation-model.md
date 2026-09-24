@@ -68,8 +68,10 @@ Report the depth walked and the count at each level.
 
 ### 2a. Measure per engineer, and never take the bottom
 
-Expect a **5–10× spread**. Measure merged PRs per week per engineer over ~8 weeks, convert with the
-measured tickets-per-PR ratio (§2d).
+Expect a **5–10× spread**. The rate is tickets closed per **delivery** week on the engineer's own
+item — see §2f for the full definition, the week classification, and the lookback window. Use
+merged PRs per week per engineer, converted with the measured tickets-per-PR ratio (§2d), only as a
+cross-check against that ticket-based rate, never as the primary measurement.
 
 The failure to avoid: taking the **bottom** of the measured range and applying it to everyone. On a
 team whose fastest engineer runs roughly 5× the slowest, planning at the slowest inflates every
@@ -317,9 +319,6 @@ It is reported for one reason: so a reader who sees a headline per-engineer rate
 it by a ticket count and conclude the team has roughly twice the capacity it has. Print it beside
 the headline rate as a caution, not inside the arithmetic.
 
-This section was previously named "concurrency haircut". The name was changed because it invited
-exactly the error it exists to prevent — a "haircut" reads as something you apply.
-
 ## 4. Report Done, Remaining and TOTAL — and make them tie out
 
 Always give **three** numbers per item:
@@ -418,7 +417,7 @@ how you find out which of your factors is wrong.
 
 ## 8. Where to split, and what the split buys
 
-**Both modes.** Splitting needs no window, and with a single item in scope it is often the most
+**Both cases.** Splitting needs no window, and with a single item in scope it is often the most
 useful output in the whole report.
 
 "This epic is too big" is an observation. A split proposal with its arithmetic is a recommendation.

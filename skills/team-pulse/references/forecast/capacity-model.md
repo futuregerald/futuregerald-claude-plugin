@@ -6,7 +6,7 @@ enable it.
 
 **This file is not how the skill produces a date.** Capacity answers *does the work fit in this
 window*. The **projected landing** — *when does it land* — comes from the critical chain divided by
-the engineers on it (`SKILL.md`, Phase 6), needs no window, and is produced whenever a date is
+the engineers on it (`method.md`, Phase 6), needs no window, and is produced whenever a date is
 wanted. Skipping capacity never means skipping the projection.
 
 Capacity answers a different question from estimation. Estimation asks *how big is this work*.
@@ -245,4 +245,4 @@ estimate bounds follow in `estimation-model.md` §5.
 - **Never pro-rate a non-producing engineer** into a fraction. Remove and report.
 - **Never apply a focus factor** on top of a measured rate.
 - **Never present the capacity total as a completion date.**
-- **Never run this section at all in scope mode.** No window means no capacity.
+- **Never run this section at all without a window.** No window means no capacity.

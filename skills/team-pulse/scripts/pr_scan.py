@@ -29,8 +29,11 @@ NOT_TICKET_PREFIXES = frozenset({
 })
 
 
-def is_ticket_key(candidate):
-    return candidate.split("-", 1)[0] not in NOT_TICKET_PREFIXES
+def is_ticket_key(candidate, scope=()):
+    prefix = candidate.split("-", 1)[0]
+    if prefix in scope:
+        return True
+    return prefix not in NOT_TICKET_PREFIXES
 
 JSON_FIELDS = (
     "number,title,headRefName,body,author,createdAt,mergedAt,"
@@ -46,10 +49,10 @@ class GhError(RuntimeError):
     pass
 
 
-def extract_keys(title, branch, body):
+def extract_keys(title, branch, body, scope=()):
     haystack = " ".join(part or "" for part in (title, branch, body))
-    found = {key for key in KEY_PATTERN.findall(haystack) if is_ticket_key(key)}
-    return sorted(found - {"NO-TICKET"})
+    found = {key for key in KEY_PATTERN.findall(haystack) if is_ticket_key(key, scope)}
+    return sorted(found)
 
 
 def classify(keys, branch, scope, title="", body=""):
@@ -68,6 +71,10 @@ def is_stale(state, is_draft, age_days, review, limit, author_is_bot=False):
     if state != "open" or is_draft or author_is_bot:
         return False
     return age_days > limit
+
+
+def is_stale_unreviewed(stale, review):
+    return stale and review in ("", "REVIEW_REQUIRED")
 
 
 def is_team_pr(pr, roster):
@@ -103,13 +110,14 @@ def build_pr(raw, repo, state, scope, stale_days, now):
     title = raw.get("title") or ""
     branch = raw.get("headRefName") or ""
     body = raw.get("body") or ""
-    keys = extract_keys(title, branch, body)
+    keys = extract_keys(title, branch, body, scope)
     created = _parse_ts(raw.get("createdAt"))
     age_days = (_parse_ts(now) - created).days if created else 0
     review = raw.get("reviewDecision") or ""
     is_draft = bool(raw.get("isDraft"))
     author = raw.get("author") or {}
     author_is_bot = bool(author.get("is_bot"))
+    stale = is_stale(state, is_draft, age_days, review, stale_days, author_is_bot)
     return {
         "repo": repo,
         "number": raw.get("number"),
@@ -127,7 +135,8 @@ def build_pr(raw, repo, state, scope, stale_days, now):
         "deletions": raw.get("deletions") or 0,
         "keys": keys,
         "bucket": classify(keys, branch, scope, title=title, body=body),
-        "stale": is_stale(state, is_draft, age_days, review, stale_days, author_is_bot),
+        "stale": stale,
+        "stale_unreviewed": is_stale_unreviewed(stale, review),
     }
 
 
@@ -141,11 +150,14 @@ def build_report(merged, open_prs, window, config, now):
     counts["no_ticket_human"] = sum(1 for pr in orphans if not pr["author_is_bot"])
     counts["no_ticket_bot"] = sum(1 for pr in orphans if pr["author_is_bot"])
     counts["stale"] = sum(1 for pr in everything if pr["stale"])
+    counts["stale_unreviewed"] = sum(1 for pr in everything if pr["stale_unreviewed"])
 
     roster = {name.lower() for name in (config.get("roster") or [])}
     counts["merged_team"] = sum(1 for pr in merged if is_team_pr(pr, roster))
     counts["open_team"] = sum(1 for pr in open_prs if is_team_pr(pr, roster))
     counts["stale_team"] = sum(1 for pr in everything if pr["stale"] and is_team_pr(pr, roster))
+    counts["stale_unreviewed_team"] = sum(
+        1 for pr in everything if pr["stale_unreviewed"] and is_team_pr(pr, roster))
     counts["no_ticket_team"] = sum(
         1 for pr in orphans if not pr["author_is_bot"] and is_team_pr(pr, roster))
     return {
@@ -175,10 +187,17 @@ def _table(rows, headers):
     return "\n".join(out) + "\n"
 
 
+def _team_only(prs, roster):
+    if not roster:
+        return prs
+    return [pr for pr in prs if is_team_pr(pr, roster)]
+
+
 def render_markdown(report):
     counts = report["counts"]
     window = report["window"]
     failures = report.get("failures") or []
+    roster = {name.lower() for name in (report["config"].get("roster") or [])}
     lines = [
         f"# PR scan {window['since']} to {window['until']}",
         "",]
@@ -197,17 +216,18 @@ def render_markdown(report):
         f"**No ticket {counts['no_ticket']}** "
         f"({counts['no_ticket_human']} human, {counts['no_ticket_bot']} bot) · "
         f"Declared no-ticket {counts['declared_no_ticket']} · "
-        f"Stale {counts['stale']}",
+        f"Stale, unreviewed {counts['stale_unreviewed']}",
         "",
         "## Not on the board",
         "",
         "Human-authored PRs carrying no ticket key anywhere in title, branch, or body. "
-        "This is work the tracker cannot see.",
+        "This is work the tracker cannot see. Repo-wide total above; table below is the team's "
+        "PRs only, when a roster is configured.",
         "",
     ]
     everything = report["merged"] + report["open"]
     orphans = [pr for pr in everything if pr["bucket"] == "no_ticket"]
-    human_orphans = [pr for pr in orphans if not pr["author_is_bot"]]
+    human_orphans = _team_only([pr for pr in orphans if not pr["author_is_bot"]], roster)
     bot_orphans = [pr for pr in orphans if pr["author_is_bot"]]
     lines.append(_table(
         [(f"{pr['repo']}#{pr['number']}", _cell(pr["title"]), pr["author"],
@@ -220,18 +240,22 @@ def render_markdown(report):
                       f"dependency bumps, not team work. Not shown.", ""]
 
     lines += ["", "## Another team's ticket", "",
-              "In your repos, but filed under a key outside your scope.", ""]
-    others = [pr for pr in everything if pr["bucket"] == "linked_out_of_scope"]
+              "In your repos, but filed under a key outside your scope. Repo-wide total above; "
+              "table below is the team's PRs only, when a roster is configured.", ""]
+    others = _team_only([pr for pr in everything if pr["bucket"] == "linked_out_of_scope"], roster)
     lines.append(_table(
         [(f"{pr['repo']}#{pr['number']}", _cell(pr["title"]), pr["author"],
           ", ".join(pr["keys"]), "merged" if pr["merged_at"] else "open") for pr in others],
         ["PR", "Title", "Author", "Keys", "State"]))
 
-    lines += ["", "## Stale open PRs", ""]
-    stale = [pr for pr in report["open"] if pr["stale"]]
+    lines += ["", "## Stale, unreviewed open PRs", "",
+              "Stale, and nobody is reviewing it. An approved-but-unmerged PR is a different "
+              "problem and is not listed here. Repo-wide total above; table below is the team's "
+              "PRs only, when a roster is configured.", ""]
+    stale_unreviewed = _team_only([pr for pr in report["open"] if pr["stale_unreviewed"]], roster)
     lines.append(_table(
         [(f"{pr['repo']}#{pr['number']}", _cell(pr["title"]), pr["author"],
-          f"{pr['age_days']}d", pr["review_decision"], pr["url"]) for pr in stale],
+          f"{pr['age_days']}d", pr["review_decision"], pr["url"]) for pr in stale_unreviewed],
         ["PR", "Title", "Author", "Age", "Review", "URL"]))
 
     lines += ["", "## Merged in window, in scope", ""]
@@ -258,16 +282,19 @@ def _gh(args):
         ) from error
 
 
-def build_gh_args(repo, state, since, limit):
+def build_gh_args(repo, state, since, limit, until=None):
     args = ["pr", "list", "--repo", repo, "--state", state,
             "-L", str(effective_limit(state, limit)), "--json", JSON_FIELDS]
     if state == "merged":
-        args += ["--search", f"merged:>={since}"]
+        if until:
+            args += ["--search", f"merged:{since}..{until}"]
+        else:
+            args += ["--search", f"merged:>={since}"]
     return args
 
 
-def fetch(repo, state, since, limit):
-    items = _gh(build_gh_args(repo, state, since, limit))
+def fetch(repo, state, since, limit, until=None):
+    items = _gh(build_gh_args(repo, state, since, limit, until))
     check_not_truncated(items, limit, repo, state)
     return items
 
@@ -277,6 +304,7 @@ def main(argv=None):
     parser.add_argument("--org", required=True)
     parser.add_argument("--repos", required=True, help="comma-separated repo names")
     parser.add_argument("--since", required=True, help="YYYY-MM-DD")
+    parser.add_argument("--until", default=None, help="YYYY-MM-DD (default: today)")
     parser.add_argument("--keys", default="", help="comma-separated project key prefixes")
     parser.add_argument("--roster", default="",
                         help="comma-separated GitHub handles of the team; a PR counts as the "
@@ -291,20 +319,21 @@ def main(argv=None):
     scope = [k.strip().upper() for k in args.keys.split(",") if k.strip()]
     roster = [h.strip() for h in args.roster.split(",") if h.strip()]
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    until = args.until or now[:10]
 
     merged, open_prs, failures = [], [], []
     for name in repos:
         repo = name if "/" in name else f"{args.org}/{name}"
         for state, sink in (("merged", merged), ("open", open_prs)):
             try:
-                for raw in fetch(repo, state, args.since, args.limit):
+                for raw in fetch(repo, state, args.since, args.limit, until):
                     sink.append(build_pr(raw, repo, state, scope, args.stale_days, now))
             except GhError as error:
                 failures.append({"repo": repo, "state": state, "error": str(error)})
 
     report = build_report(
         merged, open_prs,
-        window={"since": args.since, "until": now[:10]},
+        window={"since": args.since, "until": until},
         config={"org": args.org, "repos": repos, "keys": scope,
                 "stale_days": args.stale_days, "limit": args.limit, "roster": roster},
         now=now,
@@ -322,10 +351,14 @@ def main(argv=None):
     counts = report["counts"]
     print(f"{json_path}\n{md_path}")
     print(f"TEAM   merged={counts['merged_team']} open={counts['open_team']} "
-          f"stale={counts['stale_team']} no_ticket={counts['no_ticket_team']}")
+          f"stale_unreviewed={counts['stale_unreviewed_team']} no_ticket={counts['no_ticket_team']}")
     print(f"repos  merged={counts['merged']} open={counts['open']} "
-          f"stale={counts['stale']} no_ticket={counts['no_ticket']} "
+          f"stale_unreviewed={counts['stale_unreviewed']} no_ticket={counts['no_ticket']} "
           f"other_teams={counts['linked_out_of_scope']}")
+    if failures:
+        failed_repos = ", ".join(sorted({f["repo"] for f in failures}))
+        print(f"INCOMPLETE: {failed_repos}", file=sys.stderr)
+        return 2
     return 0
 
 

@@ -330,3 +330,154 @@ def test_empty_report_is_valid():
     assert report["counts"]["merged"] == 0
     assert report["counts"]["no_ticket"] == 0
     assert pr_scan.render_markdown(report).strip() != ""
+
+
+def test_gh_args_bound_merged_search_by_until_when_given():
+    args = pr_scan.build_gh_args("acme/repo", "merged", "2026-09-09", 1000, until="2026-09-16")
+    assert "merged:2026-09-09..2026-09-16" in args
+
+
+def test_gh_args_merged_search_is_open_ended_without_until():
+    args = pr_scan.build_gh_args("acme/repo", "merged", "2026-09-09", 1000)
+    assert "merged:>=2026-09-09" in args
+
+
+def test_gh_args_until_does_not_affect_open_state():
+    args = pr_scan.build_gh_args("acme/repo", "open", "2026-09-09", 1000, until="2026-09-16")
+    assert "--search" not in args
+
+
+@pytest.mark.parametrize(
+    "review,expected",
+    [
+        ("", True),
+        ("REVIEW_REQUIRED", True),
+        ("APPROVED", False),
+        ("CHANGES_REQUESTED", False),
+    ],
+)
+def test_stale_unreviewed_only_when_nobody_reviewed(review, expected):
+    assert pr_scan.is_stale_unreviewed(True, review) is expected
+
+
+def test_stale_unreviewed_requires_stale():
+    assert pr_scan.is_stale_unreviewed(False, "") is False
+
+
+def test_build_pr_records_stale_unreviewed_field():
+    def make(review):
+        return pr_scan.build_pr({"number": 1, "title": "x", "headRefName": "chore/x", "body": "",
+                                 "author": {"login": "person", "is_bot": False},
+                                 "createdAt": "2026-09-01T00:00:00Z", "mergedAt": None,
+                                 "isDraft": False, "reviewDecision": review, "url": "u",
+                                 "additions": 1, "deletions": 1},
+                                repo="r", state="open", scope=["ABC"], stale_days=3,
+                                now="2026-09-16T00:00:00Z")
+
+    unreviewed = make("REVIEW_REQUIRED")
+    assert unreviewed["stale"] is True
+    assert unreviewed["stale_unreviewed"] is True
+
+    approved = make("APPROVED")
+    assert approved["stale"] is True
+    assert approved["stale_unreviewed"] is False
+
+
+def test_counts_separate_stale_unreviewed_from_approved_but_unmerged():
+    def make(login, review, number):
+        return pr_scan.build_pr({"number": number, "title": "x", "headRefName": "chore/x",
+                                 "body": "", "author": {"login": login, "is_bot": False},
+                                 "createdAt": "2026-09-01T00:00:00Z", "mergedAt": None,
+                                 "isDraft": False, "reviewDecision": review, "url": "u",
+                                 "additions": 1, "deletions": 1},
+                                repo="r", state="open", scope=["ABC"], stale_days=3,
+                                now="2026-09-16T00:00:00Z")
+
+    open_prs = [make("alice", "REVIEW_REQUIRED", 1), make("carol", "APPROVED", 2)]
+    report = pr_scan.build_report(
+        [], open_prs,
+        window={"since": "2026-09-09", "until": "2026-09-16"},
+        config={"org": "o", "repos": ["r"], "keys": ["ABC"], "stale_days": 3, "limit": 1000,
+                "roster": ["alice"]},
+        now="2026-09-16T00:00:00Z")
+
+    assert report["counts"]["stale_unreviewed"] == 1
+    assert report["counts"]["stale_unreviewed_team"] == 1
+    assert report["counts"]["stale"] == 2
+
+
+def test_scope_key_exempts_matching_not_ticket_prefix():
+    assert pr_scan.extract_keys("[PR-42] fix parser", "feature/PR-42/x", "", scope=["PR"]) == ["PR-42"]
+
+
+def test_without_scope_a_not_ticket_prefix_is_still_excluded():
+    assert pr_scan.extract_keys("[PR-42] fix parser", "feature/PR-42/x", "") == []
+
+
+def test_render_markdown_no_ticket_table_is_team_only_when_roster_given():
+    def make(login, number):
+        return pr_scan.build_pr({"number": number, "title": "chore bump", "headRefName": "chore/x",
+                                 "body": "", "author": {"login": login, "is_bot": False},
+                                 "createdAt": "2026-09-01T00:00:00Z", "mergedAt": None,
+                                 "isDraft": False, "reviewDecision": "", "url": "u",
+                                 "additions": 1, "deletions": 1},
+                                repo="r", state="open", scope=["ABC"], stale_days=3,
+                                now="2026-09-16T00:00:00Z")
+
+    report = pr_scan.build_report(
+        [], [make("alice", 1), make("carol", 2)],
+        window={"since": "2026-09-09", "until": "2026-09-16"},
+        config={"org": "o", "repos": ["r"], "keys": ["ABC"], "stale_days": 3, "limit": 1000,
+                "roster": ["alice"]},
+        now="2026-09-16T00:00:00Z")
+
+    board = pr_scan.render_markdown(report).split("## Not on the board")[1].split("##")[0]
+    table = "\n".join(line for line in board.splitlines() if line.startswith("|"))
+    assert "alice" in table
+    assert "carol" not in table
+
+
+def test_render_markdown_no_ticket_table_lists_everyone_without_a_roster():
+    def make(login, number):
+        return pr_scan.build_pr({"number": number, "title": "chore bump", "headRefName": "chore/x",
+                                 "body": "", "author": {"login": login, "is_bot": False},
+                                 "createdAt": "2026-09-01T00:00:00Z", "mergedAt": None,
+                                 "isDraft": False, "reviewDecision": "", "url": "u",
+                                 "additions": 1, "deletions": 1},
+                                repo="r", state="open", scope=["ABC"], stale_days=3,
+                                now="2026-09-16T00:00:00Z")
+
+    report = pr_scan.build_report(
+        [], [make("alice", 1), make("carol", 2)],
+        window={"since": "2026-09-09", "until": "2026-09-16"},
+        config={"org": "o", "repos": ["r"], "keys": ["ABC"], "stale_days": 3, "limit": 1000},
+        now="2026-09-16T00:00:00Z")
+
+    board = pr_scan.render_markdown(report).split("## Not on the board")[1].split("##")[0]
+    table = "\n".join(line for line in board.splitlines() if line.startswith("|"))
+    assert "alice" in table
+    assert "carol" in table
+
+
+def test_main_propagates_truncated_error(monkeypatch, tmp_path):
+    def fake_fetch(repo, state, since, limit, until=None):
+        raise pr_scan.TruncatedError("TRUNCATED: acme/repo merged returned too many items")
+
+    monkeypatch.setattr(pr_scan, "fetch", fake_fetch)
+    with pytest.raises(pr_scan.TruncatedError):
+        pr_scan.main(["--org", "acme", "--repos", "repo", "--since", "2026-09-09",
+                      "--out", str(tmp_path)])
+
+
+def test_main_returns_2_and_reports_incomplete_repos_on_gh_failure(monkeypatch, tmp_path, capsys):
+    def fake_fetch(repo, state, since, limit, until=None):
+        if state == "merged":
+            raise pr_scan.GhError("gh failed: rate limited")
+        return []
+
+    monkeypatch.setattr(pr_scan, "fetch", fake_fetch)
+    code = pr_scan.main(["--org", "acme", "--repos", "repo", "--since", "2026-09-09",
+                        "--out", str(tmp_path)])
+    assert code == 2
+    captured = capsys.readouterr()
+    assert "INCOMPLETE: acme/repo" in captured.err

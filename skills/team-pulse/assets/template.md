@@ -3,7 +3,7 @@
 > **Engineering Manager:** {{MANAGER_NAME}}  
 > **Primary Repos:** {{PRIMARY_REPOS}}  
 > **Tracking:** {{TRACKER_INFO}}  
-> **Interactive Dashboard:** [`team-pulse-{{END_DATE}}.html`](file:///{{HTML_REPORT_PATH}})
+> **Interactive Dashboard:** [`team-pulse-{{END_DATE}}.html`](file://{{HTML_REPORT_PATH}})
 
 ---
 
@@ -45,7 +45,7 @@ linked to the query that produced it, and add below the table:
 
 <!-- Repeat for each active initiative/epic -->
 <!--
-### {Index}. [{Epic Name}]({Jira URL}) ([`{Key}`]({Jira URL})) — {🟢 On Track | 🟡 Needs Attention | 🔴 At Risk}
+### {Index}. [{Epic Name}]({Jira URL}) ([`{Key}`]({Jira URL})) — {On Track | Needs Attention | At Risk | Blocked}
 *{Priority} · part of [{Parent Key} {Parent Name}]({Parent URL}).* {One sentence: what the epic delivers}  
 **Lead:** {Lead Name} · **Progress:** `[{Unicode Progress Bar e.g. █████░░░░░}]` **[{N}% Complete]({query URL})** ({Done} of {Total} issues done)  
 **Split:** Frontend {N} done / {N} left · Backend {N} done / {N} left
@@ -76,7 +76,7 @@ linked to the query that produced it, and add below the table:
 
 <!--
 Example row format:
-| [`repo #123`](https://github.com/org/repo/pull/123) | [`KEY-456`](https://tracker/browse/KEY-456) Title | [@author](https://github.com/author) | Jun 1 | 2d | 🟡 **Stale Review** | `+120 / -10` | Needs review from @teammate |
+| [`repo #123`](https://github.com/org/repo/pull/123) | [`KEY-456`](https://tracker/browse/KEY-456) Title | [@author](https://github.com/author) | Jun 1 | 2d | **Stale, Unreviewed** | `+120 / -10` | Needs review from @teammate |
 -->
 
 ---
@@ -85,17 +85,25 @@ Example row format:
 
 <!-- Repeat for each team member -->
 <!--
-### {Name} — {Role} ([`@{handle}`]({GH URL})) — {🟢 On Track | 🟡 Needs Attention | 🔴 At Risk}
+### {Name} — {Role} ([`@{handle}`]({GH URL})) — {On Track | Needs Attention | At Risk | Blocked}
 * **Summary:** {1-3 sentences: what they worked on, PR activity, blockers}
 {If Needs Attention or At Risk:}
 * > ⚠️ **Why Needs Attention:** {Exact failure mode or stale PR delay}
 * **Metrics:** {N} Merged PRs · {N} In Flight · **Focus:** {Focus Area}
 -->
+<!--
+Single-person scope, per-person block (optional): add these fields to the person's card.
+* **Wins to recognise:** {specific merged work, with links}
+* **This week:** {[N PRs merged](search) · [N opened](search) · [N tickets done](query) · [N reviews given](search)}
+* **Reviews given:** {[N reviews](search), and whose work they concentrate on}
+* **Talking points:** {numbered, each tied to linked evidence}
+* **Questions to ask:** {2–4 open questions}
+-->
 {{PEOPLE_BLOCKS}}
 
 ---
 
-### 👑 Dedicated Engineering Manager Section: {{MANAGER_NAME}} ([`@{{MANAGER_GH_HANDLE}}`]({{MANAGER_GH_URL}})) — 🟢 On Track
+### 👑 Dedicated Engineering Manager Section: {{MANAGER_NAME}} ([`@{{MANAGER_GH_HANDLE}}`]({{MANAGER_GH_URL}})) — {{EM_BADGE}}
 * **Technical Spikes & Backlog Architecture:**
 {{EM_TECHNICAL_WORK}}
 * **Domain Leadership & Governance:**

@@ -33,15 +33,15 @@ the arithmetic ever moves into a script — at which point it gets a test like a
 
 **What.** The dependency ordering is prose now (method.md, Phase 6), not a script; the capacity gate was reconciled against
 the source document. The full pipeline — Phase 1 baseline through a nine-item
-window-mode report and a single-item scope-mode report against live Jira — was not run.
+report with a window and a single-item report without one, against live Jira — was not run.
 
 **Why accepted.** An end-to-end run dispatches eight to ten research sub-agents against live tracker
-data and produces a report only a human familiar with those items can grade. The parts that *can* be
-wrong silently — the graph algorithms and the capacity arithmetic — are the parts that were
-verified. The parts not verified are prose instructions, which fail visibly on first use.
+data and produces a report only a human familiar with those items can grade. The part that *can* be
+wrong silently — the capacity arithmetic — is the part that was verified. The parts not verified are
+prose instructions, including the dependency ordering, which fail visibly on first use.
 
-**Revisit at the first real invocation.** Specifically check: whether the `graph` block is actually
-assemblable from what the cluster agents return, whether the mode detection fires correctly on a bare
+**Revisit at the first real invocation.** Specifically check: whether the ordering can actually be
+written from what the cluster agents return, whether window detection fires correctly on a bare
 epic list, and whether the conditional sections render without stubs. Fix what breaks then rather
 than guessing now.
 

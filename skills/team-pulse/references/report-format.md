@@ -7,7 +7,7 @@ The same skeleton serves every scope; how deep each section goes does not.
 | Scope | Epic cards | Work breakdown | Person sections |
 |-------|-----------|----------------|-----------------|
 | **Team or multi-initiative** | Description, parent, priority, progress, why, what's left | **One line per epic:** `Frontend: N done / N left · Backend: N done / N left` | 1–3 sentences each |
-| **Single person (1:1 prep)** | Same | **Full section 02b:** per epic, frontend and backend tables with one line per PR, remaining work described, and sibling work the epic depends on | Wins, 30-day trend, reviews given, talking points, questions to ask |
+| **Single person (1:1 prep)** | Same | **Full section 02b:** per epic, frontend and backend tables with one line per PR, remaining work described, and sibling work the epic depends on | Wins, this week's stats, reviews given, talking points, questions to ask |
 | **Single epic or initiative** | Same | Full section 02b for that epic only | 1–3 sentences each |
 
 **In a 1:1, statistics cover the window only (default: the past week).** The scorecard, PR
@@ -29,8 +29,8 @@ leaves the manager unable to say what the person actually built.
 - **When the blocker is a person, name them, factually.** Read the comment threads on blocked and
   stalled items and report who asked whom, what, and how long ago.
   - ✗ "XYZ-195 is open and unassigned"
-  - ✓ "**Blocked by: [Name]**. [Colleague] asked on 08-27 whether the discount applies per test or
-    evenly. No reply in 20 days."
+  - ✓ "**Blocked by: [Name]**. [Colleague] asked on 08-27 whether the export should include
+    archived records. No reply in 20 days."
   Never as blame: the person may not know they are the blocker, and the report is read in front of
   people.
 - **Not started gets its own list.** Epics in Backlog or To Do with zero children done, each with its
@@ -40,9 +40,11 @@ leaves the manager unable to say what the person actually built.
   against 22 by the team. Use `pr_scan.py`'s `*_team` counts; the repo-wide figure is at most one line
   of context. A PR is the team's when its author is on the roster (use for "who has a stale PR") or
   its key is in scope (use for "what work on our epics is in flight"). Say which you used.
-- **PRs in flight come in three kinds worth reporting:** stale (oldest first, bots excluded), no
-  ticket at all (human authors only; bots counted, never listed), and another team's key. Frame
-  untracked work as a question ("should this be tracked?"), not an accusation.
+- **PRs in flight come in three kinds worth reporting:** `stale_unreviewed` (stale and nobody
+  reviewing it — oldest first, bots excluded), no ticket at all (human authors only; bots counted,
+  never listed), and another team's key. An approved-but-unmerged PR is a different problem and is
+  reported separately, as "approved, not merged" — it is not `stale_unreviewed`. Frame untracked
+  work as a question ("should this be tracked?"), not an accusation.
 - **The citation rule.** Every rating and claim carries a ticket key plus a date or a count. What
   could not be measured is reported as "not measured", never as zero.
 
@@ -53,8 +55,8 @@ leaves the manager unable to say what the person actually built.
 - **Every epic card says what the epic is.** One plain sentence from the epic's description,
   its parent initiative (linked) and its priority. A title alone does not tell the reader
   whether the work matters.
-- **Every PR table has Opened and Merged date columns.** Merged shows the date, `open`, or
-  `closed unmerged <date>`. Age alone hides when work landed.
+- **Every PR table has Opened; tables that include merged or closed PRs also have Merged.** Merged
+  shows the date, `open`, or `closed unmerged <date>`. Age alone hides when work landed.
 - **Remaining work is described, not just listed.** Each open ticket gets a short line on what
   it is, taken from its description; if it has none, say so and describe it from its title.
 
@@ -79,7 +81,7 @@ The pulse is delivered both as a concise summary in chat, and as a complete, pub
 | **Overall Health** | {Badge} | {1-sentence context} |
 | **PR Velocity** | {N Merged} | {In flight breakdown} |
 | **Net Code Impact** | {Lines +/-} | {Major technical debt or feature impact} |
-| **Review Bottlenecks** | {N Stale PRs} | {Stale review flags} |
+| **Review Bottlenecks** | {N `stale_unreviewed` PRs} | {Stale, unreviewed PR flags} |
 
 ---
 
@@ -113,16 +115,6 @@ The pulse is delivered both as a concise summary in chat, and as a complete, pub
 
 ---
 
-## 03. PRs in Flight & Review Backlog
-
-> **Summary:** {N} PRs in flight across repositories. {N} stale PRs flagged.
-
-| Repo / PR | Title | Author | Opened | Age | Status | Impact | Action Required |
-| :--- | :--- | :--- | :---: | :---: | :---: | :---: | :--- |
-| [`repo #123`]({PR URL}) | [`{Key}`]({Jira URL}) {Title} | [@handle]({GH URL}) | {Mon D} | {Age} | {Status Badge} | `+{A} / -{D}` | {Specific action and reviewers} |
-
----
-
 ## 02b. Work Breakdown by Epic (single-person and single-epic scopes only)
 
 ### {Epic Name} ([`{Key}`]({Jira URL})): what was built
@@ -149,6 +141,16 @@ The pulse is delivered both as a concise summary in chat, and as a complete, pub
 
 ---
 
+## 03. PRs in Flight & Review Backlog
+
+> **Summary:** {N} PRs in flight across repositories. {N} stale, unreviewed PRs flagged.
+
+| Repo / PR | Title | Author | Opened | Age | Status | Impact | Action Required |
+| :--- | :--- | :--- | :---: | :---: | :---: | :---: | :--- |
+| [`repo #123`]({PR URL}) | [`{Key}`]({Jira URL}) {Title} | [@handle]({GH URL}) | {Mon D} | {Age} | {Status Badge} | `+{A} / -{D}` | {Specific action and reviewers} |
+
+---
+
 ## 04. Team Roster & Individual Workloads
 
 ### {Person Name} — {Role} ([`@{handle}`]({GH URL})) — {Badge}
@@ -164,7 +166,7 @@ The pulse is delivered both as a concise summary in chat, and as a complete, pub
 
 ---
 
-### 👑 Dedicated Engineering Manager Section: {EM Name} ([`@{handle}`]({GH URL})) — 🟢 On Track
+### 👑 Dedicated Engineering Manager Section: {EM Name} ([`@{handle}`]({GH URL})) — {{EM_BADGE}}
 * **Technical Spikes & Backlog Architecture:** {Spikes, discovery, ADR reviews}
 * **Domain Leadership & Governance:** {Leadership, cross-team alignment, hiring}
 
@@ -187,13 +189,36 @@ The pulse is delivered both as a concise summary in chat, and as a complete, pub
 > **Bottom Line:** {2-3 sentences: synthesis of team health, top 3 priorities for today's standup, and escalations needed}
 ```
 
+### Bundled Template: `assets/template.md`
+
+Populate `assets/template.md` by replacing its placeholders:
+
+| Placeholder | Holds |
+|---|---|
+| `{{SCOPE}}`, `{{DATE_RANGE}}`, `{{MANAGER_NAME}}`, `{{PRIMARY_REPOS}}`, `{{TRACKER_INFO}}`, `{{HTML_REPORT_PATH}}`, `{{END_DATE}}` | Header metadata bar |
+| `{{OVERALL_HEALTH_BADGE}}`, `{{OVERALL_HEALTH_CONTEXT}}`, `{{PR_VELOCITY_VALUE}}`, `{{PR_VELOCITY_CONTEXT}}`, `{{CODE_IMPACT_VALUE}}`, `{{CODE_IMPACT_CONTEXT}}`, `{{REVIEW_BOTTLENECKS_VALUE}}`, `{{REVIEW_BOTTLENECKS_CONTEXT}}` | Executive scorecard tiles |
+| `{{HEADLINE}}`, `{{STRATEGIC_SHIFTS}}`, `{{MILESTONE_TIMELINES}}` | Section 01 |
+| `{{ACTIVE_EPICS_BLOCKS}}` | Section 02 epic cards |
+| `{{WORK_BREAKDOWN_BLOCKS}}` | Section 02b; empty string for team scope |
+| `{{PR_SUMMARY_LINE}}`, `{{PR_TABLE_ROWS}}` | Section 03 |
+| `{{PEOPLE_BLOCKS}}` | Section 04 person cards |
+| `{{MANAGER_GH_HANDLE}}`, `{{MANAGER_GH_URL}}`, `{{EM_BADGE}}`, `{{EM_TECHNICAL_WORK}}`, `{{EM_LEADERSHIP_WORK}}` | Section 04 EM card |
+| `{{RISK_ITEMS_BLOCKS}}` | Section 05 |
+| `{{BOTTOM_LINE}}` | Section 06 |
+
 ## Badge Format
 
-Use inline text badges:
-- **On Track** for green
-- **Needs Attention** for yellow
-- **At Risk** for red
-- **Blocked** for stopped
+Status is always shown as the word, never colour alone — a status badge is never an emoji circle
+on its own. Use inline text badges (or `●` plus the word), in the colours of the visual design
+system below:
+- **On Track** — blue
+- **Needs Attention** — amber
+- **At Risk** — orange-red
+- **Blocked** — orange-red, same colour as At Risk; distinguished by the word, since the two
+  differ in recoverability, not in urgency
+
+**{{EM_BADGE}} is a rating like any other** — it needs the same citation a person or epic's badge
+needs, and must not be hard-coded to On Track.
 
 ## Standalone HTML Dashboard Specification
 
@@ -255,36 +280,27 @@ yet despite tickets showing "In Progress" — flag with Dev Two.
 
 ### Active Work
 
-**Billing Overhaul** (ABC-100) — Needs Attention · **35% Complete** (7/20 issues)
-- ADR (ABC-121) and schema migration (ABC-118) both in code review.
-- Initial billing models merged to main.
+**[Billing Overhaul](https://tracker.example/browse/ABC-100)** ([`ABC-100`](https://tracker.example/browse/ABC-100)) — Needs Attention
+Moves invoicing onto the new tax engine. **Split:** Frontend 2 done / 3 left · Backend 5 done / 10 left
+· **35% Complete** (7/20 issues, [query](https://tracker.example/query))
 
-> ⚠️ **Why It Needs Attention:** No feature branches exist in repo for active billing stories — "Code Review" status is misleading and 4 stories have no assignee.
+> ⚠️ **Why It Needs Attention:** No feature branches exist in repo for active billing stories — "Code Review" status is misleading and 4 stories have no assignee ([ABC-119](https://tracker.example/browse/ABC-119)–[ABC-128](https://tracker.example/browse/ABC-128)).
 
 **What's Left (TL;DR):**
-- Unblock ABC-121 ADR signoff.
-- Assign and groom remaining 4 stories (ABC-119, ABC-120, ABC-124, ABC-128).
-- Data team estimation model handoff.
+- Unblock [ABC-121](https://tracker.example/browse/ABC-121) ADR signoff.
+- Assign and groom remaining 4 stories.
 
 ### PRs in Flight
 
-| PR | Author | Status | Age | Review |
-|----|--------|--------|-----|--------|
-| #412 Fix pagination | @dev-one | Merged | 1d | Approved |
-| #409 Schema migration | @dev-two | Open | 3d | Pending |
+| PR | Author | Opened | Status | Age | Review |
+|----|--------|--------|--------|-----|--------|
+| [org/repo #412](https://github.com/org/repo/pull/412) Fix pagination | [@dev-one](https://github.com/dev-one) | May 30 | Merged | 1d | Approved |
+| [org/repo #409](https://github.com/org/repo/pull/409) Schema migration | [@dev-two](https://github.com/dev-two) | May 31 | Open | 3d | Pending |
 
 ### People
 
 **Dev Two** — Needs Attention
-ABC-100 owner. ADR and schema story in review but no branches pushed. Clarify if work is local.
-
-**Dev One** — On Track
-Shipped #412. Picked up ABC-104. Active reviewer across the team.
-
-### Risks & Blockers
-
-1. ABC-100 has 4 unassigned stories — needs sprint planning.
-2. Estimation-model handoff from data team lacks tracking ticket.
+[ABC-100](https://tracker.example/browse/ABC-100) owner. ADR and schema story in review but no branches pushed since 05-30. Clarify if work is local.
 
 ### Bottom Line
 

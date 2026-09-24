@@ -1,8 +1,11 @@
 # Adversarial review of the research output
 
-Runs in a **fresh sub-agent** that did not do the research. Give it the Phase 1 baseline table and
-the whole `research/` directory. Its job is to find what is wrong before the report launders it into
-something that looks authoritative.
+Runs twice, in **fresh sub-agents** that did not do the research: `method.md` Phase 5a runs §1–4,
+5d–5f, 6–10 and 17, before any estimate exists; Phase 6b runs the rest — §5, 5a–5c, 5g–5j, 8b–8d,
+11–16 and 18 — once estimates, the ordering, the projection and (with a window) capacity and commit
+tiers exist, because those checks need a number to audit. Give each pass the Phase 1 baseline table
+and the relevant part of the `research/` directory. Its job is to find what is wrong before the
+report launders it into something that looks authoritative.
 
 The orchestrator also spot-checks the highest-stakes claims itself, directly against the tracker.
 Anything that changes a date, a status, or an owner gets verified by hand. A claim you carry into the
@@ -140,12 +143,12 @@ whether the consumer has actually built against it.** Getting this backwards inv
 Corollary: when an epic shows 0 closures but is *not* blocked, the cause is usually review, merge
 strategy, or the owner being on something else. Check which before pricing it as slow.
 
-### 8b. The graph's edges came from tracker links
+### 8b. The ordering's edges came from tracker links alone
 
 The structured dependency list from the research
-agents is authoritative; links only supplement it. A graph built from link types alone draws a
-fraction of the real edges - in one measured run, 4 of 13 — and then computes a critical chain over a
-subgraph that excludes the real bottleneck. Check where each edge came from, and that every
+agents is authoritative; links only supplement it. An ordering written from link types alone
+carries a fraction of the real edges — in one measured run, 4 of 13 — and then states a longest
+chain that excludes the real bottleneck. Check where each edge came from, and that every
 `decision` and `queue` node reached the open-questions section with an owner.
 
 ### 8c. A chain reported as a single number
@@ -154,7 +157,7 @@ External, decision and queue nodes carry no estimate.
 If the critical chain is published as one figure rather than epic weeks **plus named gates**, it is
 silently pricing a legal decision or a review queue at zero weeks.
 
-### 8d. A cycle computed through rather than reported
+### 8d. A cycle reasoned through rather than reported
 
 A cyclic dependency has no defined longest
 path. If a chain was published for a component containing one, the number is meaningless.
@@ -170,11 +173,12 @@ contains it.
 Epic-level assignees are frequently months out of date. Cross-check against
 who is actually moving child tickets and merging PRs.
 
-### 11. Capacity published in scope mode, or a window inferred
+### 11. Capacity published without a window, or a window inferred
 
-If the caller gave no window, there
-must be no capacity section, no commit tiers, no dates, and no quarter anywhere in the output.
-Inferring a window from today's date publishes a commitment nobody made.
+Without a window, there must be no capacity section, no commit tiers, and no inferred window or
+quarter anywhere in the output — but a projected landing, clearly labelled as a projection, is
+still required whenever a date is wanted; omitting it is not what this rule asks for. Inferring a
+window from today's date publishes a commitment nobody made.
 
 ### 12. A capacity input that was invented rather than supplied
 
@@ -242,7 +246,8 @@ evidence, and the corrected claim if determinable.
 - **IMPORTANT** — a wrong or unsupported number, or a missed dependency.
 - **MINOR** — imprecision that does not change a conclusion.
 
-Fix every CRITICAL and IMPORTANT before writing the report: re-query, send the agent back with
-`SendMessage`, or downgrade the claim to UNVERIFIED. Record what changed — the review's own findings
-belong in a short section of the report, because *the source document was wrong in these specific
-ways* is one of the most useful things the exercise produces.
+Fix every CRITICAL and IMPORTANT from each pass before moving on — Phase 5a's before Phase 6
+(estimates), Phase 6b's before Phase 7 (deliver): re-query, send the agent back with
+`SendMessage`, or downgrade the claim to UNVERIFIED. Record what changed from both passes — the
+review's own findings belong in a short section of the report, because *the source document was
+wrong in these specific ways* is one of the most useful things the exercise produces.

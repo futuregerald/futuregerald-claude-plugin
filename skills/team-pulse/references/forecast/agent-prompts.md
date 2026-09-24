@@ -63,10 +63,12 @@ item key and its author, and carry on.
 - Every claim gets a citation: a ticket key, a PR URL, a commit sha, or a file path.
 - Distinguish **"no ticket found"** from **"work not needed"**, and state the query you ran.
 - If you cannot verify something, write **UNVERIFIED** and say what you would need. Never guess.
-- **Read the full comment thread on every item** — request `comment` explicitly, it is not a default
-  field. Comments carry status updates, decisions and unanswered questions that never move a status
-  field, so an item can be active while its counts sit still. Report the update cadence, every
-  unanswered question with its age, and any comment that contradicts the item's own description.
+- **Read the last ~10 comments on every item from `research/baseline.json`.** Go to the full thread
+  only where it will change something — the item's verdict is STALE or WRONG, the thread is the
+  only evidence of a dependency, or a question looks unanswered. Comments carry status updates,
+  decisions and unanswered questions that never move a status field, so an item can be active while
+  its counts sit still. Report the update cadence, every unanswered question with its age, and any
+  comment that contradicts the item's own description.
 - Count things. "Six of nine children Done, 21 points remaining" beats "mostly done".
 
 ## Output
@@ -93,7 +95,8 @@ Merged PRs (url, title, merged date, +/-, author), grouped by repo.
 Open PRs (url, age in days, draft?, review state, blocking comments quoted).
 Nothing found? Name the code-host search queries you ran.
 
-### Comment thread (read ALL of it — request `comment` explicitly, it is not a default field)
+### Comment thread (last ~10 from `research/baseline.json`; go to the full thread only where it
+changes a verdict, is the only dependency evidence, or has an unanswered question)
 - **Status updates**: author, date, verbatim quote, newest first. Note the **cadence** — weekly,
   sporadic, or stopped, and when it stopped.
 - **Unanswered questions**: every question with no reply below it — asker, who it was aimed at, days

@@ -5,7 +5,7 @@ single HTML page. Nothing else — no spreadsheet, no manifest, no diagram.
 
 ## One template, sections driven by the question
 
-**The question table is in `SKILL.md`** — which phases each question needs. It is not repeated here;
+**The question table is in `method.md`** — which phases each question needs. It is not repeated here;
 one copy cannot drift from itself.
 
 What this file adds is what each question does to the *report*: **conditional sections, not
@@ -28,12 +28,12 @@ strongest evidence that the rest of the report was actually verified.
 
 ### 2. Headline
 Three to six sentences. The bottom line, the one or two items that decide it, and the biggest risk.
-In window mode that bottom line is a date; in scope mode it is the critical chain length and what
-sits on it. No preamble.
+The bottom line is a projected date range when a date is wanted, otherwise the chain length. No
+preamble.
 
 ### 3. TL;DR per item
-2–4 sentences each, scannable. Grouped by milestone in window mode, by dependency order in scope
-mode. Each carries: real status, what is genuinely left, the estimate range, and the one thing that
+2–4 sentences each, scannable. Grouped by milestone with a window, by dependency order without
+one. Each carries: real status, what is genuinely left, the estimate range, and the one thing that
 would change it. A reader who stops here should still be able to run the meeting.
 
 ### 4. Estimates — a table, not prose
@@ -57,10 +57,10 @@ Two things to state under it, because readers get both wrong:
 - **The estimates do not sum.** Items run in parallel across N engineers, so the date is set by the
   longest *chain*, not the total. Cite the computed chain from section 6 — length and path — rather
   than naming a long pole in prose.
-- **Which rows are out of scope for the current horizon.** *Window mode only:* work that falls
+- **Which rows are out of scope for the current horizon.** *Only with a window:* work that falls
   outside the window belongs in its own clearly separated block that contributes nothing to the
   arithmetic — but keep it, sized, because "what's after this" is a real planning question. Deleting
-  it is as wrong as counting it. **In scope mode there is no horizon to fall outside, so this block
+  it is as wrong as counting it. **Without a window there is no horizon to fall outside, so this block
   does not exist**; group by dependency order instead and do not invent an in/out split.
 
 **Put the headline numbers on the landing view too.** Whatever sheet or section opens first must carry
@@ -128,7 +128,7 @@ and legal decisions, another team's service — with its owner.
 **No diagram.** A dozen-epic dependency picture is decoration; the three sentences carry the whole
 decision.
 
-### 7. Split suggestions — **both modes**
+### 7. Split suggestions — **both cases**
 
 Where an epic could be cut, and **what the cut buys**. "This is too big" with no proposal attached is
 an observation, not a recommendation. See `references/forecast/estimation-model.md` §8 for the candidate
@@ -142,7 +142,7 @@ and a sentence naming which trigger flagged the epic.
 
 With a single item in scope, this is often the most useful section in the whole report.
 
-### 8. Commit tiers — **window mode only**
+### 8. Commit tiers — **only with a window**
 
 What the team should actually commit to, given the capacity in section 5. Four tiers, in order:
 
@@ -197,7 +197,7 @@ What to do in what order, and why — dependency order first (from the graph, no
 the risk-reduction argument. Name what to start now, what to start next, and **what to explicitly not
 start**, which is usually the most useful half.
 
-*Window mode:* if the target cannot hold, say so here with the arithmetic behind it, rather than
+*With a window:* if the target cannot hold, say so here with the arithmetic behind it, rather than
 burying it.
 
 ### 11. Detailed justification per item
@@ -259,32 +259,39 @@ fenced and inline code from linkification.
 
 ### 14. Method and limits
 How pace was measured, **which of the three rate sources was used and why**, the constants used, and
-what the estimates assume. In window mode, the capacity inputs and which of them were human-supplied.
+what the estimates assume. With a window, the capacity inputs and which of them were human-supplied.
 State the limits plainly — a report that admits what it does not know is the one people trust the
 second time.
 
 ## The HTML page — a primary deliverable
 
-**This is the artefact people actually read.** Generate it from the same Markdown — never hand-built,
-never a second copy of the numbers, because the one in the room would be the stale one.
+**This is the artefact people actually read.** Generate it, and the Markdown, **from the same data
+structure in one script** — never hand-built, and never one generated from the other, because two
+copies of the same numbers diverge and the one in the room is the stale one.
 
-One page, scannable, in this order:
+One page, scannable, matching the order of `assets/forecast.html`:
 
-1. **Headline** — the bottom line in two sentences.
-2. **The work** — one row per item: status, owner, what is left, remaining estimate, confidence.
-3. **Engineers** — how many the work needs, how many are on it, and who is unallocated. A reader's
+1. **What changed** — since the source document, up top.
+2. **Headline** — the bottom line in two sentences.
+3. **Does it fit** — capacity, only with a window.
+4. **At a glance** — one row per item: status, owner, what is left, remaining estimate, confidence.
+5. **Item by item** — ground, risks, and the verdict per item.
+6. **Engineers** — how many the work needs, how many are on it, and who is unallocated. A reader's
    first question is always "do we have enough people", and a report that makes them derive it has
    buried its most useful number.
-4. **What is left, per item** — specific and short.
-5. **Risks** — what could make each item much longer than it looks.
-6. **Open decisions** — each with an owner and what it blocks.
+7. **What blocks what** — the ordering: what blocks what, the chain, and what is parallel. Always
+   present, whichever question was asked.
+8. **Projected landing** — whenever a date is wanted.
+9. **What to commit to** — commit tiers, only with a window.
+10. **Decisions needed** — each with an owner and what it blocks.
+11. **How these numbers were calculated** — the method.
 
 No diagram.
 
 ## Handing it over
 
 **Two deliverables: the Markdown report and the HTML page** (styled from `assets/forecast.html`). Everything else — the shared brief, the baseline,
-the per-agent findings, the manifest, the raw graph output — lives in `research/` and is named once,
+the per-agent findings, the manifest — lives in `research/` and is named once,
 as a directory, not file by file. A virtualenv belongs in the scratchpad and never in the output
 directory. A caller who opens the folder should see the two things they asked for.
 
@@ -299,18 +306,25 @@ one family. Fill its placeholders from the same data structure as the Markdown r
 
 | Placeholder | Holds | When empty |
 |---|---|---|
+| `{{REPORT_TITLE}}` | The `<title>` element | Never |
 | `{{KICKER}}`, `{{REPORT_HEADING}}`, `{{META}}` | Kicker line, title, meta spans (`<span><strong>Label:</strong> value</span>`) | Never |
 | `{{QUESTION_ANSWERED}}`, `{{OMITTED_SECTIONS}}` | Which of the four questions was answered, and which sections were skipped | Never |
 | `{{WHAT_CHANGED}}` | Section 1 as a `<table>` | Section hides |
 | `{{HEADLINE}}` | Section 2, 3–6 sentences | Never |
-| `{{CAPACITY}}` | Window mode only: `.tiles`, then a `.two-up` with a `.panel` holding the `.gauge` and a `.panel` holding the arithmetic table, then a `.callout` | Section hides |
-| `{{GLANCE_HEAD}}`, `{{GLANCE_ROWS}}`, `{{GLANCE_SUMMARY}}` | The estimates table (section 4); window mode adds a running-total column of `.run` bars | Never |
+| `{{CAPACITY}}` | Only with a window: `.tiles`, then a `.two-up` with a `.panel` holding the `.gauge` and a `.panel` holding the arithmetic table, then a `.callout` | Section hides |
+| `{{GLANCE_HEAD}}`, `{{GLANCE_ROWS}}`, `{{GLANCE_SUMMARY}}` | The estimates table (section 4); with a window adds a running-total column of `.run` bars | Never |
 | `{{ITEM_CARDS}}` | One `<article class="item">` per item: `.item-head` (`.item-rank`, title and keys, `.item-est`), `.item-body` with `.ground` (`.gbox` what exists, `.gbox.need` what is missing), `.item-cols` (risks with `li.sev` for severe, notes), `.verdict-strip` | Never |
+| `{{ENGINEERS}}` | Who is working on what: engineer → item table, who is unallocated, who is overloaded, and competing non-initiative load | Section hides |
+| `{{ORDERING}}` | What blocks what, the longest chain and its length, and what is parallel — three or four sentences, always present, never a diagram | Never |
 | `{{PROJECTION}}` | Section 4b, whenever a date is wanted | Section hides |
-| `{{COMMIT_TIERS}}` | Window mode only: the tier table, then a `.panel` with a `.stack` bar of committed work and a `.frame` marking the capacity band | Section hides |
+| `{{COMMIT_TIERS}}` | Only with a window: the tier table, then a `.panel` with a `.stack` bar of committed work and a `.frame` marking the capacity band | Section hides |
 | `{{DECISIONS}}` | Open decisions with owner and what each blocks | Section hides |
 | `{{METHOD}}` | Section 4a (effort and productivity), always | Never |
 | `{{BOTTOM_LINE}}` | Two or three sentences | Never |
+
+**A hidden slot is replaced with an empty string, never whitespace.** A placeholder left as
+whitespace still renders an empty section frame; an empty string lets the template's own rule for
+hiding an empty section actually fire.
 
 **Bars are positioned in percent of one shared scale.** Pick the scale once per page — a round
 number just above the pessimistic demand — and use it for the gauge, every `.run` bar and the
