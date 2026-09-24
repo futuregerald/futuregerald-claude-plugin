@@ -1,4 +1,4 @@
-<sub><b>🌐 English</b> · <a href="README.md">中文</a></sub>
+<sub>🌐 <a href="README.md">中文</a> · <b>English</b></sub>
 
 <div align="center">
 
@@ -7,7 +7,7 @@
 > *"Type. Hit enter. A finished design lands in your lap."*
 > *「打字。回车。一份能交付的设计。」*
 
-[![License](https://img.shields.io/badge/License-Personal%20Use%20Only-orange.svg)](LICENSE)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Agent-Agnostic](https://img.shields.io/badge/Agent-Agnostic-blueviolet)](https://skills.sh)
 [![Skills](https://img.shields.io/badge/skills.sh-Compatible-green)](https://skills.sh)
 
@@ -27,9 +27,13 @@ Not "decent for AI" quality — it looks like a real design team made it. Give t
 npx skills add alchaincyf/huashu-design
 ```
 
+> 📣 **Now MIT-licensed.** As of 2026-05-14 this skill is fully open-source under the [MIT License](LICENSE) — free for personal **and** commercial use, no authorization required. ([what changed](#license))
+
 [See it work](#demo-gallery) · [Install](#install) · [What it does](#what-it-does) · [How it works](#core-mechanics) · [vs. Claude Design](#vs-claude-design)
 
-> 📖 **Note for English readers**: this skill is built by a Chinese-speaking developer. The skill's agent prompts (`SKILL.md`, `references/*.md`) are in Chinese but the agent is bilingual — works fine with English tasks. The demos below are the English parallel versions; the Chinese ones are in the default-named files (see the Chinese [README.md](README.md)).
+> 📖 **Note for English readers**: this skill is built by a Chinese-speaking developer. The skill's agent prompts (`SKILL.md`, `references/*.md`) are in Chinese but the agent is bilingual — works fine with English tasks. The demos below are the English parallel versions; the Chinese ones are in the default [Chinese README](README.md).
+>
+> 📖 **致中文读者**：这个 skill 由花叔（@AlchainHust）开发。一句话能让 agent 在 3–30 分钟内交付**产品发布动画 / 可点击 App 原型 / 可编辑 PPT / 印刷级信息图**。完整中文介绍见 [README.md](README.md)（默认中文）。
 
 </div>
 
@@ -50,6 +54,18 @@ npx skills add alchaincyf/huashu-design
 ```bash
 npx skills add alchaincyf/huashu-design
 ```
+
+> **Verify after install**: this skill is more than a single SKILL.md — the `references/`, `assets/`, `scripts/`, and `demos/` subdirectories hold 99 referenced recipes, scripts, and assets that the skill depends on. After installing, check the install path (e.g. `~/.claude/skills/huashu-design/`); if you only see SKILL.md and none of those subdirectories, your `skills` CLI is too old (≤1.5.15 had a bug that synced only the single file, fixed in 1.5.19). Upgrade and reinstall:
+>
+> ```bash
+> npm i -g skills@latest        # or npx skills@latest add alchaincyf/huashu-design
+> ```
+>
+> If it's still wrong after upgrading, fall back to a `git clone` install — clone the repo into any skills directory:
+>
+> ```bash
+> git clone https://github.com/alchaincyf/huashu-design.git ~/.claude/skills/huashu-design
+> ```
 
 Then just talk to Claude Code:
 
@@ -221,6 +237,12 @@ Claude Design is a **better graphics tool**. Huashu-design makes **the graphics-
 
 ---
 
+## Security & Data Flow
+
+The core pipeline (design → render → MP4/PDF/PPTX export) runs **100% locally — zero network calls, zero API keys**. Cloud features (Doubao TTS narration, AI video review) are isolated in `scripts/cloud/`, fully optional: your own keys, official vendor APIs only, and an explicit `--yes` consent gate before anything leaves your machine. No telemetry; nothing is ever sent to any author-controlled server. Every outbound host, credential touchpoint, and deletion boundary is exhaustively declared in [SECURITY.md](SECURITY.md) — point your agent at it and verify against the code.
+
+---
+
 ## Limitations
 
 - **No layer-editable PPTX-to-Figma round-trip.** The output is HTML — screenshottable, recordable, image-exportable, but not draggable into Keynote for text-position tweaks.
@@ -280,23 +302,31 @@ Thanks to Anthropic for writing the Claude Design prompts so clearly. This kind 
 
 ---
 
-## License · Usage Rights
+## Available Languages
 
-**Personal use is free and unrestricted** — studying, research, creating things for yourself, writing articles, side projects, personal social media. Use it freely, no need to ask.
+Community-maintained translations of this skill. Translation quality and license terms are the responsibility of each maintainer — please check the linked repo before relying on it.
 
-**Enterprise / commercial use is restricted** — any company, team, or for-profit organization integrating this skill into a product, external service, or client deliverable **must obtain authorization from Huasheng first**. Including but not limited to:
-- Using the skill as part of internal company tooling
-- Using skill outputs as the primary creative method for external deliverables
-- Building a commercial product on top of the skill
-- Using it in paid client projects
+| Language | Maintainer | Repository |
+|---|---|---|
+| English | [@namandhakad712](https://github.com/namandhakad712) | [namandhakad712/huashu-design-en](https://github.com/namandhakad712/huashu-design-en) |
+| 한국어 (Korean) | [@ktkarchive](https://github.com/ktkarchive) | [ktkarchive/ktk-design](https://github.com/ktkarchive/ktk-design) |
+| Tiếng Việt (Vietnamese) | [@letrquan](https://github.com/letrquan) | [letrquan/huashu-design](https://github.com/letrquan/huashu-design) |
 
-**Commercial licensing contact**: any of the social platforms below.
+Want to add your language? Fork the repo, translate `SKILL.md` + `README.md`, and open an issue here so we can link it.
+
+---
+
+## License
+
+**Relicensed to MIT on 2026-05-14.** This skill was previously released under a Personal Use License that restricted commercial use. That restriction is now removed.
+
+Under the [MIT License](LICENSE) you are free to **use, modify, and distribute** this skill for any purpose, **including commercial use** — inside companies, in client deliverables, as part of a paid product, anywhere. No prior authorization, no licensing fee, no notification required. Attribution is appreciated but not required.
 
 ---
 
 ## Connect · Huasheng (Huashu)
 
-Huasheng is an AI-native coder, independent developer, and AI content creator. Notable work: Cat Fill Light (App Store Top 1 in Paid category), *A Book on DeepSeek*, Nüwa.skill (GitHub 12k+ stars). Combined 300k+ followers across platforms.
+Huasheng is an AI-native coder, independent developer, and AI content creator. Notable work: Cat Fill Light (App Store Top 1 in Paid category), *A Book on DeepSeek*, Nüwa.skill (GitHub 21k+ stars). Combined 300k+ followers across platforms.
 
 | Platform | Handle | Link |
 |---|---|---|
@@ -308,4 +338,4 @@ Huasheng is an AI-native coder, independent developer, and AI content creator. N
 | Official Site | huasheng.ai | https://www.huasheng.ai/ |
 | Developer Hub | bookai.top | https://bookai.top |
 
-For commercial licensing, collaborations, or sponsored content, DM on any of the above.
+For collaborations or sponsored content, DM on any of the above.
