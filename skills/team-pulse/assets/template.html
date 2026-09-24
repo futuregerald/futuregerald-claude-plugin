@@ -230,8 +230,14 @@
       padding: 22px;
       display: flex;
       flex-direction: column;
-      justify-content: space-between;
+      justify-content: flex-start;
     }
+    .card .whats-left { margin-top: auto; }
+    #work-breakdown:has(.bd-wrap:empty) { display: none; }
+    .bd-h { font-family: var(--sans); font-size: 18px; margin: 28px 0 8px; }
+    .bd-p { font-size: 15px; color: var(--ink2); line-height: 1.55; margin: 8px 0; }
+    .bd-wrap code { font-family: var(--mono); font-size: 12.5px; background: var(--sunk); padding: 1px 4px; border-radius: 2px; }
+    .bd-wrap .tscroll { margin: 8px 0 14px; }
     .card.border-warn { border-top: 4px solid var(--warn); }
     .card.border-crit { border-top: 4px solid var(--crit); }
     .card.border-good { border-top: 4px solid var(--good); }
@@ -599,6 +605,16 @@
     {{ACTIVE_EPICS_CARDS}}
   </div>
 
+  <!-- Section 2b: Work Breakdown (single-person and single-epic scopes; empty string for team scope) -->
+  <section id="work-breakdown">
+    <div class="sechead">
+      <span class="secnum">02b</span>
+      <h2>Work Breakdown by Epic</h2>
+    </div>
+    <div class="sec-desc">Frontend vs backend, done vs left, one line per PR.</div>
+    <div class="bd-wrap">{{WORK_BREAKDOWN}}</div>
+  </section>
+
   <!-- Section 3: PRs in Flight Table -->
   <div class="sechead">
     <span class="secnum">03</span>
@@ -613,6 +629,7 @@
           <th>Repo / PR</th>
           <th>Title</th>
           <th>Author</th>
+          <th>Opened</th>
           <th>Age</th>
           <th>Status</th>
           <th>Lines</th>

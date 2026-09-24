@@ -161,12 +161,16 @@ See [references/agent-prompts.md](references/agent-prompts.md) for the exact pro
 | B: GitHub PRs | `gh` CLI | `gh pr list`, `gh search prs` | `Bash` + `Write` |
 | C: Meetings | Meeting-notes MCP | meeting + content search | that MCP server + `Write` |
 
+If the meeting source needs re-authentication, do not authenticate from a sub-agent: write
+"Meeting source unavailable" to the digest and say so in the report.
+
 ### Optional Agents
 
 | Agent | Source | Tool | When? |
 |-------|--------|------|-------|
 | D: Metrics | Metrics MCP | event search | User asks about deploys, incidents, reliability |
-| E: GitHub Reviews | `gh` CLI | `gh search prs --reviewed-by` | Single-person deep dives |
+| E: GitHub Reviews | `gh` CLI | `gh search prs --reviewed-by` | Single-person scope (always, for 1:1s) |
+| F: Work Breakdown | Tracker MCP + `gh` CLI | epic children, PR bodies | Single-person or single-epic scope only |
 
 ### Batching vs Fan-Out
 
@@ -189,7 +193,16 @@ Follow the format in [references/report-format.md](references/report-format.md).
 - **Brevity over completeness.** Skip anything that's fine. Highlight what needs attention.
 - **Name names.** "<person> has 2 PRs awaiting review for 4 days" not "some PRs are stale."
 - **Assessments are required.** For each person and each project/epic, give a 1-line assessment.
-- **Link 100% of tickets and PRs.** Every single ticket key (e.g. DL-xxx, TRIAGE-xxx) and PR reference (e.g. #xxxx) must be hyperlinked across all surfaces (card titles, card metadata, bullet text, table titles, action items, why callouts, what's left lists, and person cards) — no plain-text references where a reader would have to manually search.
+- **Match the detail to the scope.** Team and multi-initiative reports stay short: one line
+  per epic for the frontend/backend split, no per-PR tables. Single-person and single-epic
+  reports add section 02b (per-PR tables, remaining work described). See "Detail Depends on
+  Scope" in `references/report-format.md`.
+- **Say what each epic is.** Every epic card carries one sentence from its description, its
+  priority and its linked parent initiative.
+- **Date every PR.** PR tables carry Opened and Merged columns.
+- **Link every count, person and repo** as well as every ticket and PR: a count links to the
+  query that produced it.
+- **Link 100% of tickets and PRs.** Every single ticket key (e.g. ABC-123) and PR reference (e.g. #xxxx) must be hyperlinked across all surfaces (card titles, card metadata, bullet text, table titles, action items, why callouts, what's left lists, and person cards) — no plain-text references where a reader would have to manually search.
 - **No filler.** No "here's what I found" or "let me summarize." Just the report.
 - **Meeting context enriches, not replaces.** Use meeting data to add color (action items, decisions, sentiment) to tracker and GitHub findings. **Do not quote transcripts and do not name the meeting tool in the report** — say "on a call". Don't create a separate "meetings" section for team-wide reports — weave it into the person's assessment. For single-person reports, a dedicated Meetings section is fine.
 - **Deduplicate across sources.** If Jira and GitHub both reference the same work, merge into one mention.
@@ -219,7 +232,7 @@ rm -rf .updates
 | "how is <person> doing" | Single person across all their work |
 | "pulse on ABC-123" | Single initiative/epic and everyone assigned |
 | "what did we ship this week" | Merged PRs + completed Jira issues only |
-| "prep me for 1:1 with <person>" | Single person, deeper individual assessment |
+| "prep me for 1:1 with <person>" | Single person, full depth: agents A, B, C, E and F; 30-day trend beside the window; wins, reviews given, talking points and questions |
 
 ## Assessment Scale
 

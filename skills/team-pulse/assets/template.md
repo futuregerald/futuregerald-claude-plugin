@@ -35,8 +35,9 @@
 <!-- Repeat for each active initiative/epic -->
 <!--
 ### {Index}. [{Epic Name}]({Jira URL}) ([`{Key}`]({Jira URL})) — {🟢 On Track | 🟡 Needs Attention | 🔴 At Risk}
-*{Initiative summary}*  
-**Lead:** {Lead Name} · **Progress:** `[{Unicode Progress Bar e.g. █████░░░░░}]` **{N}% Complete** ({Done} of {Total} issues done)
+*{Priority} · part of [{Parent Key} {Parent Name}]({Parent URL}).* {One sentence: what the epic delivers}  
+**Lead:** {Lead Name} · **Progress:** `[{Unicode Progress Bar e.g. █████░░░░░}]` **[{N}% Complete]({query URL})** ({Done} of {Total} issues done)  
+**Split:** Frontend {N} done / {N} left · Backend {N} done / {N} left
 
 {If Needs Attention, At Risk, or Blocked — MANDATORY:}
 > ⚠️ **Why It Needs Attention / At Risk:**  
@@ -51,17 +52,20 @@
 
 ---
 
+{{WORK_BREAKDOWN_BLOCKS}}
+<!-- Single-person and single-epic scopes only; delete for team scope. Format: section 02b in references/report-format.md -->
+
 ## 03. PRs in Flight & Review Backlog
 
 > **Summary:** {{PR_SUMMARY_LINE}}
 
-| Repo / PR | Title | Author | Age | Status | Impact | Action Required |
-| :--- | :--- | :--- | :---: | :---: | :---: | :--- |
+| Repo / PR | Title | Author | Opened | Age | Status | Impact | Action Required |
+| :--- | :--- | :--- | :---: | :---: | :---: | :---: | :--- |
 {{PR_TABLE_ROWS}}
 
 <!--
 Example row format:
-| [`repo #123`](https://github.com/org/repo/pull/123) | [`KEY-456`](https://tracker/browse/KEY-456) Title | [@author](https://github.com/author) | 2d | 🟡 **Stale Review** | `+120 / -10` | Needs review from @teammate |
+| [`repo #123`](https://github.com/org/repo/pull/123) | [`KEY-456`](https://tracker/browse/KEY-456) Title | [@author](https://github.com/author) | Jun 1 | 2d | 🟡 **Stale Review** | `+120 / -10` | Needs review from @teammate |
 -->
 
 ---

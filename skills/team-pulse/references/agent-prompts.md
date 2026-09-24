@@ -60,6 +60,10 @@ For each active epic with activity, also query its child issues:
 - Jira Server/DC fallback: `"Epic Link" in ({ACTIVE_EPIC_KEYS})`
 Fields: summary, status, issuetype, parent, resolution
 
+For each active epic, also fetch the epic itself (fields: summary, description, priority, parent)
+and record: one plain sentence on what it delivers, its priority, and its parent initiative's
+key and name. For each open child, record one line on what it is, from its description.
+
 PAGINATION & MATH RULES:
 - Read `total` from response metadata for the denominator. If results are capped, use `total`, never `results.length`.
 - If `Total == 0`, report `N/A (No child issues logged)`.
@@ -72,7 +76,9 @@ summarize each ticket as you encounter it, then discard it. If no results, write
 Write your digest to `.updates/jira.md` using the Write tool. Format:
 - Group by person: what they completed, what's in progress, what's stuck
 - Active Epics Progress Breakdown:
+  - What it is: one sentence from the description, priority, parent initiative (key + name).
   - Quantitative progress: Total issues, Done count, In-Progress count, and % complete.
+  - The JQL behind each count, so the report can link the number to the query that produced it.
   - Exactly Why It Needs Attention / At Risk: Root cause, upstream dependency, failure mode, or idle duration if not On Track. (If tracker is silent, note empirical observation: e.g. "No code pushed or ticket movement for N days").
   - What's Left (TL;DR): Select 2–4 items strictly prioritized by: (1) In-review PRs, (2) Active assigned in-progress tasks, (3) Next unblocked milestone tickets. If >4 items remain, summarize as "- [Top 3 items] and N other open tickets".
 - Flag: issues In Progress >5 days, unassigned work, blocked items
@@ -118,15 +124,17 @@ to scope at the source. Process each repo independently — summarize before mov
 
 For each repo, run:
 gh pr list --repo {ORG}/{REPO} --state all {AUTHOR_FLAG} --limit 20 \
-  --json number,title,author,state,createdAt,mergedAt,reviewDecision,additions,deletions,headRefName \
+  --json number,title,author,state,createdAt,mergedAt,closedAt,reviewDecision,additions,deletions,headRefName,url \
   --search "created:{START_DATE}..{END_DATE} OR merged:{START_DATE}..{END_DATE}" | cat
 
 Summarize this repo's results immediately, then move to the next repo.
 If no results across all repos, write "No activity." and return.
 
 Write your digest to `.updates/github.md` using the Write tool. Format:
-- PRs merged (with +/- lines)
-- PRs opened or updated
+- PRs merged (with +/- lines, opened date and merged date)
+- PRs opened or updated (with opened date)
+- PRs closed without merging (with closed date)
+- Every PR as a link, with its tracker key if the title or branch names one
 - Stale PRs in the range (>3 days without review) — flag explicitly
 - Max {WORD_LIMIT} words
 
@@ -185,6 +193,45 @@ After writing the file, return only: "Wrote .updates/meetings.md — {brief 1-li
 
 It returns only meetings the account holder attended or that were shared with them — not
 meetings between other team members. Note this limitation in the findings when it matters.
+
+---
+
+## Agent F: Work Breakdown (single-person and single-epic scopes only)
+
+Dispatch this only when the scope is one person or one epic. A team report gets the one-line
+frontend/backend split from agents A and B instead.
+
+```
+Explain what {PERSON_OR_EPIC} built in epics {EPIC_KEYS}, split into frontend and backend, and
+what is done versus left.
+
+Frontend repos: {FRONTEND_REPOS}   Backend repos: {BACKEND_REPOS}   # from references/team.md
+
+1. For each epic, list its children (fields: summary, status, assignee, resolutiondate).
+2. Find the matching PRs: gh pr list --repo {ORG}/{REPO} {AUTHOR_FLAG} --state all --limit 40 \
+     --search "updated:>={TREND_START}" \
+     --json number,title,state,createdAt,mergedAt,closedAt,additions,deletions,headRefName,url
+   Match a PR to a ticket by the key in its title or branch name.
+3. For each matched PR, one at a time:
+   gh pr view {N} --repo {ORG}/{REPO} --json body --jq '.body[0:1500]'
+   Write ONE plain sentence on what it changes for the user. Say whether it runs on real data
+   or stubbed/mock data, and name any endpoint or permission check it adds.
+4. For each open child, write one line on what it is, from its description. If it has no
+   description, say so and describe it from the title.
+5. If the epic's parent has sibling epics the work depends on (for example, a backend epic
+   feeding a frontend one), list them: key, title, status, owner, one line each.
+
+Write .updates/breakdown.md. Per epic:
+- 2–4 sentence summary: which side of the stack, what is real vs stubbed, what it depends on
+- Backend table and Frontend table: Ticket | Status | PR | Opened | Merged | What it does
+  (Merged is the date, "open", or "closed unmerged <date>")
+- Still to do: Ticket | Status / owner | What it is
+- PRs closed without merging: why, from the last comments (paraphrase), and whether a
+  replacement exists
+Every ticket and PR as a link. Max {WORD_LIMIT} words.
+
+Return only: "Wrote .updates/breakdown.md — {1-line summary}"
+```
 
 ---
 

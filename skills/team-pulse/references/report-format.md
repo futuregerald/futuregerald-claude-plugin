@@ -1,5 +1,32 @@
 # Team Pulse Report Format
 
+## Detail Depends on Scope
+
+The same skeleton serves every scope; how deep each section goes does not.
+
+| Scope | Epic cards | Work breakdown | Person sections |
+|-------|-----------|----------------|-----------------|
+| **Team or multi-initiative** | Description, parent, priority, progress, why, what's left | **One line per epic:** `Frontend: N done / N left · Backend: N done / N left` | 1–3 sentences each |
+| **Single person (1:1 prep)** | Same | **Full section 02b:** per epic, frontend and backend tables with one line per PR, remaining work described, and sibling work the epic depends on | Wins, 30-day trend, reviews given, talking points, questions to ask |
+| **Single epic or initiative** | Same | Full section 02b for that epic only | 1–3 sentences each |
+
+A team report with per-PR tables is too long to read before a standup. A 1:1 report without them
+leaves the manager unable to say what the person actually built.
+
+## Rules for Every Scope
+
+- **Link everything a reader might want to open.** Ticket keys, PRs, people (their profile),
+  repos, and **every count**: "34 tickets resolved" links to the tracker query that returns
+  those 34, "48 reviews" links to the GitHub search that returns them. A number without a link
+  cannot be checked.
+- **Every epic card says what the epic is.** One plain sentence from the epic's description,
+  its parent initiative (linked) and its priority. A title alone does not tell the reader
+  whether the work matters.
+- **Every PR table has Opened and Merged date columns.** Merged shows the date, `open`, or
+  `closed unmerged <date>`. Age alone hides when work landed.
+- **Remaining work is described, not just listed.** Each open ticket gets a short line on what
+  it is, taken from its description; if it has none, say so and describe it from its title.
+
 ## Structure
 
 The pulse is delivered both as a concise summary in chat, and as a complete, publication-grade markdown document (`team-pulse-<END_DATE>.md`) ready to post into a GitHub Issue/Discussion, Jira ticket, or Confluence document:
@@ -40,8 +67,9 @@ The pulse is delivered both as a concise summary in chat, and as a complete, pub
 ## 02. Active Initiatives & Epics Status
 
 ### 1. [{Epic Name}]({Jira URL}) ([`{Key}`]({Jira URL})) — {Badge}
-*{Initiative summary}*  
-**Lead:** {Lead Name} · **Progress:** `[█████░░░░░]` **{N}% Complete** ({Done}/{Total} issues done)
+*{Priority} · part of [{Parent Key} {Parent Name}]({Parent URL}).* {One sentence: what the epic delivers, from its description}  
+**Lead:** {Lead Name} · **Progress:** `[█████░░░░░]` **[{N}% Complete]({tracker query for the epic's children})** ({Done}/{Total} issues done)
+**Split:** Frontend {N} done / {N} left · Backend {N} done / {N} left
 
 {If assessment is Needs Attention, At Risk, or Blocked — MANDATORY:}
 > ⚠️ **Why It Needs Attention / At Risk:**  
@@ -58,9 +86,35 @@ The pulse is delivered both as a concise summary in chat, and as a complete, pub
 
 > **Summary:** {N} PRs in flight across repositories. {N} stale PRs flagged.
 
-| Repo / PR | Title | Author | Age | Status | Impact | Action Required |
-| :--- | :--- | :--- | :---: | :---: | :---: | :--- |
-| [`repo #123`]({PR URL}) | [`{Key}`]({Jira URL}) {Title} | [@handle]({GH URL}) | {Age} | {Status Badge} | `+{A} / -{D}` | {Specific action and reviewers} |
+| Repo / PR | Title | Author | Opened | Age | Status | Impact | Action Required |
+| :--- | :--- | :--- | :---: | :---: | :---: | :---: | :--- |
+| [`repo #123`]({PR URL}) | [`{Key}`]({Jira URL}) {Title} | [@handle]({GH URL}) | {Mon D} | {Age} | {Status Badge} | `+{A} / -{D}` | {Specific action and reviewers} |
+
+---
+
+## 02b. Work Breakdown by Epic (single-person and single-epic scopes only)
+
+### {Epic Name} ([`{Key}`]({Jira URL})): what was built
+
+**Summary:** {2–4 sentences: which side of the stack the work is on, what is real vs stubbed, and what the epic still depends on}
+
+**Backend ([{repo}]({repo URL})): {N} done**
+
+| Ticket | Status | PR | Opened | Merged | What it does |
+|---|---|---|---|---|---|
+| [{Key}]({URL}) | Done | [#123]({PR URL}) | {Mon D} | {Mon D / open / closed unmerged Mon D} | {One line from the PR body: the user-visible change} |
+
+**Frontend ([{repo}]({repo URL})): {N} merged, {N} in open PRs**
+
+{Same table}
+
+**Still to do:**
+
+| Ticket | Status / owner | What it is |
+|---|---|---|
+| [{Key}]({URL}) | {Status}, {owner or unassigned} | {One line from the description} |
+
+**For the 1:1:** {1–2 questions this breakdown raises}
 
 ---
 
@@ -68,6 +122,12 @@ The pulse is delivered both as a concise summary in chat, and as a complete, pub
 
 ### {Person Name} — {Role} ([`@{handle}`]({GH URL})) — {Badge}
 * **Summary:** {1-3 sentences: focus area, merged PRs, active work}
+{Single-person scope adds:}
+* **Wins to recognise:** {specific merged work, with links}
+* **30-day trend:** {[N tickets resolved](query) · [N PRs merged](search) · median open-to-merge · median time to first review}
+* **Reviews given:** {[N reviews](search), and whose work they concentrate on}
+* **Talking points:** {numbered, each tied to linked evidence}
+* **Questions to ask:** {2–4 open questions}
 {If Needs Attention / At Risk: state exact reason why with alert}
 * **Metrics:** {N} Merged PRs · {N} In Flight · **Focus:** {Domain}
 
@@ -117,7 +177,8 @@ Populate `assets/template.html` by replacing its semantic placeholders:
 - `{{DATE_RANGE}}`, `{{MANAGER_NAME}}`, `{{PRIMARY_REPOS}}`, `{{TRACKER_INFO}}`: Metadata bar items.
 - `{{METRIC_TILES}}`: 4 metric summary tiles (Overall Health, PR Velocity, Net Impact, Review Bottlenecks).
 - `{{HEADLINE}}` & `{{STRATEGIC_CONTEXT}}`: Executive narrative and org context.
-- `{{ACTIVE_EPICS_CARDS}}`: Grid of epic cards with progress bars, `%` complete, `.why-box` root cause callouts, and `.whats-left` lists.
+- `{{ACTIVE_EPICS_CARDS}}`: Grid of epic cards. Each card carries `.card-meta` (priority and linked parent), `p.card-summary` (what the epic delivers), the progress bar with a linked `%`, a `.card-bullets` list (activity and the frontend/backend split), a `.why-box` when not On Track, and `.whats-left`.
+- `{{WORK_BREAKDOWN}}`: Section 02b as HTML tables for single-person and single-epic scopes. **Replace it with an empty string for team scope**; the template hides the section when it is empty.
 - `{{PR_SUMMARY_LINE}}` & `{{PR_TABLE_ROWS}}`: PR status summary and table rows with hyperlinks.
 - `{{PEOPLE_CARDS}}` & `{{EM_CARD}}`: Team roster workload cards and dedicated EM card.
 - `{{RISK_ITEMS}}`: Prioritized P0/P1/P2 operational risk cards.
@@ -139,7 +200,7 @@ Populate `assets/template.html` by replacing its semantic placeholders:
      - Visual progress bar (`.prog-bar`, `.prog-fill`) with quantitative completion `%` (`Done / Total` issues)
      - Explicit `.why-box` warning/danger callout for any epic not On Track
      - Scannable `.whats-left` block detailing remaining deliverables
-  4. **Interactive PR Table:** PR link, author, age, status badge, lines (+/-), and required action. Stale PRs styled in warm warning background.
+  4. **Interactive PR Table:** PR link, author, opened date, age, status badge, lines (+/-), and required action. Stale PRs styled in warm warning background.
   5. **People Grid:** Roster cards with role, summary, stats, and explicit "Why Needs Attention" micro-callouts when flagged. Dedicated EM card.
   6. **Risks & Blockers Register:** Prioritized P0/P1/P2 cards with direct issue links.
   7. **Bottom Line Callout:** Highlighted synthesis card for executive readouts.
@@ -151,7 +212,7 @@ Populate `assets/template.html` by replacing its semantic placeholders:
 |-------|-------------|
 | Full team summary (Markdown) | 300-500 words |
 | Full team HTML dashboard | Complete standalone dashboard |
-| Single person (1:1 prep) | 150-250 words |
+| Single person (1:1 prep) | 250-400 words, plus the section 02b tables |
 | Single epic/initiative | 200-350 words |
 | "What did we ship" | 100-200 words |
 
