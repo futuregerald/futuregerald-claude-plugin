@@ -1,6 +1,6 @@
 ---
 name: datadog-dashboards
-description: Create, edit, and review Datadog dashboard JSON so every widget actually renders the data the user wants — not merely valid JSON. Enforces three gates: (1) valid JSON structure, (2) every query verified against LIVE data, (3) each section verified to answer its intended question. Use when building a Datadog dashboard, reviewing or importing/exporting dashboard JSON, writing dashboard queries (query_value, timeseries, toplist, query_table, list_stream), adding rates or denominators, or debugging why a tile shows "No data", a blank cell, or a wrong number. Triggers include "datadog dashboard", "dashboard JSON", "review this dashboard", "build/create a dashboard", "widget shows no data", "why is this tile empty", "does this query return data".
+description: Create, edit, and review Datadog dashboard JSON so every widget actually renders the data the user wants — not merely valid JSON. Enforces three gates: (1) valid JSON structure, (2) every query verified against LIVE data, (3) each section verified to answer its intended question. Use when building a Datadog dashboard, reviewing or importing/exporting dashboard JSON, writing dashboard queries (query_value, timeseries, toplist, query_table, list_stream), adding rates or denominators, or debugging why a tile shows "No data", a blank cell, or a wrong number. Also use when planning what a dashboard should track over time: it puts trend widgets on metrics and events, because logs age out in days. Triggers include "datadog dashboard", "dashboard JSON", "review this dashboard", "build/create a dashboard", "widget shows no data", "why is this tile empty", "does this query return data", "trend", "over time", "week over week", "log-based metric", "retention".
 ---
 
 # Datadog Dashboards
@@ -18,6 +18,44 @@ This skill exists because static/LLM review reliably catches schema, field-name,
 and consistency bugs and reliably **misses** runtime data behavior (sparse joins,
 empty facets, count-vs-cardinality drift, no-data-vs-zero). Only running the
 queries closes that gap.
+
+## Trends need metrics and events, not logs
+
+**Whenever a dashboard is planned, built or reviewed, propose the metrics and
+events it needs for trends. Do not wait for a tile to come up empty.** Logs are
+the shortest-lived data in Datadog: index retention is usually days (often 15),
+and indexed spans a few weeks. Metrics and events are typically kept for about
+15 months. A widget built on logs can never show more than the log window,
+however wide its time picker.
+
+Check the real retention before designing. Search logs oldest-first over a wide
+window and read the oldest timestamp, then do the same for spans, events and one
+metric. Do not assume.
+
+Choose each widget's source by the question it answers:
+
+| Question | Source |
+|---|---|
+| What happened just now, which requests failed, show me the lines | Logs or spans (`list_stream`, recent toplists) |
+| Is it getting better or worse, week over week, since the release, SLO | **Metric** |
+| Rate, error rate or latency of an instrumented service | **APM trace metrics** (`trace.<operation>.hits`, `.errors`, `.duration`), which already exist with long retention |
+| A business or domain count that only appears in logs | **Log-based metric** (a count, or a distribution over a numeric attribute) |
+| Something not in logs or traces | **Custom metric** emitted by the app (DogStatsD or OpenTelemetry) |
+| Why did the line move | **Events** overlaid on the timeseries: deploys (change tracking), feature-flag flips, backfills, incidents, config changes |
+
+When proposing a metric:
+
+- **It has no history before the day it is created.** Say so, and create it early.
+- **Give exact definitions:** name, query, aggregation and group-by tags. Creating
+  a metric is usually a console or API step the tools here cannot do, so the user
+  needs something to paste.
+- **Group only by low-cardinality tags** (status, reason, tool, env, service),
+  never ids, tokens or users. See pitfall 10 in `references/query-pitfalls.md`.
+- **Pair every rate with its denominator metric**, as for log tiles.
+
+When proposing events, name where each one comes from (an existing integration,
+CI calling the events API on deploy, the app emitting one on a flag change or
+backfill) and which trend widget it will explain.
 
 ## The three gates (all required, in order)
 
@@ -58,16 +96,20 @@ Treat every widget as a **hypothesis** about what will render, then test it.
 1. **Capture intent per section.** Before writing JSON, write one sentence per
    section: "this section answers **X** for **audience Y**." Keep it — it is the
    Gate-3 checklist.
-2. **Discover the real schema.** Before writing any query, confirm actual event
+2. **Pick the source for each widget** (see *Trends need metrics and events*
+   above). Every trend widget goes on a metric. List the log-based metrics,
+   custom metrics and events the board needs, with definitions, and give that
+   list to the user with the JSON.
+3. **Discover the real schema.** Before writing any query, confirm actual event
    names, field paths, facet values, and measures by querying live data. Never
    trust a field name you have not seen in a live event.
-3. **Draft the JSON.** See `references/datadog-json.md` for widget shapes,
+4. **Draft the JSON.** See `references/datadog-json.md` for widget shapes,
    formulas (`default_zero`, `cardinality`), conditional_formats, per-widget time.
-4. **Gate 1** — validate structure.
-5. **Gate 2** — run every query against live data; confirm non-empty and shaped
+5. **Gate 1** — validate structure.
+6. **Gate 2** — run every query against live data; confirm non-empty and shaped
    as intended. Watch `references/query-pitfalls.md` while doing this.
-6. **Gate 3** — for each section, confirm it renders the sentence from step 1.
-7. **Iterate.**
+7. **Gate 3** — for each section, confirm it renders the sentence from step 1.
+8. **Iterate.**
 
 ## Workflow — reviewing a dashboard
 
@@ -79,6 +121,9 @@ Apply the same three gates to existing JSON. Specifically:
   misses.
 - For each section, state what a viewer would conclude and whether that matches
   the user's intent (Gate 3).
+- Flag every trend widget built on logs or spans, and every time window longer
+  than its source's retention. Recommend the metric or event that replaces it,
+  with its definition.
 - When you report a review, mark findings and say plainly which gates you could
   and could not verify (e.g. "Gate 2 verified against prod; ffuf tile returns 15
   runs" vs "Gate 2 not run — no data access").
@@ -95,6 +140,8 @@ For every widget and section, ask:
   **denominator/total** beside it.
 - Does the number **mean what the title claims**? Check denominator semantics,
   count-vs-cardinality, and that approximations are labeled `(approx)`.
+- Does the widget's **time window fit the retention of its source**? Is every
+  trend on a metric, with events overlaid where a change could explain a shift?
 - Is the **most useful information at the top** of the section and the board?
 
 ## Pitfalls

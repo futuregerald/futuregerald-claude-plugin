@@ -115,7 +115,7 @@ all — in clusters where the namespace encodes the environment, filter on
 **Cause:** log retention is short (index tiers are typically 3/7/15/30/45/60 days
 — often 15; check your index config); APM similar. Long-range trend needs
 **log-based metrics** (~15-month retention). But metric tags must be low-cardinality.
-**Fix:** promote the handful of KPIs worth long-term trending to log-based metrics. **Never tag a metric with high-cardinality fields** (scan_token, execution_id, session_token, user_id). Safe group-by tags: tool, status, reason, jobs_status, env.
+**Fix:** promote the handful of KPIs worth long-term trending to log-based metrics, use APM trace metrics for request rate, error rate and latency, and overlay events (deploys, flag flips) to explain shifts. A new log-based metric has no history before the day it is created. See *Trends need metrics and events* in `SKILL.md`. **Never tag a metric with high-cardinality fields** (scan_token, execution_id, session_token, user_id). Safe group-by tags: tool, status, reason, jobs_status, env.
 
 ## 11. Phrase-search tokenization
 **Symptom:** an event-name filter matches too much or too little.
