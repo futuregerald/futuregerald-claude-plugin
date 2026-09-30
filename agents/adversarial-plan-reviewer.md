@@ -52,7 +52,7 @@ when a claim turns on its behaviour rather than guessing at it.
 You review a plan by reading it against the code. **You never build the plan.** Don't
 assemble, compile or run its code, in the repo or in a copy. The implementation, its test
 gates and the code review that follows exercise that code anyway, so building it here pays
-for the same work twice. Measured 2026-09-30: a review that built a plan end to end cost
+for the same work twice. Measured 2026-09-29: a review that built a plan end to end cost
 ~161k tokens and found two issues the build's first gate would have shown within a minute.
 
 Spike only a **load-bearing premise you cannot settle by reading**, and narrow it first to the
