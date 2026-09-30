@@ -51,7 +51,9 @@ Agent tool:
     Base SHA: <git rev-parse HEAD>
 ```
 
-That is the entire prompt. The agent carries its own methodology — do not restate it.
+That is the entire prompt. The agent carries its own methodology — do not restate it. That
+includes its cost rule: it reviews by reading and never builds the plan, so a plan that
+contains full function bodies is already too expensive to review (see `writing-plans`).
 
 **Do not steer it.** No suspicions, no "areas of concern", no "please check X". A reviewer
 pointed at your worries inherits your blind spots, which defeats the point of dispatching a
