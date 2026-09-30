@@ -14,7 +14,7 @@ effort: medium
 
 Write comprehensive implementation plans assuming the engineer has zero context for our
 codebase and questionable taste. Document everything they need: which files to touch for each
-task, the code, the tests, docs they might need to check, how to verify it. Give them the
+task, the signatures, the test cases, docs they might need to check, how to verify it. Give them the
 whole plan as bite-sized tasks. DRY. YAGNI. TDD. Frequent commits.
 
 Assume they are a skilled developer who knows almost nothing about our toolset or problem
@@ -74,8 +74,12 @@ Each step is one action, 2–5 minutes:
 
 ## Task structure
 
-Each task names exact files, gives complete code, and states the exact command with its
-expected output.
+Each task names exact files, gives the exact function signatures and the test cases (inputs
+and expected outputs), and states the exact command with its expected output. **It does not
+give full function bodies:** the code is written once, during implementation, where the tests
+and the code review check it. Writing it into the plan too makes the plan as expensive as the
+build, and a reviewer can then only check it by building it. Write literal code only where the
+text itself is the decision: a regex, a config or lint rule, a migration, a data format.
 
 - **Files:** Create / Modify (with line ranges) / Test
 - **Steps:** failing test → watch it fail → implement → watch it pass → commit
@@ -97,7 +101,7 @@ line numbers still hold after the earlier ones have run.
 ## Remember
 
 - Exact file paths always
-- Complete code in the plan, not "add validation"
+- Exact signatures and test cases, not "add validation"; literal code only where the text is the decision
 - Exact commands with expected output
 - State what your test suite does **not** prove, so nobody cites a green run as evidence
 - DRY, YAGNI, TDD, frequent commits

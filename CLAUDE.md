@@ -52,6 +52,8 @@
 - NEVER review your own code — you wrote it, you cannot objectively review it
 - If a reviewer finds CRITICAL/IMPORTANT issues: fix, re-run tests, re-review with a fresh agent
 - Only proceed after explicit reviewer approval
+- **Plan tasks give signatures, test cases and gates, not full function bodies.** Code is written once, during IMPLEMENT, where the tests and CODE REVIEW check it. Write literal code in a plan only where the text itself is the decision: a regex, a config or lint rule, a migration, a data format
+- **A plan review (`plan-review`) reads; it never builds the plan.** It checks premises, callers and design against the code, and spikes only a load-bearing premise it cannot settle by reading, sized as *Prove It, Don't Assume It* says. Measured: a review that built a plan end to end cost ~161k tokens and found two issues the build's first gate would have shown within a minute
 - **Any phase that mutates code re-opens BLAST-RADIUS VERIFY.** SIMPLIFY edits, and review fix-cycles edit. Re-running tests is not enough — a fix that alters a return contract regresses exactly the callers IMPACT ANALYSIS recorded as having no test. Re-walk the caller list before COMMIT
 
 ### System Thinking: Trace Before You Touch (Mandatory)
@@ -131,7 +133,7 @@ Reasoning from memory about runtime behavior is how wrong premises reach a plan.
 If steps 1–2 leave you confident, stop and cite the evidence. Spiking what you already established wastes time and tokens. When you do spike:
 
 - Scratch or temp directory only. Never the working tree, never repo files
-- **Keep it small: one file, a few dozen lines, isolating the single behavior.** Never rebuild the app, boot the framework, or stand up a database — if proving it requires that, it is not a spike
+- **Narrow the question before writing the spike, then keep its cost proportional to what the answer is worth.** Write down the one thing it proves ("does this dependency compile under TinyGo?", not "does the plan work?"). A spike that keeps growing is a sign the question is too broad: narrow it, or stop. The budget scales with the size of the change; **building the entire thing is never in scope, whatever the size.** Never rebuild the app, boot the framework, or stand up a database — if proving it requires that, it is not a spike
 - Two attempts, a few minutes. Then abandon it and state only what you can support
 - Where independent checks would run serially, dispatch narrowly-scoped sub-agents in parallel — one question each. Do not spawn an agent for what a single search would answer
 

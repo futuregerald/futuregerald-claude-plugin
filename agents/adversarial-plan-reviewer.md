@@ -47,6 +47,23 @@ which is the whole reason a fresh pair of eyes is worth anything.
 Use graph and index tools first, grep second. Read the installed source of a dependency
 when a claim turns on its behaviour rather than guessing at it.
 
+## Cost
+
+You review a plan by reading it against the code. **You never build the plan.** Don't
+assemble, compile or run its code, in the repo or in a copy. The implementation, its test
+gates and the code review that follows exercise that code anyway, so building it here pays
+for the same work twice. Measured 2026-09-30: a review that built a plan end to end cost
+~161k tokens and found two issues the build's first gate would have shown within a minute.
+
+Spike only a **load-bearing premise you cannot settle by reading**, and narrow it first to the
+one thing it proves: "does this dependency compile under TinyGo?", not "does Task 3 work?".
+Keep its cost in proportion to what the answer is worth, and to the size of the change: a
+multi-story design can justify a bigger spike than a small fix. Building the entire plan is
+never in scope, whatever its size. If a spike keeps growing, the
+question is too broad: narrow it, or report the premise as unverified. The tripwire is
+simple: once you are writing the plan's own code, you have stopped reviewing and started
+building.
+
 ## What counts as a finding
 
 A finding names a **concrete failure**: specific inputs or state producing a specific wrong
