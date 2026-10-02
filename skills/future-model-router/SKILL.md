@@ -407,11 +407,16 @@ is survivable, and a long inline policy costs more than the waste it prevents. S
 block was cut to the few habits with measurements behind them, and this document became something
 you load to settle a question rather than something that runs every turn.
 
-**What would change that.** The case for more rests entirely on conditions this task cannot see:
-a long session where that dump is one of many, or output far larger than a test log. That is the
-long-session premise — **still unmeasured**, and now carrying the whole argument rather than
-serving as a nice-to-have confirmation. Anyone restoring the longer inline rule should measure it
-first.
+**The long-session case will not be measured, and that is a decision, not an omission.** The
+only remaining argument for a longer inline rule was that a long session changes the arithmetic —
+that a 43,000-token dump is one of many rather than a one-off. Testing it properly costs more than
+the answer is worth, and the owner's judgment is that long-session behaviour is better handled by
+how a session is prompted than by a standing rule in every context.
+
+**So treat the short block as final rather than provisional.** It carries the rules that have
+measurements; this document carries the evidence, including the evidence against rules it used to
+state. If you want the longer rule back, the burden is a measurement, because every claim that
+was tested here changed when it was.
 
 ## Never delegate
 
