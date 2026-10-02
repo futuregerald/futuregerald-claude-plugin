@@ -75,9 +75,9 @@ Before presenting, verify:
 - [ ] Related tickets, PRs, docs linked
 - [ ] No hallucinated file paths, method names, or model relationships
 - [ ] Acceptance criteria are non-redundant and testable
-- [ ] Unresolved questions explicit with numbered list
+- [ ] Unresolved questions explicit with numbered list (standalone stories, spikes and initiatives only; epics never carry them)
 - [ ] Spike tickets drafted for unknowns neither user nor investigation could resolve
-- [ ] No section overlap: stories/tasks must NOT have an "In scope" section (that content belongs in "Desired behavior" + "Technical approach"). Use "Out of scope" for guardrails only.
+- [ ] No section overlap: standalone stories/tasks must NOT have an "In scope" section (that content belongs in "Desired behavior" + "Technical approach"). Use "Out of scope" for guardrails only.
 
 **Brevity checks (initiatives and epics):**
 - [ ] No "Current State" / "How it works today" section — that's docs or child stories
@@ -86,8 +86,19 @@ Before presenting, verify:
 - [ ] No per-workstream acceptance criteria in initiatives — those go in child epics
 - [ ] No user stories in initiatives/epics — those go in child tickets
 - [ ] Decisions from comments/conversations surfaced in "Key decisions" section
-- [ ] "Open questions" contains only genuinely unresolved questions (answered ones moved to Key decisions)
-- [ ] 2-minute rule: a PM or engineer skimming this for the first time can understand problem, scope, decisions, and open questions in under 2 minutes
+- [ ] Initiatives: "Open questions" contains only genuinely unresolved questions (answered ones moved to Key decisions)
+- [ ] 2-minute rule: a PM or engineer skimming this for the first time can understand problem, scope and decisions in under 2 minutes
+
+**Epic format checks** (see the Epic template in [references/writing-style.md](references/writing-style.md)):
+- [ ] Sections in order: problem, how it works, designs, key results, success metrics, key decisions, out of scope, dependencies, related context
+- [ ] Designs section links the design file and each key screen, with a screenshot for each
+- [ ] No stories list, sizes, estimates or open questions section
+- [ ] Written in the user's voice, plain language, with no justifications
+
+**Child story checks** (stories created under an epic):
+- [ ] Each is a user story plus acceptance criteria, and nothing else (a design link is fine)
+- [ ] Every acceptance criterion is observable behaviour; no tables, endpoints, flags, file paths or technical notes
+- [ ] Non-user work (rollout, measurement) is a Task with one line of "what" and outcome-based criteria
 
 ### Phase 6: Output
 
@@ -100,12 +111,14 @@ Before presenting, verify:
 For epics and initiatives, after the parent ticket is approved:
 - Offer to break into stories and/or spike tickets
 - Each sub-task goes through phases 2-6 at its own depth level
+- Stories under an epic use the "Story (child of an epic)" template: a user story plus acceptance criteria only. Non-user work uses the "Task (child of an epic)" template. Implementation detail from investigation stays in a local plan, never in the ticket
+- Save the epic, each story and the design screenshots as local markdown files before writing to Jira
 - Spike tickets get minimal investigation (they exist to find answers)
 
 ## Unknowns Handling
 
 1. **Ask the user first** (interactive mode only)
-2. If the user doesn't know: **flag in the ticket** under "Unresolved Questions"
+2. If the user doesn't know: **flag in the ticket** under "Unresolved Questions". For epics, list the question in your reply and name its owner instead; it never goes in the epic description
 3. If the unknown needs hands-on investigation: **draft a spike ticket** with clear experiment criteria
 4. **Autonomous mode:** log assumption with confidence level (High/Medium/Low), surface all assumptions in a dedicated section
 
