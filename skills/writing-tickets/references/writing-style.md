@@ -11,7 +11,7 @@ Rules and templates for clear, actionable tickets. Dual audience: readable by PM
 5. **Technical terms in context.** Use `code formatting` for model names, scopes, file paths, method names. But explain what they do -- don't assume the reader knows.
 6. **Consolidated acceptance criteria.** No redundant ACs. Merge overlapping ones. Each AC must be independently testable.
 7. **Situate in hierarchy.** Always link parent (initiative/epic), sibling tickets, and dependencies. Show where this work fits.
-8. **Unresolved questions explicit.** Separate numbered section. Each question must be specific enough that someone could answer it without re-reading the whole ticket.
+8. **Unresolved questions explicit.** Separate numbered section. Each question must be specific enough that someone could answer it without re-reading the whole ticket. Epics are the exception: they carry no open questions (see the Epic template).
 9. **End state defined.** Every ticket must state what success looks like. For stories/epics, use a "Key results" section. For initiatives, embed this in the scope -- each deliverable line should make the end state clear.
 10. **200-300 words per section max.** If a section is longer, break it into sub-sections.
 11. **No "In scope" on stories/tasks.** Stories and tasks already have "Desired behavior" (observable outcomes) and "Technical approach" (implementation details). Adding an "In scope" section duplicates both. Use "Out of scope" for guardrails, but never "In scope" -- that content belongs in the existing sections. Only initiatives use "Scope" (they lack a technical approach section).
@@ -38,7 +38,7 @@ Rules and templates for clear, actionable tickets. Dual audience: readable by PM
 - **Scope** — what's being built, as a numbered list with 1-2 sentence descriptions per workstream. Not paragraphs.
 - **Out of scope** — explicit exclusions. Bullet list.
 - **Key decisions** — decisions made in comments or conversations, surfaced into the body so they're visible. Don't leave decisions buried in comment threads.
-- **Open questions** — only questions that are genuinely still open. Collapse answered questions into "Key decisions."
+- **Open questions** (initiatives only) — only questions that are genuinely still open. Collapse answered questions into "Key decisions."
 - **Dependencies** — what blocks this work.
 - **Next step** — what happens next (assign tech lead, break into epics, etc.).
 
@@ -96,41 +96,84 @@ This is the only place for reference material -- not inline in scope.}
 
 ### Epic
 
+Use this format whenever you write an epic, and always when you also create the stories under it. Product and engineering are both the audience. Write in the user's voice, in plain language, and don't explain or justify decisions.
+
 ```markdown
+Part of {parent initiative link}.
+
 ## What problem are we solving?
-{1-2 paragraphs: the problem in plain language, why it matters}
+{2-3 sentences: what's missing for the user, and what we'll do about it}
+
+## How it works
+{3-5 bullets: the end-to-end flow in plain language. No tables, endpoints or file names.}
+
+## Designs
+{Link to the design file or flow. Then, for each key screen:
+a bold linked title, followed by an embedded screenshot.
+Note in one line anything the designs don't cover yet, and who owns it.}
 
 ## Key results
-{Numbered list: what does the system look like when this epic is done?}
+{2-4 bullets: what's true for the user when this epic is done}
 
-## Part 1: {Plain language name}
-{Describe the first logical chunk of work. 200-300 words max.
-Use arrows for state flows, code formatting for technical terms.}
+## Success metrics
+{3-4 bullets: **Name:** what we measure. No invented numeric targets.}
 
-## Part 2: {Plain language name}
-{Next chunk. Same rules.}
+## Key decisions
+{Bullets: decisions already made, stated as facts. No reasoning, no options considered.}
 
-## Part N: ...
+## Out of scope
+{Bullets: adjacent work we're not doing}
 
 ## Dependencies
-{Links to parent initiative, blocking/blocked tickets, related PRs.
-What must exist or be completed before this epic can proceed?}
-
-## Blockers
-{Current blockers preventing progress. If none, omit this section.
-For each: what's blocked, who/what is blocking, and suggested resolution.}
+{Bullets: what must land first, with links and owners}
 
 ## Related context
-{Links to Confluence docs, ADRs, prior art PRs, Datadog dashboards}
-
-## Unresolved questions
-{Numbered list, specific enough to answer without re-reading}
-
-## Acceptance criteria
-{Checklist. Non-redundant. Each independently testable.}
+{Links: product answers, existing PRs, ADRs, upstream tickets}
 ```
 
-### Story
+**An epic never contains:**
+- User stories or acceptance criteria. Those go in the child stories.
+- A list of stories, sizes or estimates. Jira shows the children.
+- An open questions section. Resolve open questions with the user before writing. Anything that's still open goes to the person who owns it, not into the description.
+- Implementation detail: tables, columns, endpoints, flags, file paths.
+
+### Story (child of an epic)
+
+Use this format for every story created under an epic. A story is a user story plus acceptance criteria. Engineers decide how to build it.
+
+```markdown
+## User story
+As a {role}, I want {capability}, so that {outcome}.
+
+Design: {link to the screen, if there is one}
+
+## Acceptance criteria
+- [ ] {Observable behaviour a PM could check in the product}
+- [ ] ...
+```
+
+**Rules:**
+- Every acceptance criterion describes behaviour the user can see, never how it's built.
+- No technical notes, table or column names, endpoints, feature flag names, file paths or SQL. Keep that thinking in a local plan, not in the ticket.
+- Name a related ticket only when the behaviour depends on it, for example "works the same way as {link}".
+- 3-6 acceptance criteria. If there are more, the story is too big: split it.
+- A story with no user-facing surface (for example, recording data other stories read) is still written as a user story, from the user's point of view: "As an {owner}, I want the product to keep a record of…".
+
+### Task (child of an epic)
+
+For work that isn't a user capability, such as rollout, measurement or a staff preview.
+
+```markdown
+## What are we doing?
+{One sentence}
+
+## Acceptance criteria
+- [ ] {Outcome, not implementation}
+```
+
+### Story (standalone)
+
+Use this only for a single story that isn't being created under a new epic, for example a bug fix or a follow-up from grooming.
 
 ```markdown
 ## What are we doing?
@@ -204,6 +247,12 @@ This section is for engineers -- technical detail is expected.}
 - Bullet lists for items with no ordering; numbered lists for sequences
 - Keep acceptance criteria as a flat checklist, not nested
 
+### Writing to Jira
+
+- Send descriptions as Atlassian Document Format (ADF), not markdown. Markdown checklists turn into literal `\[ \]` bullets and links on inline code are dropped. Acceptance criteria become an ADF `taskList`.
+- Neither `acli` nor the Atlassian MCP can attach files. Save design screenshots locally next to the drafts, keep the design links in the description, and tell the user which files to drag in.
+- Read every created or edited ticket back and check its structure before saying it's done.
+
 ## What NOT to Write
 
 - Don't explain how Rails/Ruby/React works -- assume the reader knows the framework
@@ -217,3 +266,5 @@ This section is for engineers -- technical detail is expected.}
 - Don't preserve multi-option analyses after a decision is made -- state the decision, drop the deliberation
 - Don't write user stories in initiatives or epics -- those belong in child tickets
 - Don't leave answered questions in the "Unresolved questions" list -- move answers to "Key decisions"
+- Don't put implementation detail in stories under an epic -- engineers don't need every detail defined
+- Don't add a stories-and-sizes table or an open questions section to an epic
