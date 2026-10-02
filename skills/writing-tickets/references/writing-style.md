@@ -249,7 +249,19 @@ This section is for engineers -- technical detail is expected.}
 
 ### Writing to Jira
 
-- Send descriptions as Atlassian Document Format (ADF), not markdown. Markdown checklists turn into literal `\[ \]` bullets and links on inline code are dropped. Acceptance criteria become an ADF `taskList`.
+- **Use the project's built-in fields; don't put everything in the description.** Before writing, read the create metadata for each issue type (`getJiraIssueTypeMetaWithFields` with `requiredFieldsOnly: false`). Map each section to the matching field, and put only what's left in the description. Common matches:
+
+  | Section | Field to look for |
+  |---|---|
+  | Acceptance criteria (story, task) | Acceptance Criteria |
+  | Problem (epic) | Problem to Solve |
+  | Key results / outcomes (epic) | Objective |
+  | Success metrics (epic) | Key Results |
+  | Out of scope (epic) | Out of Scope |
+
+  Field names and IDs differ per site, so match by name from the metadata, never by a remembered ID. If a project has no matching field, keep that section in the description. A story's description is then just the user story and the design link.
+- Send rich text as Atlassian Document Format (ADF), not markdown. Markdown checklists turn into literal `\[ \]` bullets and links on inline code are dropped. Use a bullet list for an Acceptance Criteria field, and a `taskList` only when the criteria live in the description.
+- `acli` can set custom fields when creating a ticket (`additionalAttributes` in `--from-json`), but not when editing one. To change custom fields on an existing ticket, use the Atlassian MCP's `editJiraIssue` with `additional_fields`.
 - Neither `acli` nor the Atlassian MCP can attach files. Save design screenshots locally next to the drafts, keep the design links in the description, and tell the user which files to drag in.
 - Read every created or edited ticket back and check its structure before saying it's done.
 
