@@ -110,7 +110,10 @@ def test_1on1_placeholders_documented_both_ways():
 
 
 @pytest.mark.parametrize("path", [ONE_ON_ONE_HTML, FORECAST_HTML], ids=lambda p: p.name)
-@pytest.mark.parametrize("selector", [":root {", ":root[data-theme=light] {", "@media print {"])
+@pytest.mark.parametrize(
+    "selector",
+    [":root {", ":root[data-theme=light] {", "@media (prefers-color-scheme: light) {", "@media print {"],
+)
 def test_html_templates_share_tokens(path, selector):
     assert css_block(read(path), selector) == css_block(read(TEAM_HTML), selector)
 
@@ -134,3 +137,86 @@ def test_1on1_templates_have_no_comments(path):
     text = read(path)
     assert "<!--" not in text
     assert "/*" not in text
+
+
+HTML_TEMPLATES = [TEAM_HTML, ONE_ON_ONE_HTML, FORECAST_HTML]
+CHART_EDGE_SELECTORS = {".gauge .band", ".run .band"}
+LIGHT_BLOCKS = [":root[data-theme=light] {", "@media (prefers-color-scheme: light) {", "@media print {"]
+
+
+def css_rules(text):
+    body = re.search(r"<style>(.*?)</style>", text, re.S).group(1)
+    body = re.sub(r"/\*.*?\*/", "", body, flags=re.S)
+    return [(s.strip(), d) for s, d in re.findall(r"([^{}]+)\{([^{}]*)\}", body)]
+
+
+def token(block, name):
+    return re.search(rf"{re.escape(name)}\s*:\s*([^;]+);", block).group(1).strip().upper()
+
+
+def test_forecast_stylesheet_extends_team():
+    assert stylesheet(read(FORECAST_HTML)).startswith(stylesheet(read(TEAM_HTML)))
+
+
+@pytest.mark.parametrize("path", HTML_TEMPLATES, ids=lambda p: p.name)
+def test_html_templates_have_no_inline_styles(path):
+    assert not re.search(r"""\bstyle\s*=\s*["']""", read(path))
+
+
+@pytest.mark.parametrize("path", HTML_TEMPLATES, ids=lambda p: p.name)
+def test_no_coloured_bars(path):
+    bar = re.compile(r"border(-(left|top|right|bottom|inline-start|inline-end))?(-color)?\s*:[^;]*var\(--(acc|link|warn|crit|good)\)")
+    side = re.compile(r"border-left\s*:\s*\d+px\s+solid|box-shadow\s*:\s*inset")
+    offenders = [
+        selector
+        for selector, decl in css_rules(read(path))
+        if selector not in CHART_EDGE_SELECTORS and (bar.search(decl) or side.search(decl))
+    ]
+    assert offenders == []
+
+
+@pytest.mark.parametrize("path", HTML_TEMPLATES, ids=lambda p: p.name)
+def test_single_radius(path):
+    values = set(re.findall(r"border-radius\s*:\s*([^;]+);", read(path)))
+    assert values <= {"4px", "0"}
+
+
+@pytest.mark.parametrize("path", HTML_TEMPLATES, ids=lambda p: p.name)
+def test_no_gradients(path):
+    assert not re.search(r"(linear|radial)-gradient", read(path))
+
+
+@pytest.mark.parametrize("path", HTML_TEMPLATES, ids=lambda p: p.name)
+@pytest.mark.parametrize("selector", LIGHT_BLOCKS)
+def test_no_light_cream(path, selector):
+    assert token(css_block(read(path), selector), "--ground") == "#FFFFFF"
+
+
+@pytest.mark.parametrize("path", HTML_TEMPLATES, ids=lambda p: p.name)
+@pytest.mark.parametrize("selector", [":root {", *LIGHT_BLOCKS])
+def test_status_hues_not_reused_for_accent(path, selector):
+    block = css_block(read(path), selector)
+    status = {token(block, "--warn"), token(block, "--good"), token(block, "--crit")}
+    assert token(block, "--link") not in status
+    assert token(block, "--acc") not in status
+
+
+def custom_properties(block):
+    return dict(re.findall(r"(--[\w-]+)\s*:\s*([^;]+);", block))
+
+
+@pytest.mark.parametrize("path", HTML_TEMPLATES, ids=lambda p: p.name)
+def test_light_blocks_agree(path):
+    text = read(path)
+    first, *rest = [custom_properties(css_block(text, s)) for s in LIGHT_BLOCKS]
+    for other in rest:
+        assert other == first
+
+
+MONO_SELECTORS = {".key", ".bd-wrap code", ".mono"}
+
+
+@pytest.mark.parametrize("path", HTML_TEMPLATES, ids=lambda p: p.name)
+def test_monospace_only_for_keys_and_code(path):
+    users = {selector for selector, decl in css_rules(read(path)) if "var(--mono)" in decl}
+    assert users <= MONO_SELECTORS
