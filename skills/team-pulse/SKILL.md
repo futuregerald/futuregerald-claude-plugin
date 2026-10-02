@@ -318,7 +318,7 @@ Follow the format in [references/report-format.md](references/report-format.md).
   query that produced it.
 - **Link 100% of tickets and PRs.** Every single ticket key (e.g. ABC-123) and PR reference (e.g. #xxxx) must be hyperlinked across all surfaces (card titles, card metadata, bullet text, table titles, action items, why callouts, what's left lists, and person cards) — no plain-text references where a reader would have to manually search.
 - **No filler.** No "here's what I found" or "let me summarize." Just the report.
-- **Meeting context enriches, not replaces.** Use meeting data to add color (action items, decisions, sentiment) to tracker and GitHub findings. **Do not quote transcripts and do not name the meeting tool in the report** — say "on a call". Don't create a separate "meetings" section for team-wide reports — weave it into the person's assessment. For single-person reports, a dedicated Meetings section is fine.
+- **Meeting context enriches, not replaces.** Use meeting data to add color (action items, decisions, sentiment) to tracker and GitHub findings. **Do not quote transcripts and do not name the meeting tool in the report** — say "on a call". Don't create a separate "meetings" section for team-wide reports — weave it into the person's assessment. In a 1:1, meeting context goes into Talking Points; there is no separate Meetings section.
 - **Deduplicate across sources.** If Jira and GitHub both reference the same work, merge into one mention.
 
 ## Step 4: Deliver
@@ -327,14 +327,22 @@ Follow the format in [references/report-format.md](references/report-format.md).
 example `~/team-pulse-reports/` — rather than the current working tree. Create it if it does not
 exist, and use it for both files below unless the user names another location.
 
+**Pick the templates by scope.** **Any single-person scope** ("prep me for 1:1 with <person>" and
+"how is <person> doing" alike) uses `assets/template-1on1.md` and `assets/template-1on1.html`, saved as
+`team-pulse-<person-slug>-<END_DATE>.md` / `.html`, where `<person-slug>` is the person's first name or
+GitHub handle, lowercased, with only `a-z`, `0-9` and `-`. Every other scope uses `assets/template.md`
+and `assets/template.html`, saved as `team-pulse-<END_DATE>.md` / `.html`.
+Fill the template; never copy an earlier report as the starting point. `<report-file>` below is the
+chosen name.
+
 1. Output the scannable markdown report directly in chat.
-2. Save a publication-grade markdown document (`team-pulse-<END_DATE>.md`) using the bundled template at `assets/template.md` (ready to paste into GitHub issues, Jira tickets, or Confluence docs with 100% hyperlinked keys, Unicode progress meters, and callouts).
-3. Generate a publication-grade standalone HTML dashboard (`team-pulse-<END_DATE>.html`) using the bundled template at `assets/template.html` (zero external CDN or font dependencies, offline-safe, matching the design system in [references/report-format.md](references/report-format.md)).
+2. Save a publication-grade markdown document (`<report-file>.md`) using the bundled template for the scope. A team or epic report (`assets/template.md`) is ready to paste into GitHub issues, Jira tickets, or Confluence docs, with 100% hyperlinked keys, Unicode progress meters, and callouts. **A single-person report (`assets/template-1on1.md`) is a private local file:** it holds ratings, talking points and meeting context about one person, so never post it to a tracker, wiki, issue, chat channel or repository.
+3. Generate a publication-grade standalone HTML dashboard (`<report-file>.html`) using the bundled template for the scope (`assets/template.html` or `assets/template-1on1.html`) (zero external CDN or font dependencies, offline-safe, matching the design system in [references/report-format.md](references/report-format.md)).
 4. Open the dashboard in default browser (macOS / Linux, safe in headless):
 ```bash
-open team-pulse-<END_DATE>.html 2>/dev/null || xdg-open team-pulse-<END_DATE>.html 2>/dev/null || true
+open "<report-dir>/<report-file>.html" 2>/dev/null || xdg-open "<report-dir>/<report-file>.html" 2>/dev/null || true
 ```
-5. Always print the clickable local file links in the chat response: `file://<report-dir>/team-pulse-<END_DATE>.md` and `file://<report-dir>/team-pulse-<END_DATE>.html`.
+5. Always print the clickable local file links in the chat response: `file://<report-dir>/<report-file>.md` and `file://<report-dir>/<report-file>.html`.
 6. If the user asked for Confluence or Slack format, adapt chat output accordingly.
 7. Clean up intermediates:
 ```bash
@@ -350,7 +358,7 @@ rm -rf .updates
 | "how is <person> doing" | Single person across all their work |
 | "pulse on ABC-123" | Single initiative/epic and everyone assigned |
 | "what did we ship this week" | Merged PRs + completed Jira issues only |
-| "prep me for 1:1 with <person>" | Single person, full depth: agents A, B, C, E and F; statistics for the window only (default: the past week); epic progress covers the whole epic; wins, reviews given, talking points and questions |
+| "prep me for 1:1 with <person>" | Single person, full depth: agents A, B, C, E and F; statistics for the window only (default: the past week); epic progress covers the whole epic; wins, reviews given, talking points and questions; laid out by `assets/template-1on1.md` / `.html` |
 
 ## Assessment Scale
 
@@ -408,4 +416,4 @@ separate red from green.
 - Do NOT include tickets that are Done unless user asks "what did we ship."
 - Do NOT assess people you have no data on. Say "no activity in window" instead.
 - Do NOT editorialize beyond the data. Assessments must cite specific evidence.
-- Do NOT use more than 3 sentences for any single person's section (team report) or 5 sentences (individual report).
+- Do NOT use more than 3 sentences for any single person's section in a team report. A 1:1 has no person section; keep each talking point to 2 sentences.

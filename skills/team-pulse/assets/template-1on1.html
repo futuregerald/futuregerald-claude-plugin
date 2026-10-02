@@ -4,7 +4,6 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{REPORT_TITLE}}</title>
-  <!-- Fully self-contained styling with zero external network requests or CDN dependencies -->
   <style>
     :root {
       --ground: #0F1113;
@@ -110,7 +109,6 @@
     .meta-bar span { display: inline-flex; align-items: center; gap: 6px; }
     .meta-bar strong { color: var(--ink); font-weight: 500; }
 
-    /* Tiles */
     .tiles {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
@@ -151,7 +149,6 @@
       color: var(--ink2);
     }
 
-    /* Section Headers */
     .sechead {
       display: flex;
       align-items: baseline;
@@ -182,7 +179,6 @@
       margin: -10px 0 20px;
     }
 
-    /* Pills & Badges */
     .pill {
       display: inline-flex;
       align-items: center;
@@ -208,7 +204,6 @@
     .pill.lo { background: var(--critbg); color: var(--crit); }
     .pill.neutral { background: var(--sunk); color: var(--ink2); }
 
-    /* Links */
     a { color: var(--link); text-decoration: none; }
     .secnum::before { content: "["; }
     .secnum::after { content: "]"; }
@@ -227,7 +222,6 @@
     }
     a.key:hover { background: var(--accbg); text-decoration: none; }
 
-    /* Cards */
     .card-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(370px, 1fr));
@@ -298,7 +292,6 @@
       font-weight: bold;
     }
 
-    /* Progress Bar */
     .prog-wrap {
       margin: 12px 0 16px;
     }
@@ -331,7 +324,6 @@
       font-weight: 600;
     }
 
-    /* Why Boxes (Explicit Reason for At Risk / Needs Attention) */
     .why-box {
       background: var(--warnbg);
       border-left: 3px solid var(--warn);
@@ -364,7 +356,6 @@
       font-weight: 500;
     }
 
-    /* What's Left (TL;DR) */
     .whats-left {
       background: var(--sunk);
       border: 1px solid var(--line);
@@ -421,7 +412,6 @@
       align-items: center;
     }
 
-    /* Tables */
     .tscroll {
       overflow-x: auto;
       margin: 8px 0 20px;
@@ -458,7 +448,6 @@
     tr.danger td { background: var(--critbg); }
     .mono { font-family: var(--mono); font-size: 12.5px; }
 
-    /* People Rows */
     .people-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
@@ -506,7 +495,6 @@
       justify-content: space-between;
     }
 
-    /* Risk Box */
     .risk-list {
       display: flex;
       flex-direction: column;
@@ -549,7 +537,6 @@
       margin: 0;
     }
 
-    /* Bottom Line Quote Callout */
     .bottom-line {
       background: var(--surface);
       border: 1px solid var(--line);
@@ -578,45 +565,47 @@
 <div class="wrap">
 
   <header>
-    <div class="badge-top">Executive Pulse &amp; Operational Review</div>
+    <div class="badge-top">{{SCOPE_LABEL}}</div>
     <h1>{{REPORT_HEADING}}</h1>
     <div class="meta-bar">
       <span><strong>Window:</strong> {{DATE_RANGE}}</span>
       <span><strong>Engineering Manager:</strong> {{MANAGER_NAME}}</span>
       <span><strong>Primary Repos:</strong> {{PRIMARY_REPOS}}</span>
       <span><strong>Tracking:</strong> {{TRACKER_INFO}}</span>
+      <span><strong>Sources:</strong> {{SOURCES_NOTE}}</span>
     </div>
   </header>
 
-  <!-- Metric Tiles -->
+  <div class="sechead">
+    <h2>Scorecard (this week)</h2>
+  </div>
+  <div class="sec-desc">This week's numbers only. Epic progress below covers the whole epic.</div>
   <div class="tiles">
     {{METRIC_TILES}}
   </div>
-
-  <!-- Section 1: Strategic Context & Headline -->
-  <div class="sechead">
-    <span class="secnum">01</span>
-    <h2>Executive Summary &amp; Strategic Context</h2>
-  </div>
-  <p style="font-size: 18px; color: var(--ink2); margin-top: 0;">
+  <p style="font-size: 18px; color: var(--ink2); margin-top: 18px;">
     <strong>Headline:</strong> {{HEADLINE}}
   </p>
+
+  <div class="sechead">
+    <span class="secnum">01</span>
+    <h2>Wins to Recognise</h2>
+  </div>
   <div style="background: var(--surface); border: 1px solid var(--line); padding: 18px 22px; border-radius: 6px; box-shadow: var(--sh); font-size: 15px; color: var(--ink2); line-height: 1.55;">
-    {{STRATEGIC_CONTEXT}}
+    <ul class="card-bullets">
+      {{WINS_ITEMS}}
+    </ul>
   </div>
 
-  <!-- Section 2: Active Initiatives -->
   <div class="sechead">
     <span class="secnum">02</span>
-    <h2>Active Initiatives &amp; Epics Status</h2>
+    <h2>Epics</h2>
   </div>
-  <div class="sec-desc">Live progress, completion percentage, failure mode breakdown, and what's left to ship.</div>
-
+  <div class="sec-desc">Whole-epic progress, what each epic delivers, and what's left to ship.</div>
   <div class="card-grid">
     {{ACTIVE_EPICS_CARDS}}
   </div>
 
-  <!-- Section 2b: Work Breakdown (single-epic scope; empty string for team scope) -->
   <section id="work-breakdown">
     <div class="sechead">
       <span class="secnum">02b</span>
@@ -626,63 +615,44 @@
     <div class="bd-wrap">{{WORK_BREAKDOWN}}</div>
   </section>
 
-  <!-- Section 3: PRs in Flight Table -->
   <div class="sechead">
     <span class="secnum">03</span>
-    <h2>PRs in Flight &amp; Review Backlog</h2>
+    <h2>Open PRs</h2>
   </div>
-  <div class="sec-desc">{{PR_SUMMARY_LINE}}</div>
-
+  <div class="sec-desc">Every open PR, whatever its age, including drafts.</div>
   <div class="tscroll">
     <table>
       <thead>
         <tr>
-          <th>Repo / PR</th>
-          <th>Title</th>
-          <th>Author</th>
+          <th>PR</th>
           <th>Opened</th>
+          <th>Merged</th>
+          <th>Title</th>
           <th>Age</th>
           <th>Status</th>
-          <th>Lines</th>
-          <th>Action Required</th>
+          <th>Action</th>
         </tr>
       </thead>
       <tbody>
-        {{PR_TABLE_ROWS}}
+        {{OPEN_PR_ROWS}}
       </tbody>
     </table>
   </div>
+  <p class="sec-desc" style="margin-top: 12px;">{{CLOSED_UNMERGED_NOTE}}</p>
 
-  <!-- Section 4: People -->
   <div class="sechead">
     <span class="secnum">04</span>
-    <h2>Team Roster &amp; Individual Workloads</h2>
+    <h2>Talking Points</h2>
   </div>
-  <div class="sec-desc">Assessment and progress summary for all team members.</div>
-
-  <div class="people-grid">
-    {{PEOPLE_CARDS}}
-  </div>
-
-  <!-- Dedicated EM Section -->
-  <div style="margin-top: 24px;">
-    {{EM_CARD}}
+  <div style="background: var(--surface); border: 1px solid var(--line); padding: 18px 22px; border-radius: 6px; box-shadow: var(--sh); font-size: 15px; color: var(--ink2); line-height: 1.55;">
+    <ol style="margin: 0; padding-left: 22px;">
+      {{TALKING_POINTS}}
+    </ol>
+    <p style="margin: 14px 0 0;"><strong>Questions to ask:</strong> {{QUESTIONS_TO_ASK}}</p>
   </div>
 
-  <!-- Section 5: Risks & Blockers -->
-  <div class="sechead">
-    <span class="secnum">05</span>
-    <h2>Master Risks &amp; Blockers Register</h2>
-  </div>
-  <div class="sec-desc">Prioritized operational, security, and architectural issues requiring immediate action.</div>
-
-  <div class="risk-list">
-    {{RISK_ITEMS}}
-  </div>
-
-  <!-- Section 6: Bottom Line Callout -->
   <div class="bottom-line">
-    <h3>Engineering Manager Bottom Line</h3>
+    <h3>Bottom Line</h3>
     <p>
       {{BOTTOM_LINE}}
     </p>

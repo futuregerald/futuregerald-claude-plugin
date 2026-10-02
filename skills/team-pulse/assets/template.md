@@ -16,17 +16,6 @@
 | **Net Code Impact** | {{CODE_IMPACT_VALUE}} | {{CODE_IMPACT_CONTEXT}} |
 | **Review Bottlenecks** | {{REVIEW_BOTTLENECKS_VALUE}} | {{REVIEW_BOTTLENECKS_CONTEXT}} |
 
-<!--
-Single-person (1:1) scope: replace the rows above with this week's numbers only, each value
-linked to the query that produced it, and add below the table:
-"Epic progress below covers the whole epic, not just this week."
-| **Overall** | {Badge} | {1 sentence} |
-| **PRs this week** | [N merged](search) · [N opened](search) | {window} |
-| **Open PRs now** | [N open](search) | {oldest, stale, unreviewed, and any old drafts, each linked} |
-| **Tickets done this week** | [N done](query) | {which epics} |
-| **Reviews given this week** | [N reviews](search) | {how it compares with teammates} |
--->
-
 ---
 
 ## 01. Executive Summary & Strategic Context
@@ -64,7 +53,7 @@ linked to the query that produced it, and add below the table:
 ---
 
 {{WORK_BREAKDOWN_BLOCKS}}
-<!-- Single-person and single-epic scopes only; delete for team scope. Format: section 02b in references/report-format.md -->
+<!-- Single-epic scope only; delete for team scope. Format: section 02b in references/report-format.md -->
 
 ## 03. PRs in Flight & Review Backlog
 
@@ -90,14 +79,6 @@ Example row format:
 {If Needs Attention or At Risk:}
 * > ⚠️ **Why Needs Attention:** {Exact failure mode or stale PR delay}
 * **Metrics:** {N} Merged PRs · {N} In Flight · **Focus:** {Focus Area}
--->
-<!--
-Single-person scope, per-person block (optional): add these fields to the person's card.
-* **Wins to recognise:** {specific merged work, with links}
-* **This week:** {[N PRs merged](search) · [N opened](search) · [N tickets done](query) · [N reviews given](search)}
-* **Reviews given:** {[N reviews](search), and whose work they concentrate on}
-* **Talking points:** {numbered, each tied to linked evidence}
-* **Questions to ask:** {2–4 open questions}
 -->
 {{PEOPLE_BLOCKS}}
 

@@ -324,8 +324,9 @@ epic: this is planning and writing work the tracker never shows." In forecast mo
 document or roadmap sheet is always read, and PRD content feeds the scope-readiness factor.
 
 **How docs appear in the report:** as dated lines on the epic they belong to ("PRD scope cut on
-09-18: [link]"), in the person's section for a 1:1, and never as a separate "documents" section
-in a team pulse. A source reported as "not checked" gets one line in the report footer.
+09-18: [link]"); in a 1:1, a document tied to no epic goes under Wins to Recognise. Never as a
+separate "documents" section. A source reported as "not checked" gets one line in the report
+footer (team) or in `{{SOURCES_NOTE}}` (1:1).
 
 ---
 

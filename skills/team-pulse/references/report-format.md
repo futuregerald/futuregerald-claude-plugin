@@ -2,12 +2,14 @@
 
 ## Detail Depends on Scope
 
-The same skeleton serves every scope; how deep each section goes does not.
+Team and epic scopes share one skeleton (`assets/template.md` / `.html`); a 1:1 uses its own
+layout (`assets/template-1on1.md` / `.html`, see "Bundled 1:1 Templates"). How deep each section
+goes depends on scope.
 
 | Scope | Epic cards | Work breakdown | Person sections |
 |-------|-----------|----------------|-----------------|
 | **Team or multi-initiative** | Description, parent, priority, progress, why, what's left | **One line per epic:** `Frontend: N done / N left · Backend: N done / N left` | 1–3 sentences each |
-| **Single person (1:1 prep)** | Same | **Full section 02b:** per epic, frontend and backend tables with one line per PR, remaining work described, and sibling work the epic depends on | Wins, this week's stats, reviews given, talking points, questions to ask |
+| **Single person (1:1 prep)**, laid out by the 1:1 templates | Same | **Full section 02b:** per epic, frontend and backend tables with one line per PR, remaining work described, and sibling work the epic depends on | Wins, this week's stats, reviews given, talking points, questions to ask |
 | **Single epic or initiative** | Same | Full section 02b for that epic only | 1–3 sentences each |
 
 **In a 1:1, statistics cover the window only (default: the past week).** The scorecard, PR
@@ -62,7 +64,7 @@ leaves the manager unable to say what the person actually built.
 
 ## Structure
 
-The pulse is delivered both as a concise summary in chat, and as a complete, publication-grade markdown document (`team-pulse-<END_DATE>.md`) ready to post into a GitHub Issue/Discussion, Jira ticket, or Confluence document:
+For team and epic scopes, the pulse is delivered both as a concise summary in chat, and as a complete, publication-grade markdown document (`team-pulse-<END_DATE>.md`) ready to post into a GitHub Issue/Discussion, Jira ticket, or Confluence document:
 
 ```markdown
 # 📊 Team Pulse — {scope}
@@ -155,12 +157,8 @@ The pulse is delivered both as a concise summary in chat, and as a complete, pub
 
 ### {Person Name} — {Role} ([`@{handle}`]({GH URL})) — {Badge}
 * **Summary:** {1-3 sentences: focus area, merged PRs, active work}
-{Single-person scope adds:}
-* **Wins to recognise:** {specific merged work, with links}
-* **This week:** {[N PRs merged](search) · [N opened](search) · [N tickets done](query) · [N reviews given](search)}. Statistics cover the window only; do not add a longer trend
-* **Reviews given:** {[N reviews](search), and whose work they concentrate on}
-* **Talking points:** {numbered, each tied to linked evidence}
-* **Questions to ask:** {2–4 open questions}
+{A 1:1 has no person card: wins, this week's statistics, reviews given, talking points and
+questions to ask have their own sections. See "Bundled 1:1 Templates".}
 {If Needs Attention / At Risk: state exact reason why with alert}
 * **Metrics:** {N} Merged PRs · {N} In Flight · **Focus:** {Domain}
 
@@ -222,7 +220,7 @@ needs, and must not be hard-coded to On Track.
 
 ## Standalone HTML Dashboard Specification
 
-Every team pulse run generates a standalone visual HTML dashboard (`team-pulse-<END_DATE>.html`) by populating the bundled template at `assets/template.html`, and opens it in the browser.
+Every team pulse run generates a standalone visual HTML dashboard (`team-pulse-<END_DATE>.html`, or `team-pulse-<person-slug>-<END_DATE>.html` for a single person) by populating the bundled template at `assets/template.html` (team and epic scopes; a 1:1 uses `assets/template-1on1.html`), and opens it in the browser.
 
 ### Zero External Dependencies (Offline-Safe)
 The dashboard and template must **never reference external files, CDN scripts, remote stylesheets, or external fonts (such as Google Fonts)**. All styling, SVG icons, and interaction logic must be completely self-contained. Typography relies on local fonts with robust system font fallbacks so the dashboard renders identically and instantly offline or behind corporate firewalls.
@@ -234,17 +232,67 @@ Populate `assets/template.html` by replacing its semantic placeholders:
 - `{{METRIC_TILES}}`: 4 metric summary tiles (Overall Health, PR Velocity, Net Impact, Review Bottlenecks).
 - `{{HEADLINE}}` & `{{STRATEGIC_CONTEXT}}`: Executive narrative and org context.
 - `{{ACTIVE_EPICS_CARDS}}`: Grid of epic cards. Each card carries `.card-meta` (priority and linked parent), `p.card-summary` (what the epic delivers), the progress bar with a linked `%`, a `.card-bullets` list (activity and the frontend/backend split), a `.why-box` when not On Track, and `.whats-left`.
-- `{{WORK_BREAKDOWN}}`: Section 02b as HTML tables for single-person and single-epic scopes. **Replace it with an empty string for team scope**; the template hides the section when it is empty.
+- `{{WORK_BREAKDOWN}}`: Section 02b as HTML tables for single-epic scope. **Replace it with an empty string for team scope**; the template hides the section when it is empty.
 - `{{PR_SUMMARY_LINE}}` & `{{PR_TABLE_ROWS}}`: PR status summary and table rows with hyperlinks.
 - `{{PEOPLE_CARDS}}` & `{{EM_CARD}}`: Team roster workload cards and dedicated EM card.
 - `{{RISK_ITEMS}}`: Prioritized P0/P1/P2 operational risk cards.
 - `{{BOTTOM_LINE}}`: Bottom line synthesis callout.
 
+### Bundled 1:1 Templates: `assets/template-1on1.md` and `assets/template-1on1.html`
+
+A single-person (1:1 prep) pulse does **not** use the team skeleton. Both 1:1 files share one
+order, and the HTML page mirrors the markdown:
+
+Scorecard (this week) → 01 Wins to Recognise → 02 Epics → 02b Work Breakdown by Epic → 03 Open PRs
+→ 04 Talking Points (then questions to ask) → 05 Bottom Line.
+
+There is no roster, person card, risk register or EM section. What those carry in a team pulse
+goes here instead: wins and documents the person wrote go under Wins; blockers and risks go on the
+epic they affect or into Talking Points; meeting context goes into Talking Points.
+
+Save the files as `team-pulse-<person-slug>-<END_DATE>.md` and `.html` (slug rule in `SKILL.md` Step 4).
+They are **private local files**: never post a single-person report to a tracker, wiki, issue,
+chat channel or repository. The chat summary is fine.
+
+**The scorecard covers the window.** The default 1:1 window is the past week, which is what the
+"this week" labels say. For any other window, change those labels to name it ("these two
+weeks").
+
+**Escape what you did not write.** In the HTML file, escape `<`, `>`, `&` and `"` in every value
+taken from GitHub, the tracker, documents or meetings (titles, descriptions, names). Only the
+markup the template asks for is markup. A PR title is text, never HTML.
+
+| Placeholder | Holds | In |
+|---|---|---|
+| `{{SCOPE_LABEL}}` | `1:1 Prep` for a 1:1 request; `Person Pulse` for "how is <person> doing" | both |
+| `{{PERSON_NAME}}`, `{{PERSON_URL}}` | The person, linked to their GitHub or tracker profile | md title |
+| `{{REPORT_TITLE}}`, `{{REPORT_HEADING}}` | Page title and heading, e.g. "1:1 Prep: {name}" | html |
+| `{{DATE_RANGE}}`, `{{MANAGER_NAME}}`, `{{PRIMARY_REPOS}}`, `{{TRACKER_INFO}}` | Header metadata, as in the team templates | both |
+| `{{SOURCES_NOTE}}` | Which sources were read, and any that were unavailable (e.g. "meeting notes unavailable: the meeting source needs re-authentication") | both |
+| `{{HTML_REPORT_NAME}}`, `{{HTML_REPORT_PATH}}` | The HTML file's name and absolute path | md |
+| `{{OVERALL_BADGE}}`, `{{OVERALL_CONTEXT}}` | Overall rating and one sentence of why | md |
+| `{{PRS_WEEK_VALUE}}`, `{{PRS_WEEK_CONTEXT}}` | `[N merged](search) · [N opened](search)`, and the window | md |
+| `{{OPEN_PRS_VALUE}}`, `{{OPEN_PRS_CONTEXT}}` | `[N open](search)`; oldest, unreviewed, and any old drafts, each linked | md |
+| `{{TICKETS_DONE_VALUE}}`, `{{TICKETS_DONE_CONTEXT}}` | `[N done](query)`, and which epics | md |
+| `{{REVIEWS_GIVEN_VALUE}}`, `{{REVIEWS_GIVEN_CONTEXT}}` | `[N reviews](search)`, and whose work they concentrate on (Agent E's digest). Compare with teammates only when a digest holds their counts; never estimate one | md |
+| `{{METRIC_TILES}}` | The same five scorecard rows as five `.tile` divs, in the same order | html |
+| `{{HEADLINE}}` | One sentence: the state, and the things to cover | both |
+| `{{WINS_ITEMS}}` | Specific merged work and written documents, with links: `- ` lines in md, `<li>` items in html | both |
+| `{{ACTIVE_EPICS_BLOCKS}}`, `{{ACTIVE_EPICS_CARDS}}` | Epic blocks (md) or cards (html) in the team format; progress covers the whole epic | md / html |
+| `{{WORK_BREAKDOWN_BLOCKS}}`, `{{WORK_BREAKDOWN}}` | The section 02b content above, from the `###` epic heading down, without the `## 02b` heading. In html: each epic heading as `<h3 class="bd-h">`, prose as `<p class="bd-p">`, each table inside `<div class="tscroll"><table>` | md / html |
+| `{{OPEN_PR_ROWS}}` | One row per open PR, **whatever its age, including drafts**: PR · Opened · Merged (`open`) · Title with its linked ticket · Age · Status · Action. Markdown table rows in md, `<tr>` rows in html | both |
+| `{{CLOSED_UNMERGED_NOTE}}` | PRs closed without merging in the window, worth asking about, linked; an empty string if none | both |
+| `{{TALKING_POINTS}}` | Numbered points, each tied to linked evidence: `1. ` lines in md, `<li>` items in html | both |
+| `{{QUESTIONS_TO_ASK}}` | Two to four open questions, in one paragraph | both |
+| `{{BOTTOM_LINE}}` | Two or three sentences: the overall read and the actions | both |
+
 ### Visual Design System
 
 The look is a dark instrument panel: graphite ground, one amber accent, narrow bold uppercase
-headings, monospace numbers, bordered cards with no shadows. Both `assets/template.html` (pulse) and
-`assets/forecast.html` (forecast) carry the same tokens, so every report reads as one family.
+headings, monospace numbers, bordered cards with no shadows. `assets/template.html` (pulse),
+`assets/template-1on1.html` (1:1) and `assets/forecast.html` (forecast) carry the same tokens, so
+every report reads as one family. `scripts/test_templates.py` fails if they drift, and requires
+the 1:1 stylesheet to equal the pulse one.
 
 - **Type (offline-safe, system fallbacks):** display `"Archivo Narrow", "Arial Narrow", "Roboto Condensed", system sans`;
   body `"Archivo", system sans`; numbers and labels `"JetBrains Mono", ui-monospace`. No web-font
