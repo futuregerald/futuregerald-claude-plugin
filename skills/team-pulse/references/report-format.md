@@ -207,8 +207,8 @@ Populate `assets/template.md` by replacing its placeholders:
 ## Badge Format
 
 Status is always shown as the word, never colour alone — a status badge is never an emoji circle
-on its own. Use inline text badges (or `●` plus the word), in the colours of the visual design
-system below:
+on its own. Use the word as an inline text badge (`<span class="pill hi|med|lo">` in HTML), in the
+colours of the visual design system below:
 - **On Track** — blue
 - **Needs Attention** — amber
 - **At Risk** — orange-red
@@ -231,7 +231,7 @@ Populate `assets/template.html` by replacing its semantic placeholders:
 - `{{DATE_RANGE}}`, `{{MANAGER_NAME}}`, `{{PRIMARY_REPOS}}`, `{{TRACKER_INFO}}`: Metadata bar items.
 - `{{METRIC_TILES}}`: 4 metric summary tiles (Overall Health, PR Velocity, Net Impact, Review Bottlenecks).
 - `{{HEADLINE}}` & `{{STRATEGIC_CONTEXT}}`: Executive narrative and org context.
-- `{{ACTIVE_EPICS_CARDS}}`: Grid of epic cards. Each card carries `.card-meta` (priority and linked parent), `p.card-summary` (what the epic delivers), the progress bar with a linked `%`, a `.card-bullets` list (activity and the frontend/backend split), a `.why-box` when not On Track, and `.whats-left`.
+- `{{ACTIVE_EPICS_CARDS}}`: Grid of epic cards. Each card carries a `.card-head` with the title and its status badge (`.pill hi|med|lo`), `.card-meta` (priority and linked parent), `p.card-summary` (what the epic delivers), the progress bar with a linked `%`, a `.card-bullets` list (activity and the frontend/backend split), a `.why-box` when not On Track, and `.whats-left`.
 - `{{WORK_BREAKDOWN}}`: Section 02b as HTML tables for single-epic scope. **Replace it with an empty string for team scope**; the template hides the section when it is empty.
 - `{{PR_SUMMARY_LINE}}` & `{{PR_TABLE_ROWS}}`: PR status summary and table rows with hyperlinks.
 - `{{PEOPLE_CARDS}}` & `{{EM_CARD}}`: Team roster workload cards and dedicated EM card.
@@ -288,25 +288,40 @@ markup the template asks for is markup. A PR title is text, never HTML.
 
 ### Visual Design System
 
-The look is a dark instrument panel: graphite ground, one amber accent, narrow bold uppercase
-headings, monospace numbers, bordered cards with no shadows. `assets/template.html` (pulse),
-`assets/template-1on1.html` (1:1) and `assets/forecast.html` (forecast) carry the same tokens, so
-every report reads as one family. `scripts/test_templates.py` fails if they drift, and requires
-the 1:1 stylesheet to equal the pulse one.
+Plain and legible: neutral grounds, bordered cards, status shown as a coloured word.
+`assets/template.html` (pulse) and `assets/template-1on1.html` (1:1) share one stylesheet;
+`assets/forecast.html` (forecast) carries the same stylesheet followed by its own chart and
+item-card rules, so every report reads as one family. `scripts/test_templates.py` fails if the
+stylesheets drift, or on a coloured bar, a radius other than 4px or 0, a gradient, an inline
+style, a cream light ground, an accent equal to a status hue, or monospace outside keys and code.
 
-- **Type (offline-safe, system fallbacks):** display `"Archivo Narrow", "Arial Narrow", "Roboto Condensed", system sans`;
-  body `"Archivo", system sans`; numbers and labels `"JetBrains Mono", ui-monospace`. No web-font
-  links: the named faces are used when installed and the fallbacks otherwise.
-- **Tokens:** `--ground #0F1113`, `--surface #171A1E`, `--sunk #1E2227`, `--line #2B3139`,
-  `--ink #ECEFF2`, `--ink2 #B3BCC6`, `--ink3 #8B96A2`, `--acc #FFB020` (links `#FFC857`).
-- **Status colours differ in lightness, not only hue:** on track `--good #5AB8FF` (blue), needs
-  attention `--warn #FFB020` (amber), at risk `--crit #FF7A59` (orange-red), each with a dark tint
-  background (`--goodbg`, `--warnbg`, `--critbg`). Never red against green.
-- **Light and print:** `<html data-theme="light">` switches to a light palette with darker accents,
-  and `@media print` applies it automatically, so a printed or PDF'd report is legible.
-- **Components:** section numbers print as `[02]` in the accent; headings are uppercase; cards are
-  6px-radius with a 1px border; pills are fully rounded; the bottom line is an amber-bordered panel.
-- **Every reference is a link** — tickets, PRs, people, repos, and every count.
+- **Type (offline-safe):** the system UI stack (`system-ui, -apple-system, "Segoe UI", Roboto,
+  sans-serif`) for headings and body, in normal case. Monospace (`ui-monospace, SFMono-Regular,
+  Menlo`) only for ticket keys (`.key`) and code; figures use the body face with tabular
+  numerals. No web fonts.
+- **Grounds:** dark `--ground #111315`, `--surface #16191C`, `--line #2A3037`; light
+  `--ground #FFFFFF`, `--sunk #F2F4F6`, `--line #D5DAE0`. **No cream, beige or warm off-white light
+  ground**: it is the default look of generated pages.
+- **One accent, for links only:** teal `--acc` / `--link` (`#6CD4B8` dark, `#0B7A62` light). It is
+  never a status colour and never decoration.
+- **Status colours, for status only, differing in lightness as well as hue:** on track `--good`
+  (blue), needs attention `--warn` (amber), at risk and blocked `--crit` (orange-red). Status is
+  shown as a coloured word: the badge (`.pill.hi` on track, `.pill.med` needs attention, `.pill.lo`
+  at risk or blocked), a tile's label (`.tile.good|warn|crit`), a risk's number (`.risk-item.p0|p1`),
+  a flagged person's name (`.person-card.flagged`). Never a coloured border, side bar or tinted box.
+  Priority P2 and categories are not status, so they stay neutral. Never red against green.
+- **Containers:** tiles, epic cards, person cards, risk items, panels and forecast items have one
+  1px neutral border, a 4px radius and no shadow. That is the only container style. What sits
+  inside a card (why, what's left, ground truth, verdict) is separated by hairline rules, never
+  boxed again. No gradients.
+- **Decoration:** none that carries no information. No brackets around section numbers, no
+  coloured bullets or arrows (native list markers in a muted ink), no dot inside a badge, no chip
+  around a ticket key. **No emoji or symbol glyphs in the HTML**, even where the markdown uses
+  them: risk numbers are `P0`/`P1`/`P2`, why titles are plain words ("Why it's at risk").
+- **Light, dark and print:** the page follows the reader's OS setting
+  (`prefers-color-scheme`); `<html data-theme="light">` or `"dark"` forces one; `@media print`
+  always prints light.
+- **Every reference is a link**: tickets, PRs, people, repos, and every count.
 
 ## Length Guidelines
 

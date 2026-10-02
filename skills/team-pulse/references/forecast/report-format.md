@@ -313,7 +313,7 @@ one family. Fill its placeholders from the same data structure as the Markdown r
 | `{{HEADLINE}}` | Section 2, 3–6 sentences | Never |
 | `{{CAPACITY}}` | Only with a window: `.tiles`, then a `.two-up` with a `.panel` holding the `.gauge` and a `.panel` holding the arithmetic table, then a `.callout` | Section hides |
 | `{{GLANCE_HEAD}}`, `{{GLANCE_ROWS}}`, `{{GLANCE_SUMMARY}}` | The estimates table (section 4); with a window adds a running-total column of `.run` bars | Never |
-| `{{ITEM_CARDS}}` | One `<article class="item">` per item: `.item-head` (`.item-rank`, title and keys, `.item-est`), `.item-body` with `.ground` (`.gbox` what exists, `.gbox.need` what is missing), `.item-cols` (risks with `li.sev` for severe, notes), `.verdict-strip` | Never |
+| `{{ITEM_CARDS}}` | One `<article class="item">` per item: `.item-head` (`.item-rank`, title and keys, `.item-est`), `.item-body` with `.ground` (`.gbox` what exists, `.gbox.need` what is missing), `.item-cols` (risks with `li.sev` for severe, whose text starts with "Severe:" so it never relies on colour; notes), `.verdict-strip` | Never |
 | `{{ENGINEERS}}` | Who is working on what: engineer → item table, who is unallocated, who is overloaded, and competing non-initiative load | Section hides |
 | `{{ORDERING}}` | What blocks what, the longest chain and its length, and what is parallel — three or four sentences, always present, never a diagram | Never |
 | `{{PROJECTION}}` | Section 4b, whenever a date is wanted | Section hides |
