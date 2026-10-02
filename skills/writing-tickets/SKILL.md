@@ -94,6 +94,7 @@ Before presenting, verify:
 - [ ] Designs section links the design file and each key screen, with a screenshot for each
 - [ ] No stories list, sizes, estimates or open questions section
 - [ ] Written in the user's voice, plain language, with no justifications
+- [ ] When writing to Jira, sections that have a built-in field (Problem to Solve, Objective, Key Results, Out of Scope, Acceptance Criteria) go in that field, not the description (see "Writing to Jira" in [references/writing-style.md](references/writing-style.md))
 
 **Child story checks** (stories created under an epic):
 - [ ] Each is a user story plus acceptance criteria, and nothing else (a design link is fine)
