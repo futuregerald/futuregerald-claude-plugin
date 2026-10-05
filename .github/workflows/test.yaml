@@ -27,7 +27,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install Python test deps
-        run: pip install pytest
+        run: pip install pytest pyyaml
 
       - name: Run skill script tests
         run: pytest -q skills/*/scripts

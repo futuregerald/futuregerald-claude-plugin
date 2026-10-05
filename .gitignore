@@ -31,3 +31,6 @@ skills/codebase-memory-*/
 skills/*/references/config.md
 skills/*/references/*.local.md
 skills/*/references/team.local.md
+
+# Packaged skill zips (skills ship through the installer)
+*.skill

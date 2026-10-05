@@ -202,7 +202,7 @@ If symlinked to `~/.claude/skills` (installed as personal skills), invoke them b
 
 ## Skills and Agents Reference
 
-### Skills (52)
+### Skills (55)
 
 **Planning & Specs:**
 
@@ -224,6 +224,7 @@ If symlinked to `~/.claude/skills` (installed as personal skills), invoke them b
 | `grill-me` | Relentless interview to sharpen a plan or design |
 | `grilling` | Stress-test a plan, decision, or idea through relentless questioning |
 | `grill-with-docs` | Grilling that also produces ADRs and a glossary as it goes |
+| `katies-wisdom` | One-question-at-a-time challenge on what good means, what's written down for agents, and whether done is good; writes a point-of-view brief |
 
 **Debugging & Code Quality:**
 
@@ -234,7 +235,8 @@ If symlinked to `~/.claude/skills` (installed as personal skills), invoke them b
 | `comprehensive-code-review` | Parallel sub-agent review (correctness + safety) into one report |
 | `code-simplifier` | Simplify recently changed code, with Staff Engineer review |
 | `requesting-code-review` | Request review before merge to verify requirements are met |
-| `skill-reviewer` | Review skills for quality, size, and progressive disclosure |
+| `skill-reviewer` | Review skills for quality, size, progressive disclosure, and encoded judgment |
+| `editor-pass` | Post-build quality review that returns a lettered crit sheet of pinned, specific fixes |
 | `review-lens` | Surface similar past reviewer objections to calibrate findings |
 | `resolving-merge-conflicts` | Resolve an in-progress git merge/rebase conflict |
 
@@ -260,6 +262,7 @@ If symlinked to `~/.claude/skills` (installed as personal skills), invoke them b
 | `handoff` | Compact the conversation into a handoff doc for the next session |
 | `teach` | Teach a new skill or concept within the workspace |
 | `skill-creator` | Guide for creating effective skills |
+| `future-skill-creator` | Fork of skill-creator that encodes judgment: decision trees, do/don't pairs, check scripts, and editing the skill's output |
 
 **Frontend & Design:**
 
