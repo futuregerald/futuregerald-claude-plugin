@@ -3,6 +3,7 @@ import json
 import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -611,3 +612,540 @@ def test_render_digest_cuts_by_person_before_not_started():
     assert "fairly long summary" not in _section_text(text, "## By person")
     assert "N-24 " in _section_text(text, "## Not started")
     assert text.rstrip("\n").splitlines()[-1].startswith("Omitted: 160 issues, 0 not-started epics")
+
+
+BANNER = "A newer version of acli is available. You are running an outdated version (1.3.14)."
+
+
+def _completed(stdout="", stderr="", returncode=0):
+    return SimpleNamespace(stdout=stdout, stderr=stderr, returncode=returncode)
+
+
+def _runner(handler, calls=None):
+    def run(cmd, **kwargs):
+        if calls is not None:
+            calls.append(list(cmd))
+        result = handler(list(cmd))
+        if isinstance(result, SimpleNamespace):
+            return result
+        return _completed(json.dumps(result))
+    return run
+
+
+def test_run_acli_strips_the_outdated_version_banner():
+    runner = _runner(lambda cmd: _completed(BANNER + "\n" + json.dumps([{"key": "C-1"}])))
+    assert jira_scan.run_acli(["jira", "workitem", "search"], runner=runner) == [{"key": "C-1"}]
+
+
+def test_run_acli_prefixes_the_acli_binary():
+    calls = []
+    jira_scan.run_acli(["jira", "workitem", "view", "C-1"], runner=_runner(lambda cmd: {}, calls))
+    assert calls == [["acli", "jira", "workitem", "view", "C-1"]]
+
+
+def test_run_acli_raises_with_stderr_on_non_zero_exit():
+    runner = _runner(lambda cmd: _completed(stderr="✗ Error: field 'created' is not allowed",
+                                            returncode=1))
+    with pytest.raises(jira_scan.AcliError, match="field 'created' is not allowed"):
+        jira_scan.run_acli(["jira", "workitem", "search"], runner=runner)
+
+
+def test_run_acli_turns_a_missing_binary_into_acli_error():
+    def runner(cmd, **kwargs):
+        raise FileNotFoundError("acli")
+    with pytest.raises(jira_scan.AcliError, match="not found"):
+        jira_scan.run_acli(["jira", "auth", "status"], runner=runner)
+
+
+def test_run_acli_names_the_rate_limit_on_http_429():
+    runner = _runner(lambda cmd: _completed(stderr="request failed: 429 Too Many Requests",
+                                            returncode=1))
+    with pytest.raises(jira_scan.AcliError, match="rate limit"):
+        jira_scan.run_acli(["jira", "workitem", "search"], runner=runner)
+
+
+def test_run_acli_treats_429_as_an_error_even_on_exit_zero():
+    runner = _runner(lambda cmd: _completed(stdout="[]", stderr="HTTP 429 retry later"))
+    with pytest.raises(jira_scan.AcliError, match="rate limit"):
+        jira_scan.run_acli(["jira", "workitem", "search"], runner=runner)
+
+
+def test_search_command_line_paginates_as_json_with_the_exact_fields():
+    calls = []
+    result = jira_scan.search("project in (DL)", "key,summary,status,assignee,issuetype,priority",
+                              runner=_runner(lambda cmd: [{"key": "C-1"}], calls))
+    assert result == [{"key": "C-1"}]
+    line = " ".join(calls[0])
+    assert line.startswith("acli jira workitem search ")
+    assert "--paginate --json" in line
+    assert calls[0][calls[0].index("--jql") + 1] == "project in (DL)"
+    assert calls[0][calls[0].index("--fields") + 1] == "key,summary,status,assignee,issuetype,priority"
+
+
+def test_search_with_no_results_is_an_empty_list():
+    assert jira_scan.search("x", "key,summary", runner=_runner(lambda cmd: None)) == []
+    assert jira_scan.search("x", "key,summary", runner=_runner(lambda cmd: [None])) == []
+
+
+def test_view_command_line_asks_for_json_with_the_exact_fields():
+    calls = []
+    result = jira_scan.view("E-1", "parent", runner=_runner(lambda cmd: {"key": "E-1"}, calls))
+    assert result == {"key": "E-1"}
+    assert calls == [["acli", "jira", "workitem", "view", "E-1", "--fields", "parent", "--json"]]
+
+
+def test_count_reads_the_number_from_the_count_line():
+    calls = []
+    runner = _runner(lambda cmd: _completed(BANNER + "\n✓ Number of work items in the search: 43\n"),
+                     calls)
+    assert jira_scan.count("parent = E-1 AND statusCategory = Done", runner=runner) == 43
+    assert calls == [["acli", "jira", "workitem", "search", "--jql",
+                      "parent = E-1 AND statusCategory = Done", "--count"]]
+
+
+def test_count_without_a_number_raises():
+    with pytest.raises(jira_scan.AcliError, match="count"):
+        jira_scan.count("x", runner=_runner(lambda cmd: _completed("nothing here")))
+
+
+ITEM_FIELDS = "key,summary,status,assignee,issuetype,priority"
+EPIC_FIELDS = "key,summary,status,assignee,description,priority"
+EPIC_VIEW_FIELDS = "summary,description,priority,parent,assignee,status,created,updated,comment"
+NOT_STARTED_VIEW_FIELDS = "created,summary,description,assignee,priority"
+REJECTED_SEARCH_FIELDS = ("created", "parent", "resolution", "updated", "comment")
+ALICE = {"accountId": "acct-0001", "displayName": "Alice Example", "active": True}
+BOB = {"accountId": "acct-other", "displayName": "Bob Example", "active": True}
+CAROL = {"accountId": "acct-0003", "displayName": "Carol Example", "active": True}
+ERIN = {"accountId": "acct-9999", "displayName": "Erin Outsider", "active": True}
+EXCLUDED_JQL = '("Won\'t Do", "Declined", "Duplicate")'
+
+
+def _cfg(**overrides):
+    cfg = {"keys": ["DL"], "since": "2026-09-28", "until": "2026-10-05",
+           "excluded": ["Won't Do", "Declined", "Duplicate"], "roster": _roster(),
+           "max_flagged": 60, "scope": "team", "person": None, "epic": None}
+    cfg.update(overrides)
+    return cfg
+
+
+def _task(key, category, assignee=None, status_name=None, issuetype="Task"):
+    return _issue(key, category, status_name=status_name, assignee=assignee,
+                  fields={"issuetype": {"name": issuetype}, "priority": {"name": "Medium"}})
+
+
+def _parent_view(key, parent_key=None, parent_type="Epic"):
+    fields = {}
+    if parent_key:
+        fields["parent"] = {"key": parent_key, "fields": {
+            "summary": f"Synthetic {parent_key}", "issuetype": {"name": parent_type}}}
+    return {"key": key, "fields": fields}
+
+
+def _epic_view(key, summary, category="indeterminate", assignee=None, description=None,
+               comments=(), created="2026-08-01T10:00:00.000+0000"):
+    names = {"new": "To Do", "indeterminate": "In Progress 🛠️", "done": "Done ✅"}
+    return {"key": key, "fields": {
+        "summary": summary,
+        "status": {"name": names[category], "statusCategory": {"key": category}},
+        "priority": {"name": "Medium"},
+        "assignee": assignee,
+        "created": created,
+        "description": description,
+        "comment": {"comments": list(comments)},
+    }}
+
+
+def _count_out(number):
+    return _completed(f"✓ Number of work items in the search: {number}\n")
+
+
+def _jql(cmd):
+    return cmd[cmd.index("--jql") + 1]
+
+
+def _fields(cmd):
+    return cmd[cmd.index("--fields") + 1]
+
+
+def _world(fail=()):
+    window = [
+        _task("C-1", "done", ALICE),
+        _task("C-2", "indeterminate", CAROL),
+        _task("C-3", "indeterminate", CAROL, status_name="Blocked"),
+        _task("C-8", "indeterminate", ALICE),
+        _task("C-9", "indeterminate", BOB),
+        _task("C-10", "new", ERIN),
+        _task("E-1", "indeterminate", CAROL, issuetype="Epic"),
+    ]
+    epics = [_task("E-1", "indeterminate", CAROL, issuetype="Epic"),
+             _task("E-2", "indeterminate", None, issuetype="Epic")]
+    children = {
+        "E-1": [_task("C-1", "done", ALICE), _task("C-2", "indeterminate", CAROL)],
+        "E-2": [_task("C-3", "indeterminate", CAROL, status_name="Blocked"),
+                _task("C-4", "indeterminate", CAROL, status_name="Code Review 🔍")],
+        "E-9": [_task("C-9", "indeterminate", BOB), _task("C-11", "done", BOB)],
+    }
+    stalled = [_task("C-4", "indeterminate", CAROL, status_name="Code Review 🔍"),
+               _task("S-1", "indeterminate", ERIN)]
+    not_started = [_task("N-1", "new", ALICE, issuetype="Epic"),
+                   _task("N-2", "new", None, issuetype="Epic"),
+                   _task("E-9", "new", BOB, issuetype="Epic")]
+    done_counts = {"N-1": 0, "N-2": 2, "E-9": 0}
+    epic_views = {
+        "E-1": _json_fixture("epic_view.json"),
+        "E-2": _epic_view("E-2", "Synthetic epic two"),
+        "E-9": _epic_view("E-9", "Synthetic epic nine", category="new", assignee=BOB),
+    }
+    parent_views = {"C-8": _parent_view("C-8", "X-1", parent_type="Story"),
+                    "C-9": _parent_view("C-9", "E-9"),
+                    "C-10": _parent_view("C-10"),
+                    "C-3": _parent_view("C-3", "E-2")}
+    not_started_views = {"N-1": _epic_view("N-1", "Synthetic queued epic", category="new",
+                                           assignee=ALICE, created=_days_ago(30))}
+    comment_views = {
+        "C-3": {"key": "C-3", "fields": {"comment": {"comments": [
+            _comment("Alice Example", _days_ago(2), "Can we unblock this today?")]}}},
+        "C-4": {"key": "C-4", "fields": {"comment": {"comments": [
+            _comment("Carol Example", _days_ago(day), f"Update {day}.") for day in (9, 8, 7, 6, 5)]}}},
+    }
+
+    def handler(cmd):
+        if cmd[1:4] == ["jira", "auth", "status"]:
+            return _completed("✓ Authenticated")
+        if cmd[1:4] == ["jira", "workitem", "view"]:
+            key, fields = cmd[4], _fields(cmd)
+            if key in fail:
+                return _completed(stderr=f"✗ Error: failed to fetch {key}", returncode=1)
+            table = {EPIC_VIEW_FIELDS: epic_views, "parent": parent_views,
+                     NOT_STARTED_VIEW_FIELDS: not_started_views, "comment": comment_views}[fields]
+            return table[key]
+        jql = _jql(cmd)
+        if "--count" in cmd:
+            return _count_out(done_counts[jql.split()[2]])
+        if jql.startswith("parent = "):
+            key = jql.split()[2]
+            if key in fail:
+                return _completed(stderr="✗ Error: failed to parse JQL query", returncode=1)
+            return children[key]
+        if 'statusCategory = "To Do"' in jql:
+            return not_started
+        if "issuetype = Epic" in jql:
+            return epics
+        if "NOT status CHANGED" in jql:
+            return stalled
+        if "ORDER BY updated DESC" in jql:
+            return window
+        raise AssertionError(f"unexpected acli call: {cmd}")
+
+    return handler
+
+
+def _collect(handler=None, calls=None, **overrides):
+    return jira_scan.collect(_cfg(**overrides), runner=_runner(handler or _world(), calls), workers=4)
+
+
+def _views(calls, fields):
+    return sorted(cmd[4] for cmd in calls
+                  if cmd[1:4] == ["jira", "workitem", "view"] and _fields(cmd) == fields)
+
+
+def _children_searches(calls):
+    return sorted(_jql(cmd).split()[2] for cmd in calls
+                  if "--jql" in cmd and _jql(cmd).startswith("parent = ") and "--count" not in cmd)
+
+
+def test_collect_runs_the_planned_jql():
+    calls = []
+    _collect(calls=calls)
+    jqls = {_jql(cmd) for cmd in calls if "--jql" in cmd}
+    assert {
+        'project in (DL) AND updated >= "2026-09-28" AND updated <= "2026-10-05 23:59" ORDER BY updated DESC',
+        'project in (DL) AND issuetype = Epic AND (statusCategory = "In Progress" OR updated >= "2026-09-28")',
+        f"parent = E-1 AND (resolution is EMPTY OR resolution not in {EXCLUDED_JQL})",
+        'project in (DL) AND statusCategory = "In Progress" AND NOT status CHANGED AFTER -5d '
+        'ORDER BY statusCategoryChangedDate ASC',
+        'project in (DL) AND issuetype = Epic AND statusCategory = "To Do"',
+        "parent = N-1 AND statusCategory = Done",
+    } <= jqls
+
+
+def test_collect_search_fields_are_pinned_and_never_ask_for_rejected_fields():
+    calls = []
+    _collect(calls=calls)
+    searches = [cmd for cmd in calls if "--jql" in cmd and "--count" not in cmd]
+    by_kind = {}
+    for cmd in searches:
+        jql = _jql(cmd)
+        kind = ("children" if jql.startswith("parent = ") else
+                "not_started" if 'statusCategory = "To Do"' in jql else
+                "epics" if "issuetype = Epic" in jql else
+                "stalled" if "NOT status CHANGED" in jql else "window")
+        by_kind.setdefault(kind, set()).add(_fields(cmd))
+    assert by_kind == {
+        "window": {ITEM_FIELDS},
+        "children": {ITEM_FIELDS},
+        "stalled": {ITEM_FIELDS},
+        "epics": {EPIC_FIELDS},
+        "not_started": {EPIC_FIELDS},
+    }
+    for cmd in searches:
+        names = _fields(cmd).split(",")
+        assert not set(names) & set(REJECTED_SEARCH_FIELDS), cmd
+
+
+def test_collect_call_list_children_epic_views_and_parent_views():
+    calls = []
+    _collect(calls=calls)
+    assert _children_searches(calls) == ["E-1", "E-2", "E-9"]
+    assert _views(calls, EPIC_VIEW_FIELDS) == ["E-1", "E-2", "E-9"]
+    assert _views(calls, "parent") == ["C-10", "C-8", "C-9"]
+
+
+def test_collect_second_round_for_a_to_do_parent_epic():
+    data = _collect()
+    assert data["child_to_epic"] == {"C-1": "E-1", "C-2": "E-1", "C-3": "E-2", "C-4": "E-2",
+                                     "C-9": "E-9", "C-11": "E-9"}
+    assert [epic["key"] for epic in data["epics"]] == ["E-1", "E-2", "E-9"]
+    nine = data["epics"][2]
+    assert nine["status"] == "To Do"
+    assert nine["progress"] == {"total": 2, "done": 1, "in_progress": 1, "pct": 50}
+    assert nine["assignee"] == {"name": "Bob Example", "active": True}
+
+
+def test_collect_no_second_round_for_a_non_epic_parent():
+    calls = []
+    data = _collect(calls=calls)
+    assert "X-1" not in _children_searches(calls)
+    assert "X-1" not in _views(calls, EPIC_VIEW_FIELDS)
+    assert "C-8" not in data["child_to_epic"]
+
+
+def test_collect_epic_block_fields():
+    one = _collect()["epics"][0]
+    assert one["key"] == "E-1"
+    assert one["summary"] == "Synthetic epic one"
+    assert one["status"] == "In Progress 🛠️"
+    assert one["priority"] == "High"
+    assert one["parent"] == {"key": "I-1", "summary": "Synthetic initiative"}
+    assert one["assignee"] == {"name": "Carol Example", "active": True}
+    assert one["description"].startswith("Build the synthetic widget.")
+    assert len(one["description"]) <= 200
+    assert one["progress"] == {"total": 2, "done": 1, "in_progress": 1, "pct": 50}
+    total = f"parent = E-1 AND (resolution is EMPTY OR resolution not in {EXCLUDED_JQL})"
+    assert one["jql"] == {"total": total, "done": total + " AND statusCategory = Done",
+                          "in_progress": total + ' AND statusCategory = "In Progress"'}
+    assert one["children"] == [
+        {"key": "C-1", "summary": "Synthetic C-1", "status": "Done ✅", "assignee": "Alice Example"},
+        {"key": "C-2", "summary": "Synthetic C-2", "status": "In Progress 🛠️",
+         "assignee": "Carol Example"},
+    ]
+
+
+def test_collect_count_jql_template_and_window():
+    data = _collect()
+    assert data["count_jql"] == ("parent = {EPIC} AND (resolution is EMPTY OR resolution not in "
+                                 + EXCLUDED_JQL + ")")
+    assert data["window"] == {"since": "2026-09-28", "until": "2026-10-05", "keys": ["DL"]}
+
+
+def test_collect_not_started_counts_each_once_and_lists_only_zero_done_epics_with_age():
+    calls = []
+    data = _collect(calls=calls)
+    not_start_searches = [cmd for cmd in calls if "--jql" in cmd
+                          and 'statusCategory = "To Do"' in _jql(cmd)]
+    assert len(not_start_searches) == 1
+    counted = sorted(_jql(cmd).split()[2] for cmd in calls if "--count" in cmd)
+    assert counted == ["E-9", "N-1", "N-2"]
+    assert _views(calls, NOT_STARTED_VIEW_FIELDS) == ["N-1"]
+    assert [(epic["key"], epic["age_days"], epic["assignee"], epic["summary"])
+            for epic in data["not_started"]] == [("N-1", 30, "Alice Example", "Synthetic queued epic")]
+    assert data["not_started"][0]["created"].startswith(_days_ago(30)[:10])
+
+
+def test_collect_flags_blocked_then_stalled_and_skips_out_of_scope_items():
+    calls = []
+    data = _collect(calls=calls)
+    assert _views(calls, "comment") == ["C-3", "C-4"]
+    assert [(item["key"], item["reason"], item["assignee"]) for item in data["flagged"]] == [
+        ("C-3", "blocked", "Carol Example"), ("C-4", "stalled", "Carol Example")]
+
+
+def test_collect_keeps_the_newest_three_comments_and_counts_the_rest():
+    data = _collect()
+    c4 = data["flagged"][1]
+    assert [comment["excerpt"] for comment in c4["comments"]] == ["Update 7.", "Update 6.", "Update 5."]
+    assert c4["comments"][0]["author"] == "Carol Example"
+    assert data["omitted"] == {"issues": 0, "comments": 2}
+
+
+def test_collect_question_candidates_from_flagged_and_epic_comments():
+    questions = {item["key"]: item["excerpt"] for item in _collect()["questions"]}
+    assert questions == {"C-3": "Can we unblock this today?", "E-1": "Who owns the rollout plan?"}
+
+
+def test_collect_people_unmatched_and_doc_links():
+    data = _collect()
+    assert [entry["key"] for entry in data["people"]["Carol Example"]["stuck"]] == ["C-3"]
+    assert [entry["key"] for entry in data["people"]["Alice Example"]["completed"]] == ["C-1"]
+    assert [entry["key"] for entry in data["people"]["Bob Example"]["in_progress"]] == ["C-9"]
+    assert data["unmatched"] == ["Erin Outsider"]
+    assert data["doc_links"] == [
+        {"url": "https://example.atlassian.net/wiki/spaces/X/pages/1", "epic": "E-1", "kind": "wiki"},
+        {"url": "https://docs.google.com/document/d/abc", "epic": "E-1", "kind": "doc"},
+        {"url": "https://docs.google.com/spreadsheets/d/def", "epic": "E-1", "kind": "sheet"},
+        {"url": "https://www.figma.com/file/ghi", "epic": "E-1", "kind": "design"},
+    ]
+    assert data["failures"] == []
+
+
+def test_collect_records_a_failed_children_search_and_drops_that_epic_block():
+    data = _collect(handler=_world(fail=("E-2",)))
+    assert data["failures"] == ["E-2"]
+    assert "E-2" in data["errors"]
+    assert [epic["key"] for epic in data["epics"]] == ["E-1", "E-9"]
+
+
+def test_collect_epic_scope_adds_the_requested_epic_and_records_it():
+    calls = []
+    data = _collect(calls=calls, scope="epic", epic="E-9")
+    assert data["epic"] == "E-9"
+    assert _children_searches(calls).count("E-9") == 1
+
+
+def _flag_world():
+    blocked = [_task(f"B-{n}", "indeterminate", ALICE, status_name="Blocked") for n in range(1, 4)]
+    stalled = [_task(f"S-{n}", "indeterminate", ALICE) for n in range(1, 71)]
+
+    def handler(cmd):
+        if cmd[1:4] == ["jira", "workitem", "view"]:
+            fields = _fields(cmd)
+            if fields == "parent":
+                return _parent_view(cmd[4])
+            if fields == "comment":
+                return {"key": cmd[4], "fields": {"comment": {"comments": []}}}
+            raise AssertionError(cmd)
+        jql = _jql(cmd)
+        if 'statusCategory = "To Do"' in jql or "issuetype = Epic" in jql:
+            return []
+        if "NOT status CHANGED" in jql:
+            return stalled
+        if "ORDER BY updated DESC" in jql:
+            return blocked
+        raise AssertionError(cmd)
+
+    return handler
+
+
+def test_collect_caps_flagged_at_max_flagged_keeping_blocked_and_the_oldest_stalled():
+    calls = []
+    data = _collect(handler=_flag_world(), calls=calls, max_flagged=60)
+    fetched = _views(calls, "comment")
+    assert len(fetched) == 60
+    assert {"B-1", "B-2", "B-3"} <= set(fetched)
+    assert set(fetched) - {"B-1", "B-2", "B-3"} == {f"S-{n}" for n in range(1, 58)}
+    assert [item["key"] for item in data["flagged"]][:3] == ["B-1", "B-2", "B-3"]
+    assert data["omitted"]["issues"] == 13
+    text = jira_scan.render_digest(data, "team", 10 ** 6)
+    assert text.rstrip("\n").splitlines()[-1].startswith("Omitted: 13 issues")
+
+
+def _argv(out, *extra):
+    return ["--keys", "DL", "--since", "2026-09-28", "--until", "2026-10-05",
+            "--config", str(FIXTURES / "roster.md"),
+            "--excluded-resolutions", "Won't Do, Declined, Duplicate",
+            "--word-limit", "5000", "--workers", "4", "--out", str(out), *list(extra)]
+
+
+def test_main_returns_1_when_acli_auth_fails(tmp_path, capsys):
+    def handler(cmd):
+        return _completed(stderr="✗ Error: not logged in", returncode=1)
+    assert jira_scan.main(_argv(tmp_path / "out"), runner=_runner(handler)) == 1
+    assert "acli unavailable" in capsys.readouterr().err
+    assert not (tmp_path / "out").exists()
+
+
+def test_main_returns_1_when_acli_is_missing(tmp_path, capsys):
+    def runner(cmd, **kwargs):
+        raise FileNotFoundError("acli")
+    assert jira_scan.main(_argv(tmp_path), runner=runner) == 1
+    assert "acli unavailable" in capsys.readouterr().err
+
+
+def test_main_reports_incomplete_epics_and_still_writes_both_files(tmp_path, capsys):
+    code = jira_scan.main(_argv(tmp_path), runner=_runner(_world(fail=("E-2",))))
+    assert code == 2
+    assert "INCOMPLETE: E-2" in capsys.readouterr().err
+    data = json.loads((tmp_path / "jira.json").read_text())
+    assert data["failures"] == ["E-2"]
+    assert "## Not measured" in (tmp_path / "jira.md").read_text()
+
+
+def test_main_happy_path_writes_jira_json_and_jira_md(tmp_path, capsys):
+    assert jira_scan.main(_argv(tmp_path), runner=_runner(_world())) == 0
+    data = json.loads((tmp_path / "jira.json").read_text())
+    assert {"window", "epics", "child_to_epic", "people", "unmatched", "flagged",
+            "doc_links", "failures"} <= set(data)
+    assert data["child_to_epic"]["C-9"] == "E-9"
+    digest = (tmp_path / "jira.md").read_text()
+    assert digest.startswith("# Jira digest: DL, 2026-09-28 to 2026-10-05")
+    assert "## Doc links" in digest
+    assert digest.rstrip("\n").splitlines()[-1].endswith("(word limit 5000)")
+    out = capsys.readouterr().out
+    assert str(tmp_path / "jira.json") in out
+
+
+def test_main_jira_json_feeds_pr_scan_jira_map(tmp_path):
+    import pr_scan
+    jira_scan.main(_argv(tmp_path), runner=_runner(_world()))
+    assert pr_scan.load_jira_map(str(tmp_path / "jira.json"))["C-1"] == "E-1"
+
+
+def test_main_person_scope_renders_only_that_person(tmp_path):
+    argv = _argv(tmp_path, "--scope", "person", "--person", "Bob Example")
+    assert jira_scan.main(argv, runner=_runner(_world())) == 0
+    digest = (tmp_path / "jira.md").read_text()
+    assert "Scope: person (Bob Example)" in digest
+    assert "## Issues" in digest
+
+
+def test_main_passes_max_flagged_to_collect(tmp_path):
+    calls = []
+    argv = _argv(tmp_path, "--max-flagged", "1")
+    assert jira_scan.main(argv, runner=_runner(_world(), calls)) == 0
+    assert _views(calls, "comment") == ["C-3"]
+    assert json.loads((tmp_path / "jira.json").read_text())["omitted"]["issues"] == 1
+
+
+def test_main_cannot_read_config_returns_1(tmp_path, capsys):
+    argv = _argv(tmp_path)
+    argv[argv.index("--config") + 1] = str(tmp_path / "absent.md")
+    assert jira_scan.main(argv, runner=_runner(_world())) == 1
+    assert "cannot read --config" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("extra", [
+    ["--scope", "person"],
+    ["--scope", "epic"],
+    ["--scope", "sprint"],
+])
+def test_main_rejects_incomplete_scope_arguments(tmp_path, extra):
+    with pytest.raises(SystemExit) as raised:
+        jira_scan.main(_argv(tmp_path, *extra), runner=_runner(_world()))
+    assert raised.value.code == 2
+
+
+def test_main_requires_excluded_resolutions(tmp_path):
+    argv = _argv(tmp_path)
+    position = argv.index("--excluded-resolutions")
+    del argv[position:position + 2]
+    with pytest.raises(SystemExit) as raised:
+        jira_scan.main(argv, runner=_runner(_world()))
+    assert raised.value.code == 2
+
+
+def test_main_defaults_max_flagged_to_60_and_workers_to_8():
+    parser = jira_scan.build_parser()
+    args = parser.parse_args(["--keys", "DL", "--since", "2026-09-28", "--config", "x",
+                              "--excluded-resolutions", "Won't Do", "--word-limit", "100"])
+    assert args.max_flagged == 60
+    assert args.workers == 8

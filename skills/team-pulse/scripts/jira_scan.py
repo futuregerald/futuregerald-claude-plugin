@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
 
+import argparse
+import json
+import os
 import re
+import subprocess
+import sys
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 
@@ -465,3 +471,399 @@ def render_digest(data: dict, scope: str, word_limit: int, person: str | None = 
         if _word_count(parts) <= word_limit:
             break
     return "\n\n".join(parts) + "\n"
+
+
+BANNER = re.compile(r"outdated version", re.IGNORECASE)
+RATE_LIMITED = re.compile(r"\b429\b")
+COUNT_LINE = re.compile(r"(\d+)\s*$")
+
+
+class AcliError(Exception):
+    pass
+
+
+def _acli_text(args, runner):
+    command = ["acli"] + list(args)
+    try:
+        result = runner(command, capture_output=True, text=True)
+    except FileNotFoundError as error:
+        raise AcliError(f"acli not found on PATH: {error}") from error
+    stderr = (result.stderr or "").strip()
+    if RATE_LIMITED.search(stderr):
+        raise AcliError(f"Jira rate limit hit (HTTP 429) on: {' '.join(command)}\n{stderr}")
+    if result.returncode != 0:
+        raise AcliError(f"acli failed: {' '.join(command)}\n{stderr}")
+    return "\n".join(line for line in (result.stdout or "").splitlines()
+                     if not BANNER.search(line))
+
+
+def run_acli(args: list[str], runner=subprocess.run) -> list | dict:
+    text = _acli_text(args, runner)
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as error:
+        raise AcliError(f"acli returned non-JSON output for {' '.join(args)}: {error}") from error
+
+
+def search(jql: str, fields: str, runner=subprocess.run) -> list[dict]:
+    result = run_acli(["jira", "workitem", "search", "--jql", jql, "--fields", fields,
+                       "--paginate", "--json"], runner=runner)
+    return [item for item in result or [] if item]
+
+
+def view(key: str, fields: str, runner=subprocess.run) -> dict:
+    return run_acli(["jira", "workitem", "view", key, "--fields", fields, "--json"], runner=runner)
+
+
+def count(jql: str, runner=subprocess.run) -> int:
+    text = _acli_text(["jira", "workitem", "search", "--jql", jql, "--count"], runner).strip()
+    match = COUNT_LINE.search(text)
+    if not match:
+        raise AcliError(f"acli count gave no number for {jql}: {text}")
+    return int(match.group(1))
+
+
+ITEM_FIELDS = "key,summary,status,assignee,issuetype,priority"
+EPIC_FIELDS = "key,summary,status,assignee,description,priority"
+EPIC_VIEW_FIELDS = "summary,description,priority,parent,assignee,status,created,updated,comment"
+NOT_STARTED_VIEW_FIELDS = "created,summary,description,assignee,priority"
+DESCRIPTION_LIMIT = 200
+COMMENT_LIMIT = 300
+
+WINDOW_JQL = ('project in ({keys}) AND updated >= "{since}" AND updated <= "{until} 23:59" '
+              'ORDER BY updated DESC')
+EPICS_JQL = ('project in ({keys}) AND issuetype = Epic AND (statusCategory = "In Progress" '
+             'OR updated >= "{since}")')
+CHILDREN_JQL = "parent = {epic} AND (resolution is EMPTY OR resolution not in ({excluded}))"
+STALLED_JQL = ('project in ({keys}) AND statusCategory = "In Progress" AND NOT status CHANGED '
+               'AFTER -5d ORDER BY statusCategoryChangedDate ASC')
+NOT_STARTED_JQL = 'project in ({keys}) AND issuetype = Epic AND statusCategory = "To Do"'
+NOT_STARTED_DONE_JQL = "parent = {epic} AND statusCategory = Done"
+
+
+def _parallel(tasks, workers):
+    results, errors = {}, {}
+    if not tasks:
+        return results, errors
+    with ThreadPoolExecutor(max_workers=max(1, min(workers, len(tasks)))) as pool:
+        futures = {name: pool.submit(call) for name, call in tasks.items()}
+        for name, future in futures.items():
+            try:
+                results[name] = future.result()
+            except AcliError as error:
+                errors[name] = str(error)
+    return results, errors
+
+
+def _quote_jql(value):
+    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def _fields(issue):
+    return issue.get("fields") or {}
+
+
+def _assignee_name(assignee, roster):
+    if not assignee:
+        return None
+    person = match_assignee(assignee, roster)
+    if person:
+        return person["name"]
+    return assignee.get("displayName") or assignee.get("accountId")
+
+
+def _is_epic_type(issuetype):
+    return ((issuetype or {}).get("name") or "").casefold() == "epic"
+
+
+def _child_entry(issue, roster):
+    fields = _fields(issue)
+    return {"key": issue["key"], "summary": fields.get("summary") or "",
+            "status": _status_name(issue),
+            "assignee": _assignee_name(fields.get("assignee"), roster)}
+
+
+def _epic_entry(key, fields, children, children_jql, roster):
+    parent = fields.get("parent")
+    assignee = fields.get("assignee")
+    owner = None
+    if assignee:
+        owner = {"name": _assignee_name(assignee, roster), "active": assignee.get("active")}
+    return {
+        "key": key,
+        "summary": fields.get("summary") or "",
+        "status": ((fields.get("status") or {}).get("name")) or "",
+        "priority": (fields.get("priority") or {}).get("name"),
+        "parent": ({"key": parent["key"],
+                    "summary": (parent.get("fields") or {}).get("summary") or ""}
+                   if parent else None),
+        "assignee": owner,
+        "description": adf_text(fields.get("description"), DESCRIPTION_LIMIT),
+        "progress": epic_progress(children),
+        "jql": {"total": children_jql,
+                "done": children_jql + " AND statusCategory = Done",
+                "in_progress": children_jql + ' AND statusCategory = "In Progress"'},
+        "children": [_child_entry(child, roster) for child in children],
+    }
+
+
+def _comments(view_result):
+    return list((_fields(view_result).get("comment") or {}).get("comments") or [])
+
+
+def _by_created(comments):
+    return sorted((comment for comment in comments if comment.get("created")),
+                  key=lambda comment: parse_jira_time(comment["created"]))
+
+
+def _comment_entry(comment):
+    return {"author": (comment.get("author") or {}).get("displayName") or "unknown",
+            "created": comment.get("created") or "",
+            "excerpt": _comment_text(comment.get("body"), COMMENT_LIMIT)}
+
+
+def collect(cfg: dict, runner=subprocess.run, workers: int = 8) -> dict:
+    keys = ", ".join(cfg["keys"])
+    since, until = cfg["since"], cfg["until"]
+    roster = cfg.get("roster") or []
+    excluded = ", ".join(_quote_jql(value) for value in cfg["excluded"])
+    count_jql = CHILDREN_JQL.format(epic="{EPIC}", excluded=excluded)
+    failures, errors = [], {}
+
+    def children_jql(epic):
+        return CHILDREN_JQL.format(epic=epic, excluded=excluded)
+
+    def record(failed):
+        for name, message in failed.items():
+            key = name[1]
+            if key not in failures:
+                failures.append(key)
+            errors.setdefault(key, message)
+
+    first, fatal = _parallel({
+        "window": lambda: search(WINDOW_JQL.format(keys=keys, since=since, until=until),
+                                 ITEM_FIELDS, runner),
+        "epics": lambda: search(EPICS_JQL.format(keys=keys, since=since), EPIC_FIELDS, runner),
+        "stalled": lambda: search(STALLED_JQL.format(keys=keys), ITEM_FIELDS, runner),
+        "not_started": lambda: search(NOT_STARTED_JQL.format(keys=keys), EPIC_FIELDS, runner),
+    }, workers)
+    if fatal:
+        raise AcliError("; ".join(f"{name}: {message}" for name, message in fatal.items()))
+    window, stalled = first["window"], first["stalled"]
+    epic_records = {epic["key"]: epic for epic in first["epics"]}
+    epic_order = list(epic_records)
+    if cfg.get("epic") and cfg["epic"] not in epic_records:
+        epic_order.append(cfg["epic"])
+    not_started = first["not_started"]
+
+    def epic_tasks(epic_keys):
+        tasks = {}
+        for key in epic_keys:
+            tasks[("children", key)] = lambda key=key: search(children_jql(key), ITEM_FIELDS, runner)
+            tasks[("epic", key)] = lambda key=key: view(key, EPIC_VIEW_FIELDS, runner)
+        return tasks
+
+    tasks = epic_tasks(epic_order)
+    for epic in not_started:
+        tasks[("done", epic["key"])] = lambda key=epic["key"]: count(
+            NOT_STARTED_DONE_JQL.format(epic=key), runner)
+    second, failed = _parallel(tasks, workers)
+    record(failed)
+
+    children_by_epic = {key: second[("children", key)] for key in epic_order
+                        if ("children", key) in second}
+    claimed = child_to_epic(children_by_epic)
+    unclaimed = [issue["key"] for issue in window
+                 if issue["key"] not in claimed and issue["key"] not in epic_order
+                 and not _is_epic_type(_fields(issue).get("issuetype"))]
+    parents, failed = _parallel({("parent", key): lambda key=key: view(key, "parent", runner)
+                                 for key in unclaimed}, workers)
+    record(failed)
+    extra = []
+    for key in unclaimed:
+        parent = _fields(parents.get(("parent", key)) or {}).get("parent")
+        if (parent and _is_epic_type((parent.get("fields") or {}).get("issuetype"))
+                and parent["key"] not in epic_order and parent["key"] not in extra):
+            extra.append(parent["key"])
+    epic_order += extra
+
+    active = set(epic_order)
+    zero_done = [epic["key"] for epic in not_started
+                 if second.get(("done", epic["key"])) == 0 and epic["key"] not in active]
+    tasks = epic_tasks(extra)
+    for key in zero_done:
+        tasks[("not_started", key)] = lambda key=key: view(key, NOT_STARTED_VIEW_FIELDS, runner)
+    third, failed = _parallel(tasks, workers)
+    record(failed)
+    second.update(third)
+
+    children_by_epic = {key: second[("children", key)] for key in epic_order
+                        if ("children", key) in second}
+    child_map = child_to_epic(children_by_epic)
+    stalled_keys = {issue["key"] for issue in stalled}
+
+    def in_scope(issue):
+        return (match_assignee(_fields(issue).get("assignee"), roster) is not None
+                or issue["key"] in child_map)
+
+    candidates, seen = [], set()
+    pool = window + [child for children in children_by_epic.values() for child in children]
+    for issue in pool:
+        if issue["key"] not in seen and is_blocked(issue) and in_scope(issue):
+            candidates.append((issue, "blocked"))
+            seen.add(issue["key"])
+    for issue in stalled:
+        if issue["key"] not in seen and in_scope(issue):
+            candidates.append((issue, "stalled"))
+            seen.add(issue["key"])
+    max_flagged = cfg.get("max_flagged", 60)
+    kept = candidates[:max_flagged]
+    comment_views, failed = _parallel({("comment", issue["key"]): lambda key=issue["key"]: view(
+        key, "comment", runner) for issue, _ in kept}, workers)
+    record(failed)
+
+    flagged, questions, comments_cut = [], [], 0
+    for issue, reason in kept:
+        comments = _by_created(_comments(comment_views.get(("comment", issue["key"])) or {}))
+        comments_cut += max(len(comments) - MAX_COMMENTS, 0)
+        fields = _fields(issue)
+        flagged.append({"key": issue["key"], "summary": fields.get("summary") or "",
+                        "status": _status_name(issue),
+                        "assignee": _assignee_name(fields.get("assignee"), roster),
+                        "reason": reason,
+                        "comments": [_comment_entry(comment)
+                                     for comment in comments[-MAX_COMMENTS:]]})
+        questions += [{"key": issue["key"], **candidate}
+                      for candidate in question_candidates(comments, COMMENT_LIMIT)]
+
+    epics, doc_links = [], []
+    for key in epic_order:
+        if ("children", key) not in second:
+            continue
+        fields = dict(_fields(epic_records.get(key) or {}))
+        fields.update(_fields(second.get(("epic", key)) or {}))
+        epics.append(_epic_entry(key, fields, second[("children", key)], children_jql(key), roster))
+        for url in adf_links(fields.get("description")):
+            kind = classify_doc_link(url)
+            if kind:
+                doc_links.append({"url": url, "epic": key, "kind": kind})
+        questions += [{"key": key, **candidate} for candidate in
+                      question_candidates(_comments(second.get(("epic", key)) or {}), COMMENT_LIMIT)]
+
+    now = datetime.now(timezone.utc)
+    not_started_entries = []
+    for key in zero_done:
+        fields = dict(_fields(next(epic for epic in not_started if epic["key"] == key)))
+        fields.update(_fields(second.get(("not_started", key)) or {}))
+        created = fields.get("created") or ""
+        not_started_entries.append({
+            "key": key, "summary": fields.get("summary") or "", "created": created,
+            "age_days": (now - parse_jira_time(created)).days if created else None,
+            "assignee": _assignee_name(fields.get("assignee"), roster),
+        })
+
+    stalled_window = [dict(issue, stalled=issue["key"] in stalled_keys) for issue in window
+                      if not _is_epic_type(_fields(issue).get("issuetype"))]
+    people, unmatched = group_by_person(stalled_window, roster)
+    data = {
+        "window": {"since": since, "until": until, "keys": list(cfg["keys"])},
+        "count_jql": count_jql,
+        "epics": epics,
+        "child_to_epic": child_map,
+        "people": people,
+        "unmatched": unmatched,
+        "flagged": flagged,
+        "questions": questions,
+        "doc_links": doc_links,
+        "not_started": not_started_entries,
+        "failures": failures,
+        "errors": errors,
+        "omitted": {"issues": len(candidates) - len(kept), "comments": comments_cut},
+    }
+    if cfg.get("scope") == "epic" and cfg.get("epic"):
+        data["epic"] = cfg["epic"]
+    return data
+
+
+def _split(value):
+    return [part.strip().strip("\"'").strip() for part in value.split(",") if part.strip()]
+
+
+def build_parser():
+    parser = argparse.ArgumentParser(
+        description="Collect Jira epics, issues and flagged items through acli into "
+                    "jira.json and a size-bounded jira.md digest.")
+    parser.add_argument("--keys", required=True, help="comma-separated Jira project keys")
+    parser.add_argument("--since", required=True, help="YYYY-MM-DD")
+    parser.add_argument("--until", default=None, help="YYYY-MM-DD (default: today, UTC)")
+    parser.add_argument("--config", required=True, metavar="PATH",
+                        help="team config markdown holding the roster table")
+    parser.add_argument("--scope", choices=SCOPES, default="team")
+    parser.add_argument("--person", default=None, help="roster name; required with --scope person")
+    parser.add_argument("--epic", default=None, help="epic key; required with --scope epic")
+    parser.add_argument("--excluded-resolutions", required=True,
+                        help="comma-separated resolutions left out of epic counts, from the "
+                             "team config; every value must exist on the Jira site")
+    parser.add_argument("--word-limit", type=int, required=True,
+                        help="digest word target, 50 x people x days")
+    parser.add_argument("--max-flagged", type=int, default=60,
+                        help="most blocked or stalled items whose comments are fetched")
+    parser.add_argument("--workers", type=int, default=8, help="parallel acli calls")
+    parser.add_argument("--out", default=".", help="directory for jira.json and jira.md")
+    return parser
+
+
+def main(argv: list[str] | None = None, runner=subprocess.run) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    if args.scope == "person" and not args.person:
+        parser.error("--scope person needs --person")
+    if args.scope == "epic" and not args.epic:
+        parser.error("--scope epic needs --epic")
+    keys = [key.upper() for key in _split(args.keys)]
+    excluded = _split(args.excluded_resolutions)
+    if not keys or not excluded:
+        parser.error("--keys and --excluded-resolutions need at least one value")
+    try:
+        with open(args.config) as handle:
+            roster = parse_roster(handle.read())
+    except (OSError, ValueError) as error:
+        print(f"cannot read --config {args.config}: {error}", file=sys.stderr)
+        return 1
+    try:
+        _acli_text(["jira", "auth", "status"], runner)
+    except AcliError as error:
+        print(f"acli unavailable: {error}", file=sys.stderr)
+        return 1
+    cfg = {"keys": keys, "since": args.since,
+           "until": args.until or datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+           "excluded": excluded, "roster": roster, "max_flagged": args.max_flagged,
+           "scope": args.scope, "person": args.person, "epic": args.epic}
+    try:
+        data = collect(cfg, runner=runner, workers=args.workers)
+    except AcliError as error:
+        print(f"acli unavailable: {error}", file=sys.stderr)
+        return 1
+
+    os.makedirs(args.out, exist_ok=True)
+    json_path = os.path.join(args.out, "jira.json")
+    md_path = os.path.join(args.out, "jira.md")
+    with open(json_path, "w") as handle:
+        json.dump(data, handle, indent=2, ensure_ascii=False)
+    with open(md_path, "w") as handle:
+        handle.write(render_digest(data, args.scope, args.word_limit, args.person))
+
+    print(f"{json_path}\n{md_path}")
+    print(f"epics={len(data['epics'])} children={len(data['child_to_epic'])} "
+          f"flagged={len(data['flagged'])} not_started={len(data['not_started'])} "
+          f"unmatched={len(data['unmatched'])}")
+    if data["failures"]:
+        for key in data["failures"]:
+            print(f"{key}: {data['errors'].get(key, '')}", file=sys.stderr)
+        print(f"INCOMPLETE: {', '.join(data['failures'])}", file=sys.stderr)
+        return 2
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
