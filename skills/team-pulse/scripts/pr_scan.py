@@ -325,8 +325,9 @@ def render_markdown(report):
     others = _team_only([pr for pr in everything if pr["bucket"] == "linked_out_of_scope"], roster)
     lines.append(_table(
         [(f"{pr['repo']}#{pr['number']}", _cell(pr["title"]), pr["author"],
-          ", ".join(pr["keys"]), "merged" if pr["merged_at"] else "open") for pr in others],
-        ["PR", "Title", "Author", "Keys", "State"]))
+          ", ".join(pr["keys"]), "merged" if pr["merged_at"] else "open", pr["url"])
+         for pr in others],
+        ["PR", "Title", "Author", "Keys", "State", "URL"]))
 
     lines += ["", "## Stale, unreviewed open PRs", "",
               "Stale, and nobody is reviewing it. An approved-but-unmerged PR is a different "
