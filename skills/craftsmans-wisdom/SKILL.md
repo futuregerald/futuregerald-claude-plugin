@@ -1,18 +1,20 @@
 ---
-name: katies-wisdom
-description: Challenge the user, one question at a time, to think a piece of work through using Katie Dill's craft method — what good means here, the generic default to avoid, what is written down for agents, whether done is actually good, and who maintains it — then write a confirmed point-of-view brief that steers the build and that editor-pass reviews against. Use when the user says "katies wisdom", "katie's wisdom", "am I thinking this through", or "what does good mean here".
+name: craftsmans-wisdom
+description: Challenge the user, one question at a time, to think a piece of work through as a craftsman would — what good means here, the generic default to avoid, what is written down for agents, whether done is actually good, and who maintains it — then write a confirmed point-of-view brief that steers the build and that editor-pass reviews against. Use when the user says "craftsman's wisdom", "craftsmans wisdom", "am I thinking this through", or "what does good mean here".
 author: Gerald Onyango
 tags: [planning, design, quality, interview]
 ---
 
-# Katie's Wisdom
+# Craftsman's Wisdom
 
 AI makes building cheap, so the hard part moves to knowing what good means, writing it
 down where agents will follow it, and refusing to call built work done. This skill asks
 the questions that force those answers, before and during the work, and leaves a brief
-that every later step reads. The full method is in
-[references/methodology.md](references/methodology.md); the question bank is in
-[references/questions.md](references/questions.md).
+that every later step reads.
+
+- Read [references/questions.md](references/questions.md) before the first question.
+- Read [references/methodology.md](references/methodology.md) only when a question needs
+  its reasoning, or the user asks what the method says.
 
 ## What good output looks like
 
@@ -28,16 +30,22 @@ that every later step reads. The full method is in
 
 Read what already exists, so the session sharpens it instead of starting blank:
 
-- an earlier brief: `docs/point-of-view/<slug>.md`
+- an earlier brief: `docs/point-of-view/<slug>.md` in the repo, or
+  `~/.claude/point-of-view/<slug>.md`
 - `PRODUCT.md` and `DESIGN.md` (written by `impeccable`), `product-facts.md` (written by
   `huashu-design`)
 - the ticket, PRD, plan, draft and the repo itself
 
+**The slug** is the kebab-case name of the work (the feature, page or product, e.g.
+`checkout-redesign`). When several briefs exist and none clearly matches, list them and
+ask which applies.
+
 **Facts versus judgments.** Look up facts — what is being built, the stack, the deadline,
 what exists — and never ask for them. Always ask for judgments — who specifically it is
 for, what good means, the generic default, the detail one level deeper — and never fill
-one from a ticket or spec. The one exception is the user's own earlier answer (a brief,
-PRODUCT.md): read it back and ask what they would change.
+one from a document someone else wrote. The exception is anything the user wrote
+themselves (an earlier brief, their PRODUCT.md or PRD): read it back and ask what they
+would change.
 
 ## Session rules
 
@@ -50,11 +58,12 @@ PRODUCT.md): read it back and ask what they would change.
 5. **The user steers:** "skip", "next stage" and "enough" are honoured immediately.
 6. **Budget about eight questions.** Spend them on the required fields first (below),
    then on the stages that apply.
+7. **Don't start building** until the user has confirmed the brief.
 
 ## Required in every session
 
-Unless an existing brief or PRODUCT.md already answers them — and the user confirms it
-still holds — ask these three, whatever the stage:
+Unless something the user wrote already answers them — and they confirm it still holds —
+ask these three, whatever the stage:
 
 | Brief field | Question |
 |---|---|
@@ -102,8 +111,10 @@ confirms or corrects it.
 ```
 
 **Where it lives:** `docs/point-of-view/<slug>.md` in the repo, committed with the work
-it describes, so a later session's `editor-pass` can find it. Outside a repo, use
-`~/.claude/point-of-view/<slug>.md`. When a brief already exists, update it in place.
+it describes, so a later session's `editor-pass` can find it. The brief can name people
+and plans, so in a public repo ask before committing it, and on a no save it to
+`~/.claude/point-of-view/<slug>.md` instead — the same path used outside a repo. When a
+brief already exists, update it in place.
 
 ## Next step
 

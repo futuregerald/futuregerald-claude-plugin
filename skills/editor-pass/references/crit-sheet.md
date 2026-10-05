@@ -23,10 +23,10 @@ B. [<pin>] <what is off> → <direction>, same treatment as A
 | Letters | A, B, C… in order, no gaps, no repeats | yes |
 | Pin | `[where]`: a place a reader can find | non-empty |
 | Body | what is off `→` what it should be or feel like | has `→` (or `->`) |
-| References | "same as C", "similar to H", "see B", "match D" | target letter exists |
-| Wording | no praise ("looks great"), no scores ("8/10") | yes |
+| References | "same as C", "similar to H", "see B", "match D", "matching E" | target letter exists |
+| Wording | no praise ("looks great"), no scores ("8/10", "score: 7") | yes; a fraction like "step 3/10" also reads as a score, so write "step 3 of 10" |
 
-An item can wrap onto following lines. A blank line or the next letter ends it.
+An item can wrap onto following lines, and its text can start on the line after the pin. A blank line or the next letter ends it. A sheet holds at most 26 items (A–Z); past that, merge related items.
 
 ## Do/don't pairs
 

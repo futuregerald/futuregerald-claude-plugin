@@ -3,47 +3,56 @@ import re
 import sys
 from pathlib import Path
 
-ITEM_START = re.compile(r"^\s*(?:[-*]\s+)?([A-Z])\.\s+\[([^\]]*)\]\s+(.+)$")
-UNPINNED_ITEM_START = re.compile(r"^\s*(?:[-*]\s+)?([A-Z])\.\s+(?!\[)\S")
-OVERALL = re.compile(r"(?im)^\s*(?:#+\s*|\*\*)?overall\b")
-CROSS_REF = re.compile(r"\b(?i:same (?:note |treatment )?as|similar to|see|match(?:es)?)\s+([A-Z])\b")
-PRAISE = ("looks great", "looks good", "nice work", "great job", "love it")
-SCORE = re.compile(r"\b\d{1,2}\s*/\s*10\b|\bscore\b", re.IGNORECASE)
+ITEM_START = re.compile(r"^\s*(?:[-*]\s+)?([A-Z])\.\s+\[([^\]]*)\]\s*(.*)$")
+UNPINNED_ITEM_START = re.compile(r"^\s*(?:[-*]\s+)?([A-Z])\.\s+(?!\[)(\S.*)$")
+MULTI_LETTER_ITEM = re.compile(r"^\s*(?:[-*]\s+)?([A-Z]{2,})\.\s")
+OVERALL_HEADING = re.compile(r"^\s*(?:#+\s*|\*\*)?overall\b(?::?\*\*)?:?\s*(.*)$", re.IGNORECASE)
+CROSS_REF = re.compile(r"\b(?i:same (?:note |treatment )?as|similar to|see|match(?:es|ing)?)\s+([A-Z])\b")
+PRAISE = re.compile(r"\b(?:looks great|looks good|nice work|great job|love it)\b", re.IGNORECASE)
+SCORE = re.compile(r"(?<![\d/])\b\d{1,2}\s*/\s*10\b(?!\s*/)|\b(?:score|rating)\s*[:=]\s*\d", re.IGNORECASE)
 DIRECTION = ("→", "->")
 
 
-def split_sections(text):
-    overall_lines = []
+def parse_sheet(text):
+    overall = None
     items = []
-    in_overall = False
+    oversized = []
     current = None
     for line in text.splitlines():
-        start = ITEM_START.match(line)
-        unpinned = None if start else UNPINNED_ITEM_START.match(line)
-        if start or unpinned:
-            letter = (start or unpinned).group(1)
-            pin = start.group(2).strip() if start else ""
-            body = start.group(3) if start else line.split(".", 1)[1]
-            current = {"letter": letter, "pin": pin, "body": [body]}
+        pinned = ITEM_START.match(line)
+        unpinned = None if pinned else UNPINNED_ITEM_START.match(line)
+        if pinned or unpinned:
+            match = pinned or unpinned
+            current = {
+                "letter": match.group(1),
+                "pin": pinned.group(2).strip() if pinned else "",
+                "body": [pinned.group(3) if pinned else unpinned.group(2)],
+            }
             items.append(current)
-            in_overall = False
-        elif not line.strip():
+            continue
+        if MULTI_LETTER_ITEM.match(line):
+            oversized.append(MULTI_LETTER_ITEM.match(line).group(1))
             current = None
-            in_overall = False
-        elif current is not None:
-            current["body"].append(line.strip())
-        elif OVERALL.match(line) or in_overall:
-            in_overall = True
-            overall_lines.append(line)
+            continue
+        if current is not None:
+            if line.strip():
+                current["body"].append(line.strip())
+            else:
+                current = None
+            continue
+        heading = OVERALL_HEADING.match(line)
+        if overall is None and heading:
+            overall = [heading.group(1)] if heading.group(1).strip() else []
+        elif overall is not None and not items and line.strip():
+            overall.append(line.strip())
     for item in items:
-        item["body"] = " ".join(item["body"])
-    return " ".join(overall_lines), items
+        item["body"] = " ".join(part for part in item["body"] if part).strip()
+    return overall, items, oversized
 
 
 def wording_problems(label, text):
     problems = []
-    lowered = text.lower()
-    praise = [phrase for phrase in PRAISE if phrase in lowered]
+    praise = sorted({match.lower() for match in PRAISE.findall(text)})
     if praise:
         problems.append(f"{label}: praise is not a fix ({', '.join(praise)})")
     if SCORE.search(text):
@@ -52,12 +61,16 @@ def wording_problems(label, text):
 
 
 def check_crit(text):
-    overall, items = split_sections(text)
+    overall, items, oversized = parse_sheet(text)
     problems = []
-    if not OVERALL.search(text):
+    if overall is None:
         problems.append("Missing the **Overall:** note before the lettered items")
     else:
-        problems.extend(wording_problems("Overall", overall))
+        problems.extend(wording_problems("Overall", " ".join(overall)))
+    if oversized:
+        problems.append(
+            f"Items {', '.join(oversized)}: more than 26 items — merge related ones or split the sheet"
+        )
     if not items:
         problems.append("Crit sheet has no lettered items (A. [pin] what is off → what it should be)")
         return problems

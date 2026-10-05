@@ -36,7 +36,7 @@ def test_overall_with_no_items():
 
 
 def test_gap_in_letters():
-    text = VALID.replace("B. [Hero photo]", "C. [Hero photo]").replace("as A", "as A")
+    text = VALID.replace("B. [Hero photo]", "C. [Hero photo]")
     found = check_crit.check_crit(text)
     assert len(found) == 1
     assert "B" in found[0]
@@ -102,6 +102,70 @@ def test_praise_on_a_continuation_line_is_caught():
     text = "**Overall:** x\n\nA. [Edge] edges too sharp → cloudier\n   though overall it looks great\n"
     assert len(check_crit.check_crit(text)) == 1
     assert problems_mentioning(text, "praise")
+
+
+@pytest.mark.parametrize(
+    "item",
+    [
+        "A. [Score card] The credit score is 11px grey → make it the largest number",
+        "A. [Invoice date] 3/10/2026 reads as March or October → write 10 March 2026",
+        "A. [Hero copy] Shoppers love items they can preview → lead with the preview",
+        "A. [Product grid] The glove items lack sizes → show sizes on each card",
+        "A. [Docs intro] Describes a nice workflow but no first step → open with the first command",
+    ],
+)
+def test_subject_words_are_not_praise_or_scores(item):
+    assert check_crit.check_crit(f"**Overall:** x\n\n{item}\n") == []
+
+
+def test_dangling_matching_reference():
+    text = "**Overall:** x\n\nA. [Edge] too sharp → cloudier\nB. [Link] one style → matching Z\n"
+    found = check_crit.check_crit(text)
+    assert len(found) == 1
+    assert "Z" in found[0]
+
+
+def test_pin_alone_on_its_line_keeps_the_item():
+    text = "**Overall:** x\n\nA. [Hero]\n   Reads like a tagline → name the dish\n"
+    assert check_crit.check_crit(text) == []
+
+
+def test_item_with_no_body_needs_a_direction():
+    text = "**Overall:** x\n\nA. [Edge] too sharp → cloudier\nB. [Footer]\n"
+    found = check_crit.check_crit(text)
+    assert len(found) == 1
+    assert "Item B" in found[0] and "direction" in found[0]
+
+
+def test_arrow_directly_after_pin_is_an_item():
+    text = "**Overall:** x\n\nA. [Footer]→ one link style\n"
+    assert check_crit.check_crit(text) == []
+
+
+def test_overall_word_inside_an_item_is_not_the_overall_note():
+    text = "A. [Hero] too generic\n   overall it reads as SaaS → name the dish\n"
+    found = check_crit.check_crit(text)
+    assert len(found) == 1
+    assert "overall" in found[0].lower()
+
+
+def test_overall_heading_then_paragraph_is_checked_for_praise():
+    text = "## Overall\n\nLooks great, mostly.\n\nA. [Edge] too sharp → cloudier\n"
+    found = check_crit.check_crit(text)
+    assert len(found) == 1
+    assert "praise" in found[0]
+
+
+def test_more_than_26_items_is_reported():
+    text = "**Overall:** x\n\nA. [Edge] too sharp → cloudier\nAA. [Extra] more → split it\n"
+    assert problems_mentioning(text, "26")
+
+
+def test_worked_example_in_crit_sheet_reference_passes():
+    reference = Path(__file__).resolve().parent.parent / "references" / "crit-sheet.md"
+    text = reference.read_text(encoding="utf-8")
+    example = text.split("<!-- example:start -->", 1)[1].split("<!-- example:end -->", 1)[0]
+    assert check_crit.check_crit(example) == []
 
 
 def run_cli(*args, stdin=None):

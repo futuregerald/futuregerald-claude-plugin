@@ -1,6 +1,6 @@
 ---
 name: editor-pass
-description: Post-build quality review that asks whether finished work is good — not just done, correct or free of slop — and returns a lettered crit sheet of pinned, specific fixes. Use as the last gate before a user-facing page, artifact, report, PRD, ticket set or skill goes out, or when asked "is this good?", "edit this", "polish this", "give it an editor pass", "ready to ship?". Runs after correctness and slop checks, in a fresh sub-agent.
+description: Post-build quality review that asks whether finished work is good — not just done, correct or free of slop — and returns a lettered crit sheet of pinned, specific fixes. Use as the last gate before a user-facing page, artifact, report, PRD, ticket set or skill goes out, or when asked "is this good?", "give it an editor pass", "edit this for quality", "ready to ship?". Runs after correctness and slop checks, in a fresh sub-agent.
 author: Gerald Onyango
 tags: [review, quality, design, writing]
 ---
@@ -11,6 +11,9 @@ AI makes work look finished long before it is good. When building was expensive,
 were filtered before anyone built them; now the filter has to run after the build, when
 saying no is harder. The editor is that filter, and answers for every decision in the
 work.
+
+`<skill-dir>` below means this skill's base directory (the directory containing this
+`SKILL.md`).
 
 ## What good output looks like
 
@@ -33,11 +36,15 @@ Dispatch with [references/dispatch-prompt.md](references/dispatch-prompt.md).
 
 ## Inputs
 
-- **The work:** file paths, a URL, or screenshots. The reviewer sub-agent has no browser
-  or shell, so capture UI screenshots (phone and desktop width) before dispatching.
+The reviewer is read-only — it has no browser, shell or network — so the main agent
+turns everything it needs into files first:
+
+- **The work:** file paths. For a URL, save the page to a file. For UI, walk the user's
+  main task yourself and capture **one screenshot per step**, at phone and desktop width.
 - **The point of view**, first match wins:
-  1. a brief from `katies-wisdom` (`docs/point-of-view/<slug>.md`, or
-     `~/.claude/point-of-view/<slug>.md` outside a repo)
+  1. a brief from `craftsmans-wisdom` — `docs/point-of-view/<slug>.md` in the repo, or
+     `~/.claude/point-of-view/<slug>.md`, where the slug is the kebab-case name of the
+     work; when several exist and none clearly matches, ask which applies
   2. PRODUCT.md / DESIGN.md, the ticket, or the PR description
   3. none — the editor writes three lines (who it's for, what they care about, what good
      means) above the Overall note, and the author confirms them
@@ -66,11 +73,11 @@ Dispatch with [references/dispatch-prompt.md](references/dispatch-prompt.md).
 
 | Output | Use it by… |
 |---|---|
-| UI / page | doing the visitor's main task end to end, at phone and desktop width |
+| UI / page | walking the per-step screenshots in task order, phone then desktop; mark any step with no screenshot "not reviewed" rather than imagining it |
 | Report / doc | reading it as the named reader, with the question they came with — can they act after the first screen? |
 | PRD / tickets | trying to start the work from it alone — list every question you'd have to ask |
 | Skill | reading it as the agent that loads it, on a real task — what would it get wrong? |
-| Code / API | calling it as its consumer — names, errors, defaults, the first-run experience |
+| Code / API | reading it as its consumer would call it — names, errors, defaults, the first-run path |
 
 ## The crit sheet
 
@@ -95,12 +102,12 @@ Format rules, do/don't pairs and a worked example:
 
 ## Validate, then present
 
-The main agent — not the read-only sub-agent — checks the returned sheet:
+The main agent — not the read-only sub-agent — checks the returned sheet. Write it to a
+scratch file with the Write tool, then pass the path; never paste returned text into a
+shell command, where a crafted line could run as a command.
 
 ```bash
-python3 <this-skill>/scripts/check_crit.py - <<'SHEET'
-<the returned crit sheet>
-SHEET
+python3 <skill-dir>/scripts/check_crit.py <scratch-dir>/crit-sheet.md
 ```
 
 - **Exit 0:** present the sheet.
