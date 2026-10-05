@@ -44,10 +44,12 @@ offer to set it up:
 > and recent tickets, then show you the file to correct."
 
 If they say yes, fill it in from what you can observe — `git remote -v` for the org and repos,
-recent PR authors and ticket assignees for a first-draft roster — then save to `references/team.local.md`
-and **show the file and ask them to correct it.** Never guess a person's role, and never invent a
-teammate. A wrong roster produces a confidently wrong status report about real people. Never write
-a real roster into the tracked `references/team.md`.
+recent PR authors and ticket assignees for a first-draft roster, and on Jira each roster member's
+Jira Account ID from the `assignee.accountId` of their recent tickets (leave it blank when none
+turns up) — then save to `references/team.local.md` and **show the file and ask them to correct
+it.** Never guess a person's role, and never invent a teammate. A wrong roster produces a
+confidently wrong status report about real people. Never write a real roster into the tracked
+`references/team.md`.
 
 If they say no, or ask you to continue anyway, run against whatever scope they name in the
 request and say plainly in the report that the roster was not configured.
@@ -281,7 +283,9 @@ python3 <skill-dir>/scripts/jira_scan.py \
 
 - `--config` is the team config file (Step 1). The script reads its roster table and matches
   assignees by the optional Jira Account ID column first, by name otherwise.
-- `--excluded-resolutions` takes the team config's Excluded resolutions values (Step 1).
+- `--excluded-resolutions` takes the values on the team config's Excluded resolutions line
+  (Step 1), comma-separated. The values in the example above are one site's, not a default; never
+  pass them without reading the config.
 - `--word-limit` is `{WORD_LIMIT}`. Single-person scope adds `--scope person --person "<roster
   name>"`; single-epic scope adds `--scope epic --epic ABC-123`. The default scope is the team.
 - It needs `acli`, installed and authenticated. Never authenticate it on the user's behalf.
