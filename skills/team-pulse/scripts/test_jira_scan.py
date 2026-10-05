@@ -1149,3 +1149,12 @@ def test_main_defaults_max_flagged_to_60_and_workers_to_8():
                               "--excluded-resolutions", "Won't Do", "--word-limit", "100"])
     assert args.max_flagged == 60
     assert args.workers == 8
+
+
+def test_collect_reports_raw_counts_for_cross_checking():
+    assert _collect()["counts"] == {"window": 7, "stalled": 2, "blocked": 1, "flagged_candidates": 2}
+
+
+def test_collect_counts_flagged_candidates_before_the_cap():
+    counts = _collect(handler=_flag_world(), max_flagged=60)["counts"]
+    assert counts == {"window": 3, "stalled": 70, "blocked": 3, "flagged_candidates": 73}

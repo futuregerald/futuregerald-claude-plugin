@@ -779,6 +779,9 @@ def collect(cfg: dict, runner=subprocess.run, workers: int = 8) -> dict:
         "failures": failures,
         "errors": errors,
         "omitted": {"issues": len(candidates) - len(kept), "comments": comments_cut},
+        "counts": {"window": len(window), "stalled": len(stalled),
+                   "blocked": sum(1 for _, reason in candidates if reason == "blocked"),
+                   "flagged_candidates": len(candidates)},
     }
     if cfg.get("scope") == "epic" and cfg.get("epic"):
         data["epic"] = cfg["epic"]
@@ -854,7 +857,8 @@ def main(argv: list[str] | None = None, runner=subprocess.run) -> int:
         handle.write(render_digest(data, args.scope, args.word_limit, args.person))
 
     print(f"{json_path}\n{md_path}")
-    print(f"epics={len(data['epics'])} children={len(data['child_to_epic'])} "
+    print(f"window={data['counts']['window']} stalled={data['counts']['stalled']} "
+          f"epics={len(data['epics'])} children={len(data['child_to_epic'])} "
           f"flagged={len(data['flagged'])} not_started={len(data['not_started'])} "
           f"unmatched={len(data['unmatched'])}")
     if data["failures"]:
