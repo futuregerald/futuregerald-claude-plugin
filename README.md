@@ -202,7 +202,7 @@ If symlinked to `~/.claude/skills` (installed as personal skills), invoke them b
 
 ## Skills and Agents Reference
 
-### Skills (54)
+### Skills (55)
 
 **Planning & Specs:**
 
