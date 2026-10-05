@@ -28,7 +28,7 @@ python3 <plugin>/skills/future-skill-creator/scripts/quick_validate.py <skill>  
 ls <plugin>/skills/*/scripts/test_*.py                    # criterion 11, basename collisions
 ```
 
-`quick_validate.py` checks the frontmatter keys, `name` against the directory, inline `tags`, and leftover TODO placeholders. It needs PyYAML; without it, run it with `uv run --with pyyaml python3 …`.
+`quick_validate.py` checks the frontmatter keys, `name` against the directory, inline `tags`, and leftover TODO placeholders. It needs PyYAML; without it, run it with `uv run --with pyyaml python3 …`. Where `future-skill-creator` isn't installed, check those four by reading the frontmatter, and say so in the review.
 
 ## Review Checklist
 
