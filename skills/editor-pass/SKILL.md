@@ -36,7 +36,8 @@ Dispatch with [references/dispatch-prompt.md](references/dispatch-prompt.md).
 - **The work:** file paths, a URL, or screenshots. The reviewer sub-agent has no browser
   or shell, so capture UI screenshots (phone and desktop width) before dispatching.
 - **The point of view**, first match wins:
-  1. a brief from `katies-wisdom` (`docs/point-of-view/<slug>.md`)
+  1. a brief from `katies-wisdom` (`docs/point-of-view/<slug>.md`, or
+     `~/.claude/point-of-view/<slug>.md` outside a repo)
   2. PRODUCT.md / DESIGN.md, the ticket, or the PR description
   3. none — the editor writes three lines (who it's for, what they care about, what good
      means) above the Overall note, and the author confirms them

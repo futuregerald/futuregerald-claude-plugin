@@ -1,6 +1,6 @@
 ---
 name: katies-wisdom
-description: Challenge Gerald, one question at a time, to think a piece of work through using Katie Dill's craft method — what good means here, the generic default to avoid, what is written down for agents, whether done is actually good, and who maintains it — then write a point-of-view brief that editor-pass reviews against. Use when Gerald says "katie", "katies wisdom", "katie's wisdom", "am I thinking this through", or "what does good mean here".
+description: Challenge the user, one question at a time, to think a piece of work through using Katie Dill's craft method — what good means here, the generic default to avoid, what is written down for agents, whether done is actually good, and who maintains it — then write a confirmed point-of-view brief that steers the build and that editor-pass reviews against. Use when the user says "katies wisdom", "katie's wisdom", "am I thinking this through", or "what does good mean here".
 author: Gerald Onyango
 tags: [planning, design, quality, interview]
 ---
@@ -9,74 +9,109 @@ tags: [planning, design, quality, interview]
 
 AI makes building cheap, so the hard part moves to knowing what good means, writing it
 down where agents will follow it, and refusing to call built work done. This skill asks
-the questions that force those answers, before and during the work. The full method is
-in [references/methodology.md](references/methodology.md); the question bank is in
+the questions that force those answers, before and during the work, and leaves a brief
+that every later step reads. The full method is in
+[references/methodology.md](references/methodology.md); the question bank is in
 [references/questions.md](references/questions.md).
 
 ## What good output looks like
 
-- **For Gerald:** questions that make him commit to specifics he hadn't written down, and
-  a short brief at the end that he — and `editor-pass` — can hold the work against.
+- **For the user:** questions that make them commit to specifics they hadn't written
+  down, and a short brief, confirmed by them, that the builder and `editor-pass` both
+  hold the work against.
 - **The default to prevent:** a checklist read aloud, leading questions with the answer
   baked in, and accepting "clean", "modern" or "intuitive" as an answer.
-- **The detail a careless session misses:** looking up what can be looked up (the repo,
-  the ticket, the draft) instead of asking.
+- **The detail a careless session misses:** the answers the user has already written
+  down elsewhere.
+
+## Before the first question
+
+Read what already exists, so the session sharpens it instead of starting blank:
+
+- an earlier brief: `docs/point-of-view/<slug>.md`
+- `PRODUCT.md` and `DESIGN.md` (written by `impeccable`), `product-facts.md` (written by
+  `huashu-design`)
+- the ticket, PRD, plan, draft and the repo itself
+
+**Facts versus judgments.** Look up facts — what is being built, the stack, the deadline,
+what exists — and never ask for them. Always ask for judgments — who specifically it is
+for, what good means, the generic default, the detail one level deeper — and never fill
+one from a ticket or spec. The one exception is the user's own earlier answer (a brief,
+PRODUCT.md): read it back and ask what they would change.
 
 ## Session rules
 
-1. **Find the work first.** From the conversation, the repo, the ticket or the draft,
-   work out what is being built and for whom. Ask only for what you can't find.
-2. **One question at a time.** Wait for the answer before the next one.
-3. **Never offer an answer first.** No "for example, maybe…". The point is his answer.
-4. **Push once on a generic answer.** If the answer could describe any project — "make it
-   good", "clean", "fast", "users want it simple" — push with the matching line from
-   questions.md, once. Then record what he said and move on.
-5. **Move on from a specific answer** without commentary. Don't praise answers.
-6. **He can steer:** "skip", "next stage" and "enough" are honoured immediately.
-7. **Keep it short:** about eight questions in total. Pick from the bank; don't
-   recite it.
+1. **One question at a time.** Wait for the answer before the next one.
+2. **Never offer an answer first.** No examples, no menus of options. The point is their
+   answer.
+3. **Push once on a generic answer.** If it could describe any project, push with the
+   matching line from questions.md, once, then record what they said and move on.
+4. **Move on from a specific answer** without commentary or praise.
+5. **The user steers:** "skip", "next stage" and "enough" are honoured immediately.
+6. **Budget about eight questions.** Spend them on the required fields first (below),
+   then on the stages that apply.
 
-## Which stage
+## Required in every session
 
-Ask from the first stage that applies, then continue down:
+Unless an existing brief or PRODUCT.md already answers them — and the user confirms it
+still holds — ask these three, whatever the stage:
 
-```
-Nothing built yet?                      → 1. Point of view
-Others or agents will build parts of it? → 2. Encode it
-A draft or build exists?                → 3. Done ≠ good  (end by offering editor-pass)
-Always finish with                      → 4. Ambition and ownership
-```
-
-| Stage | Covers |
+| Brief field | Question |
 |---|---|
-| 1. Point of view | who it's for, what they care about, what good means, the generic default, the unexpected detail |
-| 2. Encode it | what agents or teammates will decide without you, and what is written down for them |
-| 3. Done ≠ good | used it as the user would, coherence, unexplained decisions, fully formed |
-| 4. Ambition and ownership | what would make it distinctive, what strange idea got dropped, who maintains it |
+| For | Who is this for, specifically? |
+| Good means | What does good mean here? |
+| Generic default | What would the generic version of this look like? |
+
+## Which stages
+
+Run each stage whose condition holds, in order:
+
+```
+Nothing built yet                         → 1. Point of view
+Others or agents will build parts of it   → 2. Encode it
+A draft or build exists                   → 3. Done ≠ good
+Always                                    → 4. Ambition and ownership
+```
+
+1. **Point of view** — whose need this serves and what would make it theirs.
+2. **Encode it** — what gets decided without the user in the room, and what is written
+   down for it.
+3. **Done ≠ good** — whether the built thing is actually good, not just finished.
+4. **Ambition and ownership** — what would make it distinctive, and who keeps it alive.
+
+Each brief field below names the stage whose questions fill it.
 
 ## The brief
 
-When the questions end, write the brief from his answers — his words, tightened, nothing
-invented. Save it to `docs/point-of-view/<slug>.md` in the current repo, or the
-scratchpad when there is no repo. Don't commit it unless asked.
+When the questions end, write the brief from the user's answers — their words,
+tightened, nothing invented — and **show it before saving**. Save only after the user
+confirms or corrects it.
 
 ```markdown
 # Point of view: <the work>
 
-- **For:** <who, specifically>
-- **They care about:** <what they need, not only what they say>
-- **Good means:** <a sentence specific enough that the work could fail it>
-- **The generic default to avoid:** <what the most probable version would look like>
-- **One level deeper:** <the detail a careless version would miss>
-- **Written down for agents:** <decision trees, templates, checks — or "nothing yet">
-- **Editor:** <who judges whether it's good before it ships>
-- **Owner in six months:** <who maintains it>
-- **Open:** <questions he chose not to answer yet>
+- **For:** <who, specifically>                                   (required)
+- **They care about:** <what they need, not only what they say>  (stage 1)
+- **Good means:** <a sentence the work could fail>               (required)
+- **The generic default to avoid:** <the most probable version>  (required)
+- **One level deeper:** <the detail a careless version misses>   (stage 1)
+- **Written down for agents:** <trees, pairs, templates, checks> (stage 2)
+- **Editor:** <who judges it good before it ships>               (stage 4)
+- **Owner in six months:** <who maintains it>                    (stage 4)
+- **Open:** <questions the user chose not to answer yet>
 ```
 
-Then offer the next step that fits: `editor-pass` against this brief once a draft exists,
-or `future-skill-creator` when the answers to stage 2 show a standard worth encoding as a
-skill.
+**Where it lives:** `docs/point-of-view/<slug>.md` in the repo, committed with the work
+it describes, so a later session's `editor-pass` can find it. Outside a repo, use
+`~/.claude/point-of-view/<slug>.md`. When a brief already exists, update it in place.
+
+## Next step
+
+- **Nothing built yet:** hand the brief to whatever builds next — `impeccable` (fold it
+  into PRODUCT.md), `huashu-design`, `write-a-prd`, `brainstorming` or `writing-plans` —
+  so it steers the build, not just judges it.
+- **A draft exists:** offer `editor-pass` against the brief.
+- **Stage 2 found a standard worth encoding:** offer `future-skill-creator`.
 
 ---
 

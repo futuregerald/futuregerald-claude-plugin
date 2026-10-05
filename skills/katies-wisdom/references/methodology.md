@@ -2,7 +2,7 @@
 
 Adapted from Katie Dill (Stripe), "How to scale intent, quality, and artistry with AI", Lenny & Friends Summit, 2026 — https://www.youtube.com/watch?v=GLvFTMtw4Jk
 
-This is a summary in our own words, with short quotes from the talk. Read it when a question needs its reasoning, or when Gerald asks what the method says.
+This is a summary in our own words, with short quotes from the talk. Read it when a question needs its reasoning, or when the user asks what the method says.
 
 ## Contents
 
@@ -26,7 +26,7 @@ After the Second World War, builders copied modernism's look without the thinkin
 
 **1. Have a point of view.** "If you don't, AI will give it to you", and it will be generic and backward-looking. Decide what the work is for you, what it is for your users, who you want to be to them, and what they care about. That is the basis of your standards. When building is spread across many people and agents, ownership gets spread too, and it becomes easy to hand decisions to the AI. Users don't care how the work was made, only whether it's good, so the bar for AI-made work is the same bar. Aim one level deeper than the customer can see; the goal is that level, not perfection. Taste comes from noticing: what users need (not only what they say), and what separates great from "meh" in products, art and science.
 
-**2. Encode your standards into the machine.** People won't be in the room for most decisions. Interfaces get built without a designer present, agents fix problems overnight, and some UI is generated at runtime. "The old system scaled consistency, but the new system needs to scale intent." Stripe's first attempt was an MCP server over its design docs, and the same prompt gave three people three different results. What worked was a CLI where builders already work. It serves structured docs for one item at a time, checks code against the system, and ships full templates, flows and decision trees ("single short action → dialog"), not just components. But "a system can satisfy every rule and still be dead" (Christopher Alexander). Rules only set the floor.
+**2. Encode your standards into the machine.** People won't be in the room for most decisions. Interfaces get built without a designer present, agents fix problems overnight, and some UI is generated at runtime. "The old system scaled consistency, but the new system needs to scale intent." Stripe's first attempt was an MCP server over its design docs, and the same prompt gave three people three different results. What worked was a CLI where builders already work. It serves structured docs for one item at a time, checks code against the system, and ships full templates, flows, decision trees ("single short action → dialog") and do/don't pairs, not just components. But "a system can satisfy every rule and still be dead" (Christopher Alexander). Rules only set the floor.
 
 **3. Refuse to confuse done with good.** Quality used to be filtered before building: there were twenty ideas and staff for one. Now twenty can be built in a week, so the filter has to run after the build, when saying no is harder. Someone has to be the editor. Unlearn two assumptions: that built means done, and that done means good.
 - Use the work as a user would. Does it solve the problem, and does it fit how they think?
@@ -41,12 +41,12 @@ What AI does badly is what makes work great: unexpected details, deeper meaning,
 
 | Test | Ask | Used in |
 |---|---|---|
-| Swap test | Replace the subject with a different one. Does anything else need to change? If not, it's a template. | `no-slop-ui` tell 11, `editor-pass` step 3 |
-| Green cup | "The cup is green but may as well have been blue." Can you name the reason for each visible decision? | `editor-pass` step 5 |
-| One level deeper | What need did the user not state but will have? | `editor-pass` step 6, stage 1 questions |
+| Swap test | Replace the subject with a different one. Does anything else need to change? If not, it's a template. | `no-slop-ui` ("One template for every subject"), `editor-pass` ("Swap test") |
+| Green cup | "The cup is green but may as well have been blue." Can you name the reason for each visible decision? | `editor-pass` ("Green-cup audit"), stage 3 questions |
+| One level deeper | What need did the user not state but will have? | `editor-pass` ("One level deeper"), stage 1 questions |
 | Burrito check | Am I accepting this because it's fast, or because it's good? | stage 3 questions |
 | Iterate, don't accept | The first result is the most probable one. What would the next versions try? | stage 3 questions |
-| Who maintains this | Who owns it in six months, and what breaks first? | `editor-pass` step 8, stage 4 questions |
+| Who maintains this | Who owns it in six months, and what breaks first? | `editor-pass` ("Ownership"), stage 4 questions |
 
 ## 5. Tactics and culture
 
