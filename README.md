@@ -223,7 +223,7 @@ If symlinked to `~/.claude/skills` (installed as personal skills), invoke them b
 | `research` | Investigate a question against primary sources; capture as Markdown |
 | `grilling` | Stress-test a plan, decision, or idea through relentless questioning |
 | `grill-with-docs` | Grilling that also produces ADRs and a glossary as it goes |
-| `craftsmans-wisdom` | One-question-at-a-time challenge on what good means, what's written down for agents, and whether done is good; writes a point-of-view brief |
+| `craftsmans-wisdom` | Runs before any plan: one-question-at-a-time challenge on what good means, what's written down for agents, and whether done is good; writes a point-of-view brief, then offers grilling on the details |
 
 **Debugging & Code Quality:**
 

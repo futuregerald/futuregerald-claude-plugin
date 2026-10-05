@@ -1,6 +1,6 @@
 ---
 name: craftsmans-wisdom
-description: Challenge the user, one question at a time, to think a piece of work through as a craftsman would — what good means here, the generic default to avoid, what is written down for agents, whether done is actually good, and who maintains it — then write a confirmed point-of-view brief that steers the build and that editor-pass reviews against. Use when the user says "craftsman's wisdom", "craftsmans wisdom", "am I thinking this through", or "what does good mean here".
+description: Challenge the user, one question at a time, to think a piece of work through as a craftsman would — what good means here, the generic default to avoid, what is written down for agents, whether done is actually good, and who maintains it — then write a confirmed point-of-view brief that steers the build and that editor-pass reviews against, and offer to hand off to grilling for the details. Use before writing any plan, PRD or spec, and when the user says "craftsman's wisdom", "craftsmans wisdom", "am I thinking this through", or "what does good mean here".
 author: Gerald Onyango
 tags: [planning, design, quality, interview]
 ---
@@ -25,6 +25,15 @@ that every later step reads.
   baked in, and accepting "clean", "modern" or "intuitive" as an answer.
 - **The detail a careless session misses:** the answers the user has already written
   down elsewhere.
+
+## When it runs
+
+Before any plan, PRD or spec is written — the user should not have to invoke it.
+
+- **A confirmed brief already covers this work:** read it back, ask whether it still
+  holds, update it if not, and go straight to the next step.
+- **Internal technical work** (a refactor, a dependency bump, a small fix): ask once
+  whether to skip it. On "skip", go straight to planning.
 
 ## Before the first question
 
@@ -118,9 +127,15 @@ brief already exists, update it in place.
 
 ## Next step
 
-- **Nothing built yet:** hand the brief to whatever builds next — `impeccable` (fold it
-  into PRODUCT.md), `huashu-design`, `write-a-prd`, `brainstorming` or `writing-plans` —
-  so it steers the build, not just judges it.
+- **Nothing built yet:** once the brief is saved, ask: "Do you want to be grilled on the
+  details?"
+  - **Yes:** run `grilling` with the brief's path as context. Tell it the brief settles
+    who it's for and what good means, so it spends its questions on how — and checks
+    each answer against the brief.
+  - **No:** go straight to planning.
+  - Either way, hand the brief to whatever builds next — `writing-plans`, `write-a-prd`,
+    `impeccable` (fold it into PRODUCT.md), `huashu-design` or `brainstorming` — so it
+    steers the build, not just judges it.
 - **A draft exists:** offer `editor-pass` against the brief.
 - **Stage 2 found a standard worth encoding:** offer `future-skill-creator`.
 
