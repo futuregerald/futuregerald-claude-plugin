@@ -202,7 +202,7 @@ If symlinked to `~/.claude/skills` (installed as personal skills), invoke them b
 
 ## Skills and Agents Reference
 
-### Skills (55)
+### Skills (54)
 
 **Planning & Specs:**
 
@@ -221,7 +221,6 @@ If symlinked to `~/.claude/skills` (installed as personal skills), invoke them b
 | `to-tickets` | Break a plan/spec into tracer-bullet tickets with blocking edges |
 | `wayfinder` | Plan work too big for one session as a map of decision tickets |
 | `research` | Investigate a question against primary sources; capture as Markdown |
-| `grill-me` | Relentless interview to sharpen a plan or design |
 | `grilling` | Stress-test a plan, decision, or idea through relentless questioning |
 | `grill-with-docs` | Grilling that also produces ADRs and a glossary as it goes |
 | `katies-wisdom` | One-question-at-a-time challenge on what good means, what's written down for agents, and whether done is good; writes a point-of-view brief |
