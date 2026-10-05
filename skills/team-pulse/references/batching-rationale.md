@@ -2,7 +2,10 @@
 
 ## One Per Source vs Per Day Trade-Off
 
-The default pattern is **one agent per source covering the whole window** (3 agents total).
+The default pattern is **one agent per source covering the whole window**. Jira and GitHub are
+collected by scripts, not agents (SKILL.md Steps 2a and 2b), so this trade-off applies only to the
+agent sources: meetings, and the tracker when Agent A runs as the fallback. The table below was
+measured when all three sources were agents.
 Fan out per day instead (24 agents) when attribution isolation matters more than tokens.
 
 ### Trade Table

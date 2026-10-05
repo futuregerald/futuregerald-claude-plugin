@@ -64,16 +64,19 @@ Once configured, skip this section entirely.
 
 ## Architecture: Map-Reduce with Disk Intermediates
 
-**The orchestrator (you) NEVER queries data sources directly — except Step 2b.** Step 2b runs
-`pr_scan.py`, a deterministic script, not a query into context; every other data gathering step is
-delegated to sub-agents. The orchestrator stays lean — it resolves scope, dispatches agents, reads
-small digest files, and synthesizes.
+**The orchestrator (you) NEVER queries data sources directly — except Steps 2a and 2b.**
+`jira_scan.py` (Step 2a) and `pr_scan.py` (Step 2b) are deterministic scripts, not queries into
+context: each writes a size-bounded digest that the orchestrator reads like any other. Every other
+data gathering step is delegated to sub-agents. The orchestrator stays lean — it resolves scope,
+runs the two scripts, dispatches agents, reads small digest files, and synthesizes.
 
 ### Why This Architecture
 
-Many small agent contexts beat one mega-prompt. Each sub-agent keeps its own context small by:
+Many small agent contexts beat one mega-prompt, and a script beats an agent wherever collection is
+mechanical: Jira and GitHub are collected by scripts in seconds, with no agent floor and no
+tool call per item. Each sub-agent keeps its own context small by:
 - Querying only scoped, filtered data (never fetch-all-then-filter)
-- Summarizing incrementally (one item at a time, not all at once)
+- **Work in bulk.** One query per source covering the whole range, then process every result in a single pass — with a short script when the result is large. Never spend one tool call per ticket, PR or meeting.
 - Writing a compressed digest to disk (not returning raw data via tool results)
 
 This keeps the orchestrator small. **On a local model, read the batching argument in
@@ -85,22 +88,22 @@ aggressively or keep the window short.
 ### Flow
 
 1. **Resolve scope** (orchestrator) — parse request, load team roster, compute date range
-2. **Dispatch sub-agents in parallel** (orchestrator) — one agent per data source, each writes to `.updates/`
+2. **Collect** (orchestrator) — run `jira_scan.py`, then dispatch the agents in one message and run `pr_scan.py` while they work; everything lands in `.updates/`
 3. **Synthesize report** (orchestrator) — read the small digest files and produce the final report
 4. **Deliver** (orchestrator) — output the report, clean up `.updates/`
 
 ### Sub-Agent Design Rules
 
 - Each sub-agent gets a self-contained prompt with all context it needs (team roster, date range, exact queries)
-- Sub-agents write their digest to a file in `.updates/` (e.g., `.updates/jira.md`, `.updates/github.md`, `.updates/meetings.md`)
+- Sub-agents write their digest to a file in `.updates/` (e.g., `.updates/meetings.md`, `.updates/docs.md`); the two scripts write theirs the same way
 - **Digest word limit scales with team size AND window length.** The budget is
   `50 words x people in scope x days in window`, and the orchestrator computes it and passes it
   as `{WORD_LIMIT}`. A 7-person team over 8 days = **2,800 words** for that source's digest.
   A single person over 8 days = 400. Optional agents (D, E) get a flat 200.
   **Do not pass a per-day cap to an agent covering a whole range** — it silently truncates the
   report to an eighth of the work and nothing flags it.
-- Sub-agents summarize incrementally: process one PR, one ticket, or one meeting at a time. Never concatenate all raw data and summarize in one pass.
-- The orchestrator reads ONLY the digest files — never raw JSON, full API responses, or large tool results
+- **Work in bulk.** One query per source covering the whole range, then process every result in a single pass — with a short script when the result is large. Never spend one tool call per ticket, PR or meeting.
+- The orchestrator reads ONLY the digest files — never raw JSON, full API responses, or large tool results. `jira.json` and `prs.json` are inputs for scripts, not for the orchestrator
 - If a sub-agent's tool call returns data too large to fit in its context, it must filter/summarize in chunks before writing the digest
 - **Never read large files or raw JSON in the orchestrator** — if a sub-agent result is too large, dispatch another sub-agent to summarize it
 
@@ -111,11 +114,11 @@ These rules exist to minimize context usage in every agent, enabling fast execut
 | Rule | Why |
 |------|-----|
 | **Scoped queries only** | Filter by date/repo/project/author at the source. Never fetch all then filter in context. |
-| **Summarize incrementally** | Process items one at a time within each sub-agent. Never load all items, then summarize. |
+| **Work in bulk** | One query per source covering the whole range, then process every result in a single pass — with a short script when the result is large. Never spend one tool call per ticket, PR or meeting. |
 | **Disk intermediates** | Sub-agents write to `.updates/` files. The synthesis step reads only these compressed digests. |
 | **Parallel sub-agents** | Each agent keeps its own small context. No shared state between data-gathering agents. |
 | **Digest cap scales with scope AND window** | `50 x people x days`. 7-person team, 8 days = 2,800 words per source. Single person, 8 days = 400. The orchestrator computes it — an agent covering 8 days must not be handed a one-day budget. |
-| **One agent per SOURCE, not per day** | 3 agents for a 3-source window, not 24. Each dispatch costs ~57,000 tokens of floor before it does any work (~31,000 with a restricted `tools:` grant), and that floor is charged per agent, not per token of data. Splitting one source across 8 days pays the floor 8 times to move the same digest volume. |
+| **One agent per SOURCE, not per day** | One meeting agent for an 8-day window, not 8. Each dispatch costs ~57,000 tokens of floor before it does any work (~31,000 with a restricted `tools:` grant), and that floor is charged per agent, not per token of data. Splitting one source across 8 days pays the floor 8 times to move the same digest volume. |
 | **No duplicate data** | If Jira and GitHub both mention a PR, the orchestrator deduplicates during synthesis — not by loading both raw datasets. |
 
 ## Step 0: Prepare Workspace
@@ -147,6 +150,11 @@ Parse the user's request for:
   agent F takes `{WORD_LIMIT_F}` (below).
 - **Meeting result cap** — compute `{WINDOW_MEETING_LIMIT} = 10 x (days in window)` and pass it to
   Agent C, so batching does not shrink its capacity below what per-day agents had.
+- **Excluded resolutions** — read the team config's Excluded resolutions line: the resolutions that
+  mean "not delivered" (for example Won't Do, Declined, Duplicate). They go to `jira_scan.py` as
+  `--excluded-resolutions` and to Agent A as `{EXCLUDED_RESOLUTIONS}`, each value double-quoted and
+  comma-separated (`"Won't Do", "Declined", "Duplicate"`). The values are site-specific, and one the
+  site lacks fails every query, so if the line is missing, ask the user; never guess.
 - **Epic start, for Agent F** — when Agent F is dispatched, compute `{EPIC_START}`: the earliest
   `created` date among the epics in scope. Agent F's queries describe the epic's own work, not the
   reporting window, so they need the epic's start date, not `{START_DATE}`.
@@ -163,52 +171,63 @@ treats as a finding.
 
 Load the team roster from the team config. If the scope falls outside the configured team, ask the user for its members and tracker project key.
 
-## Step 2: Dispatch Sub-Agents (Parallel — One Per Source)
+## Step 2: Collect (Scripts First, Then One Agent Per Source)
 
-**Default: always one agent per source, covering the whole window — including 1:1s.** Three
-required sources means **three agents**. Fan out per day only when the user explicitly asks for
-it, and only for agents A–C: see
+**The order is fixed:**
+
+1. **Step 2a: run `jira_scan.py`** when the team config's tracker type is `jira`. It takes seconds.
+2. **Right after it returns, in one message:** dispatch Agent C, Agent G and any optional agents
+   (D, E, F) the scope calls for, and run Step 2b (`pr_scan.py --jira-map .updates/jira.json`)
+   while they work.
+3. **Fallback path** (the tracker is not Jira, or Step 2a exited 1): dispatch Agent A, Agent C and
+   any optional agents in one message. Once Agent A returns, dispatch Agent G and run Step 2b,
+   because both read what Agent A writes (`jira.md`'s Doc links, `jira.json`'s child-to-epic map).
+
+**Default: always one agent per source, covering the whole window — including 1:1s.** Fan out per
+day only when the user explicitly asks for it, and only for agents A and C: see
 [references/batching-rationale.md](references/batching-rationale.md) for the trade-off. The
 prompts in `references/agent-prompts.md` take a date range, so a per-day agent is the same prompt
 with `{START_DATE} == {END_DATE}`, and each per-day agent writes its own dated digest
 (`.updates/<source>-<YYYY-MM-DD>.md`) so the files do not overwrite each other. Otherwise, each
 agent queries its own source across the full date range and writes a single digest.
 
-Launch ALL agents in a **single message with multiple Agent tool calls**. Each agent prompt must
-include: team roster, GitHub handles, the **full date range** it covers, and exact queries scoped
-to that range. **The one exception is Agent G (Docs)**: it needs Agent A's doc links, so dispatch it as soon as A returns.
+Each agent prompt must include: team roster, GitHub handles, the **full date range** it covers,
+and exact queries scoped to that range.
 
 **Restrict each agent's tool grant if your harness lets you.** `tools:` is a field in an *agent
 definition file*, not a dispatch parameter — you cannot pass it on an `Agent(...)` call. So this
-is only available if you define agent types for these three sources (each granted its own data
+is only available if you define agent types for these sources (each granted its own data
 source plus `Write`) and name them as the `subagent_type`. **This skill does not ship them.**
 Out of the box each agent inherits the full tool surface and costs the unrestricted floor.
 
 Note also that a sub-agent does not necessarily inherit the parent's MCP servers, so agents A and
 C need definitions that explicitly grant theirs.
 
-**Each agent writes its digest to `.updates/<source>.md`:**
+**Everything collected lands in `.updates/`:**
 ```
-.updates/jira.md
-.updates/github.md
-.updates/meetings.md
-.updates/metrics.md     (if dispatched)
-.updates/reviews.md     (if dispatched)
+.updates/jira.json      (Step 2a; on the fallback path Agent A writes only its child_to_epic map)
+.updates/jira.md        (Step 2a, or Agent A on the fallback path)
+.updates/prs.json       (Step 2b)
+.updates/prs.md         (Step 2b)
+.updates/meetings.md    (Agent C)
+.updates/docs.md        (Agent G)
+.updates/metrics.md     (if Agent D dispatched)
+.updates/reviews.md     (if Agent E dispatched)
 .updates/breakdown.md   (if Agent F dispatched)
-.updates/docs.md        (Agent G, second wave, after A)
 ```
 
-The orchestrator does NOT read the tool results for data — it reads the files in Step 3.
+The orchestrator does NOT read the tool results for data — it reads the `.md` files in Step 3.
 
 See [references/agent-prompts.md](references/agent-prompts.md) for the exact prompt templates for each agent.
 
-### Required Agents — one each, full window
+### Required Sources — one each, full window
 
-| Agent | Source | Tool | Grant it needs |
-|-------|--------|------|----------------|
-| A: Tracker Activity | Tracker MCP | issue search by JQL or equivalent | that MCP server + `Write` |
-| B: GitHub PRs | `gh` CLI | `gh pr list`, `gh search prs` | `Bash` + `Write` |
-| C: Meetings | Meeting-notes MCP | meeting + content search | that MCP server + `Write` |
+| Source | Collected by | Tool | Grant it needs |
+|--------|--------------|------|----------------|
+| Tracker (Jira) | Step 2a, `jira_scan.py` | `acli` | none: the orchestrator runs it |
+| Tracker (not Jira, or Step 2a exited 1) | Agent A: Tracker Activity (fallback) | issue search by JQL or equivalent | that MCP server + `Write` |
+| GitHub PRs | Step 2b, `pr_scan.py` | `gh` CLI | none: the orchestrator runs it |
+| Meetings | Agent C | meeting + content search | that MCP server + `Write` |
 
 If the meeting source needs re-authentication, do not authenticate from a sub-agent: write
 "Meeting source unavailable" to the digest and say so in the report.
@@ -220,10 +239,10 @@ If the meeting source needs re-authentication, do not authenticate from a sub-ag
 | D: Metrics | Metrics MCP | event search | User asks about deploys, incidents, reliability |
 | E: GitHub Reviews | `gh` CLI | `gh search prs --reviewed-by` | Single-person scope (always, for 1:1s) |
 | F: Work Breakdown | Tracker MCP + `gh` CLI | epic children, PR bodies | Single-person or single-epic scope only |
-| G: Docs | Whatever wiki, doc and spreadsheet tools the session has | metadata first, then read only what changed | Every run where agent A found doc links or the team config lists standing docs; forecast mode always |
+| G: Docs | Whatever wiki, doc and spreadsheet tools the session has | metadata first, then read only what changed | Every run where `jira.md` lists doc links or the team config lists standing docs; forecast mode always |
 
 **Agent G is cheap by design, and gets cheaper each run.** It never searches first. Its candidates
-are the doc links agent A found on in-scope epics plus any standing docs in the team config. It
+are the doc links `jira.md` lists for in-scope epics plus any standing docs in the team config. It
 checks each doc's last-modified time and reads only docs changed inside the window, at most 8, on
 the cheapest model, 60 words per doc. Summaries are cached by doc id and modified time, so an
 unchanged doc costs one metadata call. Search is a fallback for epics with no linked docs, capped
@@ -238,39 +257,102 @@ authenticates or retries.
 
 ### Batching vs Fan-Out
 
-- **Default: One agent per source across the full window** (3 agents total), always — including
-  1:1s. Scoped queries cap raw input.
-- **Fan-out by day (24 agents), for agents A–C only:** Use only when the user explicitly asks for
+- **Default: One agent per source across the full window**, always — including 1:1s. Scoped
+  queries cap raw input. The two scripts are not agents and never fan out.
+- **Fan-out by day, for agents A and C only:** Use only when the user explicitly asks for
   it — not by default for 1:1s or performance reviews. See
   [references/batching-rationale.md](references/batching-rationale.md) for full benchmarks and
   trade-off analysis.
 
+## Step 2a: Scan Jira (Jira Tracker Only)
+
+Run it first, before any agent, and only when the team config's tracker type is `jira`; any other
+tracker goes straight to Agent A. This is one of the two named exceptions to "the orchestrator
+never queries data sources directly" — `jira_scan.py` is a deterministic script, not a query into
+context, so it is mechanical and must not go to an agent:
+
+```bash
+python3 <skill-dir>/scripts/jira_scan.py \
+  --keys ABC,XYZ --since {START_DATE} --until {END_DATE} \
+  --config <team config path> \
+  --excluded-resolutions "Won't Do,Declined,Duplicate" \
+  --word-limit {WORD_LIMIT} --out .updates
+```
+
+- `--config` is the team config file (Step 1). The script reads its roster table and matches
+  assignees by the optional Jira Account ID column first, by name otherwise.
+- `--excluded-resolutions` takes the team config's Excluded resolutions values (Step 1).
+- `--word-limit` is `{WORD_LIMIT}`. Single-person scope adds `--scope person --person "<roster
+  name>"`; single-epic scope adds `--scope epic --epic ABC-123`. The default scope is the team.
+- It needs `acli`, installed and authenticated. Never authenticate it on the user's behalf.
+
+It writes `jira.json` (input for Step 2b's `--jira-map`; never read it yourself) and `jira.md`, the
+tracker digest. `jira.md` puts the sections that are never cut first: `## Not measured` (only when
+something failed), `## Active epics` (key, title, status, priority, parent, assignee with an
+`(inactive)` flag, done/total/in-progress, a description excerpt), `## Flagged` (Blocked, or In
+Progress with no status change for 5 days, with their latest comments), `## Question candidates`,
+`## Unmatched assignees` and `## Doc links`. Then the cuttable detail: `## By person` (team),
+`## Issues` (person) or `## Children` (epic), and `## Not started`. The count JQL is given once
+with an `{EPIC}` placeholder; substitute the epic key to link a count to its query. The last line,
+`Omitted: …`, counts everything cut to fit the word limit.
+
+**Exit codes:**
+- **0** — continue with step 2 of the order above.
+- **1** (`acli unavailable: …` or `cannot read --config …`) — dispatch Agent A as the fallback.
+  When the message is `cannot read --config`, the roster table is the problem and Agent A needs the
+  same roster, so fix the team config first.
+- **2 with `INCOMPLETE: <keys>`** — stop and report those keys as "not measured", the same rule as
+  Step 2b's `INCOMPLETE`. Both files are still written, with the failed keys under
+  `## Not measured`, and the acli error for each key is printed before the `INCOMPLETE` line. A
+  rate limit (`429`) clears on a rerun with a lower `--workers` (default 8).
+- **2 with a `usage:` message** — a required flag is missing. Fix the command and rerun.
+
 ## Step 2b: Scan PRs Against the Tracker
 
-Run the script directly, alongside the agents. This is the named exception to "the orchestrator
-never queries data sources directly" — `pr_scan.py` is a deterministic script, not a query into
-context, so it is mechanical and must not go to an agent:
+Run it after Step 2a, alongside the agents — on the fallback path, after Agent A returns. This is
+the other named exception to "the orchestrator never queries data sources directly" —
+`pr_scan.py` is a deterministic script, not a query into context, so it is mechanical and must not
+go to an agent:
 
 ```bash
 python3 <skill-dir>/scripts/pr_scan.py \
   --org ORG --repos repo-one,repo-two \
   --since {START_DATE} --until {END_DATE} --keys ABC,XYZ \
   --roster handle-one,handle-two,handle-three \
+  --frontend-repos repo-one --backend-repos repo-two \
+  --jira-map .updates/jira.json \
   --stale-days 3 --out .updates
 ```
 
 `<skill-dir>` is this skill's base directory (the directory containing this `SKILL.md`).
 
+- `--frontend-repos` and `--backend-repos` come from the team config's Frontend repos and Backend
+  repos lines.
+- `--jira-map .updates/jira.json` goes in when Step 2a exited 0, or when Agent A wrote `jira.json`
+  on the fallback path. It rolls each PR up to its epic through the child-to-epic map. Without it,
+  `## By epic` rows are keyed by the ticket key on the PR, not by epic: say so, and never present
+  those rows as epics. An unreadable map makes the script exit 1 with `cannot read --jira-map`.
+
 **`--roster` is not optional.** Repos are shared with other teams, so without it every count is
 repo-wide and overstates the team's output, measured at 83 repo-wide against 22 for the team in
 one real week. Pass the roster's GitHub handles from the team config and read the `*_team`
-counts (`merged_team`, `open_team`, `stale_unreviewed_team`, `no_ticket_team`), never the bare
-totals. See "Count the team, not the repo" in [report-format.md](references/report-format.md).
+counts (`merged_team`, `open_team`, `stale_unreviewed_team`, `no_ticket_team`,
+`opened_in_window_team`), never the bare totals. See "Count the team, not the repo" in
+[report-format.md](references/report-format.md).
 
 It writes `prs.json` and `prs.md`. Every PR lands in exactly one bucket: `linked_in_scope`,
 `linked_out_of_scope`, `no_ticket`, `declared_no_ticket`. `no_ticket` is the point of the step:
 work the tracker cannot see, invisible to any tracker-only report. So is a PR approved months ago
 and never merged while its ticket reads Done.
+
+`prs.md` is the whole GitHub picture; there is no GitHub agent. Every row links its PR:
+- `## Not on the board`, `## Another team's ticket`, `## Stale, unreviewed open PRs`
+- `## Merged in window, in scope`, with Opened, Merged and Size columns
+- `## Open PRs (team)`: every team PR open now, whatever its age, drafts included, oldest first,
+  with its review state; an approved PR reads `approved, not merged`
+- `## Frontend vs backend` and `## By epic` (merged and open, per side), when the stack flags or
+  the map are given
+- `## Closed without merging`, with the closed date
 
 **If the script exits with `TRUNCATED`, do not proceed.** Narrow the window and rerun. `gh pr list`
 caps results silently, and a partial scan makes the untracked section look complete while empty.
@@ -279,8 +361,8 @@ caps results silently, and a partial scan makes the untracked section look compl
 be read. Report those repos' counts as "not measured", never as zero — a silent gap reads as a
 fact.
 
-**The window bounds merged PRs only.** Open PRs report as current state regardless of `--since`,
-because a PR open five weeks is exactly what a status report should surface.
+**The window bounds merged and closed PRs only.** Open PRs report as current state regardless of
+`--since`, because a PR open five weeks is exactly what a status report should surface.
 
 ## Step 3: Synthesize Report
 
@@ -288,6 +370,21 @@ Read ONLY the digest files from `.updates/`. List them first:
 ```bash
 ls .updates/
 ```
+
+Tracker facts come from `jira.md` and PR facts from `prs.md`; never open `jira.json` or
+`prs.json`. The judgment work an agent used to do on the tracker is yours now, from those two
+digests:
+
+- **Write each epic's one sentence yourself**, from the description excerpt in its `jira.md` block:
+  what it delivers, for someone who has never opened the ticket, never a restatement of the title.
+  An epic whose block has no description is a finding: report it as "no description on the
+  ticket" rather than guessing.
+- **Judge each question candidate.** `jira.md` lists every item whose newest comment asks a
+  question nobody has commented after. Decide which are real open questions; report each with who
+  asked, who it was aimed at, the date and how long it has been silent. Drop the ones that are
+  rhetorical or answered in another digest (a PR, a meeting).
+- **Build What's Left from `jira.md` + `prs.md`**: in-review PRs from `## Open PRs (team)` and
+  `## By epic` first, then in-progress assigned items, then the next unblocked tickets.
 
 Follow the format in [references/report-format.md](references/report-format.md). Key rules:
 
@@ -358,7 +455,7 @@ rm -rf .updates
 | "how is <person> doing" | Single person across all their work |
 | "pulse on ABC-123" | Single initiative/epic and everyone assigned |
 | "what did we ship this week" | Merged PRs + completed Jira issues only |
-| "prep me for 1:1 with <person>" | Single person, full depth: agents A, B, C, E and F; statistics for the window only (default: the past week); epic progress covers the whole epic; wins, reviews given, talking points and questions; laid out by `assets/template-1on1.md` / `.html` |
+| "prep me for 1:1 with <person>" | Single person, full depth: Steps 2a and 2b plus agents C, E and F; statistics for the window only (default: the past week); epic progress covers the whole epic; wins, reviews given, talking points and questions; laid out by `assets/template-1on1.md` / `.html` |
 
 ## Assessment Scale
 
@@ -403,10 +500,11 @@ separate red from green.
 
 ## Anti-Patterns
 
-- Do NOT query data sources directly from the orchestrator, except Step 2b (`pr_scan.py`) — a
-  deterministic script, not a query into context. Everything else goes through sub-agents.
+- Do NOT query data sources directly from the orchestrator, except Steps 2a and 2b
+  (`jira_scan.py`, `pr_scan.py`) — deterministic scripts, not queries into context. Everything
+  else goes through sub-agents.
 - Do NOT fan out per day by reflex, including for 1:1s. One agent per source, covering the whole
-  window, is always the default. Per-day fan-out, for agents A–C only, is a deliberate choice made
+  window, is always the default. Per-day fan-out, for agents A and C only, is a deliberate choice made
   only when the user explicitly asks for it. See
   [references/batching-rationale.md](references/batching-rationale.md).
 - Prefer agent definitions with a restricted `tools:` grant where you have them; without them,
