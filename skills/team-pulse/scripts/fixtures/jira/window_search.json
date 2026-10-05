@@ -1,0 +1,18 @@
+[
+  {"key": "C-1", "fields": {"summary": "Synthetic done task", "status": {"name": "Done ✅", "statusCategory": {"key": "done"}},
+   "assignee": {"accountId": "acct-0001", "displayName": "Alice Example", "active": true}}},
+  {"key": "C-2", "fields": {"summary": "Synthetic active task", "status": {"name": "In Progress 🛠️", "statusCategory": {"key": "indeterminate"}},
+   "assignee": {"accountId": "acct-other", "displayName": "bob example", "active": true}}},
+  {"key": "C-3", "fields": {"summary": "Synthetic blocked task", "status": {"name": "Blocked", "statusCategory": {"key": "indeterminate"}},
+   "assignee": {"accountId": "acct-0003", "displayName": "Carol Example", "active": true}}},
+  {"key": "C-4", "fields": {"summary": "Synthetic stalled task", "status": {"name": "Code Review 🔍", "statusCategory": {"key": "indeterminate"}},
+   "assignee": {"accountId": "acct-0003", "displayName": "Carol Example", "active": true}}, "stalled": true},
+  {"key": "C-5", "fields": {"summary": "Synthetic queued task", "status": {"name": "To Do", "statusCategory": {"key": "new"}},
+   "assignee": {"accountId": "acct-0001", "displayName": "Alice Example", "active": true}}},
+  {"key": "C-6", "fields": {"summary": "Synthetic outside task", "status": {"name": "Done ✅", "statusCategory": {"key": "done"}},
+   "assignee": {"accountId": "acct-9999", "displayName": "Erin Outsider", "active": true}}},
+  {"key": "C-7", "fields": {"summary": "Synthetic unassigned task", "status": {"name": "To Do", "statusCategory": {"key": "new"}},
+   "assignee": null}},
+  {"key": "C-8", "fields": {"summary": "Another outside task", "status": {"name": "In Progress 🛠️", "statusCategory": {"key": "indeterminate"}},
+   "assignee": {"accountId": "acct-9999", "displayName": "Erin Outsider", "active": true}}}
+]
