@@ -1,6 +1,6 @@
 ---
 name: no-slop-ui
-description: "Ten visual tells that make an interface read as AI slop — gradient-everything, rainbow palettes, pulsing status badges, fingernail cards, emoji icons, misaligned glyphs, default Inter/JetBrains Mono, leaked stack text, reflex glassmorphism, hype taglines — and what to do instead. Use when designing, building, restyling or reviewing any UI, landing page, dashboard, README banner, or generated frontend code."
+description: "Eleven visual tells that make an interface read as AI slop — gradient-everything, rainbow palettes, pulsing status badges, fingernail cards, emoji icons, misaligned glyphs, default Inter/JetBrains Mono, leaked stack text, reflex glassmorphism, hype taglines, subject-blind templates — and what to do instead. Use when designing, building, restyling or reviewing any UI, landing page, dashboard, README banner, or generated frontend code."
 author: Gerald Onyango
 tags: [ui, design, frontend, review, anti-patterns]
 ---
@@ -15,7 +15,7 @@ resist*. Use one when there is a reason, and be able to say the reason.
 Slop is cumulative. One gradient is a choice; gradient plus purple plus a pulsing
 badge plus a hype H1 is a tell.
 
-## The ten tells
+## The eleven tells
 
 1. **Gradients everywhere** — on buttons, cards, backgrounds, headings, and above all
    purple-to-blue. Default to flat fills. At most one gradient per screen, where it
@@ -45,9 +45,18 @@ badge plus a hype H1 is a tell.
    twin the identical-looking "brutalist" theme. Either is fine as a chosen language
    and poor as a default; whichever you pick, don't apply it to every surface.
 10. **Hype copy** — "Elevate", "Seamless", "Next-generation", "Supercharge", "Unleash",
-    "Empower"; an H1 trailed by a grey subtitle promising a paradigm; "Welcome to your
-    dashboard, [Name] ✨". Write what the screen does. A functional tool is not a
+    "Empower"; an H1 trailed by a grey subtitle promising a paradigm; the two-beat
+    tagline ("Ship faster. Sleep better.", "Wellness that fits real life."); "Welcome to
+    your dashboard, [Name] ✨". Write what the screen does. A functional tool is not a
     landing page.
+11. **One template for every subject** — the same hero, card grid, dashboard mock and
+    gradient whether the page sells software, wellness or Korean barbecue. Every element
+    can pass the ten checks above and the page is still slop, because it could belong to
+    anyone. Run the swap test: replace the business name with a different kind of
+    business — if nothing else would need to change, it's a template, not a design.
+    Start from the subject's own world: its materials, its vocabulary, its photographs,
+    and what a visitor actually comes to do (see the menu, book a table, find the
+    location).
 
 ## Two checks that catch most of it
 
@@ -62,3 +71,6 @@ inactive state, drop it" — not the category. Flag a tell once per pattern, not
 instance.
 
 Adapted from "10 tells of a slop ui", hereticpleb, 2026-09-27.
+Tell 11 and the two-beat tagline adapted from Katie Dill (Stripe), "How to scale intent,
+quality, and artistry with AI", Lenny & Friends Summit, 2026 —
+https://www.youtube.com/watch?v=GLvFTMtw4Jk
