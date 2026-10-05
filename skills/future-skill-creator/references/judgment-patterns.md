@@ -79,10 +79,10 @@ Use one when part of the standard can be tested mechanically: a format, a requir
 - They live next to the script as `scripts/test_<name>.py`, using pytest.
 - CI runs `pytest -q skills/*/scripts`, and pytest imports each test file by its basename, so **the basename must be unique across all skills**. Check with `ls skills/*/scripts/test_*.py`.
 - Import the module directly (`import check_thing`); pytest puts the script's directory on the path.
-- Stick to the standard library. CI installs only `pytest` and `pyyaml`.
+- Stick to the standard library, plus `pyyaml` if you must. Those are all CI installs besides `pytest`.
 - Cover a valid example, each rule failing alone, and the CLI's exit codes.
 
-**Who runs it:** the agent that holds the output and has a shell. When a read-only sub-agent produces the output, the main agent pipes it to `check -`.
+**Who runs it:** the agent that holds the output and has a shell. When a read-only sub-agent produces the output, the main agent writes it to a file with the Write tool and runs `scripts/check_<name>.py FILE`. Never paste returned text into a shell command, because a crafted line can end a heredoc early and run as a command.
 
 Check only what a script can actually decide. Judgment stays in SKILL.md: a check script that tries to score quality produces confident nonsense.
 

@@ -165,7 +165,8 @@ Write for another instance of Claude: include what is non-obvious to it. Pattern
 - **Output formats and quality standards** — [references/output-patterns.md](references/output-patterns.md)
 
 Start with the bundled resources. Run every script you add; test check scripts with
-pytest (see judgment-patterns.md for the conventions this repo's CI expects).
+pytest (judgment-patterns.md has the conventions the futuregerald plugin repo's CI
+expects).
 
 **Frontmatter:**
 
@@ -175,7 +176,9 @@ pytest (see judgment-patterns.md for the conventions this repo's CI expects).
 - `author` — the person who wrote the skill.
 - `tags` — an inline list, `tags: [review, quality]`; the installer filters on it.
 
-No other fields, apart from `license`, `allowed-tools` and `metadata` where needed.
+Keep any other field an existing skill already uses — `model`, `effort`, `languages`
+(the installer filters on it), `argument-hint`, `trigger`, `version`, `user-invocable`,
+`license`, `allowed-tools`, `metadata`. Don't invent new ones; the validator rejects them.
 
 **Body:** imperative form. Put "What good output looks like" near the top. When content
 is adapted from a source, end with a credit line: `Adapted from <author>, "<title>",
@@ -184,12 +187,16 @@ is adapted from a source, end with a credit line: `Adapted from <author>, "<titl
 ### Step 5: Validate
 
 ```bash
-scripts/quick_validate.py <path/to/skill-folder>
+python3 scripts/quick_validate.py <path/to/skill-folder>
+# without PyYAML installed:
+uv run --with pyyaml python3 scripts/quick_validate.py <path/to/skill-folder>
 ```
 
-It checks frontmatter format and fields, the name and the description. Skills in this
-plugin ship through the installer, so do not build `.skill` packages here;
-`scripts/package_skill.py` exists only for distributing a skill outside the plugin.
+It checks the frontmatter fields, that `name` matches the directory, that `tags` is an
+inline list, the description, and that no `TODO` placeholder from `init_skill.py`
+remains. In the futuregerald plugin repo, skills ship through the installer, so don't
+build `.skill` packages there; `scripts/package_skill.py` is for distributing a skill
+on its own.
 
 Then review the skill with `skill-reviewer`.
 
@@ -205,7 +212,7 @@ A skill is done when its output is good, not when its files exist.
 
 ---
 
-Forked from Anthropic's `skill-creator` (Apache-2.0, see LICENSE.txt) by Gerald Onyango.
+Forked by Gerald Onyango from Anthropic's `skill-creator` (Apache-2.0, see LICENSE.txt).
 Modified: SKILL.md, scripts/init_skill.py, scripts/quick_validate.py; added
 references/judgment-patterns.md, references/progressive-disclosure.md,
 scripts/test_quick_validate.py.

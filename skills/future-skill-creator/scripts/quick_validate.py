@@ -39,7 +39,11 @@ def validate_skill(skill_path):
         return False, f"Invalid YAML in frontmatter: {e}"
 
     # Define allowed properties
-    ALLOWED_PROPERTIES = {'name', 'description', 'license', 'allowed-tools', 'metadata', 'author', 'tags'}
+    ALLOWED_PROPERTIES = {
+        'name', 'description', 'license', 'allowed-tools', 'metadata',
+        'author', 'tags', 'model', 'effort', 'languages',
+        'argument-hint', 'trigger', 'version', 'user-invocable',
+    }
 
     # Check for unexpected properties (excluding nested keys under metadata)
     unexpected_keys = set(frontmatter.keys()) - ALLOWED_PROPERTIES
@@ -69,6 +73,8 @@ def validate_skill(skill_path):
         # Check name length (max 64 characters per spec)
         if len(name) > 64:
             return False, f"Name is too long ({len(name)} characters). Maximum is 64 characters."
+        if name != skill_path.resolve().name:
+            return False, f"Name '{name}' must match the skill directory '{skill_path.resolve().name}'"
 
     # Extract and validate description
     description = frontmatter.get('description', '')
@@ -83,7 +89,33 @@ def validate_skill(skill_path):
         if len(description) > 1024:
             return False, f"Description is too long ({len(description)} characters). Maximum is 1024 characters."
 
+    tags_problem = check_tags_inline(frontmatter_text)
+    if tags_problem:
+        return False, tags_problem
+
+    placeholder = find_todo_placeholder(frontmatter)
+    if placeholder:
+        return False, f"Replace the TODO placeholder in '{placeholder}' before validating"
+
     return True, "Skill is valid!"
+
+
+def check_tags_inline(frontmatter_text):
+    for line in frontmatter_text.splitlines():
+        if line.startswith('tags:') and not re.match(r'^tags:\s*\[.*\]\s*$', line):
+            return "'tags' must be an inline list, e.g. tags: [review, quality] — the installer reads only that form"
+    return None
+
+
+def find_todo_placeholder(frontmatter):
+    for key in ('description', 'author'):
+        value = frontmatter.get(key)
+        if isinstance(value, str) and 'TODO' in value:
+            return key
+    tags = frontmatter.get('tags') or []
+    if isinstance(tags, list) and any(str(tag).strip().lower() == 'todo' for tag in tags):
+        return 'tags'
+    return None
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:

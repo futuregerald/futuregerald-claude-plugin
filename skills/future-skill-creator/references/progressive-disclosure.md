@@ -7,12 +7,12 @@ Read this when a skill is approaching 300 lines, or supports several variants, f
 Skills use a three-level loading system to manage context efficiently:
 
 1. **Metadata (name + description)** - Always in context (~100 words)
-2. **SKILL.md body** - When skill triggers (<5k words)
+2. **SKILL.md body** - When skill triggers (target under 300 lines)
 3. **Bundled resources** - As needed by Claude (Unlimited because scripts can be executed without reading into context window)
 
 ## Patterns
 
-Keep SKILL.md body to the essentials and under 500 lines to minimize context bloat. Split content into separate files when approaching this limit. When splitting out content into other files, it is very important to reference them from SKILL.md and describe clearly when to read them, to ensure the reader of the skill knows they exist and when to use them.
+Keep SKILL.md body to the essentials: under 300 lines is the target, and 500 is the hard limit (`skill-reviewer` fails a skill past it). Split content into separate files when approaching 300. When splitting out content into other files, it is very important to reference them from SKILL.md and describe clearly when to read them, to ensure the reader of the skill knows they exist and when to use them.
 
 **Key principle:** When a skill supports multiple variations, frameworks, or options, keep only the core workflow and selection guidance in SKILL.md. Move variant-specific details (patterns, examples, configuration) into separate reference files.
 
@@ -42,7 +42,7 @@ For Skills with multiple domains, organize content by domain to avoid loading ir
 ```
 bigquery-skill/
 ├── SKILL.md (overview and navigation)
-└── reference/
+└── references/
     ├── finance.md (revenue, billing metrics)
     ├── sales.md (opportunities, pipeline)
     ├── product.md (API usage, features)
