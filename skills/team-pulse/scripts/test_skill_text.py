@@ -114,3 +114,35 @@ def test_step_3_covers_the_fallback_digest():
 def test_epic_start_names_its_source():
     resolve = _between(read(SKILL_MD), "**Epic start, for Agent F**", "**Word budget for Agent F**")
     assert "Created" in resolve and "jira.md" in resolve
+
+
+def test_agent_e_reads_reviews_in_bulk():
+    agent_e = _between(read(AGENT_PROMPTS), "## Agent E", "## Combining")
+    assert "--json number,title,author,reviews" in agent_e
+    assert "For each candidate PR" not in agent_e
+    assert "pulls/{N}/reviews" not in agent_e
+
+
+def test_skill_lists_high_priority_section():
+    assert "## High priority outside epics" in read(SKILL_MD)
+
+
+def test_agent_a_lists_high_priority_outside_epics():
+    agent_a = _between(read(AGENT_PROMPTS), "## Agent A", "## Agent C")
+    assert "## High priority outside epics" in agent_a
+
+
+def test_step_3_says_who_a_question_waits_on():
+    step3 = _between(read(SKILL_MD), "## Step 3", "## Step 4")
+    assert "@mentions" in step3 and "→" in step3
+
+
+def test_agent_a_comments_follow_the_mention_rule():
+    agent_a = _between(read(AGENT_PROMPTS), "## Agent A", "## Agent C")
+    assert "@mentions someone other than its author" in agent_a
+
+
+def test_agent_e_repo_placeholder_matches_the_rest_of_the_file():
+    agent_e = _between(read(AGENT_PROMPTS), "## Agent E", "## Combining")
+    assert "--repo {ORG}/{REPO}" in agent_e
+    assert "nameWithOwner" not in agent_e

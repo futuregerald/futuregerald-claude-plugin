@@ -297,7 +297,8 @@ something failed), `## Active epics` (key, title, status, priority, parent, assi
 `(inactive)` flag, created date, done/total/in-progress, a description excerpt and, in team scope, up to 4 open
 children with in-review first), `## Flagged` (Blocked, or In Progress with no status change for 5
 days: one line each with its age, and the newest comment for the first 15 only), `## Unassigned`
-(unassigned bugs and unassigned In Progress work), `## Question candidates`,
+(unassigned bugs and unassigned In Progress work), `## High priority outside epics` (not-done
+P0/P1, Highest, Blocker or Critical window items with no parent at all), `## Question candidates`,
 `## Unmatched assignees` and `## Doc links`. Then the cuttable detail: `## By person` (team),
 `## Issues` (person) or `## Children` (epic), and `## Not started`. The count JQL is given once
 with an `{EPIC}` placeholder; substitute the epic key to link a count to its query. The last line,
@@ -388,13 +389,16 @@ digests:
   An epic whose block has no description is a finding: report it as "no description on the
   ticket" rather than guessing.
 - **Judge each question candidate.** `jira.md` lists the flagged items and active epics whose
-  newest comment asks a question nobody has commented after; other items' comments are not read.
+  newest comment asks a question or @mentions someone, with nobody commenting after; other items'
+  comments are not read. `Author → Name` says who the comment waits on.
   Decide which are real open questions; report each with who asked, who it was aimed at, the date
   and how long it has been silent. Drop the ones that are rhetorical or answered in another digest
   (a PR, a meeting).
 - **Build What's Left from each epic block's open children in `jira.md` plus `prs.md`**: in-review
   PRs from `## Open PRs (team)` and `## By epic` first, then in-progress assigned items, then the
   next unblocked tickets. A block ending `+N more open` has more work than it lists; say so.
+- **Give every item in `## High priority outside epics` a line** in the risk register or its
+  person's card: a P0/P1 with no epic appears nowhere else in the digest.
 - **Read `## Unassigned` for the At Risk rule** "a customer-facing defect is unassigned": an
   unassigned bug there is the evidence. Unassigned In Progress work is a finding too: name it.
 

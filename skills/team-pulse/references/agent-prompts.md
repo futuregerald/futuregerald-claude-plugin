@@ -104,10 +104,16 @@ List epics that have NOT STARTED (`statusCategory = "To Do"` with zero children 
 `statusCategory = Done`) in their own section, with how long each has sat. They are invisible to
 any activity-based query.
 
+List every not-done P0/P1 (or Highest, Blocker, Critical) item from the window search that has no
+parent at all under `## High priority outside epics`: key, type, status, priority, assignee, one
+line on what it is. No epic block carries them, so they are easy to miss.
+
 COMMENTS, FOR BLOCKED/STALLED/QUESTIONED ITEMS ONLY: for any item that is Blocked, stalled
 (`statusCategory = "In Progress" AND NOT status CHANGED AFTER -5d`), or has an open question, fetch
 its last 10 comments (add `comment` to the field list for those items only) and report any
 unanswered question: who asked, who it was aimed at, the date, and how long it has been silent.
+Count a newest comment that @mentions someone other than its author, with no comment after it, as
+unanswered too, aimed at the person mentioned.
 
 PAGINATION & MATH RULES:
 - Read `total` from response metadata for the denominator. If results are capped, use `total`, never `results.length`.
@@ -337,16 +343,20 @@ After writing the file, return only: "Wrote .updates/metrics.md — {brief 1-lin
 ```
 Search GitHub for PRs reviewed by {HANDLE} across the configured repos since {START_DATE}.
 
-This search finds candidate PRs updated in the window — it does not mean the review itself was
-submitted in the window. Confirm that separately:
+A PR updated in the window is only a candidate: the review itself must have been submitted in the
+window. Work in bulk — one call per repo, never one per PR:
 
-1. gh search prs --reviewed-by {HANDLE} --owner {ORG} --updated ">={START_DATE}" \
-     --json repository,number,title,author,state --limit 30 | cat
+1. Find which repos have candidates, in one org-wide call:
+     gh search prs --reviewed-by {HANDLE} --owner {ORG} --updated ">={START_DATE}" \
+       --json repository --limit 100 --jq '[.[].repository.name] | unique'
 
-2. For each candidate PR, list {HANDLE}'s actual review timestamps:
-     gh api repos/{ORG}/{REPO}/pulls/{N}/reviews \
-       --jq '[.[] | select(.user.login=="{HANDLE}") | .submitted_at]'
-   Count only reviews whose `submitted_at` falls within {START_DATE}..{END_DATE} inclusive.
+2. For each of those repos, read the candidates and their reviews in one call:
+     gh pr list --repo {ORG}/{REPO} --state all --limit 100 \
+       --search "reviewed-by:{HANDLE} updated:>={START_DATE}" \
+       --json number,title,author,reviews \
+       --jq '[.[] | {number, title, author: .author.login,
+                     submitted: [.reviews[] | select(.author.login=="{HANDLE}") | .submittedAt]}]'
+   Count only `submitted` timestamps within {START_DATE}..{END_DATE} inclusive.
 
 Write your digest to `.updates/reviews.md` using the Write tool. Format:
 - How many reviews were submitted within {START_DATE}..{END_DATE} (not how many PRs were merely updated in it)
