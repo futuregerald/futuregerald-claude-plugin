@@ -1,6 +1,6 @@
 ---
 name: craftsmans-wisdom
-description: Challenge the user, one question at a time, to think a piece of work through as a craftsman would — what good means here, the generic default to avoid, what is written down for agents, whether done is actually good, and who maintains it — then write a confirmed point-of-view brief that steers the build and that editor-pass reviews against, and offer to hand off to future-grilling for the details. Use before writing any plan, PRD or spec, and when the user says "craftsman's wisdom", "craftsmans wisdom", "am I thinking this through", or "what does good mean here".
+description: Challenge the user, one question at a time, to think a piece of work through as a craftsman would — what good means here, the generic default to avoid, what is written down for agents, whether done is actually good, and who maintains it — then write a confirmed point-of-view brief that steers the build and that editor-pass reviews against, and offer to hand off to future-grilling for the details. Use before planning new or user-facing work (a feature, product, page, design or PRD) when the user is present — not in sub-agents or before to-spec — and when the user says "craftsman's wisdom", "craftsmans wisdom", "am I thinking this through", or "what does good mean here".
 author: Gerald Onyango
 tags: [planning, design, quality, interview]
 ---
@@ -28,12 +28,19 @@ that every later step reads.
 
 ## When it runs
 
-Before any plan, PRD or spec is written — the user should not have to invoke it.
+Before planning new or user-facing work — a feature, product, page, design or PRD — the
+user should not have to invoke it. Check these first, in order:
 
-- **A confirmed brief already covers this work:** read it back, ask whether it still
-  holds, update it if not, and go straight to the next step.
-- **Internal technical work** (a refactor, a dependency bump, a small fix): ask once
-  whether to skip it. On "skip", go straight to planning.
+1. **A brief was confirmed earlier in this session** for this work: skip this skill.
+2. **No user in the loop** (a sub-agent, an unattended run): skip, and say so in the
+   output. Never answer the questions on the user's behalf.
+3. **`to-spec`** is about to run: skip; it promises no interview.
+4. **A confirmed brief from an earlier session covers this work:** read it back, ask
+   whether it still holds, update it if not, then go straight to planning.
+5. **Internal technical work** (a refactor, a dependency bump, a small fix): ask whether
+   to skip it, once per session. On "skip", go straight to planning.
+6. **`brainstorming` also applies:** run this first, then pass the brief into
+   brainstorming so it doesn't re-ask what the brief settles.
 
 ## Before the first question
 
@@ -131,10 +138,11 @@ brief already exists, update it in place.
   details?"
   - **Yes:** run `future-grilling` with the brief's path. It reads the brief, spends its
     questions on how, and checks each answer against the brief.
-  - **No:** go straight to planning.
-  - Either way, hand the brief to whatever builds next — `writing-plans`, `write-a-prd`,
-    `impeccable` (fold it into PRODUCT.md), `huashu-design` or `brainstorming` — so it
-    steers the build, not just judges it.
+  - **No:** go to whatever builds next (below).
+  - Either way, hand the brief — and any decisions grilling settled — to whatever builds
+    next: `writing-plans`, `write-a-prd`, `impeccable` (fold it into PRODUCT.md),
+    `huashu-design` or `brainstorming`. Tell it not to re-ask what they cover, so the
+    brief steers the build instead of the user being interviewed again.
 - **A draft exists:** offer `editor-pass` against the brief.
 - **Stage 2 found a standard worth encoding:** offer `future-skill-creator`.
 
