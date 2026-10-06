@@ -1657,3 +1657,18 @@ def test_main_survives_one_transient_window_search_failure(tmp_path, capsys):
 
     assert jira_scan.main(_argv(tmp_path), runner=_runner(handler)) == 0
     assert failed == [True]
+
+
+def test_collect_question_excerpts_are_capped_at_200_characters():
+    base = _world()
+    long_question = "word " * 80 + "ready?"
+
+    def handler(cmd):
+        if cmd[1:4] == ["jira", "workitem", "view"] and cmd[4] == "C-3" and _fields(cmd) == FLAGGED_VIEW_FIELDS:
+            return {"key": "C-3", "fields": {"comment": {"comments": [
+                _comment("Alice Example", _days_ago(2), long_question)]}}}
+        return base(cmd)
+
+    assert jira_scan.QUESTION_EXCERPT_LIMIT == 200
+    c3 = next(item for item in _collect(handler=handler)["questions"] if item["key"] == "C-3")
+    assert len(c3["excerpt"]) == 200

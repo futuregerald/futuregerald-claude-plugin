@@ -692,6 +692,7 @@ NOT_STARTED_VIEW_FIELDS = "created,summary,description,assignee,priority"
 FLAGGED_VIEW_FIELDS = "comment,statuscategorychangedate"
 DESCRIPTION_LIMIT = 200
 COMMENT_LIMIT = 300
+QUESTION_EXCERPT_LIMIT = 200
 
 WINDOW_JQL = ('project in ({keys}) AND updated >= "{since}" AND updated <= "{until} 23:59" '
               'ORDER BY updated DESC')
@@ -906,7 +907,7 @@ def collect(cfg: dict, runner=subprocess.run, workers: int = 8) -> dict:
                         "comments": [_comment_entry(comment)
                                      for comment in comments[-MAX_COMMENTS:]]})
         questions += [{"key": issue["key"], **candidate}
-                      for candidate in question_candidates(comments, COMMENT_LIMIT)]
+                      for candidate in question_candidates(comments, QUESTION_EXCERPT_LIMIT)]
 
     epics, doc_links = [], []
     for key in epic_order:
@@ -920,7 +921,8 @@ def collect(cfg: dict, runner=subprocess.run, workers: int = 8) -> dict:
             if kind:
                 doc_links.append({"url": url, "epic": key, "kind": kind})
         questions += [{"key": key, **candidate} for candidate in
-                      question_candidates(_comments(second.get(("epic", key)) or {}), COMMENT_LIMIT)]
+                      question_candidates(_comments(second.get(("epic", key)) or {}),
+                                          QUESTION_EXCERPT_LIMIT)]
 
     questions = list({item["key"]: item for item in reversed(questions)}.values())[::-1]
 
