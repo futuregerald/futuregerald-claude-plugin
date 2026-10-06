@@ -135,3 +135,14 @@ def test_agent_a_lists_high_priority_outside_epics():
 def test_step_3_says_who_a_question_waits_on():
     step3 = _between(read(SKILL_MD), "## Step 3", "## Step 4")
     assert "@mentions" in step3 and "→" in step3
+
+
+def test_agent_a_comments_follow_the_mention_rule():
+    agent_a = _between(read(AGENT_PROMPTS), "## Agent A", "## Agent C")
+    assert "@mentions someone other than its author" in agent_a
+
+
+def test_agent_e_repo_placeholder_matches_the_rest_of_the_file():
+    agent_e = _between(read(AGENT_PROMPTS), "## Agent E", "## Combining")
+    assert "--repo {ORG}/{REPO}" in agent_e
+    assert "nameWithOwner" not in agent_e

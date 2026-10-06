@@ -112,6 +112,8 @@ COMMENTS, FOR BLOCKED/STALLED/QUESTIONED ITEMS ONLY: for any item that is Blocke
 (`statusCategory = "In Progress" AND NOT status CHANGED AFTER -5d`), or has an open question, fetch
 its last 10 comments (add `comment` to the field list for those items only) and report any
 unanswered question: who asked, who it was aimed at, the date, and how long it has been silent.
+Count a newest comment that @mentions someone other than its author, with no comment after it, as
+unanswered too, aimed at the person mentioned.
 
 PAGINATION & MATH RULES:
 - Read `total` from response metadata for the denominator. If results are capped, use `total`, never `results.length`.
@@ -346,10 +348,10 @@ window. Work in bulk — one call per repo, never one per PR:
 
 1. Find which repos have candidates, in one org-wide call:
      gh search prs --reviewed-by {HANDLE} --owner {ORG} --updated ">={START_DATE}" \
-       --json repository --limit 100 --jq '[.[].repository.nameWithOwner] | unique'
+       --json repository --limit 100 --jq '[.[].repository.name] | unique'
 
 2. For each of those repos, read the candidates and their reviews in one call:
-     gh pr list --repo {REPO} --state all --limit 100 \
+     gh pr list --repo {ORG}/{REPO} --state all --limit 100 \
        --search "reviewed-by:{HANDLE} updated:>={START_DATE}" \
        --json number,title,author,reviews \
        --jq '[.[] | {number, title, author: .author.login,

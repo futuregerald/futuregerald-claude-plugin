@@ -120,8 +120,9 @@ def _adf_link_walk(node, found):
         url = (node.get("attrs") or {}).get("url")
         if url:
             found.append(url)
-    if node.get("type") == "text":
-        found.extend(match.rstrip(URL_TRAILING) for match in BARE_URL.findall(node.get("text") or ""))
+    marks = node.get("marks") or []
+    if node.get("type") == "text" and not any(mark.get("type") == "link" for mark in marks):
+        found.extend(_trim_url(match) for match in BARE_URL.findall(node.get("text") or ""))
     for mark in node.get("marks") or []:
         if mark.get("type") == "link":
             href = (mark.get("attrs") or {}).get("href")
@@ -129,6 +130,14 @@ def _adf_link_walk(node, found):
                 found.append(href)
     for child in node.get("content") or []:
         _adf_link_walk(child, found)
+
+
+def _trim_url(url):
+    while url and url[-1] in URL_TRAILING:
+        if url[-1] == ")" and url.count("(") >= url.count(")"):
+            break
+        url = url[:-1]
+    return url
 
 
 def adf_links(node: dict | None) -> list[str]:
@@ -853,8 +862,6 @@ def collect(cfg: dict, runner=subprocess.run, workers: int = 8) -> dict:
                 and parent["key"] not in epic_order and parent["key"] not in extra):
             extra.append(parent["key"])
     epic_order += extra
-    has_parent = {key for key in unclaimed
-                  if _fields(parents.get(("parent", key)) or {}).get("parent")}
 
     active = set(epic_order)
     zero_done = [epic["key"] for epic in not_started
@@ -870,6 +877,15 @@ def collect(cfg: dict, runner=subprocess.run, workers: int = 8) -> dict:
                         if ("children", key) in second}
     child_map = child_to_epic(children_by_epic)
     stalled_keys = {issue["key"] for issue in stalled}
+    has_parent = set()
+    for key in unclaimed:
+        if ("parent", key) not in parents:
+            has_parent.add(key)
+            continue
+        parent = _fields(parents[("parent", key)] or {}).get("parent")
+        if parent and (_is_epic_type((parent.get("fields") or {}).get("issuetype"))
+                       or parent["key"] in child_map):
+            has_parent.add(key)
 
     def in_scope(issue):
         return (match_assignee(_fields(issue).get("assignee"), roster) is not None
@@ -924,7 +940,10 @@ def collect(cfg: dict, runner=subprocess.run, workers: int = 8) -> dict:
                       question_candidates(_comments(second.get(("epic", key)) or {}),
                                           QUESTION_EXCERPT_LIMIT)]
 
-    questions = list({item["key"]: item for item in reversed(questions)}.values())[::-1]
+    unique_questions = {}
+    for item in questions:
+        unique_questions.setdefault(item["key"], item)
+    questions = list(unique_questions.values())
 
     not_started_entries = []
     for key in zero_done:

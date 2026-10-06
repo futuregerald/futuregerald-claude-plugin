@@ -1598,9 +1598,9 @@ def _high_priority_world():
     return handler
 
 
-def test_collect_lists_high_priority_window_items_with_no_parent():
+def test_collect_lists_high_priority_window_items_outside_any_epic():
     data = _collect(handler=_high_priority_world())
-    assert [item["key"] for item in data["high_priority"]] == ["H-1"]
+    assert [item["key"] for item in data["high_priority"]] == ["H-1", "H-2"]
     assert data["high_priority"][0]["assignee"] == "Alice Example"
 
 
@@ -1672,3 +1672,79 @@ def test_collect_question_excerpts_are_capped_at_200_characters():
     assert jira_scan.QUESTION_EXCERPT_LIMIT == 200
     c3 = next(item for item in _collect(handler=handler)["questions"] if item["key"] == "C-3")
     assert len(c3["excerpt"]) == 200
+
+
+def test_adf_links_keeps_a_linked_url_that_ends_in_a_bracket_once_and_whole():
+    url = "https://example.atlassian.net/wiki/spaces/S/pages/1/Plan+(v2)"
+    node = {"type": "doc", "content": [{"type": "paragraph", "content": [
+        {"type": "text", "text": url, "marks": [{"type": "link", "attrs": {"href": url}}]}]}]}
+    assert jira_scan.adf_links(node) == [url]
+
+
+def test_adf_links_keeps_a_balanced_closing_bracket_on_a_bare_url():
+    node = {"type": "doc", "content": [
+        _text_paragraph("See https://example.atlassian.net/wiki/x/Plan+(v2) and (https://docs.google.com/document/d/Y).")]}
+    assert jira_scan.adf_links(node) == ["https://example.atlassian.net/wiki/x/Plan+(v2)",
+                                         "https://docs.google.com/document/d/Y"]
+
+
+def test_collect_questions_keep_first_occurrence_order():
+    base = _world()
+
+    def handler(cmd):
+        if "--jql" in cmd and _jql(cmd).startswith("parent = C-3"):
+            return []
+        if cmd[1:4] == ["jira", "workitem", "view"] and cmd[4] == "C-3" and _fields(cmd) == EPIC_VIEW_FIELDS:
+            return _epic_view("C-3", "Synthetic", comments=[
+                _comment("Alice Example", _days_ago(1), "Is this an epic question?")])
+        result = base(cmd)
+        if "--jql" in cmd and "issuetype = Epic" in _jql(cmd) and 'statusCategory = "To Do"' not in _jql(cmd):
+            return result + [_task("C-3", "indeterminate", CAROL, status_name="Blocked", issuetype="Epic")]
+        return result
+
+    keys = [item["key"] for item in _collect(handler=handler)["questions"]]
+    assert keys == ["C-3", "E-1"]
+
+
+def _loose_world(parent_of, fail_parent=()):
+    base = _world()
+    items = {key: _hp(key, "P0", assignee=ALICE) for key in parent_of}
+
+    def handler(cmd):
+        if cmd[1:4] == ["jira", "workitem", "view"] and _fields(cmd) == "parent" and cmd[4] in items:
+            if cmd[4] in fail_parent:
+                return _completed(stderr="✗ Error: failed to fetch", returncode=1)
+            parent_key, parent_type = parent_of[cmd[4]]
+            return _parent_view(cmd[4], parent_key, parent_type=parent_type)
+        result = base(cmd)
+        if "--jql" in cmd and "ORDER BY updated DESC" in _jql(cmd):
+            return result + list(items.values())
+        return result
+
+    return handler
+
+
+def test_collect_high_priority_keeps_a_subtask_of_a_story_that_has_no_epic():
+    data = _collect(handler=_loose_world({"H-1": ("X-5", "Story"), "H-2": ("E-9", "Epic"),
+                                          "H-3": ("C-2", "Story")}))
+    assert [item["key"] for item in data["high_priority"]] == ["H-1"]
+
+
+def test_collect_high_priority_leaves_out_an_item_whose_parent_view_failed():
+    data = _collect(handler=_loose_world({"H-1": (None, None)}, fail_parent=("H-1",)))
+    assert data["high_priority"] == []
+    assert "H-1" in data["failures"]
+
+
+def test_collect_high_priority_treats_a_null_parent_view_as_no_parent():
+    base = _world()
+
+    def handler(cmd):
+        if cmd[1:4] == ["jira", "workitem", "view"] and _fields(cmd) == "parent" and cmd[4] == "H-1":
+            return _completed("null")
+        result = base(cmd)
+        if "--jql" in cmd and "ORDER BY updated DESC" in _jql(cmd):
+            return result + [_hp("H-1", "P1", assignee=ALICE)]
+        return result
+
+    assert [item["key"] for item in _collect(handler=handler)["high_priority"]] == ["H-1"]
