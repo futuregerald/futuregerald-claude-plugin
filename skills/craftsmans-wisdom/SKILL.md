@@ -1,6 +1,6 @@
 ---
 name: craftsmans-wisdom
-description: Challenge the user, one question at a time, to think a piece of work through as a craftsman would — what good means here, the generic default to avoid, what is written down for agents, whether done is actually good, and who maintains it — then write a confirmed point-of-view brief that steers the build and that editor-pass reviews against, and offer to hand off to grilling for the details. Use before writing any plan, PRD or spec, and when the user says "craftsman's wisdom", "craftsmans wisdom", "am I thinking this through", or "what does good mean here".
+description: Challenge the user, one question at a time, to think a piece of work through as a craftsman would — what good means here, the generic default to avoid, what is written down for agents, whether done is actually good, and who maintains it — then write a confirmed point-of-view brief that steers the build and that editor-pass reviews against, and offer to hand off to future-grilling for the details. Use before writing any plan, PRD or spec, and when the user says "craftsman's wisdom", "craftsmans wisdom", "am I thinking this through", or "what does good mean here".
 author: Gerald Onyango
 tags: [planning, design, quality, interview]
 ---
@@ -129,9 +129,8 @@ brief already exists, update it in place.
 
 - **Nothing built yet:** once the brief is saved, ask: "Do you want to be grilled on the
   details?"
-  - **Yes:** run `grilling` with the brief's path as context. Tell it the brief settles
-    who it's for and what good means, so it spends its questions on how — and checks
-    each answer against the brief.
+  - **Yes:** run `future-grilling` with the brief's path. It reads the brief, spends its
+    questions on how, and checks each answer against the brief.
   - **No:** go straight to planning.
   - Either way, hand the brief to whatever builds next — `writing-plans`, `write-a-prd`,
     `impeccable` (fold it into PRODUCT.md), `huashu-design` or `brainstorming` — so it
