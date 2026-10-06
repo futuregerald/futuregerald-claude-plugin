@@ -2,17 +2,23 @@
 
 Use these templates when dispatching sub-agents. The orchestrator resolves the date range and dispatches **one agent per source, covering the whole range**. Replace `{VARIABLES}` with resolved values from Step 1.
 
+Jira and GitHub are not collected by agents: `jira_scan.py` and `pr_scan.py` (SKILL.md Steps 2a
+and 2b) write `jira.md` and `prs.md`. Agent A is the tracker fallback.
+
 ## Dispatch Pattern
 
-Three required sources means **three agents**, launched in a single message:
-
 ```
-Agent A (Tracker,  {START_DATE} .. {END_DATE})
-Agent B (GitHub,   {START_DATE} .. {END_DATE})
-Agent C (Meetings, {START_DATE} .. {END_DATE})
-+ Optional: Agent D (Metrics) + Agent E (Reviews)
-Then, second wave: Agent G (Docs), which needs Agent A's "Doc links" section
-+ Optional: Agent F (Work Breakdown) — single-person or single-epic scope only
+Step 2a: jira_scan.py ({START_DATE} .. {END_DATE}), seconds
+Then, in one message:
+  Agent C (Meetings, {START_DATE} .. {END_DATE})
+  Agent G (Docs), which reads the "Doc links" section of jira.md
+  + Optional: Agent D (Metrics) + Agent E (Reviews)
+  + Optional: Agent F (Work Breakdown) — single-person or single-epic scope only
+  + Step 2b: pr_scan.py --jira-map .updates/jira.json, run while the agents work
+
+Fallback (tracker is not Jira, or jira_scan.py exited 1):
+  Agent A (Tracker, {START_DATE} .. {END_DATE}) + Agent C + optional agents, in one message
+  Then, once Agent A returns: Agent G + Step 2b (pr_scan.py --jira-map .updates/jira.json)
 ```
 
 Each agent receives the **full range** — `{START_DATE}` and `{END_DATE}`. The orchestrator
@@ -28,7 +34,7 @@ any definition you write must grant them explicitly.
 **Do not split a source by day, by default — including for 1:1s.** One agent per source, covering
 the whole window, is always the default; every extra agent pays the floor again — 24 agents cost
 roughly 1,365,000 tokens of floor against ~171,000 for 3 with inherited grants. Per-day fan-out is
-a deliberate exception, taken only when the user explicitly asks for it, and only for agents A–C —
+a deliberate exception, taken only when the user explicitly asks for it, and only for agents A and C —
 see [batching-rationale.md](batching-rationale.md). A per-day agent writes a dated digest
 (`.updates/<source>-<YYYY-MM-DD>.md`) so the days do not overwrite each other.
 
@@ -43,14 +49,17 @@ Every sub-agent MUST follow these rules to keep context usage minimal:
 
 1. **Whole-range scope** — each agent queries its own source across `{START_DATE}`..`{END_DATE}`, passed by the orchestrator. **Both bounds are INCLUSIVE** — `{END_DATE}` is the last day of the window and must appear in your results. An exclusive upper bound drops the most recent day, which is the one that matters most.
 2. **Scoped queries only** — filter by date, author, project at the API/CLI level. Never fetch everything and filter in-context.
-3. **Summarize incrementally** — process one PR, ticket, or meeting at a time. Never load all results into context simultaneously.
+3. **Work in bulk.** One query per source covering the whole range, then process every result in a single pass — with a short script when the result is large. Never spend one tool call per ticket, PR or meeting.
 4. **Write digest to disk** — write your compressed findings to `.updates/<source>.md` using the Write tool.
 5. **Word limit scales with team size and window** — the orchestrator computes `50 x people x days` and passes it as `{WORD_LIMIT}`. It already accounts for the full range you are covering. Stay within it; do not scale it down yourself.
 6. **No raw data** — never include raw JSON, full API responses, or unprocessed tool output in the digest.
 7. **Return a 1-line summary** — after writing the file, return only a brief confirmation (e.g., "Wrote .updates/jira.md — 3 tickets moved, 1 blocker").
 8. **Empty ranges are fine** — if no activity found, write "No activity." to the file and return. Don't waste context searching harder.
 
-## Agent A: Tracker Activity (whole range)
+## Agent A: Tracker Activity (fallback only, whole range)
+
+Dispatch Agent A only when the tracker is not Jira, or `jira_scan.py` exited 1 (SKILL.md Step 2a).
+Agent G and Step 2b wait for it, because they read the files it writes.
 
 ```
 Search the tracker for {SCOPE_DESCRIPTION} between {START_DATE} and {END_DATE} using the tracker MCP tools.
@@ -61,10 +70,14 @@ Run this JQL:
 {JQL_QUERY}
 Fields: summary, status, issuetype, assignee, priority, updated, labels, parent
 
+STATUS CHECKS: judge status by its category (`statusCategory`: To Do, In Progress, Done), never
+by its name. Status names differ per site and often carry emoji, so `status = "In Progress"` can
+match nothing. The one name check is Blocked: a status whose name contains "blocked", any case.
+
 EPIC COMPLETION AGGREGATION:
-For each active epic with activity, also query its child issues:
-- Jira Cloud: `parent in ({ACTIVE_EPIC_KEYS})`
-- Jira Server/DC fallback: `"Epic Link" in ({ACTIVE_EPIC_KEYS})`
+Query the child issues of every active epic with activity in one search:
+- Jira Cloud: `parent in ({ACTIVE_EPIC_KEYS}) AND (resolution is EMPTY OR resolution not in ({EXCLUDED_RESOLUTIONS}))`
+- Jira Server/DC fallback: `"Epic Link" in ({ACTIVE_EPIC_KEYS}) AND (resolution is EMPTY OR resolution not in ({EXCLUDED_RESOLUTIONS}))`
 Fields: summary, status, issuetype, parent, resolution
 
 For each active epic, also fetch the epic itself (fields: summary, description, priority, parent,
@@ -87,25 +100,28 @@ DISCOVER the epics in scope rather than working only from a supplied list: searc
 summary match, by links from known roots, and by the parents of issues that moved this window. A
 hand-enumerated list can only confirm what someone already believed.
 
-List epics that have NOT STARTED (Backlog or To Do with zero children done) in their own section,
-with how long each has sat. They are invisible to any activity-based query.
+List epics that have NOT STARTED (`statusCategory = "To Do"` with zero children in
+`statusCategory = Done`) in their own section, with how long each has sat. They are invisible to
+any activity-based query.
 
-COMMENTS, FOR BLOCKED/STALLED/QUESTIONED ITEMS ONLY: for any item that is Blocked, In Progress
-for more than 5 days, or has an open question, fetch its last 10 comments (add `comment` to the
-field list for that item only) and report any unanswered question: who asked, who it was aimed
-at, the date, and how long it has been silent.
+COMMENTS, FOR BLOCKED/STALLED/QUESTIONED ITEMS ONLY: for any item that is Blocked, stalled
+(`statusCategory = "In Progress" AND NOT status CHANGED AFTER -5d`), or has an open question, fetch
+its last 10 comments (add `comment` to the field list for those items only) and report any
+unanswered question: who asked, who it was aimed at, the date, and how long it has been silent.
 
 PAGINATION & MATH RULES:
 - Read `total` from response metadata for the denominator. If results are capped, use `total`, never `results.length`.
 - If `Total == 0`, report `N/A (No child issues logged)`.
-- Exclude cancelled/won't do issues from both numerator and denominator
-  (`(resolution is EMPTY OR resolution not in ("Won't Do", "Declined", "Cancelled"))`). JQL's
-  `not in` never matches an empty field, so a bare `resolution not in (...)` silently drops every
-  open child from the denominator too and makes epics read as far more complete than they are.
-- Compute: `% Complete = (Done delivering issues) / (Total active scope issues) * 100`.
+- Exclude the resolutions listed in {EXCLUDED_RESOLUTIONS} (from the team config) from both
+  numerator and denominator, with `(resolution is EMPTY OR resolution not in ({EXCLUDED_RESOLUTIONS}))`.
+  JQL's `not in` never matches an empty field, so a bare `resolution not in (...)` silently drops
+  every open child from the denominator too and makes epics read as far more complete than they
+  are. The values are site-specific: if the query fails to parse, report the error verbatim and
+  never retry with a guessed value.
+- Compute: `% Complete = (children in statusCategory Done) / (Total active scope issues) * 100`.
 
-CONTEXT EFFICIENCY: Process results incrementally across the range —
-summarize each ticket as you encounter it, then discard it. If no results, write "No activity." and return.
+CONTEXT EFFICIENCY: **Work in bulk.** One query per source covering the whole range, then process every result in a single pass — with a short script when the result is large. Never spend one tool call per ticket, PR or meeting.
+If no results, write "No activity." and return.
 
 Write your digest to `.updates/jira.md` using the Write tool. Format:
 - Group by person: what they completed, what's in progress, what's stuck
@@ -115,11 +131,16 @@ Write your digest to `.updates/jira.md` using the Write tool. Format:
   - The JQL behind each count, so the report can link the number to the query that produced it.
   - Exactly Why It Needs Attention / At Risk: Root cause, upstream dependency, failure mode, or idle duration if not On Track. (If tracker is silent, note empirical observation: e.g. "No code pushed or ticket movement for N days").
   - What's Left (TL;DR): Select 2–4 items strictly prioritized by: (1) In-review PRs, (2) Active assigned in-progress tasks, (3) Next unblocked milestone tickets. If >4 items remain, summarize as "- [Top 3 items] and N other open tickets".
-- Flag: issues In Progress >5 days, unassigned work, blocked items
+- Flag: issues stalled In Progress (no status change for 5 days), unassigned work, blocked items
 - Unanswered questions found in comments, each with asker, addressee, date, and age
 - Max {WORD_LIMIT} words
 
-After writing the file, return only: "Wrote .updates/jira.md — {brief 1-line summary}"
+Also write `.updates/jira.json`: a JSON object with one key, "child_to_epic", mapping every child
+key from the children search to its epic key, for example
+{"child_to_epic": {"ABC-12": "ABC-3", "ABC-14": "ABC-3"}}. Nothing else goes in it; `pr_scan.py`
+reads it to roll PRs up to their epic.
+
+After writing both files, return only: "Wrote .updates/jira.md and .updates/jira.json — {brief 1-line summary}"
 ```
 
 ### JQL Templates (whole range)
@@ -146,56 +167,13 @@ project = {PROJECT_KEY} AND (summary ~ "{TOPIC}" OR labels in ("{TOPIC}")) AND u
 
 ---
 
-## Agent B: GitHub PRs (whole range)
-
-```
-Search GitHub for PR activity by {SCOPE_DESCRIPTION} from {START_DATE} to {END_DATE}.
-
-Team GitHub handles: {HANDLES_LIST}
-Repos: {ORG}/{REPO} for each repo listed in the team config
-
-CONTEXT EFFICIENCY: Process results incrementally across the range. Use --limit and --search filters
-to scope at the source. Process each repo independently — summarize before moving to the next.
-
-For each repo, run:
-gh pr list --repo {ORG}/{REPO} --state all {AUTHOR_FLAG} --limit 20 \
-  --json number,title,author,state,createdAt,mergedAt,closedAt,reviewDecision,additions,deletions,headRefName,url \
-  --search "created:{START_DATE}..{END_DATE} OR merged:{START_DATE}..{END_DATE}" | cat
-
-Summarize this repo's results immediately, then move to the next repo.
-If no results across all repos, write "No activity." and return.
-
-Write your digest to `.updates/github.md` using the Write tool. Format:
-- PRs merged (with +/- lines, opened date and merged date)
-- PRs opened or updated (with opened date)
-- PRs closed without merging (with closed date)
-- Every PR open right now, whatever its age, including drafts: read this from `pr_scan.py`'s
-  `.updates/prs.json` (the `open` list) rather than this agent's own windowed query, which cannot
-  see a PR opened before `{START_DATE}` — an old open PR is easy to forget
-- Every PR as a link, with its tracker key if the title or branch names one
-- Stale, unreviewed PRs in the range (`stale_unreviewed`: stale and nobody reviewing it) — flag
-  explicitly. An approved-but-unmerged PR is reported separately, not as this
-- For each epic key found in a PR title or branch: count merged and open PRs by side —
-  frontend/backend, from `{FRONTEND_REPOS}` / `{BACKEND_REPOS}` in the team config
-- Max {WORD_LIMIT} words
-
-After writing the file, return only: "Wrote .updates/github.md — {brief 1-line summary}"
-```
-
-### Author flag
-
-- **Full team:** omit `--author` flag, then filter results by team handles from the output
-- **Single person:** `--author {HANDLE}`
-
----
-
 ## Agent C: Meetings (whole range)
 
 ```
 Search the meeting source for meetings between {START_DATE} and {END_DATE} involving {PERSON_OR_TEAM}.
 
-CONTEXT EFFICIENCY: Process one meeting at a time, summarising as you go — never load them
-all at once. Use search_meetings (structured data) first; you rarely need full transcripts.
+CONTEXT EFFICIENCY: **Work in bulk.** One query per source covering the whole range, then process every result in a single pass — with a short script when the result is large. Never spend one tool call per ticket, PR or meeting.
+Use search_meetings (structured data) first; you rarely need full transcripts.
 If no meetings found, write "No meetings." and return.
 
 1. Search meetings:
@@ -205,8 +183,6 @@ If no meetings found, write "No meetings." and return.
    - before: "{END_DATE}"
    - limit: {WINDOW_MEETING_LIMIT}   # orchestrator passes 10 x days in window; default 80
    - fields: ["name", "date", "attendees", "speakers", "key_points", "action_items", "detailed_summary"]
-
-   Summarize each meeting's findings as you process it. Move on.
 
    **If the number of results equals the limit, the window is truncated** — say so explicitly in
    the digest so the orchestrator knows the report covers only part of the range.
@@ -240,7 +216,7 @@ meetings between other team members. Note this limitation in the findings when i
 ## Agent F: Work Breakdown (single-person and single-epic scopes only)
 
 Dispatch this only when the scope is one person or one epic. A team report gets the one-line
-frontend/backend split from agents A and B instead.
+frontend/backend split from `prs.md`'s `## By epic` section instead.
 
 ```
 Explain what {PERSON_OR_EPIC} built in epics {EPIC_KEYS}, split into frontend and backend, and
@@ -249,12 +225,13 @@ what is done versus left.
 Frontend repos: {FRONTEND_REPOS}   Backend repos: {BACKEND_REPOS}   # from the team config
 
 1. For each epic, list its children (fields: summary, status, assignee, resolutiondate).
-2. Find the matching PRs: gh pr list --repo {ORG}/{REPO} {AUTHOR_FLAG} --state all --limit 40 \
+2. Find the matching PRs, with their bodies, in one call per repo:
+   gh pr list --repo {ORG}/{REPO} {AUTHOR_FLAG} --state all --limit 40 \
      --search "updated:>={EPIC_START}" \
-     --json number,title,state,createdAt,mergedAt,closedAt,additions,deletions,headRefName,url
+     --json number,title,state,createdAt,mergedAt,closedAt,additions,deletions,headRefName,url,body \
+     --jq '[.[] | .body = ((.body // "")[0:1500])]'
    Match a PR to a ticket by the key in its title or branch name.
-3. For each matched PR, one at a time:
-   gh pr view {N} --repo {ORG}/{REPO} --json body --jq '.body[0:1500]'
+3. For each matched PR, from the body already in step 2's output (no further call per PR):
    Write ONE plain sentence on what it changes for the user. Say whether it runs on real data
    or stubbed/mock data, and name any endpoint or permission check it adds.
 4. For each open child, write one line on what it is, from its description. If it has no
@@ -274,12 +251,17 @@ Every ticket and PR as a link. Max {WORD_LIMIT} words.
 Return only: "Wrote .updates/breakdown.md — {1-line summary}"
 ```
 
+### Author flag
+
+- **Single person:** `--author {HANDLE}`
+- **Single epic:** omit the `--author` flag, then keep the PRs that match the epic's tickets
+
 ---
 
 ## Agent G: Docs (wiki pages, documents, spreadsheets)
 
-Dispatch on the cheapest model. It runs after agent A, because A's "Doc links" section is its main
-input.
+Dispatch on the cheapest model. It runs after `jira_scan.py` (or Agent A on the fallback path),
+because the "Doc links" section of `jira.md` is its main input.
 
 ```
 Find what changed in the team's written documents between {START_DATE} and {END_DATE}.

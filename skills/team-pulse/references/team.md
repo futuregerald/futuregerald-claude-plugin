@@ -17,6 +17,11 @@ treats a bracketed value as "not configured" and will ask again.
 - **Project key:** [e.g. ABC]
 - **Cloud ID:** [Jira only — from your Atlassian admin, or ask Claude to look it up]
 - **Site:** [e.g. yourcompany.atlassian.net]
+- **Excluded resolutions:** [Won't Do, Declined, Duplicate]
+
+Excluded resolutions are left out of every epic's done and total counts. Every value must exist on
+your Jira site, or every query fails: resolution names differ per site (`Cancelled` exists on some
+and not others).
 
 ## GitHub
 
@@ -39,10 +44,13 @@ One row per person. The **Notes** column is free-form and genuinely useful — p
 instructions there ("assess by tickets groomed, not PRs" for a PM, "always include my own
 activity in a dedicated section" for yourself).
 
-| Name | GitHub Handle | Role | Notes |
-|------|--------------|------|-------|
-| [Your Name] | [your-handle] | [Engineering Manager] | [Report author — include your own activity in its own section] |
-| [Teammate] | [handle] | [Software Engineer] | |
+The **Jira Account ID** column is optional. When it is empty, Jira assignees are matched to the
+roster by display name instead, which misses anyone whose Jira name differs from the Name column.
+
+| Name | GitHub Handle | Role | Jira Account ID | Notes |
+|------|--------------|------|-----------------|-------|
+| [Your Name] | [your-handle] | [Engineering Manager] | [account ID] | [Report author — include your own activity in its own section] |
+| [Teammate] | [handle] | [Software Engineer] | | |
 
 ## Key Active Initiatives
 

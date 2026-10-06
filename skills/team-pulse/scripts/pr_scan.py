@@ -36,9 +36,15 @@ def is_ticket_key(candidate, scope=()):
     return prefix not in NOT_TICKET_PREFIXES
 
 JSON_FIELDS = (
-    "number,title,headRefName,body,author,createdAt,mergedAt,"
+    "number,title,headRefName,body,author,createdAt,mergedAt,closedAt,"
     "isDraft,reviewDecision,url,additions,deletions"
 )
+
+REVIEW_LABELS = {
+    "APPROVED": "approved, not merged",
+    "CHANGES_REQUESTED": "changes requested",
+    "REVIEW_REQUIRED": "review required",
+}
 
 
 class TruncatedError(RuntimeError):
@@ -84,7 +90,7 @@ def is_team_pr(pr, roster):
 
 
 def effective_limit(state, limit):
-    if state == "merged":
+    if state in ("merged", "closed"):
         return min(limit, SEARCH_API_CAP)
     return limit
 
@@ -96,8 +102,75 @@ def check_not_truncated(items, limit, repo, state):
             f"TRUNCATED: {repo} {state} returned {len(items)} items, at or above the "
             f"effective cap of {cap}. Results are incomplete. Narrow the window with a "
             f"later --since, or scan fewer repos per run. Raising --limit will NOT help "
-            f"for merged PRs: GitHub's search API stops at {SEARCH_API_CAP} regardless."
+            f"for merged or closed PRs: GitHub's search API stops at {SEARCH_API_CAP} regardless."
         )
+
+
+def _repo_in(repo, names):
+    lowered = {name.lower() for name in names}
+    repo = repo.lower()
+    return repo in lowered or repo.split("/", 1)[-1] in lowered
+
+
+def classify_stack(repo, frontend, backend):
+    if _repo_in(repo, frontend):
+        return "frontend"
+    if _repo_in(repo, backend):
+        return "backend"
+    return "other"
+
+
+def load_jira_map(path):
+    with open(path) as handle:
+        data = json.load(handle)
+    if not isinstance(data, dict):
+        raise ValueError(f"{path} is not a JSON object")
+    return dict(data.get("child_to_epic") or {})
+
+
+def epic_for(pr, jira_map):
+    keys = pr.get("keys") or []
+    for key in keys:
+        if key in jira_map:
+            return jira_map[key]
+    epics = set(jira_map.values())
+    for key in keys:
+        if key in epics:
+            return key
+    return None
+
+
+def build_epic_rollup(prs, frontend, backend, jira_map):
+    rollup = {}
+    for pr in prs:
+        if jira_map:
+            epic = epic_for(pr, jira_map)
+            targets = [epic] if epic else []
+        elif pr.get("bucket") == "linked_in_scope":
+            targets = pr["keys"]
+        else:
+            targets = []
+        stack = classify_stack(pr["repo"], frontend, backend)
+        state = "merged" if pr.get("merged_at") else "open"
+        for target in targets:
+            entry = rollup.setdefault(target, {"frontend": {"merged": 0, "open": 0},
+                                               "backend": {"merged": 0, "open": 0}})
+            entry.setdefault(stack, {"merged": 0, "open": 0})[state] += 1
+    return rollup
+
+
+def build_stack_counts(prs, frontend, backend, roster):
+    roster = {name.lower() for name in roster}
+    stacks = {stack: {"merged": 0, "open": 0, "additions": 0, "deletions": 0}
+              for stack in ("frontend", "backend", "other")}
+    for pr in prs:
+        if not is_team_pr(pr, roster):
+            continue
+        entry = stacks[classify_stack(pr["repo"], frontend, backend)]
+        entry["merged" if pr.get("merged_at") else "open"] += 1
+        entry["additions"] += pr.get("additions") or 0
+        entry["deletions"] += pr.get("deletions") or 0
+    return stacks
 
 
 def _parse_ts(value):
@@ -128,6 +201,7 @@ def build_pr(raw, repo, state, scope, stale_days, now):
         "branch": branch,
         "created_at": raw.get("createdAt"),
         "merged_at": raw.get("mergedAt"),
+        "closed_at": raw.get("closedAt"),
         "is_draft": is_draft,
         "review_decision": review,
         "age_days": age_days,
@@ -160,6 +234,10 @@ def build_report(merged, open_prs, window, config, now):
         1 for pr in everything if pr["stale_unreviewed"] and is_team_pr(pr, roster))
     counts["no_ticket_team"] = sum(
         1 for pr in orphans if not pr["author_is_bot"] and is_team_pr(pr, roster))
+    counts["opened_in_window_team"] = sum(
+        1 for pr in everything
+        if is_team_pr(pr, roster)
+        and window["since"] <= (pr["created_at"] or "")[:10] <= window["until"])
     return {
         "generated_at": now,
         "window": window,
@@ -245,8 +323,9 @@ def render_markdown(report):
     others = _team_only([pr for pr in everything if pr["bucket"] == "linked_out_of_scope"], roster)
     lines.append(_table(
         [(f"{pr['repo']}#{pr['number']}", _cell(pr["title"]), pr["author"],
-          ", ".join(pr["keys"]), "merged" if pr["merged_at"] else "open") for pr in others],
-        ["PR", "Title", "Author", "Keys", "State"]))
+          ", ".join(pr["keys"]), "merged" if pr["merged_at"] else "open", pr["url"])
+         for pr in others],
+        ["PR", "Title", "Author", "Keys", "State", "URL"]))
 
     lines += ["", "## Stale, unreviewed open PRs", "",
               "Stale, and nobody is reviewing it. An approved-but-unmerged PR is a different "
@@ -261,9 +340,77 @@ def render_markdown(report):
     lines += ["", "## Merged in window, in scope", ""]
     shipped = [pr for pr in report["merged"] if pr["bucket"] == "linked_in_scope"]
     lines.append(_table(
-        [(f"{pr['repo']}#{pr['number']}", _cell(pr["title"]), pr["author"],
-          ", ".join(pr["keys"])) for pr in shipped],
-        ["PR", "Title", "Author", "Keys"]))
+        [(_link(pr), _cell(pr["title"]), pr["author"], ", ".join(pr["keys"]),
+          _date(pr["created_at"]), _date(pr["merged_at"]), _size(pr)) for pr in shipped],
+        ["PR", "Title", "Author", "Keys", "Opened", "Merged", "Size"]))
+
+    lines += ["", render_open_prs(report["open"], roster)]
+    if "stacks" in report:
+        lines += ["", _render_stacks(report["stacks"])]
+    if "epics" in report:
+        lines += ["", _render_epics(report["epics"])]
+    if "closed_unmerged" in report:
+        lines += ["", _render_closed(report["closed_unmerged"], roster)]
+    return "\n".join(lines)
+
+
+def _link(pr):
+    label = f"{pr['repo']}#{pr['number']}"
+    return f"[{label}]({pr['url']})" if pr.get("url") else label
+
+
+def _date(value):
+    return (value or "")[:10]
+
+
+def _size(pr):
+    return f"+{pr['additions']}/-{pr['deletions']}"
+
+
+def render_open_prs(open_prs, roster):
+    team = sorted(_team_only(open_prs, roster), key=lambda pr: pr["created_at"] or "9999")
+    lines = ["## Open PRs (team)", "",
+             "Every PR the team has open right now, whatever its age, drafts included. "
+             "Oldest first.", ""]
+    lines.append(_table(
+        [(_link(pr), _cell(pr["title"]), pr["author"], _date(pr["created_at"]),
+          f"{pr['age_days']}d", "draft" if pr["is_draft"] else "no",
+          REVIEW_LABELS.get(pr["review_decision"], "none"), ", ".join(pr["keys"]))
+         for pr in team],
+        ["PR", "Title", "Author", "Opened", "Age", "Draft", "Review", "Keys"]))
+    return "\n".join(lines)
+
+
+def _render_stacks(stacks):
+    rows = [(stack.capitalize(), tally["merged"], tally["open"],
+             f"+{tally['additions']}/-{tally['deletions']}")
+            for stack, tally in stacks.items()
+            if stack != "other" or tally["merged"] or tally["open"]]
+    lines = ["## Frontend vs backend", "", "The team's PRs, merged in the window and open now.", ""]
+    lines.append(_table(rows, ["Stack", "Merged", "Open", "Size"]))
+    return "\n".join(lines)
+
+
+def _render_epics(epics):
+    def cell(tally):
+        return f"{tally['merged']} merged, {tally['open']} open"
+
+    empty = {"merged": 0, "open": 0}
+    rows = [(epic, cell(sides["frontend"]), cell(sides["backend"]),
+             cell(sides.get("other", empty))) for epic, sides in sorted(epics.items())]
+    lines = ["## By epic", "",
+             "PRs merged in the window and open now, by the epic their ticket sits under.", ""]
+    lines.append(_table(rows, ["Epic", "Frontend", "Backend", "Other"]))
+    return "\n".join(lines)
+
+
+def _render_closed(closed, roster):
+    team = _team_only(closed, roster)
+    lines = ["## Closed without merging", ""]
+    lines.append(_table(
+        [(_link(pr), _cell(pr["title"]), pr["author"], ", ".join(pr["keys"]),
+          _date(pr["created_at"]), f"closed unmerged {_date(pr['closed_at'])}") for pr in team],
+        ["PR", "Title", "Author", "Keys", "Opened", "Merged"]))
     return "\n".join(lines)
 
 
@@ -285,11 +432,11 @@ def _gh(args):
 def build_gh_args(repo, state, since, limit, until=None):
     args = ["pr", "list", "--repo", repo, "--state", state,
             "-L", str(effective_limit(state, limit)), "--json", JSON_FIELDS]
-    if state == "merged":
+    if state in ("merged", "closed"):
         if until:
-            args += ["--search", f"merged:{since}..{until}"]
+            args += ["--search", f"{state}:{since}..{until}"]
         else:
-            args += ["--search", f"merged:>={since}"]
+            args += ["--search", f"{state}:>={since}"]
     return args
 
 
@@ -310,6 +457,15 @@ def main(argv=None):
                         help="comma-separated GitHub handles of the team; a PR counts as the "
                              "team's when its author is on this list OR its ticket key is in "
                              "--keys. Without it, shared-repo totals include other teams.")
+    parser.add_argument("--frontend-repos", default="",
+                        help="comma-separated repos counted as frontend; bare names match "
+                             "with or without the org/ prefix")
+    parser.add_argument("--backend-repos", default="",
+                        help="comma-separated repos counted as backend; bare names match "
+                             "with or without the org/ prefix")
+    parser.add_argument("--jira-map", default=None, metavar="PATH",
+                        help="jira.json from jira_scan.py; its child_to_epic map rolls PRs "
+                             "up to their epic")
     parser.add_argument("--stale-days", type=int, default=3)
     parser.add_argument("--limit", type=int, default=1000)
     parser.add_argument("--out", default=".")
@@ -318,13 +474,22 @@ def main(argv=None):
     repos = [r.strip() for r in args.repos.split(",") if r.strip()]
     scope = [k.strip().upper() for k in args.keys.split(",") if k.strip()]
     roster = [h.strip() for h in args.roster.split(",") if h.strip()]
+    frontend = {r.strip() for r in args.frontend_repos.split(",") if r.strip()}
+    backend = {r.strip() for r in args.backend_repos.split(",") if r.strip()}
+    jira_map = {}
+    if args.jira_map:
+        try:
+            jira_map = load_jira_map(args.jira_map)
+        except (OSError, ValueError) as error:
+            print(f"cannot read --jira-map {args.jira_map}: {error}", file=sys.stderr)
+            return 1
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     until = args.until or now[:10]
 
-    merged, open_prs, failures = [], [], []
+    merged, open_prs, closed, failures = [], [], [], []
     for name in repos:
         repo = name if "/" in name else f"{args.org}/{name}"
-        for state, sink in (("merged", merged), ("open", open_prs)):
+        for state, sink in (("merged", merged), ("open", open_prs), ("closed", closed)):
             try:
                 for raw in fetch(repo, state, args.since, args.limit, until):
                     sink.append(build_pr(raw, repo, state, scope, args.stale_days, now))
@@ -339,6 +504,11 @@ def main(argv=None):
         now=now,
     )
     report["failures"] = failures
+    report["closed_unmerged"] = [pr for pr in closed if not pr["merged_at"]]
+    if frontend or backend:
+        report["stacks"] = build_stack_counts(merged + open_prs, frontend, backend, set(roster))
+    if frontend or backend or args.jira_map:
+        report["epics"] = build_epic_rollup(merged + open_prs, frontend, backend, jira_map)
 
     os.makedirs(args.out, exist_ok=True)
     json_path = os.path.join(args.out, "prs.json")
