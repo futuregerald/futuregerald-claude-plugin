@@ -158,7 +158,7 @@ Parse the user's request for:
   comma-separated (`"Won't Do", "Declined", "Duplicate"`). The values are site-specific, and one the
   site lacks fails every query, so if the line is missing, ask the user; never guess.
 - **Epic start, for Agent F** — when Agent F is dispatched, compute `{EPIC_START}`: the earliest
-  `Created` date among the epic blocks in `jira.md`'s `## Active epics`. Agent F's queries
+  `Created` date among the in-scope epics in `jira.md`'s `## Active epics` and `## Not started`. Agent F's queries
   describe the epic's own work, not the reporting window, so they need the epic's start date, not
   `{START_DATE}`.
 - **Word budget for Agent F** — compute `{WORD_LIMIT_F} = 250 x (epics in scope)` and pass it
@@ -293,15 +293,24 @@ python3 <skill-dir>/scripts/jira_scan.py \
 
 It writes `jira.json` (input for Step 2b's `--jira-map`; never read it yourself) and `jira.md`, the
 tracker digest. `jira.md` puts the sections that are never cut first: `## Not measured` (only when
-something failed), `## Active epics` (key, title, status, priority, parent, assignee with an
-`(inactive)` flag, created date, done/total/in-progress, a description excerpt and, in team scope, up to 4 open
-children with in-review first), `## Flagged` (Blocked, or In Progress with no status change for 5
-days: one line each with its age, and the newest comment for the first 15 only), `## Unassigned`
+something failed), `## Active epics` (in team scope, only epics with work done or in progress:
+key, title, status, priority, parent, assignee with an `(inactive)` flag, created date,
+done/total/in-progress, a 120-character description excerpt, `Refs` for other tickets the
+description names, and up to 2 open children with review or acceptance first; person and epic
+scopes give every epic a block), `## Closed or ongoing epics` (team scope: one line per Done,
+Won't Do, Released or Ongoing epic, with its owner and, when 3 or fewer, its open children),
+`## Flagged` (Blocked, or In Progress with no status change for 5 days: one line each with its age,
+the newest comment for the first 15 lines, and one closing `Long-stalled` line listing every
+non-epic item stalled over 30 days with its owner's first name; stalled epics are left out because
+their own sections cover them), `## Unassigned`
 (unassigned bugs and unassigned In Progress work), `## High priority outside epics` (not-done
 P0/P1, Highest, Blocker or Critical window items with no parent at all), `## Question candidates`,
 `## Unmatched assignees` and `## Doc links`. Then the cuttable detail: `## By person` (team),
-`## Issues` (person) or `## Children` (epic), and `## Not started`. The count JQL is given once
-with an `{EPIC}` placeholder; substitute the epic key to link a count to its query. The last line,
+`## Issues` (person) or `## Children` (epic), and `## Not started` (epics in scope with no work done or in
+progress come first and are never cut, with a description excerpt and refs). The count JQL is given once with an
+`{EPIC}` placeholder; substitute the epic key to link a count to its query, and add
+`AND statusCategory = Done` or `AND statusCategory = "In Progress"` for the done and in-progress
+counts. The last line,
 `Omitted: …`, counts everything cut to fit the word limit.
 
 **Exit codes:**
@@ -399,6 +408,9 @@ digests:
   next unblocked tickets. A block ending `+N more open` has more work than it lists; say so.
 - **Give every item in `## High priority outside epics` a line** in the risk register or its
   person's card: a P0/P1 with no epic appears nowhere else in the digest.
+- **Put every `Long-stalled` entry on that person's card** (key and days), and treat a **closed**
+  line in `## Closed or ongoing epics` that still has open children as a tracker-hygiene finding.
+  An ongoing line with open children is not one: ongoing epics exist to hold open work.
 - **Read `## Unassigned` for the At Risk rule** "a customer-facing defect is unassigned": an
   unassigned bug there is the evidence. Unassigned In Progress work is a finding too: name it.
 

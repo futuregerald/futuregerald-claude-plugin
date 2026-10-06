@@ -146,3 +146,22 @@ def test_agent_e_repo_placeholder_matches_the_rest_of_the_file():
     agent_e = _between(read(AGENT_PROMPTS), "## Agent E", "## Combining")
     assert "--repo {ORG}/{REPO}" in agent_e
     assert "nameWithOwner" not in agent_e
+
+
+def test_skill_lists_closed_or_ongoing_section():
+    assert "## Closed or ongoing epics" in read(SKILL_MD)
+
+
+def test_step_3_puts_long_stalled_on_person_cards():
+    step3 = _between(read(SKILL_MD), "## Step 3", "## Step 4")
+    assert "Long-stalled" in step3 and "person's card" in step3
+
+
+def test_epic_start_reads_active_or_not_started():
+    resolve = _between(read(SKILL_MD), "**Epic start, for Agent F**", "**Word budget for Agent F**")
+    assert "## Active epics" in resolve and "## Not started" in resolve
+
+
+def test_skill_says_how_to_build_done_and_in_progress_count_queries():
+    step2a = _between(read(SKILL_MD), "## Step 2a", "## Step 2b")
+    assert "AND statusCategory = Done" in step2a
