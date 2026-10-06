@@ -19,10 +19,11 @@ BARE_URL = re.compile(r"https?://[^\s<>\"']+")
 URL_TRAILING = ").,;:!?]"
 HIGH_PRIORITY_RANK = {"p0": 0, "blocker": 0, "highest": 0, "p1": 1, "critical": 1}
 MENTION_EXCERPT_LIMIT = 100
-ISSUE_KEY = re.compile(r"\b[A-Z][A-Z0-9]+-\d+\b")
+ISSUE_KEY = re.compile(r"\b[A-Z][A-Z0-9]+-\d+\b(?!-\d)")
+STANDARD_PREFIXES = frozenset({"CVE", "CWE", "GHSA", "ISO", "UTF", "SHA", "TLS", "SSL", "RFC", "SOC", "PCI", "HTTP", "MD"})
 MAX_REFS = 5
 CLOSED_STATUS_PREFIXES = ("released",)
-GOOGLE_DOC = re.compile(r"docs\.google\.com/(document|spreadsheets)/d/([^/?#]+)")
+GOOGLE_DOC = re.compile(r"docs\.google\.com/(document|spreadsheets)/(?:u/\d+/)?d/([^/?#]+)")
 PERSON_GROUPS = ("completed", "in_progress", "stuck", "to_do")
 ROSTER_COLUMNS = {
     "name": "name",
@@ -351,6 +352,7 @@ OPEN_CHILDREN_SHOWN = 2
 LONG_STALLED_DAYS = 30
 OLD_QUESTION_DAYS = 30
 OLD_QUESTION_EXCERPT = 60
+TOUCHED_DESCRIPTION_LIMIT = 60
 SUMMARY_LIMIT = 80
 NOT_STARTED_KEPT = 10
 
@@ -401,9 +403,12 @@ def doc_identity(url: str) -> tuple[str, str]:
         return f"google:{kind}:{doc_id}", f"https://docs.google.com/{kind}/d/{doc_id}"
     parts = urlsplit(url)
     query = ""
-    if parts.path.endswith("viewpage.action"):
-        page = parse_qs(parts.query).get("pageId")
-        query = f"pageId={page[0]}" if page else ""
+    kept = {"viewpage.action": "pageId"}.get(parts.path.rsplit("/", 1)[-1])
+    if (parts.hostname or "").endswith("figma.com"):
+        kept = "node-id"
+    if kept:
+        value = parse_qs(parts.query).get(kept)
+        query = f"{kept}={value[0]}" if value else ""
     canonical = urlunsplit((parts.scheme, parts.netloc, parts.path, query, ""))
     return canonical, canonical
 
@@ -500,10 +505,14 @@ def _render_flagged(flagged, child_map, epic_keys=frozenset()):
                          f"{_clean(comment.get('excerpt'))}")
     if long_stalled:
         ordered = sorted(long_stalled, key=lambda item: -(item.get("age_days") or 0))
+        firsts = [_first_name(item.get("assignee")) for item in ordered]
+        shared = {name for name in firsts if firsts.count(name) > 1 and name != "unassigned"}
+        owners = [_clean(item.get("assignee")) if first in shared else first
+                  for item, first in zip(ordered, firsts)]
         lines.append(f"- Long-stalled, no status change for over {LONG_STALLED_DAYS} days "
                      f"({len(ordered)}): " + ", ".join(
-                         f"{item['key']} {item['age_days']}d {_first_name(item.get('assignee'))}"
-                         for item in ordered))
+                         f"{item['key']} {item['age_days']}d {owner}"
+                         for item, owner in zip(ordered, owners)))
     return _section("## Flagged", lines), cut
 
 
@@ -546,9 +555,9 @@ def _render_doc_links(links):
     lines, seen = [], set()
     for link in links:
         identity, canonical = doc_identity(link["url"])
-        if identity in seen:
+        if (identity, link["epic"]) in seen:
             continue
-        seen.add(identity)
+        seen.add((identity, link["epic"]))
         lines.append(f"- {canonical} ({link['epic']}, {link['kind']})")
     return _section("## Doc links", lines)
 
@@ -602,8 +611,8 @@ def _touched_not_started_line(epic):
     status = _clean(epic.get("status"))
     if status.casefold().split(" ")[0] not in ("to", "backlog", ""):
         line += f" · {status}"
-    if not _clean(epic.get("description")):
-        line += " · no description on the ticket"
+    description = _clean(epic.get("description"))
+    line += f" · {_truncate(description, TOUCHED_DESCRIPTION_LIMIT)}" if description else " · no description on the ticket"
     if epic.get("refs"):
         line += f" · refs: {', '.join(epic['refs'])}"
     return line
@@ -860,9 +869,13 @@ def _child_entry(issue, roster):
 
 
 def description_refs(description, own_key, child_keys):
+    found = ISSUE_KEY.findall(adf_text(description, 10 ** 9))
+    for url in adf_links(description):
+        found += ISSUE_KEY.findall(urlsplit(url).path)
     refs = []
-    for ref in ISSUE_KEY.findall(adf_text(description, 10 ** 9)):
-        if ref != own_key and ref not in child_keys and ref not in refs:
+    for ref in found:
+        if (ref != own_key and ref not in child_keys and ref not in refs
+                and ref.split("-", 1)[0] not in STANDARD_PREFIXES):
             refs.append(ref)
     return refs[:MAX_REFS]
 

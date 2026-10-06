@@ -300,13 +300,14 @@ description names, and up to 2 open children with review or acceptance first; pe
 scopes give every epic a block), `## Closed or ongoing epics` (team scope: one line per Done,
 Won't Do, Released or Ongoing epic, with its owner and, when 3 or fewer, its open children),
 `## Flagged` (Blocked, or In Progress with no status change for 5 days: one line each with its age,
-the newest comment for the first 15 lines, and one closing `Long-stalled` line listing everything
-stalled over 30 days with its owner's first name), `## Unassigned`
+the newest comment for the first 15 lines, and one closing `Long-stalled` line listing every
+non-epic item stalled over 30 days with its owner's first name; stalled epics are left out because
+their own sections cover them), `## Unassigned`
 (unassigned bugs and unassigned In Progress work), `## High priority outside epics` (not-done
 P0/P1, Highest, Blocker or Critical window items with no parent at all), `## Question candidates`,
 `## Unmatched assignees` and `## Doc links`. Then the cuttable detail: `## By person` (team),
-`## Issues` (person) or `## Children` (epic), and `## Not started` (epics touched this window but not
-started come first and are never cut, with their refs). The count JQL is given once with an
+`## Issues` (person) or `## Children` (epic), and `## Not started` (epics in scope with no work done or in
+progress come first and are never cut, with a description excerpt and refs). The count JQL is given once with an
 `{EPIC}` placeholder; substitute the epic key to link a count to its query, and add
 `AND statusCategory = Done` or `AND statusCategory = "In Progress"` for the done and in-progress
 counts. The last line,

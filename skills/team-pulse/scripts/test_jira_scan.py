@@ -1154,7 +1154,7 @@ def test_collect_epic_block_fields():
     assert one["parent"] == {"key": "I-1", "summary": "Synthetic initiative"}
     assert one["assignee"] == {"name": "Carol Example", "active": True}
     assert one["description"].startswith("Build the synthetic widget.")
-    assert len(one["description"]) <= 200
+    assert len(one["description"]) <= jira_scan.DESCRIPTION_LIMIT
     assert one["progress"] == {"total": 2, "done": 1, "in_progress": 1, "pct": 50}
     total = f"parent = E-1 AND (resolution is EMPTY OR resolution not in {EXCLUDED_JQL})"
     assert one["jql"] == {"total": total, "done": total + " AND statusCategory = Done",
@@ -1825,7 +1825,7 @@ def test_render_digest_touched_not_started_epics_lead_not_started_and_are_never_
     text = _render(data, word_limit=50)
     lines = _section_text(text, "## Not started").strip().splitlines()
     assert lines[0] == "- E-5 Synthetic E-5 · created 2026-09-16 · no description on the ticket · refs: TD-1953"
-    assert lines[1] == "- E-6 Synthetic E-6 · created 2026-09-01 · Blocked"
+    assert lines[1] == "- E-6 Synthetic E-6 · created 2026-09-01 · Blocked · Synthetic description."
     assert lines[:2] == _section_text(uncapped, "## Not started").strip().splitlines()[:2]
 
 
@@ -1939,7 +1939,8 @@ def test_render_digest_lists_each_document_once_by_canonical_url():
                          {"url": base + "/edit", "epic": "E-1", "kind": "doc"},
                          {"url": "https://docs.google.com/spreadsheets/d/S1/edit", "epic": "E-1", "kind": "sheet"}]
     lines = _section_text(_render(data), "## Doc links").strip().splitlines()
-    assert lines == [f"- {base} (E-1, doc)", "- https://docs.google.com/spreadsheets/d/S1 (E-1, sheet)"]
+    assert lines == [f"- {base} (E-1, doc)", f"- {base} (E-2, doc)",
+                     "- https://docs.google.com/spreadsheets/d/S1 (E-1, sheet)"]
 
 
 def test_render_digest_old_question_candidates_get_a_short_excerpt():
@@ -1978,3 +1979,61 @@ def test_description_refs_skips_own_key_and_direct_children_and_caps_at_five():
     assert jira_scan.description_refs(description, "EP-2", {"CH-3"}) == [
         "TD-1953", "AB-1", "CX-9", "DP-4", "ZZ-5"]
     assert jira_scan.MAX_REFS == 5
+
+
+def test_description_refs_reads_issue_keys_from_smart_links():
+    description = {"type": "doc", "content": [{"type": "paragraph", "content": [
+        {"type": "text", "text": "Depends on "},
+        {"type": "inlineCard", "attrs": {"url": "https://example.atlassian.net/browse/TD-1953"}},
+        {"type": "text", "text": " and AB-2"}]}]}
+    assert jira_scan.description_refs(description, "EP-1", set()) == ["AB-2", "TD-1953"]
+
+
+def test_description_refs_skips_standards_identifiers():
+    description = {"type": "doc", "content": [_text_paragraph(
+        "Fix CVE-2024-3094 per ISO-27001, UTF-8, SHA-256, TLS-1 and RFC-9110; tracked in AB-7.")]}
+    assert jira_scan.description_refs(description, "EP-1", set()) == ["AB-7"]
+
+
+def test_render_digest_closed_line_lists_child_keys_at_three_but_not_four():
+    data = _kinds_data()
+    data["epics"] = [
+        _kind_epic("E-7", "Done ✔️", "done", 1, 0, total=4,
+                   children=[_child(f"C-7{n}", "x", "To Do", None, "new") for n in range(3)]),
+        _kind_epic("E-8", "Done ✔️", "done", 1, 0, total=5,
+                   children=[_child(f"C-8{n}", "x", "To Do", None, "new") for n in range(4)]),
+    ]
+    lines = _section_text(_render(data), "## Closed or ongoing epics").strip().splitlines()
+    assert lines[0].endswith("3 open: C-70 unassigned, C-71 unassigned, C-72 unassigned")
+    assert lines[1].endswith("4 open")
+
+
+def test_render_digest_touched_not_started_lines_survive_a_tight_word_cap():
+    data = _big_data()
+    touched = [_kind_epic(f"T-{n}", "Backlog", "new", 0, 0, total=1) for n in range(12)]
+    data["epics"] = data["epics"] + touched
+    uncapped = _render(data, word_limit=10 ** 6)
+    text = _render(data, word_limit=900)
+    capped_lines = _section_text(text, "## Not started").strip().splitlines()
+    full_lines = _section_text(uncapped, "## Not started").strip().splitlines()
+    assert capped_lines[:12] == full_lines[:12]
+    assert all(line.startswith(f"- T-{n} ") for n, line in enumerate(capped_lines[:12]))
+    assert " 15 not-started epics" in text.rstrip("\n").splitlines()[-1]
+
+
+def test_render_digest_long_stalled_uses_full_names_when_first_names_collide():
+    data = _data()
+    data["child_to_epic"] = {}
+    data["flagged"] = [_flag("S-1", "stalled", 50, assignee="Sam One"),
+                       _flag("S-2", "stalled", 40, assignee="Sam Two"),
+                       _flag("S-3", "stalled", 35, assignee="Rae Three")]
+    line = _section_text(_render(data), "## Flagged").strip().splitlines()[-1]
+    assert line.endswith("(3): S-1 50d Sam One, S-2 40d Sam Two, S-3 35d Rae")
+
+
+@pytest.mark.parametrize("url,identity", [
+    ("https://www.figma.com/design/F1/Name?node-id=1-2&t=x", "https://www.figma.com/design/F1/Name?node-id=1-2"),
+    ("https://docs.google.com/document/u/0/d/AbC/edit", "google:document:AbC"),
+])
+def test_doc_identity_keeps_figma_frames_and_reads_google_user_paths(url, identity):
+    assert jira_scan.doc_identity(url)[0] == identity
