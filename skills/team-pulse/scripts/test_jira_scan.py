@@ -258,7 +258,7 @@ def test_question_candidates_flags_a_newest_comment_with_a_question():
     ]
     assert jira_scan.question_candidates(comments, 20) == [
         {"author": "Carol Example", "created": comments[1]["created"], "age_days": 3,
-         "excerpt": "Who owns the rollou…"},
+         "addressees": [], "excerpt": "Who owns the rollou…"},
     ]
 
 
@@ -397,6 +397,7 @@ def test_render_digest_team_scope_has_every_section_in_order():
         "## Active epics",
         "## Flagged",
         "## Unassigned",
+        "## High priority outside epics",
         "## Question candidates",
         "## Unmatched assignees",
         "## Doc links",
@@ -502,6 +503,7 @@ def test_render_digest_person_scope_shows_only_that_person():
         "## Active epics",
         "## Flagged",
         "## Unassigned",
+        "## High priority outside epics",
         "## Question candidates",
         "## Unmatched assignees",
         "## Doc links",
@@ -581,7 +583,8 @@ def _big_data():
     }
 
 
-NEVER_CUT = ("## Active epics", "## Flagged", "## Unassigned", "## Question candidates",
+NEVER_CUT = ("## Active epics", "## Flagged", "## Unassigned", "## High priority outside epics",
+             "## Question candidates",
              "## Unmatched assignees", "## Doc links")
 
 
@@ -1424,3 +1427,233 @@ def test_collect_reports_raw_counts_for_cross_checking():
 def test_collect_counts_flagged_candidates_before_the_cap():
     counts = _collect(handler=_flag_world(), max_flagged=60)["counts"]
     assert counts == {"window": 3, "stalled": 70, "blocked": 3, "flagged_candidates": 73}
+
+
+def _text_paragraph(text):
+    return {"type": "paragraph", "content": [{"type": "text", "text": text}]}
+
+
+def test_adf_links_finds_bare_urls_in_text_and_strips_trailing_punctuation():
+    node = {"type": "doc", "content": [
+        _text_paragraph("Plan: (see https://docs.google.com/document/d/X/edit)."),
+        _text_paragraph("Also https://example.atlassian.net/wiki/spaces/S/pages/2, and done!"),
+    ]}
+    assert jira_scan.adf_links(node) == [
+        "https://docs.google.com/document/d/X/edit",
+        "https://example.atlassian.net/wiki/spaces/S/pages/2",
+    ]
+
+
+def test_adf_links_does_not_repeat_a_url_that_is_both_marked_and_written_out():
+    url = "https://docs.google.com/document/d/X/edit"
+    node = {"type": "doc", "content": [{"type": "paragraph", "content": [
+        {"type": "text", "text": url, "marks": [{"type": "link", "attrs": {"href": url}}]},
+        {"type": "text", "text": " and https://www.figma.com/file/abc"},
+    ]}]}
+    assert jira_scan.adf_links(node) == [url, "https://www.figma.com/file/abc"]
+
+
+def _mention(account_id, text):
+    return {"type": "mention", "attrs": {"id": account_id, "text": text}}
+
+
+def _mention_comment(author, created, *content):
+    return {"author": {"accountId": f"acct-{author.lower()}", "displayName": author},
+            "created": created,
+            "body": {"type": "doc", "content": [{"type": "paragraph", "content": list(content)}]}}
+
+
+def test_question_candidates_a_newest_comment_that_mentions_someone_else_is_a_candidate():
+    comments = [_mention_comment("Mia Example", _days_ago(15), _mention("acct-pm", "@Pat Example"),
+                                 {"type": "text", "text": " this change is done, and on dev"})]
+    assert jira_scan.question_candidates(comments, 300) == [
+        {"author": "Mia Example", "created": comments[0]["created"], "age_days": 15,
+         "addressees": ["Pat Example"], "excerpt": "@Pat Example this change is done, and on dev"},
+    ]
+
+
+def test_question_candidates_mentioning_only_yourself_is_not_a_candidate():
+    comments = [_mention_comment("Mia Example", _days_ago(2), _mention("acct-mia example", "@Mia E"),
+                                 {"type": "text", "text": " note to self"})]
+    assert jira_scan.question_candidates(comments, 300) == []
+
+
+def test_question_candidates_falls_back_to_mention_text_without_an_id():
+    comments = [_mention_comment("Mia Example", _days_ago(2), _mention(None, "@Mia Example"),
+                                 {"type": "text", "text": " reminder"}),
+                ]
+    assert jira_scan.question_candidates(comments, 300) == []
+    comments[0]["body"]["content"][0]["content"][0] = _mention(None, "@Pat Example")
+    assert jira_scan.question_candidates(comments, 300)[0]["addressees"] == ["Pat Example"]
+
+
+def test_question_candidates_lists_each_addressee_once():
+    comments = [_mention_comment("Mia Example", _days_ago(2), _mention("acct-pm", "@Pat Example"),
+                                 {"type": "text", "text": " and again "},
+                                 _mention("acct-pm", "@Pat Example"))]
+    assert jira_scan.question_candidates(comments, 300)[0]["addressees"] == ["Pat Example"]
+
+
+def test_question_candidates_mention_only_excerpt_is_capped_at_100_characters():
+    long_text = " " + "word " * 80
+    mention_only = [_mention_comment("Mia Example", _days_ago(2), _mention("acct-pm", "@Pat Example"),
+                                     {"type": "text", "text": long_text})]
+    asked = [_mention_comment("Mia Example", _days_ago(2), _mention("acct-pm", "@Pat Example"),
+                              {"type": "text", "text": long_text + "ready?"})]
+    assert jira_scan.MENTION_EXCERPT_LIMIT == 100
+    assert len(jira_scan.question_candidates(mention_only, 300)[0]["excerpt"]) == 100
+    assert len(jira_scan.question_candidates(asked, 300)[0]["excerpt"]) == 300
+
+
+def test_question_candidates_a_question_without_mentions_has_no_addressees():
+    comments = [_comment("Carol Example", _days_ago(3), "Who owns this?")]
+    assert jira_scan.question_candidates(comments, 300)[0]["addressees"] == []
+
+
+def test_render_digest_question_line_names_who_it_waits_on():
+    data = _data()
+    data["questions"] = [{"key": "C-3", "author": "Mia Example", "addressees": ["Pat Example"],
+                          "created": "2026-09-21T09:00:00.000+0000", "age_days": 15,
+                          "excerpt": "@Pat Example done, on dev"}]
+    lines = _section_text(_render(data), "## Question candidates").strip().splitlines()
+    assert lines == ["- C-3 · Mia Example → Pat Example · 2026-09-21 · 15 days: @Pat Example done, on dev"]
+
+
+def _hp(key, priority, category="new", issuetype="Task", assignee=None):
+    issue = _issue(key, category, assignee=assignee,
+                   fields={"issuetype": {"name": issuetype}, "priority": {"name": priority},
+                           "summary": f"Synthetic {key} " + "x" * 90})
+    return issue
+
+
+def test_high_priority_outside_epics_keeps_loose_p0_p1_work_by_rank_then_key():
+    issues = [_hp("H-3", "P1"), _hp("H-1", "Highest"), _hp("H-2", "P0"), _hp("H-4", "Critical"),
+              _hp("H-5", "Blocker"), _hp("H-6", "P2"), _hp("H-7", "P1", category="done"),
+              _hp("H-8", "P1", issuetype="Epic"), _hp("H-9", "P1"), _hp("H-10", "P1"), _hp("H-3", "P1")]
+    found = jira_scan.high_priority_outside_epics(issues, {"H-9": "E-1"}, {"H-10"})
+    assert [item["key"] for item in found] == ["H-1", "H-2", "H-5", "H-3", "H-4"]
+    assert found[0] == {"key": "H-1", "type": "Task", "status": "To Do", "priority": "Highest",
+                        "assignee": None, "summary": "Synthetic H-1 " + "x" * 90}
+
+
+def test_high_priority_rank_is_a_named_constant():
+    assert jira_scan.HIGH_PRIORITY_RANK == {"p0": 0, "blocker": 0, "highest": 0, "p1": 1, "critical": 1}
+
+
+def _with_high_priority(data):
+    data["high_priority"] = [
+        {"key": "H-1", "type": "Bug", "status": "To Do", "priority": "P1",
+         "assignee": "Alice Example", "summary": "Synthetic forged token accepted " + "y" * 90},
+        {"key": "H-2", "type": "Task", "status": "In Progress", "priority": "P0",
+         "assignee": None, "summary": "Synthetic outage follow-up"},
+    ]
+    return data
+
+
+def test_render_digest_high_priority_section_follows_unassigned_with_one_line_each():
+    text = _render(_with_high_priority(_data()))
+    headings = _headings(text)
+    assert headings.index("## High priority outside epics") == headings.index("## Unassigned") + 1
+    lines = _section_text(text, "## High priority outside epics").strip().splitlines()
+    assert lines[0] == ("- H-1 · Bug · To Do · P1 · Alice Example · Synthetic forged token accepted "
+                        + "y" * 47 + "…")
+    assert lines[1] == "- H-2 · Task · In Progress · P0 · unassigned · Synthetic outage follow-up"
+
+
+def test_render_digest_high_priority_section_is_never_cut():
+    data = _with_high_priority(_big_data())
+    uncapped = _render(data, word_limit=10 ** 6)
+    text = _render(data, word_limit=900)
+    assert (_section_text(text, "## High priority outside epics")
+            == _section_text(uncapped, "## High priority outside epics"))
+    assert "H-2" in _section_text(text, "## High priority outside epics")
+
+
+def test_render_digest_high_priority_section_empty_says_none():
+    assert _section_text(_render(), "## High priority outside epics").strip() == "None."
+
+
+def test_render_digest_high_priority_person_scope_keeps_that_person_and_epic_scope_none():
+    data = _with_high_priority(_data())
+    person = _section_text(_render(data, scope="person", person="Alice Example"),
+                           "## High priority outside epics")
+    assert "H-1" in person and "H-2" not in person
+    data["epic"] = "E-1"
+    assert _section_text(_render(data, scope="epic"), "## High priority outside epics").strip() == "None."
+
+
+def _high_priority_world():
+    base = _world()
+    loose = _hp("H-1", "P1", assignee=ALICE)
+    under_story = _hp("H-2", "P1", assignee=ALICE)
+
+    def handler(cmd):
+        if cmd[1:4] == ["jira", "workitem", "view"] and _fields(cmd) == "parent" and cmd[4] in ("H-1", "H-2"):
+            return _parent_view(cmd[4], "X-2" if cmd[4] == "H-2" else None, parent_type="Story")
+        result = base(cmd)
+        if "--jql" in cmd and "ORDER BY updated DESC" in _jql(cmd):
+            return result + [loose, under_story]
+        return result
+
+    return handler
+
+
+def test_collect_lists_high_priority_window_items_with_no_parent():
+    data = _collect(handler=_high_priority_world())
+    assert [item["key"] for item in data["high_priority"]] == ["H-1"]
+    assert data["high_priority"][0]["assignee"] == "Alice Example"
+
+
+def test_collect_lists_each_question_key_once():
+    base = _world()
+
+    def handler(cmd):
+        if "--jql" in cmd and _jql(cmd).startswith("parent = C-3"):
+            return []
+        if cmd[1:4] == ["jira", "workitem", "view"] and cmd[4] == "C-3" and _fields(cmd) == EPIC_VIEW_FIELDS:
+            return _epic_view("C-3", "Synthetic", comments=[
+                _comment("Alice Example", _days_ago(1), "Is this an epic question?")])
+        result = base(cmd)
+        if "--jql" in cmd and "issuetype = Epic" in _jql(cmd) and 'statusCategory = "To Do"' not in _jql(cmd):
+            return result + [_task("C-3", "indeterminate", CAROL, status_name="Blocked", issuetype="Epic")]
+        return result
+
+    keys = [item["key"] for item in _collect(handler=handler)["questions"]]
+    assert keys.count("C-3") == 1
+
+
+def test_acli_text_retries_once_after_a_transient_failure():
+    calls, outcomes = [], [_completed(stderr="✗ Error: unexpected error, trace id: abc", returncode=1),
+                           _completed(stdout="[]")]
+    runner = _runner(lambda cmd: outcomes.pop(0), calls)
+    assert jira_scan.run_acli(["jira", "workitem", "search"], runner=runner) == []
+    assert len(calls) == 2
+
+
+def test_acli_text_gives_up_after_the_second_failure():
+    calls = []
+    runner = _runner(lambda cmd: _completed(stderr="✗ Error: unexpected error", returncode=1), calls)
+    with pytest.raises(jira_scan.AcliError, match="unexpected error"):
+        jira_scan.run_acli(["jira", "workitem", "search"], runner=runner)
+    assert len(calls) == 2
+
+
+def test_acli_text_does_not_retry_a_rate_limit():
+    calls = []
+    runner = _runner(lambda cmd: _completed(stderr="429 Too Many Requests", returncode=1), calls)
+    with pytest.raises(jira_scan.AcliError, match="rate limit"):
+        jira_scan.run_acli(["jira", "workitem", "search"], runner=runner)
+    assert len(calls) == 1
+
+
+def test_main_survives_one_transient_window_search_failure(tmp_path, capsys):
+    base, failed = _world(), []
+
+    def handler(cmd):
+        if "--jql" in cmd and "ORDER BY updated DESC" in _jql(cmd) and not failed:
+            failed.append(True)
+            return _completed(stderr="✗ Error: unexpected error, trace id: abc", returncode=1)
+        return base(cmd)
+
+    assert jira_scan.main(_argv(tmp_path), runner=_runner(handler)) == 0
+    assert failed == [True]

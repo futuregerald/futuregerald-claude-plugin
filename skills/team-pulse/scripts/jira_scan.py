@@ -15,6 +15,10 @@ from urllib.parse import urlparse
 PLACEHOLDER = re.compile(r"^\[.*\]$")
 ELLIPSIS = "…"
 CARD_TYPES = ("inlineCard", "blockCard", "embedCard")
+BARE_URL = re.compile(r"https?://[^\s<>\"']+")
+URL_TRAILING = ").,;:!?]"
+HIGH_PRIORITY_RANK = {"p0": 0, "blocker": 0, "highest": 0, "p1": 1, "critical": 1}
+MENTION_EXCERPT_LIMIT = 100
 PERSON_GROUPS = ("completed", "in_progress", "stuck", "to_do")
 ROSTER_COLUMNS = {
     "name": "name",
@@ -116,6 +120,8 @@ def _adf_link_walk(node, found):
         url = (node.get("attrs") or {}).get("url")
         if url:
             found.append(url)
+    if node.get("type") == "text":
+        found.extend(match.rstrip(URL_TRAILING) for match in BARE_URL.findall(node.get("text") or ""))
     for mark in node.get("marks") or []:
         if mark.get("type") == "link":
             href = (mark.get("attrs") or {}).get("href")
@@ -232,6 +238,25 @@ def unassigned_issues(issues: list[dict]) -> list[dict]:
     return found
 
 
+def high_priority_outside_epics(issues: list[dict], child_map: dict[str, str],
+                                has_parent: set[str]) -> list[dict]:
+    found, seen = [], set()
+    for issue in issues:
+        fields = issue.get("fields") or {}
+        priority = (fields.get("priority") or {}).get("name") or ""
+        if (issue["key"] in seen or issue["key"] in child_map or issue["key"] in has_parent
+                or priority.casefold() not in HIGH_PRIORITY_RANK or _category(issue) == "done"
+                or _issuetype_name(issue).casefold() == "epic"):
+            continue
+        seen.add(issue["key"])
+        found.append({"key": issue["key"], "type": _issuetype_name(issue),
+                      "status": _status_name(issue), "priority": priority,
+                      "assignee": (fields.get("assignee") or {}).get("displayName"),
+                      "summary": fields.get("summary") or ""})
+    return sorted(found, key=lambda item: (HIGH_PRIORITY_RANK[item["priority"].casefold()],
+                                           _key_order(item["key"])))
+
+
 def _open_rank(child):
     if "review" in (child.get("status") or "").casefold():
         return 0
@@ -256,20 +281,49 @@ def _comment_text(body, limit):
     return adf_text(body, limit)
 
 
+def _mentions(node, found):
+    if not isinstance(node, dict):
+        return
+    if node.get("type") == "mention":
+        attrs = node.get("attrs") or {}
+        found.append((attrs.get("id"), (attrs.get("text") or "").lstrip("@").strip()))
+    for child in node.get("content") or []:
+        _mentions(child, found)
+
+
+def _addressees(comment):
+    author = comment.get("author") or {}
+    mentions = []
+    _mentions(comment.get("body"), mentions)
+    names = []
+    for account_id, name in mentions:
+        if account_id:
+            if account_id == author.get("accountId"):
+                continue
+        elif name.casefold() == (author.get("displayName") or "").casefold():
+            continue
+        if name and name not in names:
+            names.append(name)
+    return names
+
+
 def question_candidates(comments: list[dict], limit: int) -> list[dict]:
     dated = [comment for comment in comments if comment.get("created")]
     if not dated:
         return []
     newest = max(dated, key=lambda comment: parse_jira_time(comment["created"]))
     full = _comment_text(newest.get("body"), 10 ** 9)
-    if "?" not in full:
+    asks = "?" in full
+    addressees = _addressees(newest)
+    if not asks and not addressees:
         return []
     created = parse_jira_time(newest["created"])
     return [{
         "author": (newest.get("author") or {}).get("displayName") or "unknown",
         "created": newest["created"],
         "age_days": (datetime.now(timezone.utc) - created).days,
-        "excerpt": _truncate(full, limit),
+        "addressees": addressees,
+        "excerpt": _truncate(full, limit if asks else min(limit, MENTION_EXCERPT_LIMIT)),
     }]
 
 
@@ -385,9 +439,20 @@ def _render_unassigned(items):
     ])
 
 
+def _render_high_priority(items):
+    return _section("## High priority outside epics", [
+        f"- {item['key']} · {_clean(item.get('type'))} · {_clean(item.get('status'))} · "
+        f"{_clean(item.get('priority'))} · {_clean(item.get('assignee')) or 'unassigned'} · "
+        f"{_truncate(_clean(item.get('summary')), SUMMARY_LIMIT)}"
+        for item in items
+    ])
+
+
 def _render_questions(questions):
     return _section("## Question candidates", [
-        f"- {item['key']} · {_clean(item.get('author'))} · {str(item.get('created') or '')[:10]} · "
+        f"- {item['key']} · {_clean(item.get('author'))}"
+        f"{' → ' + ', '.join(_clean(name) for name in item['addressees']) if item.get('addressees') else ''}"
+        f" · {str(item.get('created') or '')[:10]} · "
         f"{item.get('age_days')} days: {_clean(item.get('excerpt'))}"
         for item in questions
     ])
@@ -461,6 +526,7 @@ def _scoped(data, scope, person):
     links = list(data.get("doc_links") or [])
     not_started = list(data.get("not_started") or [])
     unassigned = list(data.get("unassigned") or [])
+    high_priority = list(data.get("high_priority") or [])
     people = dict(data.get("people") or {})
     child_map = data.get("child_to_epic") or {}
     if scope == "person":
@@ -478,7 +544,9 @@ def _scoped(data, scope, person):
         flagged = own_flagged
         questions = [item for item in questions if item["key"] in keys]
         not_started = [epic for epic in not_started if _same_person(epic.get("assignee"), person)]
+        high_priority = [item for item in high_priority if _same_person(item.get("assignee"), person)]
     elif scope == "epic":
+        high_priority = []
         wanted = data.get("epic")
         if wanted:
             epics = [epic for epic in epics if epic["key"] == wanted]
@@ -491,7 +559,7 @@ def _scoped(data, scope, person):
     if scope != "team":
         links = [link for link in links if link["epic"] in epic_keys]
         unassigned = [item for item in unassigned if child_map.get(item["key"]) in epic_keys]
-    return epics, flagged, unassigned, questions, links, not_started, people
+    return epics, flagged, unassigned, high_priority, questions, links, not_started, people
 
 
 def _word_count(parts):
@@ -526,7 +594,8 @@ def render_digest(data: dict, scope: str, word_limit: int, person: str | None = 
         raise ValueError(f"unknown scope: {scope}")
     if scope == "person" and not person:
         raise ValueError("person scope needs a person")
-    epics, flagged, unassigned, questions, links, not_started, people = _scoped(data, scope, person)
+    epics, flagged, unassigned, high_priority, questions, links, not_started, people = _scoped(
+        data, scope, person)
     flagged_text, comments_cut = _render_flagged(flagged, data.get("child_to_epic") or {})
     never = [_header(data, scope, person)]
     if data.get("failures"):
@@ -535,6 +604,7 @@ def render_digest(data: dict, scope: str, word_limit: int, person: str | None = 
         _render_epics(epics, data.get("count_jql"), with_open_children=scope == "team"),
         flagged_text,
         _render_unassigned(unassigned),
+        _render_high_priority(high_priority),
         _render_questions(questions),
         _section("## Unmatched assignees", [f"- {_clean(name)}" for name in data.get("unmatched") or []]),
         _render_doc_links(links),
@@ -563,18 +633,22 @@ class AcliError(Exception):
     pass
 
 
+ACLI_ATTEMPTS = 2
+
+
 def _acli_text(args, runner):
     command = ["acli"] + list(args)
-    try:
-        result = runner(command, capture_output=True, text=True)
-    except FileNotFoundError as error:
-        raise AcliError(f"acli not found on PATH: {error}") from error
-    stderr = (result.stderr or "").strip()
-    if RATE_LIMITED.search(stderr):
-        raise AcliError(f"Jira rate limit hit (HTTP 429) on: {' '.join(command)}\n{stderr}")
-    if result.returncode != 0:
-        raise AcliError(f"acli failed: {' '.join(command)}\n{stderr}")
-    return result.stdout or ""
+    for attempt in range(1, ACLI_ATTEMPTS + 1):
+        try:
+            result = runner(command, capture_output=True, text=True)
+        except FileNotFoundError as error:
+            raise AcliError(f"acli not found on PATH: {error}") from error
+        stderr = (result.stderr or "").strip()
+        if RATE_LIMITED.search(stderr):
+            raise AcliError(f"Jira rate limit hit (HTTP 429) on: {' '.join(command)}\n{stderr}")
+        if result.returncode == 0:
+            return result.stdout or ""
+    raise AcliError(f"acli failed: {' '.join(command)}\n{stderr}")
 
 
 def _without_banner(text):
@@ -778,6 +852,8 @@ def collect(cfg: dict, runner=subprocess.run, workers: int = 8) -> dict:
                 and parent["key"] not in epic_order and parent["key"] not in extra):
             extra.append(parent["key"])
     epic_order += extra
+    has_parent = {key for key in unclaimed
+                  if _fields(parents.get(("parent", key)) or {}).get("parent")}
 
     active = set(epic_order)
     zero_done = [epic["key"] for epic in not_started
@@ -846,6 +922,8 @@ def collect(cfg: dict, runner=subprocess.run, workers: int = 8) -> dict:
         questions += [{"key": key, **candidate} for candidate in
                       question_candidates(_comments(second.get(("epic", key)) or {}), COMMENT_LIMIT)]
 
+    questions = list({item["key"]: item for item in reversed(questions)}.values())[::-1]
+
     not_started_entries = []
     for key in zero_done:
         fields = dict(_fields(next(epic for epic in not_started if epic["key"] == key)))
@@ -861,6 +939,12 @@ def collect(cfg: dict, runner=subprocess.run, workers: int = 8) -> dict:
                       if not _is_epic_type(_fields(issue).get("issuetype"))]
     people, unmatched = group_by_person(stalled_window, roster)
     unassigned = unassigned_issues(pool)
+    high_priority = high_priority_outside_epics(
+        [issue for issue in window if not _is_epic_type(_fields(issue).get("issuetype"))],
+        child_map, has_parent)
+    window_by_key = {issue["key"]: issue for issue in window}
+    for item in high_priority:
+        item["assignee"] = _assignee_name(_fields(window_by_key[item["key"]]).get("assignee"), roster)
     data = {
         "window": {"since": since, "until": until, "keys": list(cfg["keys"])},
         "count_jql": count_jql,
@@ -869,6 +953,7 @@ def collect(cfg: dict, runner=subprocess.run, workers: int = 8) -> dict:
         "people": people,
         "unmatched": unmatched,
         "unassigned": unassigned,
+        "high_priority": high_priority,
         "flagged": flagged,
         "questions": questions,
         "doc_links": doc_links,
