@@ -313,8 +313,9 @@ def _epic(key, summary, children=(), assignee=None, description="Synthetic descr
     }
 
 
-def _child(key, summary, status="In Progress 🛠️", assignee=None):
-    return {"key": key, "summary": summary, "status": status, "assignee": assignee}
+def _child(key, summary, status="In Progress 🛠️", assignee=None, category="indeterminate"):
+    return {"key": key, "summary": summary, "status": status, "assignee": assignee,
+            "category": category}
 
 
 def _data():
@@ -324,7 +325,7 @@ def _data():
         "count_jql": COUNT_JQL,
         "epics": [
             _epic("E-1", "Synthetic epic one",
-                  children=[_child("C-1", "Synthetic done task", "Done ✅", "Alice Example"),
+                  children=[_child("C-1", "Synthetic done task", "Done ✅", "Alice Example", "done"),
                             _child("C-3", "Synthetic blocked task", "Blocked", "Carol Example")],
                   assignee={"name": "Carol Example", "active": True}),
             _epic("E-2", "Synthetic epic two",
@@ -353,6 +354,10 @@ def _data():
         "not_started": [
             {"key": "E-7", "summary": "Synthetic idle epic", "created": "2026-05-01T00:00:00.000+0000",
              "age_days": 157, "assignee": "Bob Example"},
+        ],
+        "unassigned": [
+            {"key": "C-5", "type": "Bug", "status": "To Do", "priority": "High",
+             "summary": "Synthetic unassigned defect"},
         ],
         "failures": [],
         "omitted": {"issues": 0, "comments": 0},
@@ -389,6 +394,7 @@ def test_render_digest_team_scope_has_every_section_in_order():
     assert _headings(_render()) == [
         "## Active epics",
         "## Flagged",
+        "## Unassigned",
         "## Question candidates",
         "## Unmatched assignees",
         "## Doc links",
@@ -456,7 +462,7 @@ def test_render_digest_ends_with_omitted_line():
     )
 
 
-def test_render_digest_carries_collector_omissions_and_caps_comments_at_three():
+def test_render_digest_carries_collector_omissions_and_renders_only_the_newest_comment():
     data = _data()
     data["omitted"] = {"issues": 13, "comments": 2}
     data["flagged"][0]["comments"] = [
@@ -464,9 +470,10 @@ def test_render_digest_carries_collector_omissions_and_caps_comments_at_three():
          "excerpt": f"note {n}"} for n in range(5)
     ]
     text = _render(data)
-    assert "note 3" not in text and "note 4" not in text
+    assert "note 4" in text
+    assert not any(f"note {n}" in text for n in range(4))
     assert text.rstrip("\n").splitlines()[-1] == (
-        "Omitted: 13 issues, 0 not-started epics, 4 comments (word limit 5000)"
+        "Omitted: 13 issues, 0 not-started epics, 6 comments (word limit 5000)"
     )
 
 
@@ -485,6 +492,7 @@ def test_render_digest_person_scope_shows_only_that_person():
     assert headings == [
         "## Active epics",
         "## Flagged",
+        "## Unassigned",
         "## Question candidates",
         "## Unmatched assignees",
         "## Doc links",
@@ -564,7 +572,7 @@ def _big_data():
     }
 
 
-NEVER_CUT = ("## Active epics", "## Flagged", "## Question candidates",
+NEVER_CUT = ("## Active epics", "## Flagged", "## Unassigned", "## Question candidates",
              "## Unmatched assignees", "## Doc links")
 
 
@@ -614,7 +622,178 @@ def test_render_digest_cuts_by_person_before_not_started():
     assert text.rstrip("\n").splitlines()[-1].startswith("Omitted: 160 issues, 0 not-started epics")
 
 
-BANNER = "A newer version of acli is available. You are running an outdated version (1.3.14)."
+def _flagged_items(number, comments_each):
+    return [{"key": f"F-{n}", "summary": f"Synthetic flagged {n}", "status": "Blocked",
+             "assignee": "Alice Example", "reason": "blocked",
+             "comments": [{"author": "Bob Example", "created": f"2026-09-2{c}T09:00:00.000+0000",
+                           "excerpt": f"excerpt {n}-{c}"} for c in range(comments_each)]}
+            for n in range(number)]
+
+
+def test_render_digest_flagged_keeps_every_line_but_excerpts_only_the_first_fifteen():
+    data = _data()
+    data["flagged"] = _flagged_items(20, 3)
+    flagged = _section_text(_render(data), "## Flagged")
+    item_lines = [line for line in flagged.splitlines() if line.startswith("- F-")]
+    excerpt_lines = [line for line in flagged.splitlines() if line.startswith("  - ")]
+    assert len(item_lines) == 20
+    assert len(excerpt_lines) == 15
+    assert all("excerpt" in line for line in excerpt_lines)
+    assert _render(data).rstrip("\n").splitlines()[-1] == (
+        "Omitted: 0 issues, 0 not-started epics, 45 comments (word limit 5000)"
+    )
+
+
+def test_render_digest_flagged_excerpts_follow_the_given_order_and_use_the_newest_comment():
+    data = _data()
+    data["flagged"] = _flagged_items(20, 3)
+    flagged = _section_text(_render(data), "## Flagged")
+    excerpts = [line for line in flagged.splitlines() if line.startswith("  - ")]
+    assert [line.split(": ", 1)[1] for line in excerpts] == [f"excerpt {n}-2" for n in range(15)]
+
+
+def test_render_digest_flagged_excerpt_limit_is_a_named_constant():
+    assert jira_scan.FLAGGED_WITH_EXCERPTS == 15
+
+
+def test_render_digest_flagged_line_shows_the_age():
+    data = _data()
+    data["flagged"][0]["age_days"] = 12
+    flagged = _section_text(_render(data), "## Flagged")
+    assert ("- C-3 Synthetic blocked task — Blocked · Carol Example · blocked · "
+            "12 days in status category · epic E-1") in flagged
+
+
+def test_render_digest_unassigned_section_sits_right_after_flagged():
+    headings = _headings(_render())
+    assert headings.index("## Unassigned") == headings.index("## Flagged") + 1
+
+
+def test_render_digest_unassigned_line_shows_key_type_status_priority_and_trimmed_summary():
+    data = _data()
+    data["unassigned"] = [{"key": "C-6", "type": "Story", "status": "In Progress 🛠️",
+                           "priority": "Medium", "summary": "word " * 40}]
+    lines = _section_text(_render(data), "## Unassigned").strip().splitlines()
+    assert len(lines) == 1
+    prefix = "- C-6 · Story · In Progress 🛠️ · Medium · "
+    assert lines[0].startswith(prefix)
+    summary = lines[0][len(prefix):]
+    assert len(summary) == 80 and summary.endswith("…")
+
+
+def test_render_digest_unassigned_is_never_cut():
+    data = _big_data()
+    data["unassigned"] = [{"key": f"U-{n}", "type": "Bug", "status": "To Do", "priority": "High",
+                           "summary": f"Synthetic defect {n}"} for n in range(12)]
+    uncapped = _render(data, word_limit=10 ** 6)
+    text = _render(data, word_limit=900)
+    assert _section_text(text, "## Unassigned") == _section_text(uncapped, "## Unassigned")
+    assert "U-11" in _section_text(text, "## Unassigned")
+
+
+def test_render_digest_without_unassigned_says_none():
+    data = _data()
+    data["unassigned"] = []
+    assert _section_text(_render(data), "## Unassigned").strip() == "None."
+
+
+def _mixed_children():
+    return [
+        _child("C-30", "Synthetic queued later", "To Do", None, "new"),
+        _child("C-21", "Synthetic building", "In Progress 🛠️", "Bob Example"),
+        _child("C-40", "Synthetic finished", "Done ✅", "Alice Example", "done"),
+        _child("C-12", "Synthetic in review", "Code Review 🔍", "Carol Example"),
+        _child("C-9", "Synthetic building early", "In Progress 🛠️", None),
+        _child("C-3", "Synthetic queued", "To Do", "Alice Example", "new"),
+        _child("C-41", "Synthetic also finished", "Done ✅", "Bob Example", "done"),
+        _child("C-15", "Synthetic peer REVIEW", "Peer Review", "Bob Example"),
+    ]
+
+
+def test_open_children_orders_review_then_in_progress_then_to_do_and_drops_done():
+    assert [child["key"] for child in jira_scan.open_children(_mixed_children())] == [
+        "C-12", "C-15", "C-9", "C-21", "C-3", "C-30"]
+
+
+def test_render_digest_team_epic_block_lists_four_open_children_and_the_rest_as_a_count():
+    data = _data()
+    data["epics"][0]["children"] = _mixed_children()
+    block = _section_text(_render(data), "## Active epics")
+    e1 = block[block.index("### E-1"):block.index("### E-2")]
+    lines = e1.splitlines()
+    start = lines.index("- Open children:")
+    assert lines[start + 1:start + 6] == [
+        "  - C-12 Code Review 🔍 · Carol Example · Synthetic in review",
+        "  - C-15 Peer Review · Bob Example · Synthetic peer REVIEW",
+        "  - C-9 In Progress 🛠️ · unassigned · Synthetic building early",
+        "  - C-21 In Progress 🛠️ · Bob Example · Synthetic building",
+        "  - +2 more open",
+    ]
+    assert "C-40" not in e1 and "C-41" not in e1
+
+
+def test_render_digest_open_child_summary_is_trimmed_to_80_characters():
+    data = _data()
+    data["epics"][0]["children"] = [_child("C-2", "long " * 40, "In Progress 🛠️", "Bob Example")]
+    block = _section_text(_render(data), "## Active epics")
+    line = next(line for line in block.splitlines() if line.startswith("  - C-2 "))
+    summary = line.split(" · ")[-1]
+    assert len(summary) == 80 and summary.endswith("…")
+
+
+def test_render_digest_epic_without_open_children_says_none():
+    data = _data()
+    data["epics"][0]["children"] = [_child("C-1", "Synthetic done task", "Done ✅", "Alice Example",
+                                           "done")]
+    block = _section_text(_render(data), "## Active epics")
+    e1 = block[block.index("### E-1"):block.index("### E-2")]
+    assert "- Open children: none" in e1
+    assert "C-1" not in e1
+
+
+def test_render_digest_open_children_appear_only_in_team_scope():
+    data = _data()
+    data["epic"] = "E-1"
+    epic_text = _render(data, scope="epic")
+    person_text = _render(scope="person", person="Carol Example")
+    assert "Open children" not in epic_text
+    assert "Open children" not in person_text
+
+
+def _raw(key, category, issuetype, assignee=None, status_name=None):
+    return _issue(key, category, status_name=status_name, assignee=assignee,
+                  fields={"issuetype": {"name": issuetype}, "priority": {"name": "High"}})
+
+
+def test_unassigned_issues_keeps_unassigned_bugs_and_unassigned_in_progress_work():
+    issues = [
+        _raw("U-1", "new", "Bug"),
+        _raw("U-2", "indeterminate", "Story"),
+        _raw("U-3", "new", "Story"),
+        _raw("U-4", "new", "Bug", assignee={"accountId": "acct-0001", "displayName": "Alice Example"}),
+        _raw("U-5", "new", "BUG"),
+    ]
+    assert jira_scan.unassigned_issues(issues) == [
+        {"key": "U-1", "type": "Bug", "status": "To Do", "priority": "High",
+         "summary": "Synthetic U-1"},
+        {"key": "U-2", "type": "Story", "status": "In Progress 🛠️", "priority": "High",
+         "summary": "Synthetic U-2"},
+        {"key": "U-5", "type": "BUG", "status": "To Do", "priority": "High",
+         "summary": "Synthetic U-5"},
+    ]
+
+
+def test_unassigned_issues_dedupes_by_key_and_skips_done_items_and_epics():
+    issues = [
+        _raw("U-1", "new", "Bug"),
+        _raw("U-1", "new", "Bug"),
+        _raw("U-6", "done", "Bug"),
+        _raw("U-7", "indeterminate", "Epic"),
+    ]
+    assert [item["key"] for item in jira_scan.unassigned_issues(issues)] == ["U-1"]
+
+
+BANNER ="A newer version of acli is available. You are running an outdated version (1.3.14)."
 
 
 def _completed(stdout="", stderr="", returncode=0):
@@ -712,6 +891,7 @@ ITEM_FIELDS = "key,summary,status,assignee,issuetype,priority"
 EPIC_FIELDS = "key,summary,status,assignee,description,priority"
 EPIC_VIEW_FIELDS = "summary,description,priority,parent,assignee,status,created,updated,comment"
 NOT_STARTED_VIEW_FIELDS = "created,summary,description,assignee,priority"
+FLAGGED_VIEW_FIELDS = "comment,statuscategorychangedate"
 REJECTED_SEARCH_FIELDS = ("created", "parent", "resolution", "updated", "comment")
 ALICE = {"accountId": "acct-0001", "displayName": "Alice Example", "active": True}
 BOB = {"accountId": "acct-other", "displayName": "Bob Example", "active": True}
@@ -767,7 +947,7 @@ def _fields(cmd):
     return cmd[cmd.index("--fields") + 1]
 
 
-def _world(fail=()):
+def _world(fail=(), unassigned=False):
     window = [
         _task("C-1", "done", ALICE),
         _task("C-2", "indeterminate", CAROL),
@@ -785,6 +965,13 @@ def _world(fail=()):
                 _task("C-4", "indeterminate", CAROL, status_name="Code Review 🔍")],
         "E-9": [_task("C-9", "indeterminate", BOB), _task("C-11", "done", BOB)],
     }
+    if unassigned:
+        loose = [_task("U-1", "new", None, issuetype="Bug"),
+                 _task("U-2", "indeterminate", None, issuetype="Story"),
+                 _task("U-3", "new", None, issuetype="Story"),
+                 _task("U-4", "new", ALICE, issuetype="Bug")]
+        window = window + [loose[0]]
+        children["E-2"] = children["E-2"] + loose
     stalled = [_task("C-4", "indeterminate", CAROL, status_name="Code Review 🔍"),
                _task("S-1", "indeterminate", ERIN)]
     not_started = [_task("N-1", "new", ALICE, issuetype="Epic"),
@@ -803,7 +990,8 @@ def _world(fail=()):
     not_started_views = {"N-1": _epic_view("N-1", "Synthetic queued epic", category="new",
                                            assignee=ALICE, created=_days_ago(30))}
     comment_views = {
-        "C-3": {"key": "C-3", "fields": {"comment": {"comments": [
+        "C-3": {"key": "C-3", "fields": {"statuscategorychangedate": _days_ago(12),
+                                         "comment": {"comments": [
             _comment("Alice Example", _days_ago(2), "Can we unblock this today?")]}}},
         "C-4": {"key": "C-4", "fields": {"comment": {"comments": [
             _comment("Carol Example", _days_ago(day), f"Update {day}.") for day in (9, 8, 7, 6, 5)]}}},
@@ -817,7 +1005,8 @@ def _world(fail=()):
             if key in fail:
                 return _completed(stderr=f"✗ Error: failed to fetch {key}", returncode=1)
             table = {EPIC_VIEW_FIELDS: epic_views, "parent": parent_views,
-                     NOT_STARTED_VIEW_FIELDS: not_started_views, "comment": comment_views}[fields]
+                     NOT_STARTED_VIEW_FIELDS: not_started_views,
+                     FLAGGED_VIEW_FIELDS: comment_views}[fields]
             return table[key]
         jql = _jql(cmd)
         if "--count" in cmd:
@@ -935,9 +1124,10 @@ def test_collect_epic_block_fields():
     assert one["jql"] == {"total": total, "done": total + " AND statusCategory = Done",
                           "in_progress": total + ' AND statusCategory = "In Progress"'}
     assert one["children"] == [
-        {"key": "C-1", "summary": "Synthetic C-1", "status": "Done ✅", "assignee": "Alice Example"},
+        {"key": "C-1", "summary": "Synthetic C-1", "status": "Done ✅", "assignee": "Alice Example",
+         "category": "done"},
         {"key": "C-2", "summary": "Synthetic C-2", "status": "In Progress 🛠️",
-         "assignee": "Carol Example"},
+         "assignee": "Carol Example", "category": "indeterminate"},
     ]
 
 
@@ -965,9 +1155,30 @@ def test_collect_not_started_counts_each_once_and_lists_only_zero_done_epics_wit
 def test_collect_flags_blocked_then_stalled_and_skips_out_of_scope_items():
     calls = []
     data = _collect(calls=calls)
-    assert _views(calls, "comment") == ["C-3", "C-4"]
+    assert _views(calls, FLAGGED_VIEW_FIELDS) == ["C-3", "C-4"]
     assert [(item["key"], item["reason"], item["assignee"]) for item in data["flagged"]] == [
         ("C-3", "blocked", "Carol Example"), ("C-4", "stalled", "Carol Example")]
+
+
+def test_collect_flagged_age_comes_from_the_status_category_change_date():
+    flagged = {item["key"]: item for item in _collect()["flagged"]}
+    assert flagged["C-3"]["age_days"] == 12
+    assert flagged["C-4"]["age_days"] is None
+
+
+def test_collect_lists_unassigned_bugs_and_in_progress_work_once_each():
+    data = _collect(handler=_world(unassigned=True))
+    assert data["unassigned"] == [
+        {"key": "U-1", "type": "Bug", "status": "To Do", "priority": "Medium",
+         "summary": "Synthetic U-1"},
+        {"key": "U-2", "type": "Story", "status": "In Progress 🛠️", "priority": "Medium",
+         "summary": "Synthetic U-2"},
+    ]
+    assert "U-1" not in [name for name in data["unmatched"]]
+
+
+def test_collect_with_nothing_unassigned_gives_an_empty_list():
+    assert _collect()["unassigned"] == []
 
 
 def test_collect_keeps_the_newest_three_comments_and_counts_the_rest():
@@ -1021,7 +1232,7 @@ def _flag_world():
             fields = _fields(cmd)
             if fields == "parent":
                 return _parent_view(cmd[4])
-            if fields == "comment":
+            if fields == FLAGGED_VIEW_FIELDS:
                 return {"key": cmd[4], "fields": {"comment": {"comments": []}}}
             raise AssertionError(cmd)
         jql = _jql(cmd)
@@ -1039,7 +1250,7 @@ def _flag_world():
 def test_collect_caps_flagged_at_max_flagged_keeping_blocked_and_the_oldest_stalled():
     calls = []
     data = _collect(handler=_flag_world(), calls=calls, max_flagged=60)
-    fetched = _views(calls, "comment")
+    fetched = _views(calls, FLAGGED_VIEW_FIELDS)
     assert len(fetched) == 60
     assert {"B-1", "B-2", "B-3"} <= set(fetched)
     assert set(fetched) - {"B-1", "B-2", "B-3"} == {f"S-{n}" for n in range(1, 58)}
@@ -1083,7 +1294,7 @@ def test_main_reports_incomplete_epics_and_still_writes_both_files(tmp_path, cap
 def test_main_happy_path_writes_jira_json_and_jira_md(tmp_path, capsys):
     assert jira_scan.main(_argv(tmp_path), runner=_runner(_world())) == 0
     data = json.loads((tmp_path / "jira.json").read_text())
-    assert {"window", "epics", "child_to_epic", "people", "unmatched", "flagged",
+    assert {"window", "epics", "child_to_epic", "people", "unmatched", "unassigned", "flagged",
             "doc_links", "failures"} <= set(data)
     assert data["child_to_epic"]["C-9"] == "E-9"
     digest = (tmp_path / "jira.md").read_text()
@@ -1112,7 +1323,7 @@ def test_main_passes_max_flagged_to_collect(tmp_path):
     calls = []
     argv = _argv(tmp_path, "--max-flagged", "1")
     assert jira_scan.main(argv, runner=_runner(_world(), calls)) == 0
-    assert _views(calls, "comment") == ["C-3"]
+    assert _views(calls, FLAGGED_VIEW_FIELDS) == ["C-3"]
     assert json.loads((tmp_path / "jira.json").read_text())["omitted"]["issues"] == 1
 
 

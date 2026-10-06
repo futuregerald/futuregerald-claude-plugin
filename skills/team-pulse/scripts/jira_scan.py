@@ -203,6 +203,46 @@ def group_by_person(issues: list[dict], roster: list[dict]) -> tuple[dict[str, d
     return people, unmatched
 
 
+def _key_order(key):
+    prefix, _, number = key.rpartition("-")
+    return (prefix, int(number) if number.isdigit() else -1, key)
+
+
+def _issuetype_name(issue):
+    return ((issue.get("fields") or {}).get("issuetype") or {}).get("name") or ""
+
+
+def unassigned_issues(issues: list[dict]) -> list[dict]:
+    found, seen = [], set()
+    for issue in issues:
+        fields = issue.get("fields") or {}
+        issuetype = _issuetype_name(issue)
+        category = _category(issue)
+        if (issue["key"] in seen or fields.get("assignee") or category == "done"
+                or issuetype.casefold() == "epic"):
+            continue
+        if issuetype.casefold() != "bug" and category != "indeterminate":
+            continue
+        seen.add(issue["key"])
+        found.append({"key": issue["key"], "type": issuetype, "status": _status_name(issue),
+                      "priority": (fields.get("priority") or {}).get("name"),
+                      "summary": fields.get("summary") or ""})
+    return found
+
+
+def _open_rank(child):
+    if "review" in (child.get("status") or "").casefold():
+        return 0
+    if child.get("category") == "indeterminate":
+        return 1
+    return 2
+
+
+def open_children(children: list[dict]) -> list[dict]:
+    return sorted((child for child in children if child.get("category") != "done"),
+                  key=lambda child: (_open_rank(child), _key_order(child["key"])))
+
+
 def parse_jira_time(value):
     text = re.sub(r"([+-]\d{2})(\d{2})$", r"\1:\2", value.replace("Z", "+00:00"))
     return datetime.fromisoformat(text)
@@ -235,6 +275,10 @@ SCOPES = ("team", "person", "epic")
 GROUP_LABELS = {"completed": "Completed", "in_progress": "In progress", "stuck": "Stuck",
                 "to_do": "To do"}
 MAX_COMMENTS = 3
+FLAGGED_WITH_EXCERPTS = 15
+EXCERPTS_PER_FLAGGED = 1
+OPEN_CHILDREN_SHOWN = 4
+SUMMARY_LIMIT = 80
 NOT_STARTED_KEPT = 10
 
 
@@ -250,7 +294,22 @@ def _section(heading, lines):
     return "\n".join([heading, ""] + (lines or ["None."]))
 
 
-def _render_epic(epic):
+def _render_open_children(children):
+    shown = open_children(children)
+    if not shown:
+        return ["- Open children: none"]
+    lines = ["- Open children:"] + [
+        f"  - {child['key']} {_clean(child.get('status'))} · "
+        f"{_clean(child.get('assignee')) or 'unassigned'} · "
+        f"{_truncate(_clean(child.get('summary')), SUMMARY_LIMIT)}"
+        for child in shown[:OPEN_CHILDREN_SHOWN]
+    ]
+    if len(shown) > OPEN_CHILDREN_SHOWN:
+        lines.append(f"  - +{len(shown) - OPEN_CHILDREN_SHOWN} more open")
+    return lines
+
+
+def _render_epic(epic, with_open_children=False):
     parent = epic.get("parent")
     assignee = epic.get("assignee")
     if assignee:
@@ -268,17 +327,20 @@ def _render_epic(epic):
         f"Assignee: {owner}",
     ]
     description = _clean(epic.get("description")) or "no description on the ticket"
-    return "\n".join([
+    lines = [
         f"### {epic['key']} {_clean(epic.get('summary'))}",
         "- " + " · ".join(details),
         f"- Progress: {progress.get('done', 0)}/{progress.get('total', 0)} done, "
         f"{progress.get('in_progress', 0)} in progress, "
         f"{'n/a' if pct is None else str(pct) + '%'}",
         f"- Description: {description}",
-    ])
+    ]
+    if with_open_children:
+        lines += _render_open_children(epic.get("children") or [])
+    return "\n".join(lines)
 
 
-def _render_epics(epics, count_jql):
+def _render_epics(epics, count_jql, with_open_children=False):
     lines = []
     if count_jql:
         lines.append(
@@ -287,25 +349,37 @@ def _render_epics(epics, count_jql):
             "`AND statusCategory = \"In Progress\"`."
         )
         lines.append("")
-    blocks = [_render_epic(epic) for epic in epics]
+    blocks = [_render_epic(epic, with_open_children) for epic in epics]
     return "\n".join(["## Active epics", ""] + lines + ["\n\n".join(blocks) if blocks else "None."])
 
 
 def _render_flagged(flagged, child_map):
     lines = []
     cut = 0
-    for item in flagged:
+    for index, item in enumerate(flagged):
         parts = [_clean(item.get("status")), _clean(item.get("assignee")) or "unassigned",
                  _clean(item.get("reason"))]
+        if item.get("age_days") is not None:
+            parts.append(f"{item['age_days']} days in status category")
         if item["key"] in child_map:
             parts.append(f"epic {child_map[item['key']]}")
         lines.append(f"- {item['key']} {_clean(item.get('summary'))} — " + " · ".join(parts))
         comments = item.get("comments") or []
-        cut += max(len(comments) - MAX_COMMENTS, 0)
-        for comment in comments[:MAX_COMMENTS]:
+        shown = comments[-EXCERPTS_PER_FLAGGED:] if index < FLAGGED_WITH_EXCERPTS else []
+        cut += len(comments) - len(shown)
+        for comment in shown:
             lines.append(f"  - {_clean(comment.get('author'))} {str(comment.get('created') or '')[:10]}: "
                          f"{_clean(comment.get('excerpt'))}")
     return _section("## Flagged", lines), cut
+
+
+def _render_unassigned(items):
+    return _section("## Unassigned", [
+        f"- {item['key']} · {_clean(item.get('type'))} · {_clean(item.get('status'))} · "
+        f"{_clean(item.get('priority')) or 'no priority'} · "
+        f"{_truncate(_clean(item.get('summary')), SUMMARY_LIMIT)}"
+        for item in items
+    ])
 
 
 def _render_questions(questions):
@@ -383,6 +457,7 @@ def _scoped(data, scope, person):
     questions = list(data.get("questions") or [])
     links = list(data.get("doc_links") or [])
     not_started = list(data.get("not_started") or [])
+    unassigned = list(data.get("unassigned") or [])
     people = dict(data.get("people") or {})
     child_map = data.get("child_to_epic") or {}
     if scope == "person":
@@ -412,7 +487,8 @@ def _scoped(data, scope, person):
     epic_keys = {epic["key"] for epic in epics}
     if scope != "team":
         links = [link for link in links if link["epic"] in epic_keys]
-    return epics, flagged, questions, links, not_started, people
+        unassigned = [item for item in unassigned if child_map.get(item["key"]) in epic_keys]
+    return epics, flagged, unassigned, questions, links, not_started, people
 
 
 def _word_count(parts):
@@ -447,14 +523,15 @@ def render_digest(data: dict, scope: str, word_limit: int, person: str | None = 
         raise ValueError(f"unknown scope: {scope}")
     if scope == "person" and not person:
         raise ValueError("person scope needs a person")
-    epics, flagged, questions, links, not_started, people = _scoped(data, scope, person)
+    epics, flagged, unassigned, questions, links, not_started, people = _scoped(data, scope, person)
     flagged_text, comments_cut = _render_flagged(flagged, data.get("child_to_epic") or {})
     never = [_header(data, scope, person)]
     if data.get("failures"):
         never.append(_section("## Not measured", [f"- {key}" for key in data["failures"]]))
     never += [
-        _render_epics(epics, data.get("count_jql")),
+        _render_epics(epics, data.get("count_jql"), with_open_children=scope == "team"),
         flagged_text,
+        _render_unassigned(unassigned),
         _render_questions(questions),
         _section("## Unmatched assignees", [f"- {_clean(name)}" for name in data.get("unmatched") or []]),
         _render_doc_links(links),
@@ -527,6 +604,7 @@ ITEM_FIELDS = "key,summary,status,assignee,issuetype,priority"
 EPIC_FIELDS = "key,summary,status,assignee,description,priority"
 EPIC_VIEW_FIELDS = "summary,description,priority,parent,assignee,status,created,updated,comment"
 NOT_STARTED_VIEW_FIELDS = "created,summary,description,assignee,priority"
+FLAGGED_VIEW_FIELDS = "comment,statuscategorychangedate"
 DESCRIPTION_LIMIT = 200
 COMMENT_LIMIT = 300
 
@@ -580,7 +658,8 @@ def _child_entry(issue, roster):
     fields = _fields(issue)
     return {"key": issue["key"], "summary": fields.get("summary") or "",
             "status": _status_name(issue),
-            "assignee": _assignee_name(fields.get("assignee"), roster)}
+            "assignee": _assignee_name(fields.get("assignee"), roster),
+            "category": _category(issue)}
 
 
 def _epic_entry(key, fields, children, children_jql, roster):
@@ -719,18 +798,22 @@ def collect(cfg: dict, runner=subprocess.run, workers: int = 8) -> dict:
     max_flagged = cfg.get("max_flagged", 60)
     kept = candidates[:max_flagged]
     comment_views, failed = _parallel({("comment", issue["key"]): lambda key=issue["key"]: view(
-        key, "comment", runner) for issue, _ in kept}, workers)
+        key, FLAGGED_VIEW_FIELDS, runner) for issue, _ in kept}, workers)
     record(failed)
 
+    now = datetime.now(timezone.utc)
     flagged, questions, comments_cut = [], [], 0
     for issue, reason in kept:
-        comments = _by_created(_comments(comment_views.get(("comment", issue["key"])) or {}))
+        flagged_view = comment_views.get(("comment", issue["key"])) or {}
+        changed = _fields(flagged_view).get("statuscategorychangedate")
+        comments = _by_created(_comments(flagged_view))
         comments_cut += max(len(comments) - MAX_COMMENTS, 0)
         fields = _fields(issue)
         flagged.append({"key": issue["key"], "summary": fields.get("summary") or "",
                         "status": _status_name(issue),
                         "assignee": _assignee_name(fields.get("assignee"), roster),
                         "reason": reason,
+                        "age_days": (now - parse_jira_time(changed)).days if changed else None,
                         "comments": [_comment_entry(comment)
                                      for comment in comments[-MAX_COMMENTS:]]})
         questions += [{"key": issue["key"], **candidate}
@@ -750,7 +833,6 @@ def collect(cfg: dict, runner=subprocess.run, workers: int = 8) -> dict:
         questions += [{"key": key, **candidate} for candidate in
                       question_candidates(_comments(second.get(("epic", key)) or {}), COMMENT_LIMIT)]
 
-    now = datetime.now(timezone.utc)
     not_started_entries = []
     for key in zero_done:
         fields = dict(_fields(next(epic for epic in not_started if epic["key"] == key)))
@@ -765,6 +847,7 @@ def collect(cfg: dict, runner=subprocess.run, workers: int = 8) -> dict:
     stalled_window = [dict(issue, stalled=issue["key"] in stalled_keys) for issue in window
                       if not _is_epic_type(_fields(issue).get("issuetype"))]
     people, unmatched = group_by_person(stalled_window, roster)
+    unassigned = unassigned_issues(pool)
     data = {
         "window": {"since": since, "until": until, "keys": list(cfg["keys"])},
         "count_jql": count_jql,
@@ -772,6 +855,7 @@ def collect(cfg: dict, runner=subprocess.run, workers: int = 8) -> dict:
         "child_to_epic": child_map,
         "people": people,
         "unmatched": unmatched,
+        "unassigned": unassigned,
         "flagged": flagged,
         "questions": questions,
         "doc_links": doc_links,

@@ -293,8 +293,10 @@ python3 <skill-dir>/scripts/jira_scan.py \
 It writes `jira.json` (input for Step 2b's `--jira-map`; never read it yourself) and `jira.md`, the
 tracker digest. `jira.md` puts the sections that are never cut first: `## Not measured` (only when
 something failed), `## Active epics` (key, title, status, priority, parent, assignee with an
-`(inactive)` flag, done/total/in-progress, a description excerpt), `## Flagged` (Blocked, or In
-Progress with no status change for 5 days, with their latest comments), `## Question candidates`,
+`(inactive)` flag, done/total/in-progress, a description excerpt and, in team scope, up to 4 open
+children with in-review first), `## Flagged` (Blocked, or In Progress with no status change for 5
+days: one line each with its age, and the newest comment for the first 15 only), `## Unassigned`
+(unassigned bugs and unassigned In Progress work), `## Question candidates`,
 `## Unmatched assignees` and `## Doc links`. Then the cuttable detail: `## By person` (team),
 `## Issues` (person) or `## Children` (epic), and `## Not started`. The count JQL is given once
 with an `{EPIC}` placeholder; substitute the epic key to link a count to its query. The last line,
@@ -387,8 +389,11 @@ digests:
   question nobody has commented after. Decide which are real open questions; report each with who
   asked, who it was aimed at, the date and how long it has been silent. Drop the ones that are
   rhetorical or answered in another digest (a PR, a meeting).
-- **Build What's Left from `jira.md` + `prs.md`**: in-review PRs from `## Open PRs (team)` and
-  `## By epic` first, then in-progress assigned items, then the next unblocked tickets.
+- **Build What's Left from each epic block's open children in `jira.md` plus `prs.md`**: in-review
+  PRs from `## Open PRs (team)` and `## By epic` first, then in-progress assigned items, then the
+  next unblocked tickets. A block ending `+N more open` has more work than it lists; say so.
+- **Read `## Unassigned` for the At Risk rule** "a customer-facing defect is unassigned": an
+  unassigned bug there is the evidence. Unassigned In Progress work is a finding too: name it.
 
 Follow the format in [references/report-format.md](references/report-format.md). Key rules:
 
