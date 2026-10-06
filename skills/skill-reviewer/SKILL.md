@@ -1,6 +1,7 @@
 ---
 name: skill-reviewer
-description: Review skills for quality, size, progressive disclosure, and effectiveness. Use when auditing existing skills, reviewing skill changes in PRs, or when comprehensive-code-review detects SKILL.md files in a diff.
+description: Review skills for quality, size, progressive disclosure, encoded judgment, checkable standards, point of view and attribution. Use when auditing existing skills, reviewing skill changes in PRs, or when comprehensive-code-review detects SKILL.md files in a diff.
+author: Gerald Onyango
 tags: [quality, review, skills]
 ---
 
@@ -8,16 +9,37 @@ tags: [quality, review, skills]
 
 You are a **Staff Engineer** reviewing skills (SKILL.md files and their sibling resources) for quality and effectiveness. Skills are context that gets loaded into an AI agent's working memory — every line costs tokens and competes with the actual task.
 
+## What good output looks like
+
+- **For the skill's author:** every rating that isn't PASS cites `file:line` and says what to change; every PASS on a criterion that could have failed says what was checked.
+- **The default to prevent:** a table of PASSes with no evidence — a rubber stamp.
+
+**Vendored skills** are synced from an upstream repo (e.g. `impeccable`, `huashu-design`, `skill-creator`, the Matt Pocock set; provenance notes live in `docs/*-provenance.md` where present). Review them advisory-only: criteria 10-12 are this plugin's conventions, which upstream doesn't share, so rate them N/A, and remember any fix is wiped by the next sync. Fork the skill if a fix matters.
+
+## Run First
+
+Settle the mechanical checks with tools, not by eye, and cite their output:
+
+```bash
+wc -l <skill>/SKILL.md                                    # criterion 1
+wc -c <skill>/SKILL.md                                    # criterion 1, tokens ≈ characters / 4
+find <skill> -type f | sort                               # criteria 2 and 8
+python3 <plugin>/skills/future-skill-creator/scripts/quick_validate.py <skill>   # criterion 3
+ls <plugin>/skills/*/scripts/test_*.py                    # criterion 11, basename collisions
+```
+
+`quick_validate.py` checks the frontmatter keys, `name` against the directory, inline `tags`, and leftover TODO placeholders. It needs PyYAML; without it, run it with `uv run --with pyyaml python3 …`. Where `future-skill-creator` isn't installed, check those four by reading the frontmatter, and say so in the review.
+
 ## Review Checklist
 
-For each skill, evaluate against these criteria and rate as PASS, WARN, or FAIL:
+For each skill, evaluate against these criteria and rate as PASS, WARN, or FAIL (N/A where a criterion says so):
 
 ### 1. Size Budget
 
 | Metric | Target | WARN | FAIL |
 |--------|--------|------|------|
 | SKILL.md lines | < 300 | 300-500 | > 500 |
-| SKILL.md tokens (estimate: lines x 4) | < 1200 | 1200-2000 | > 2000 |
+| SKILL.md tokens (estimate: characters / 4) | < 3000 | 3000-5000 | > 5000 |
 | Total content (SKILL.md + references) | < 1500 lines | 1500-2500 | > 2500 |
 
 ### 2. Progressive Disclosure (Single-File Check)
@@ -33,6 +55,7 @@ For each skill, evaluate against these criteria and rate as PASS, WARN, or FAIL:
 
 - `name` — must match directory name, be kebab-case
 - `description` — must clearly state WHEN the skill triggers and WHAT it does. This is the only thing Claude sees before deciding to load the skill. Vague descriptions like "best practices for X" are a WARN.
+- `author` and `tags` are allowed, and so are the fields the installer and existing skills use: `model`, `effort`, `languages`, `argument-hint`, `trigger`, `version`, `user-invocable`, `license`, `allowed-tools`, `metadata`. `tags` must be an inline list (`tags: [a, b]`); the installer parses only that form, so a block list silently drops the skill from `--tags` filtering (FAIL).
 
 ### 4. Interface Over Internals
 
@@ -62,12 +85,30 @@ For each skill, evaluate against these criteria and rate as PASS, WARN, or FAIL:
 
 - **FAIL** if the skill directory contains README.md, CHANGELOG.md, INSTALLATION_GUIDE.md, or other documentation not directly used by the agent
 - Skills should only contain SKILL.md, `references/`, `scripts/`, and `assets/`
+- Exempt: `LICENSE*` and `NOTICE*` files a source licence requires keeping (e.g. Apache-2.0 §4)
 
 ### 9. Actionability
 
 - Every section should help the model produce correct output
 - **WARN** for "nice to know" sections that don't change behavior (history, philosophy, "why we chose X")
 - Tables and checklists are preferred over prose paragraphs
+
+### 10. Encoded Judgment
+
+- **WARN** where the skill makes a choice but gives advice an agent cannot act on ("use the appropriate X", "keep it clean") and a decision tree, do/don't pair or worked example would fit
+- Decision trees for "which option when"; do/don't pairs where right and almost-right look alike; per-item reference files or a lookup script where the skill covers many items but any task needs only a few
+- N/A for skills that make no choices (pure procedure or reference)
+
+### 11. Checkable Standard
+
+- **WARN** if part of the output standard is mechanically checkable (format, required sections, banned phrases, cross-references) but the skill ships no check script with a `test_*.py`
+- **WARN** if a check script has no tests, or its test basename collides with another skill's (CI imports test files by basename)
+- N/A for skills whose standard is purely judgment
+
+### 12. Point of View and Attribution
+
+- **WARN** if a skill that produces output never states what good output looks like, or the generic default it exists to prevent
+- **FAIL** if the skill adapts third-party content (a talk, article, guide, another skill) with no credit line naming the source
 
 ## Output Format
 
@@ -87,10 +128,15 @@ For each skill reviewed:
 | Degrees of freedom | PASS/WARN/FAIL | {details} |
 | No extraneous files | PASS/WARN/FAIL | {details} |
 | Actionability | PASS/WARN/FAIL | {details} |
+| Encoded judgment | PASS/WARN/N/A | {details} |
+| Checkable standard | PASS/WARN/N/A | {details} |
+| Point of view & attribution | PASS/WARN/FAIL/N/A | {details} |
 
 **Verdict:** APPROVED / NEEDS WORK
 **Action items:** (numbered list of specific changes, if any)
 ```
+
+**Verdict rule:** NEEDS WORK if any criterion is FAIL, or if any WARN would change what an agent following the skill actually does (a wrong instruction, a missing decision, a check that misfires). Otherwise APPROVED, with remaining WARNs listed as action items. Vendored skills are always reported as advisory.
 
 End with a summary table:
 

@@ -202,7 +202,7 @@ If symlinked to `~/.claude/skills` (installed as personal skills), invoke them b
 
 ## Skills and Agents Reference
 
-### Skills (52)
+### Skills (56)
 
 **Planning & Specs:**
 
@@ -221,9 +221,10 @@ If symlinked to `~/.claude/skills` (installed as personal skills), invoke them b
 | `to-tickets` | Break a plan/spec into tracer-bullet tickets with blocking edges |
 | `wayfinder` | Plan work too big for one session as a map of decision tickets |
 | `research` | Investigate a question against primary sources; capture as Markdown |
-| `grill-me` | Relentless interview to sharpen a plan or design |
 | `grilling` | Stress-test a plan, decision, or idea through relentless questioning |
+| `future-grilling` | Fork of grilling that reads a craftsmans-wisdom brief and checks each answer against it |
 | `grill-with-docs` | Grilling that also produces ADRs and a glossary as it goes |
+| `craftsmans-wisdom` | Runs before any plan: one-question-at-a-time challenge on what good means, what's written down for agents, and whether done is good; writes a point-of-view brief, then offers future-grilling on the details |
 
 **Debugging & Code Quality:**
 
@@ -234,7 +235,8 @@ If symlinked to `~/.claude/skills` (installed as personal skills), invoke them b
 | `comprehensive-code-review` | Parallel sub-agent review (correctness + safety) into one report |
 | `code-simplifier` | Simplify recently changed code, with Staff Engineer review |
 | `requesting-code-review` | Request review before merge to verify requirements are met |
-| `skill-reviewer` | Review skills for quality, size, and progressive disclosure |
+| `skill-reviewer` | Review skills for quality, size, progressive disclosure, and encoded judgment |
+| `editor-pass` | Post-build quality review that returns a lettered crit sheet of pinned, specific fixes |
 | `review-lens` | Surface similar past reviewer objections to calibrate findings |
 | `resolving-merge-conflicts` | Resolve an in-progress git merge/rebase conflict |
 
@@ -260,6 +262,7 @@ If symlinked to `~/.claude/skills` (installed as personal skills), invoke them b
 | `handoff` | Compact the conversation into a handoff doc for the next session |
 | `teach` | Teach a new skill or concept within the workspace |
 | `skill-creator` | Guide for creating effective skills |
+| `future-skill-creator` | Fork of skill-creator that encodes judgment: decision trees, do/don't pairs, check scripts, and editing the skill's output |
 
 **Frontend & Design:**
 
@@ -267,7 +270,7 @@ If symlinked to `~/.claude/skills` (installed as personal skills), invoke them b
 |-------|-------------|
 | `frontend-design` | Distinctive, production-grade frontend interfaces |
 | `impeccable` | Frontend design, UX review, and UI polish |
-| `no-slop-ui` | Ten visual tells that make a UI read as AI slop, and what to do instead |
+| `no-slop-ui` | Eleven visual tells that make a UI read as AI slop, and what to do instead |
 | `huashu-design` | HTML-native prototypes, slide decks, animations and infographics; 20 design philosophies, 5-dimension expert critique, MP4/GIF/PDF/editable-PPTX export |
 | `prototype` | Build a throwaway prototype to answer a design question |
 
