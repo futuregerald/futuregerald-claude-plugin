@@ -1,3 +1,4 @@
+import ast
 import re
 from pathlib import Path
 
@@ -15,6 +16,7 @@ BANNED = [
     r"(?i)process(?:es)? results incrementally",
     r"\bwrite_to_file\b",
     r"\brun_command\b",
+    r"(?i)as you process it",
 ]
 
 
@@ -53,3 +55,62 @@ def test_orchestrator_exception_names_both_scripts():
 def test_no_github_digest():
     for text_file in TEXT_FILES:
         assert ".updates/github.md" not in read(SKILL / text_file), text_file
+
+
+SCRIPTS = sorted(path.name for path in (SKILL / "scripts").glob("*.py")
+                 if not path.name.startswith("test_"))
+
+
+def _union_annotations(tree):
+    annotations = []
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            arguments = node.args.posonlyargs + node.args.args + node.args.kwonlyargs
+            annotations += [argument.annotation for argument in arguments] + [node.returns]
+        elif isinstance(node, ast.AnnAssign):
+            annotations.append(node.annotation)
+    return [annotation for annotation in annotations if annotation is not None
+            and any(isinstance(part, ast.BinOp) and isinstance(part.op, ast.BitOr)
+                    for part in ast.walk(annotation))]
+
+
+def _has_future_annotations(tree):
+    return any(isinstance(node, ast.ImportFrom) and node.module == "__future__"
+               and any(alias.name == "annotations" for alias in node.names)
+               for node in tree.body)
+
+
+@pytest.mark.parametrize("script", SCRIPTS)
+def test_scripts_import_on_python_3_9(script):
+    source = read(SKILL / "scripts" / script)
+    tree = ast.parse(source, feature_version=(3, 9))
+    if _union_annotations(tree):
+        assert _has_future_annotations(tree), f"{script} uses X | Y annotations without the future import"
+
+
+def _between(text, start, end):
+    begin = text.index(start)
+    return text[begin:text.index(end, begin)]
+
+
+def test_jira_scan_incomplete_exit_continues_the_run():
+    codes = _between(read(SKILL_MD), "**Exit codes:**", "## Step 2b")
+    incomplete = _between(codes, "**2 with `INCOMPLETE", "**2 with a `usage:`")
+    assert "continue with step 2" in incomplete
+    assert not re.search(r"\bstop\b", incomplete)
+
+
+def test_step_3_names_where_question_candidates_come_from():
+    step3 = _between(read(SKILL_MD), "## Step 3", "## Step 4")
+    assert "lists every item" not in step3
+    assert "flagged items and active epics" in step3
+
+
+def test_step_3_covers_the_fallback_digest():
+    step3 = _between(read(SKILL_MD), "## Step 3", "## Step 4")
+    assert "Agent A's own sections" in step3
+
+
+def test_epic_start_names_its_source():
+    resolve = _between(read(SKILL_MD), "**Epic start, for Agent F**", "**Word budget for Agent F**")
+    assert "Created" in resolve and "jira.md" in resolve

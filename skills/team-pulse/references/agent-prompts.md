@@ -184,8 +184,6 @@ If no meetings found, write "No meetings." and return.
    - limit: {WINDOW_MEETING_LIMIT}   # orchestrator passes 10 x days in window; default 80
    - fields: ["name", "date", "attendees", "speakers", "key_points", "action_items", "detailed_summary"]
 
-   Summarize each meeting's findings as you process it. Move on.
-
    **If the number of results equals the limit, the window is truncated** — say so explicitly in
    the digest so the orchestrator knows the report covers only part of the range.
 

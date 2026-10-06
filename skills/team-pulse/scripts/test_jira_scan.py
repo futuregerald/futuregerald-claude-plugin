@@ -295,10 +295,11 @@ COUNT_JQL = "parent = {EPIC} AND (resolution is EMPTY OR resolution not in (\"Wo
 
 
 def _epic(key, summary, children=(), assignee=None, description="Synthetic description.",
-          done=1, total=2):
+          done=1, total=2, created="2026-08-01T10:00:00.000+0000"):
     return {
         "key": key,
         "summary": summary,
+        "created": created,
         "status": "In Progress 🛠️",
         "priority": "High",
         "parent": {"key": "I-1", "summary": "Synthetic initiative"},
@@ -330,7 +331,8 @@ def _data():
                   assignee={"name": "Carol Example", "active": True}),
             _epic("E-2", "Synthetic epic two",
                   children=[_child("C-2", "Synthetic active task", assignee="Bob Example")],
-                  assignee={"name": "Former Person", "active": False}, description=""),
+                  assignee={"name": "Former Person", "active": False}, description="",
+                  created=""),
         ],
         "child_to_epic": {"C-1": "E-1", "C-3": "E-1", "C-2": "E-2"},
         "people": people,
@@ -411,6 +413,13 @@ def test_render_digest_epic_block_is_compact():
     assert "Assignee: Carol Example" in block
     assert "1/2 done, 1 in progress, 50%" in block
     assert "Synthetic description." in block
+
+
+def test_render_digest_epic_block_shows_the_created_date():
+    block = _section_text(_render(), "## Active epics")
+    e1, e2 = block[block.index("### E-1"):block.index("### E-2")], block[block.index("### E-2"):]
+    assert "Created: 2026-08-01" in e1
+    assert "Created: unknown" in e2
 
 
 def test_render_digest_flags_inactive_assignee_and_missing_description():
@@ -793,7 +802,8 @@ def test_unassigned_issues_dedupes_by_key_and_skips_done_items_and_epics():
     assert [item["key"] for item in jira_scan.unassigned_issues(issues)] == ["U-1"]
 
 
-BANNER ="A newer version of acli is available. You are running an outdated version (1.3.14)."
+BANNER = ("You're using an outdated version of acli.\n"
+          "Follow this link: https://developer.atlassian.com/cloud/acli/guides/install-acli/")
 
 
 def _completed(stdout="", stderr="", returncode=0):
@@ -814,6 +824,24 @@ def _runner(handler, calls=None):
 def test_run_acli_strips_the_outdated_version_banner():
     runner = _runner(lambda cmd: _completed(BANNER + "\n" + json.dumps([{"key": "C-1"}])))
     assert jira_scan.run_acli(["jira", "workitem", "search"], runner=runner) == [{"key": "C-1"}]
+
+
+def test_run_acli_strips_the_banner_printed_after_the_json():
+    runner = _runner(lambda cmd: _completed(json.dumps({"key": "C-1"}) + "\n" + BANNER + "\n"))
+    assert jira_scan.run_acli(["jira", "workitem", "view"], runner=runner) == {"key": "C-1"}
+
+
+def test_run_acli_keeps_compact_json_whose_text_mentions_an_outdated_version():
+    items = [{"key": "C-1", "fields": {"summary": "Upgrade outdated version of Rails"}}]
+    runner = _runner(lambda cmd: _completed(json.dumps(items)))
+    assert jira_scan.run_acli(["jira", "workitem", "search"], runner=runner) == items
+
+
+def test_run_acli_keeps_pretty_json_lines_that_mention_an_outdated_version():
+    item = {"key": "C-1", "fields": {"priority": "Low",
+                                     "summary": "Upgrade outdated version of Rails"}}
+    runner = _runner(lambda cmd: _completed(BANNER + "\n" + json.dumps(item, indent=2)))
+    assert jira_scan.run_acli(["jira", "workitem", "view"], runner=runner) == item
 
 
 def test_run_acli_prefixes_the_acli_binary():
@@ -880,6 +908,11 @@ def test_count_reads_the_number_from_the_count_line():
     assert jira_scan.count("parent = E-1 AND statusCategory = Done", runner=runner) == 43
     assert calls == [["acli", "jira", "workitem", "search", "--jql",
                       "parent = E-1 AND statusCategory = Done", "--count"]]
+
+
+def test_count_ignores_the_banner_printed_after_the_count_line():
+    runner = _runner(lambda cmd: _completed("✓ Number of work items in the search: 7\n" + BANNER + "\n"))
+    assert jira_scan.count("x", runner=runner) == 7
 
 
 def test_count_without_a_number_raises():
@@ -1054,7 +1087,8 @@ def test_collect_runs_the_planned_jql():
         'project in (DL) AND statusCategory = "In Progress" AND NOT status CHANGED AFTER -5d '
         'ORDER BY statusCategoryChangedDate ASC',
         'project in (DL) AND issuetype = Epic AND statusCategory = "To Do"',
-        "parent = N-1 AND statusCategory = Done",
+        "parent = N-1 AND statusCategory = Done AND (resolution is EMPTY OR resolution not in "
+        + EXCLUDED_JQL + ")",
     } <= jqls
 
 
@@ -1150,6 +1184,27 @@ def test_collect_not_started_counts_each_once_and_lists_only_zero_done_epics_wit
     assert [(epic["key"], epic["age_days"], epic["assignee"], epic["summary"])
             for epic in data["not_started"]] == [("N-1", 30, "Alice Example", "Synthetic queued epic")]
     assert data["not_started"][0]["created"].startswith(_days_ago(30)[:10])
+
+
+def test_collect_keeps_a_not_started_epic_whose_only_done_children_are_excluded():
+    world = _world()
+
+    def handler(cmd):
+        if "--count" in cmd and _jql(cmd).split()[2] == "N-2":
+            return _count_out(0 if "resolution not in" in _jql(cmd) else 2)
+        if cmd[1:4] == ["jira", "workitem", "view"] and cmd[4] == "N-2":
+            return _epic_view("N-2", "Synthetic duplicate-only epic", category="new",
+                              created=_days_ago(20))
+        return world(cmd)
+
+    data = _collect(handler=handler)
+    assert [epic["key"] for epic in data["not_started"]] == ["N-1", "N-2"]
+
+
+def test_collect_epic_entries_carry_the_created_date():
+    epics = {epic["key"]: epic for epic in _collect()["epics"]}
+    assert epics["E-1"]["created"] == "2026-08-01T10:00:00.000+0000"
+    assert epics["E-2"]["created"] == "2026-08-01T10:00:00.000+0000"
 
 
 def test_collect_flags_blocked_then_stalled_and_skips_out_of_scope_items():

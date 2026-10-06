@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+from __future__ import annotations
+
 import argparse
 import json
 import os
@@ -325,6 +327,7 @@ def _render_epic(epic, with_open_children=False):
         f"Priority: {_clean(epic.get('priority')) or 'none'}",
         f"Parent: {_clean(parent['key'] + ' ' + (parent.get('summary') or '')) if parent else 'none'}",
         f"Assignee: {owner}",
+        f"Created: {str(epic.get('created') or '')[:10] or 'unknown'}",
     ]
     description = _clean(epic.get("description")) or "no description on the ticket"
     lines = [
@@ -550,7 +553,8 @@ def render_digest(data: dict, scope: str, word_limit: int, person: str | None = 
     return "\n\n".join(parts) + "\n"
 
 
-BANNER = re.compile(r"outdated version", re.IGNORECASE)
+BANNER = re.compile(r"^\W*(?:You[’']re using an outdated version|Follow this link:)")
+JSON_START = re.compile(r"^[ \t]*[\[{]", re.MULTILINE)
 RATE_LIMITED = re.compile(r"\b429\b")
 COUNT_LINE = re.compile(r"(\d+)\s*$")
 
@@ -570,14 +574,20 @@ def _acli_text(args, runner):
         raise AcliError(f"Jira rate limit hit (HTTP 429) on: {' '.join(command)}\n{stderr}")
     if result.returncode != 0:
         raise AcliError(f"acli failed: {' '.join(command)}\n{stderr}")
-    return "\n".join(line for line in (result.stdout or "").splitlines()
-                     if not BANNER.search(line))
+    return result.stdout or ""
+
+
+def _without_banner(text):
+    return "\n".join(line for line in text.splitlines() if not BANNER.match(line))
 
 
 def run_acli(args: list[str], runner=subprocess.run) -> list | dict:
     text = _acli_text(args, runner)
+    start = JSON_START.search(text)
     try:
-        return json.loads(text)
+        if start:
+            return json.JSONDecoder().raw_decode(text, start.end() - 1)[0]
+        return json.loads(_without_banner(text))
     except json.JSONDecodeError as error:
         raise AcliError(f"acli returned non-JSON output for {' '.join(args)}: {error}") from error
 
@@ -593,7 +603,8 @@ def view(key: str, fields: str, runner=subprocess.run) -> dict:
 
 
 def count(jql: str, runner=subprocess.run) -> int:
-    text = _acli_text(["jira", "workitem", "search", "--jql", jql, "--count"], runner).strip()
+    text = _without_banner(_acli_text(["jira", "workitem", "search", "--jql", jql, "--count"],
+                                      runner)).strip()
     match = COUNT_LINE.search(text)
     if not match:
         raise AcliError(f"acli count gave no number for {jql}: {text}")
@@ -616,7 +627,8 @@ CHILDREN_JQL = "parent = {epic} AND (resolution is EMPTY OR resolution not in ({
 STALLED_JQL = ('project in ({keys}) AND statusCategory = "In Progress" AND NOT status CHANGED '
                'AFTER -5d ORDER BY statusCategoryChangedDate ASC')
 NOT_STARTED_JQL = 'project in ({keys}) AND issuetype = Epic AND statusCategory = "To Do"'
-NOT_STARTED_DONE_JQL = "parent = {epic} AND statusCategory = Done"
+NOT_STARTED_DONE_JQL = ("parent = {epic} AND statusCategory = Done AND "
+                        "(resolution is EMPTY OR resolution not in ({excluded}))")
 
 
 def _parallel(tasks, workers):
@@ -671,6 +683,7 @@ def _epic_entry(key, fields, children, children_jql, roster):
     return {
         "key": key,
         "summary": fields.get("summary") or "",
+        "created": fields.get("created") or "",
         "status": ((fields.get("status") or {}).get("name")) or "",
         "priority": (fields.get("priority") or {}).get("name"),
         "parent": ({"key": parent["key"],
@@ -745,7 +758,7 @@ def collect(cfg: dict, runner=subprocess.run, workers: int = 8) -> dict:
     tasks = epic_tasks(epic_order)
     for epic in not_started:
         tasks[("done", epic["key"])] = lambda key=epic["key"]: count(
-            NOT_STARTED_DONE_JQL.format(epic=key), runner)
+            NOT_STARTED_DONE_JQL.format(epic=key, excluded=excluded), runner)
     second, failed = _parallel(tasks, workers)
     record(failed)
 

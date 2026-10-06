@@ -158,8 +158,9 @@ Parse the user's request for:
   comma-separated (`"Won't Do", "Declined", "Duplicate"`). The values are site-specific, and one the
   site lacks fails every query, so if the line is missing, ask the user; never guess.
 - **Epic start, for Agent F** — when Agent F is dispatched, compute `{EPIC_START}`: the earliest
-  `created` date among the epics in scope. Agent F's queries describe the epic's own work, not the
-  reporting window, so they need the epic's start date, not `{START_DATE}`.
+  `Created` date among the epic blocks in `jira.md`'s `## Active epics`. Agent F's queries
+  describe the epic's own work, not the reporting window, so they need the epic's start date, not
+  `{START_DATE}`.
 - **Word budget for Agent F** — compute `{WORD_LIMIT_F} = 250 x (epics in scope)` and pass it
   instead of `{WORD_LIMIT}`.
 
@@ -293,7 +294,7 @@ python3 <skill-dir>/scripts/jira_scan.py \
 It writes `jira.json` (input for Step 2b's `--jira-map`; never read it yourself) and `jira.md`, the
 tracker digest. `jira.md` puts the sections that are never cut first: `## Not measured` (only when
 something failed), `## Active epics` (key, title, status, priority, parent, assignee with an
-`(inactive)` flag, done/total/in-progress, a description excerpt and, in team scope, up to 4 open
+`(inactive)` flag, created date, done/total/in-progress, a description excerpt and, in team scope, up to 4 open
 children with in-review first), `## Flagged` (Blocked, or In Progress with no status change for 5
 days: one line each with its age, and the newest comment for the first 15 only), `## Unassigned`
 (unassigned bugs and unassigned In Progress work), `## Question candidates`,
@@ -307,10 +308,11 @@ with an `{EPIC}` placeholder; substitute the epic key to link a count to its que
 - **1** (`acli unavailable: …` or `cannot read --config …`) — dispatch Agent A as the fallback.
   When the message is `cannot read --config`, the roster table is the problem and Agent A needs the
   same roster, so fix the team config first.
-- **2 with `INCOMPLETE: <keys>`** — stop and report those keys as "not measured", the same rule as
-  Step 2b's `INCOMPLETE`. Both files are still written, with the failed keys under
-  `## Not measured`, and the acli error for each key is printed before the `INCOMPLETE` line. A
-  rate limit (`429`) clears on a rerun with a lower `--workers` (default 8).
+- **2 with `INCOMPLETE: <keys>`** — continue with step 2 of the order above, and report those
+  keys as "not measured", the same rule as Step 2b's `INCOMPLETE`. Both files are still written,
+  with the failed keys under `## Not measured`, so `--jira-map .updates/jira.json` still works. The
+  acli error for each key is printed before the `INCOMPLETE` line. Only a rate limit (`429`) is
+  worth a rerun first, with a lower `--workers` (default 8).
 - **2 with a `usage:` message** — a required flag is missing. Fix the command and rerun.
 
 ## Step 2b: Scan PRs Against the Tracker
@@ -385,15 +387,19 @@ digests:
   what it delivers, for someone who has never opened the ticket, never a restatement of the title.
   An epic whose block has no description is a finding: report it as "no description on the
   ticket" rather than guessing.
-- **Judge each question candidate.** `jira.md` lists every item whose newest comment asks a
-  question nobody has commented after. Decide which are real open questions; report each with who
-  asked, who it was aimed at, the date and how long it has been silent. Drop the ones that are
-  rhetorical or answered in another digest (a PR, a meeting).
+- **Judge each question candidate.** `jira.md` lists the flagged items and active epics whose
+  newest comment asks a question nobody has commented after; other items' comments are not read.
+  Decide which are real open questions; report each with who asked, who it was aimed at, the date
+  and how long it has been silent. Drop the ones that are rhetorical or answered in another digest
+  (a PR, a meeting).
 - **Build What's Left from each epic block's open children in `jira.md` plus `prs.md`**: in-review
   PRs from `## Open PRs (team)` and `## By epic` first, then in-progress assigned items, then the
   next unblocked tickets. A block ending `+N more open` has more work than it lists; say so.
 - **Read `## Unassigned` for the At Risk rule** "a customer-facing defect is unassigned": an
   unassigned bug there is the evidence. Unassigned In Progress work is a finding too: name it.
+
+On the fallback path, `jira.md` is Agent A's digest and has none of these headings: take the same
+facts from Agent A's own sections, and say in the report whether unassigned work was checked.
 
 Follow the format in [references/report-format.md](references/report-format.md). Key rules:
 

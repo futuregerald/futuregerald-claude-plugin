@@ -112,7 +112,7 @@ def _repo_in(repo, names):
     return repo in lowered or repo.split("/", 1)[-1] in lowered
 
 
-def classify_stack(repo: str, frontend: set[str], backend: set[str]) -> str:
+def classify_stack(repo, frontend, backend):
     if _repo_in(repo, frontend):
         return "frontend"
     if _repo_in(repo, backend):
@@ -120,7 +120,7 @@ def classify_stack(repo: str, frontend: set[str], backend: set[str]) -> str:
     return "other"
 
 
-def load_jira_map(path: str) -> dict[str, str]:
+def load_jira_map(path):
     with open(path) as handle:
         data = json.load(handle)
     if not isinstance(data, dict):
@@ -128,7 +128,7 @@ def load_jira_map(path: str) -> dict[str, str]:
     return dict(data.get("child_to_epic") or {})
 
 
-def epic_for(pr: dict, jira_map: dict[str, str]) -> str | None:
+def epic_for(pr, jira_map):
     keys = pr.get("keys") or []
     for key in keys:
         if key in jira_map:
@@ -140,8 +140,7 @@ def epic_for(pr: dict, jira_map: dict[str, str]) -> str | None:
     return None
 
 
-def build_epic_rollup(prs: list[dict], frontend: set[str], backend: set[str],
-                      jira_map: dict[str, str]) -> dict[str, dict]:
+def build_epic_rollup(prs, frontend, backend, jira_map):
     rollup = {}
     for pr in prs:
         if jira_map:
@@ -160,8 +159,7 @@ def build_epic_rollup(prs: list[dict], frontend: set[str], backend: set[str],
     return rollup
 
 
-def build_stack_counts(prs: list[dict], frontend: set[str], backend: set[str],
-                       roster: set[str]) -> dict[str, dict]:
+def build_stack_counts(prs, frontend, backend, roster):
     roster = {name.lower() for name in roster}
     stacks = {stack: {"merged": 0, "open": 0, "additions": 0, "deletions": 0}
               for stack in ("frontend", "backend", "other")}
@@ -369,7 +367,7 @@ def _size(pr):
     return f"+{pr['additions']}/-{pr['deletions']}"
 
 
-def render_open_prs(open_prs: list[dict], roster: set[str]) -> str:
+def render_open_prs(open_prs, roster):
     team = sorted(_team_only(open_prs, roster), key=lambda pr: pr["created_at"] or "9999")
     lines = ["## Open PRs (team)", "",
              "Every PR the team has open right now, whatever its age, drafts included. "
