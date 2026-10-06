@@ -395,6 +395,7 @@ def test_render_digest_doc_links_heading():
 def test_render_digest_team_scope_has_every_section_in_order():
     assert _headings(_render()) == [
         "## Active epics",
+        "## Closed or ongoing epics",
         "## Flagged",
         "## Unassigned",
         "## High priority outside epics",
@@ -501,6 +502,7 @@ def test_render_digest_person_scope_shows_only_that_person():
     assert "## By person" not in headings
     assert headings == [
         "## Active epics",
+        "## Closed or ongoing epics",
         "## Flagged",
         "## Unassigned",
         "## High priority outside epics",
@@ -583,7 +585,7 @@ def _big_data():
     }
 
 
-NEVER_CUT = ("## Active epics", "## Flagged", "## Unassigned", "## High priority outside epics",
+NEVER_CUT = ("## Active epics", "## Closed or ongoing epics", "## Flagged", "## Unassigned", "## High priority outside epics",
              "## Question candidates",
              "## Unmatched assignees", "## Doc links")
 
@@ -672,8 +674,7 @@ def test_render_digest_flagged_line_shows_the_age():
     data = _data()
     data["flagged"][0]["age_days"] = 12
     flagged = _section_text(_render(data), "## Flagged")
-    assert ("- C-3 Synthetic blocked task — Blocked · Carol Example · blocked · "
-            "12 days in status category · epic E-1") in flagged
+    assert "- C-3 Synthetic blocked task — Blocked · Carol Example · blocked · 12d · epic E-1" in flagged
 
 
 def test_render_digest_unassigned_section_sits_right_after_flagged():
@@ -727,19 +728,17 @@ def test_open_children_orders_review_then_in_progress_then_to_do_and_drops_done(
         "C-12", "C-15", "C-9", "C-21", "C-3", "C-30"]
 
 
-def test_render_digest_team_epic_block_lists_four_open_children_and_the_rest_as_a_count():
+def test_render_digest_team_epic_block_lists_two_open_children_and_the_rest_as_a_count():
     data = _data()
     data["epics"][0]["children"] = _mixed_children()
     block = _section_text(_render(data), "## Active epics")
     e1 = block[block.index("### E-1"):block.index("### E-2")]
     lines = e1.splitlines()
     start = lines.index("- Open children:")
-    assert lines[start + 1:start + 6] == [
+    assert lines[start + 1:start + 4] == [
         "  - C-12 Code Review 🔍 · Carol Example · Synthetic in review",
         "  - C-15 Peer Review · Bob Example · Synthetic peer REVIEW",
-        "  - C-9 In Progress 🛠️ · unassigned · Synthetic building early",
-        "  - C-21 In Progress 🛠️ · Bob Example · Synthetic building",
-        "  - +2 more open",
+        "  - +4 more open",
     ]
     assert "C-40" not in e1 and "C-41" not in e1
 
@@ -1748,3 +1747,234 @@ def test_collect_high_priority_treats_a_null_parent_view_as_no_parent():
         return result
 
     assert [item["key"] for item in _collect(handler=handler)["high_priority"]] == ["H-1"]
+
+
+def _kind_epic(key, status, category, done, in_progress, total=None, **extra):
+    epic = _epic(key, f"Synthetic {key}", done=done, total=total if total is not None else max(done + in_progress, 1),
+                 **extra)
+    epic["status"] = status
+    epic["status_category"] = category
+    epic["progress"]["in_progress"] = in_progress
+    return epic
+
+
+@pytest.mark.parametrize("status,category,done,in_progress,expected", [
+    ("In Progress 🛠️", "indeterminate", 2, 1, "active"),
+    ("In Progress 🛠️", "indeterminate", 0, 1, "active"),
+    ("In Progress 🛠️", "indeterminate", 36, 0, "active"),
+    ("Backlog", "new", 0, 0, "not_started"),
+    ("Planning 📋", "indeterminate", 0, 0, "not_started"),
+    ("Done ✔️", "done", 32, 0, "closed"),
+    ("Won't Do ⛔", "done", 0, 0, "closed"),
+    ("Released 🚀", "indeterminate", 3, 1, "closed"),
+    ("Ongoing 🌀", "indeterminate", 13, 0, "ongoing"),
+])
+def test_epic_kind(status, category, done, in_progress, expected):
+    assert jira_scan.epic_kind(_kind_epic("K-1", status, category, done, in_progress)) == expected
+
+
+def test_closed_status_prefixes_is_a_named_constant():
+    assert jira_scan.CLOSED_STATUS_PREFIXES == ("released",)
+
+
+def _kinds_data():
+    data = _data()
+    data["epics"] = [
+        _kind_epic("E-1", "In Progress 🛠️", "indeterminate", 1, 1,
+                   children=[_child("C-2", "Synthetic active task", assignee="Bob Example")],
+                   assignee={"name": "Carol Example", "active": True}),
+        _kind_epic("E-3", "Done ✔️", "done", 32, 0, total=34,
+                   children=[_child("C-31", "Synthetic leftover", "To Do", None, "new"),
+                             _child("C-32", "Synthetic leftover two", "To Do", "Bob Example", "new")],
+                   assignee={"name": "Former Person", "active": False}),
+        _kind_epic("E-4", "Ongoing 🌀", "indeterminate", 1, 0, total=6,
+                   children=[_child(f"C-4{n}", f"Synthetic debt {n}", "To Do", None, "new") for n in range(5)]),
+        _kind_epic("E-5", "Backlog", "new", 0, 0, total=3, description="",
+                   created="2026-09-16T10:00:00.000+0000"),
+        _kind_epic("E-6", "Blocked", "indeterminate", 0, 0, total=1,
+                   created="2026-09-01T10:00:00.000+0000"),
+    ]
+    data["epics"][3]["refs"] = ["TD-1953"]
+    data["child_to_epic"] = {"C-2": "E-1"}
+    return data
+
+
+def test_render_digest_team_scope_gives_full_blocks_only_to_moving_epics():
+    text = _render(_kinds_data())
+    blocks = re.findall(r"(?m)^### (\S+) ", _section_text(text, "## Active epics"))
+    assert blocks == ["E-1"]
+
+
+def test_render_digest_closed_or_ongoing_section_follows_active_epics():
+    headings = _headings(_render(_kinds_data()))
+    assert headings.index("## Closed or ongoing epics") == headings.index("## Active epics") + 1
+
+
+def test_render_digest_closed_and_ongoing_one_liners():
+    lines = _section_text(_render(_kinds_data()), "## Closed or ongoing epics").strip().splitlines()
+    assert lines == [
+        "- E-3 Synthetic E-3 · Done ✔️ · Former Person (inactive) · 32/34 done, 2 open: "
+        "C-31 unassigned, C-32 Bob Example",
+        "- E-4 Synthetic E-4 · Ongoing 🌀 · unassigned · 1/6 done, 5 open",
+    ]
+
+
+def test_render_digest_touched_not_started_epics_lead_not_started_and_are_never_cut():
+    data = _kinds_data()
+    uncapped = _render(data, word_limit=10 ** 6)
+    text = _render(data, word_limit=50)
+    lines = _section_text(text, "## Not started").strip().splitlines()
+    assert lines[0] == "- E-5 Synthetic E-5 · created 2026-09-16 · no description on the ticket · refs: TD-1953"
+    assert lines[1] == "- E-6 Synthetic E-6 · created 2026-09-01 · Blocked"
+    assert lines[:2] == _section_text(uncapped, "## Not started").strip().splitlines()[:2]
+
+
+def test_render_digest_epic_block_shows_refs():
+    data = _kinds_data()
+    data["epics"][0]["refs"] = ["TD-7", "CX-9"]
+    assert "- Refs: TD-7, CX-9" in _section_text(_render(data), "## Active epics")
+
+
+def test_render_digest_person_and_epic_scope_keep_full_blocks_for_every_epic():
+    data = _kinds_data()
+    for epic in data["epics"]:
+        epic["assignee"] = {"name": "Carol Example", "active": True}
+    person = _render(data, scope="person", person="Carol Example")
+    assert re.findall(r"(?m)^### (\S+) ", _section_text(person, "## Active epics")) == [
+        "E-1", "E-3", "E-4", "E-5", "E-6"]
+    assert _section_text(person, "## Closed or ongoing epics").strip() == "None."
+    data["epic"] = "E-3"
+    assert re.findall(r"(?m)^### (\S+) ", _render(data, scope="epic")) == ["E-3"]
+
+
+def test_open_children_ranks_review_and_acceptance_first_and_shows_two():
+    children = [_child("C-1", "a", "Acceptance 🧐"), _child("C-2", "b", "In Progress 🛠️"),
+                _child("C-3", "c", "Code Review 🔍"), _child("C-4", "d", "To Do", category="new"),
+                _child("C-5", "e", "To Do", category="new")]
+    data = _data()
+    data["epics"][0]["children"] = children
+    lines = _section_text(_render(data), "## Active epics").split("### E-1", 1)[1].split("###", 1)[0]
+    shown = [l.strip() for l in lines.splitlines() if l.startswith("  - ")]
+    assert [l.split()[1] for l in shown[:2]] == ["C-1", "C-3"]
+    assert shown[2] == "- +3 more open"
+    assert jira_scan.OPEN_CHILDREN_SHOWN == 2
+
+
+def _flag(key, reason, age, status="In Progress 🛠️", comments=(), assignee="Alice Example", summary=None):
+    return {"key": key, "summary": summary or f"Synthetic {key}", "status": status, "assignee": assignee,
+            "reason": reason, "age_days": age,
+            "comments": [{"author": "Bob Example", "created": "2026-09-30T09:00:00.000+0000",
+                          "excerpt": text} for text in comments]}
+
+
+def test_render_digest_flagged_skips_stalled_epics_but_keeps_blocked_ones():
+    data = _kinds_data()
+    data["flagged"] = [_flag("E-1", "stalled", 18), _flag("E-6", "blocked", 40, status="Blocked"),
+                       _flag("C-2", "stalled", 7)]
+    flagged = _section_text(_render(data), "## Flagged")
+    assert "- E-1 " not in flagged
+    assert "- E-6 " in flagged and "- C-2 " in flagged
+
+
+def test_render_digest_flagged_compacts_long_stalled_items_oldest_first():
+    data = _data()
+    data["child_to_epic"] = {}
+    data["flagged"] = [_flag("B-1", "blocked", 90, status="Blocked"),
+                       _flag("S-1", "stalled", 45, assignee="Carol Example", comments=("old note",)),
+                       _flag("S-2", "stalled", 60, assignee=None),
+                       _flag("S-3", "stalled", 10)]
+    data["omitted"] = {"issues": 0, "comments": 0}
+    text = _render(data)
+    lines = _section_text(text, "## Flagged").strip().splitlines()
+    assert lines[0].startswith("- B-1 ")
+    assert lines[1].startswith("- S-3 ")
+    assert lines[-1] == "- Long-stalled, no status change for over 30 days (2): S-2 60d unassigned, S-1 45d Carol"
+    assert "old note" not in text
+    assert text.rstrip("\n").splitlines()[-1].startswith("Omitted: 0 issues, 0 not-started epics, 1 comments")
+    assert jira_scan.LONG_STALLED_DAYS == 30
+
+
+def test_render_digest_flagged_excerpt_budget_counts_rendered_lines_only():
+    data = _data()
+    data["child_to_epic"] = {}
+    data["flagged"] = ([_flag(f"S-{n}", "stalled", 100 - n, comments=("x",)) for n in range(15)]
+                       + [_flag("R-1", "stalled", 6, comments=("recent context",))])
+    assert "recent context" in _section_text(_render(data), "## Flagged")
+
+
+def test_render_digest_flagged_line_trims_the_summary_and_shows_a_short_age():
+    data = _data()
+    data["child_to_epic"] = {}
+    data["flagged"] = [_flag("S-9", "stalled", 12, summary="word " * 40)]
+    line = _section_text(_render(data), "## Flagged").strip().splitlines()[0]
+    assert line == "- S-9 " + ("word " * 16).strip() + "… — In Progress 🛠️ · Alice Example · stalled · 12d"
+
+
+def test_render_digest_count_jql_is_one_sentence():
+    block = _section_text(_render(), "## Active epics")
+    assert "Done adds" not in block
+    assert block.strip().splitlines()[0] == f"Count JQL template; substitute the epic key: total `{COUNT_JQL}`."
+
+
+@pytest.mark.parametrize("url,identity,canonical", [
+    ("https://docs.google.com/document/d/AbC_1/edit?tab=t.0#heading=h.x", "google:document:AbC_1",
+     "https://docs.google.com/document/d/AbC_1"),
+    ("https://docs.google.com/spreadsheets/d/S1/edit?usp=sharing", "google:spreadsheets:S1",
+     "https://docs.google.com/spreadsheets/d/S1"),
+    ("https://example.atlassian.net/wiki/spaces/X/pages/1/Title?atlOrigin=abc", "https://example.atlassian.net/wiki/spaces/X/pages/1/Title",
+     "https://example.atlassian.net/wiki/spaces/X/pages/1/Title"),
+    ("https://example.atlassian.net/wiki/pages/viewpage.action?pageId=7&foo=1",
+     "https://example.atlassian.net/wiki/pages/viewpage.action?pageId=7",
+     "https://example.atlassian.net/wiki/pages/viewpage.action?pageId=7"),
+])
+def test_doc_identity(url, identity, canonical):
+    assert jira_scan.doc_identity(url) == (identity, canonical)
+
+
+def test_render_digest_lists_each_document_once_by_canonical_url():
+    data = _data()
+    base = "https://docs.google.com/document/d/D1"
+    data["doc_links"] = [{"url": base + "/edit?tab=t.0", "epic": "E-1", "kind": "doc"},
+                         {"url": base + "/edit?disco=X", "epic": "E-2", "kind": "doc"},
+                         {"url": base + "/edit", "epic": "E-1", "kind": "doc"},
+                         {"url": "https://docs.google.com/spreadsheets/d/S1/edit", "epic": "E-1", "kind": "sheet"}]
+    lines = _section_text(_render(data), "## Doc links").strip().splitlines()
+    assert lines == [f"- {base} (E-1, doc)", "- https://docs.google.com/spreadsheets/d/S1 (E-1, sheet)"]
+
+
+def test_render_digest_old_question_candidates_get_a_short_excerpt():
+    data = _data()
+    long_text = "word " * 40 + "ready?"
+    data["questions"] = [{"key": "C-3", "author": "A", "created": "2026-06-23T09:00:00.000+0000",
+                          "age_days": 45, "excerpt": long_text},
+                         {"key": "C-2", "author": "B", "created": "2026-10-01T09:00:00.000+0000",
+                          "age_days": 5, "excerpt": long_text}]
+    lines = _section_text(_render(data), "## Question candidates").strip().splitlines()
+    assert len(lines[0].split(": ", 1)[1]) == jira_scan.OLD_QUESTION_EXCERPT == 60
+    assert lines[1].endswith("ready?")
+    assert jira_scan.OLD_QUESTION_DAYS == 30
+
+
+def test_collect_epic_entries_store_category_short_description_and_refs():
+    base = _world()
+    long_description = {"type": "doc", "content": [_text_paragraph(
+        "x" * 150 + " Depends on TD-1953 and AB-1, see also EP-1 and CX-12.")]}
+
+    def handler(cmd):
+        if cmd[1:4] == ["jira", "workitem", "view"] and cmd[4] == "E-2" and _fields(cmd) == EPIC_VIEW_FIELDS:
+            view = _epic_view("E-2", "Synthetic epic two", description=long_description)
+            return view
+        return base(cmd)
+
+    e2 = next(e for e in _collect(handler=handler)["epics"] if e["key"] == "E-2")
+    assert e2["status_category"] == "indeterminate"
+    assert len(e2["description"]) <= 120
+    assert e2["refs"] == ["TD-1953", "AB-1", "EP-1", "CX-12"]
+
+
+def test_description_refs_skips_own_key_and_direct_children_and_caps_at_five():
+    description = {"type": "doc", "content": [_text_paragraph(
+        "EP-2 depends on TD-1953, child CH-3, AB-1, AB-1 again, CX-9, DP-4, ZZ-5 and QQ-6.")]}
+    assert jira_scan.description_refs(description, "EP-2", {"CH-3"}) == [
+        "TD-1953", "AB-1", "CX-9", "DP-4", "ZZ-5"]
+    assert jira_scan.MAX_REFS == 5

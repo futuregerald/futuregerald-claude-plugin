@@ -10,7 +10,7 @@ import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse, urlsplit, urlunsplit
 
 PLACEHOLDER = re.compile(r"^\[.*\]$")
 ELLIPSIS = "…"
@@ -19,6 +19,10 @@ BARE_URL = re.compile(r"https?://[^\s<>\"']+")
 URL_TRAILING = ").,;:!?]"
 HIGH_PRIORITY_RANK = {"p0": 0, "blocker": 0, "highest": 0, "p1": 1, "critical": 1}
 MENTION_EXCERPT_LIMIT = 100
+ISSUE_KEY = re.compile(r"\b[A-Z][A-Z0-9]+-\d+\b")
+MAX_REFS = 5
+CLOSED_STATUS_PREFIXES = ("released",)
+GOOGLE_DOC = re.compile(r"docs\.google\.com/(document|spreadsheets)/d/([^/?#]+)")
 PERSON_GROUPS = ("completed", "in_progress", "stuck", "to_do")
 ROSTER_COLUMNS = {
     "name": "name",
@@ -267,7 +271,8 @@ def high_priority_outside_epics(issues: list[dict], child_map: dict[str, str],
 
 
 def _open_rank(child):
-    if "review" in (child.get("status") or "").casefold():
+    status = (child.get("status") or "").casefold()
+    if "review" in status or "acceptance" in status:
         return 0
     if child.get("category") == "indeterminate":
         return 1
@@ -342,7 +347,10 @@ GROUP_LABELS = {"completed": "Completed", "in_progress": "In progress", "stuck":
 MAX_COMMENTS = 3
 FLAGGED_WITH_EXCERPTS = 15
 EXCERPTS_PER_FLAGGED = 1
-OPEN_CHILDREN_SHOWN = 4
+OPEN_CHILDREN_SHOWN = 2
+LONG_STALLED_DAYS = 30
+OLD_QUESTION_DAYS = 30
+OLD_QUESTION_EXCERPT = 60
 SUMMARY_LIMIT = 80
 NOT_STARTED_KEPT = 10
 
@@ -374,15 +382,43 @@ def _render_open_children(children):
     return lines
 
 
+def epic_kind(epic: dict) -> str:
+    status = (epic.get("status") or "").casefold()
+    if epic.get("status_category") == "done" or status.startswith(CLOSED_STATUS_PREFIXES):
+        return "closed"
+    if status.startswith("ongoing"):
+        return "ongoing"
+    progress = epic.get("progress") or {}
+    if (progress.get("done") or 0) + (progress.get("in_progress") or 0) > 0:
+        return "active"
+    return "not_started"
+
+
+def doc_identity(url: str) -> tuple[str, str]:
+    google = GOOGLE_DOC.search(url)
+    if google:
+        kind, doc_id = google.groups()
+        return f"google:{kind}:{doc_id}", f"https://docs.google.com/{kind}/d/{doc_id}"
+    parts = urlsplit(url)
+    query = ""
+    if parts.path.endswith("viewpage.action"):
+        page = parse_qs(parts.query).get("pageId")
+        query = f"pageId={page[0]}" if page else ""
+    canonical = urlunsplit((parts.scheme, parts.netloc, parts.path, query, ""))
+    return canonical, canonical
+
+
+def _owner(epic):
+    assignee = epic.get("assignee")
+    if not assignee:
+        return "unassigned"
+    owner = _clean(assignee.get("name")) or "unassigned"
+    return owner + (" (inactive)" if assignee.get("active") is False else "")
+
+
 def _render_epic(epic, with_open_children=False):
     parent = epic.get("parent")
-    assignee = epic.get("assignee")
-    if assignee:
-        owner = _clean(assignee.get("name"))
-        if assignee.get("active") is False:
-            owner += " (inactive)"
-    else:
-        owner = "unassigned"
+    owner = _owner(epic)
     progress = epic.get("progress") or {}
     pct = progress.get("pct")
     details = [
@@ -401,6 +437,8 @@ def _render_epic(epic, with_open_children=False):
         f"{'n/a' if pct is None else str(pct) + '%'}",
         f"- Description: {description}",
     ]
+    if epic.get("refs"):
+        lines.append(f"- Refs: {', '.join(epic['refs'])}")
     if with_open_children:
         lines += _render_open_children(epic.get("children") or [])
     return "\n".join(lines)
@@ -409,33 +447,63 @@ def _render_epic(epic, with_open_children=False):
 def _render_epics(epics, count_jql, with_open_children=False):
     lines = []
     if count_jql:
-        lines.append(
-            f"Count JQL template; substitute the epic key: total `{count_jql}`. "
-            "Done adds `AND statusCategory = Done`; in progress adds "
-            "`AND statusCategory = \"In Progress\"`."
-        )
+        lines.append(f"Count JQL template; substitute the epic key: total `{count_jql}`.")
         lines.append("")
     blocks = [_render_epic(epic, with_open_children) for epic in epics]
     return "\n".join(["## Active epics", ""] + lines + ["\n\n".join(blocks) if blocks else "None."])
 
 
-def _render_flagged(flagged, child_map):
+def _render_closed(epics):
     lines = []
-    cut = 0
-    for index, item in enumerate(flagged):
+    for epic in epics:
+        progress = epic.get("progress") or {}
+        open_kids = [child for child in epic.get("children") or [] if child.get("category") != "done"]
+        line = (f"- {epic['key']} {_truncate(_clean(epic.get('summary')), 70)} · "
+                f"{_clean(epic.get('status'))} · {_owner(epic)} · "
+                f"{progress.get('done', 0)}/{progress.get('total', 0)} done, {len(open_kids)} open")
+        if 0 < len(open_kids) <= 3:
+            line += ": " + ", ".join(f"{child['key']} {_clean(child.get('assignee')) or 'unassigned'}"
+                                     for child in open_kids)
+        lines.append(line)
+    return _section("## Closed or ongoing epics", lines)
+
+
+def _first_name(name):
+    return (_clean(name) or "unassigned").split()[0]
+
+
+def _render_flagged(flagged, child_map, epic_keys=frozenset()):
+    lines, long_stalled = [], []
+    cut = rendered = 0
+    for item in flagged:
+        comments = item.get("comments") or []
+        if item.get("reason") == "stalled" and item["key"] in epic_keys:
+            cut += len(comments)
+            continue
+        if item.get("reason") == "stalled" and (item.get("age_days") or 0) > LONG_STALLED_DAYS:
+            long_stalled.append(item)
+            cut += len(comments)
+            continue
         parts = [_clean(item.get("status")), _clean(item.get("assignee")) or "unassigned",
                  _clean(item.get("reason"))]
         if item.get("age_days") is not None:
-            parts.append(f"{item['age_days']} days in status category")
+            parts.append(f"{item['age_days']}d")
         if item["key"] in child_map:
             parts.append(f"epic {child_map[item['key']]}")
-        lines.append(f"- {item['key']} {_clean(item.get('summary'))} — " + " · ".join(parts))
-        comments = item.get("comments") or []
-        shown = comments[-EXCERPTS_PER_FLAGGED:] if index < FLAGGED_WITH_EXCERPTS else []
+        lines.append(f"- {item['key']} {_truncate(_clean(item.get('summary')), SUMMARY_LIMIT)} — "
+                     + " · ".join(parts))
+        shown = comments[-EXCERPTS_PER_FLAGGED:] if rendered < FLAGGED_WITH_EXCERPTS else []
+        rendered += 1
         cut += len(comments) - len(shown)
         for comment in shown:
             lines.append(f"  - {_clean(comment.get('author'))} {str(comment.get('created') or '')[:10]}: "
                          f"{_clean(comment.get('excerpt'))}")
+    if long_stalled:
+        ordered = sorted(long_stalled, key=lambda item: -(item.get("age_days") or 0))
+        lines.append(f"- Long-stalled, no status change for over {LONG_STALLED_DAYS} days "
+                     f"({len(ordered)}): " + ", ".join(
+                         f"{item['key']} {item['age_days']}d {_first_name(item.get('assignee'))}"
+                         for item in ordered))
     return _section("## Flagged", lines), cut
 
 
@@ -457,20 +525,32 @@ def _render_high_priority(items):
     ])
 
 
+def _question_excerpt(item):
+    excerpt = _clean(item.get("excerpt"))
+    if (item.get("age_days") or 0) > OLD_QUESTION_DAYS:
+        return _truncate(excerpt, OLD_QUESTION_EXCERPT)
+    return excerpt
+
+
 def _render_questions(questions):
     return _section("## Question candidates", [
         f"- {item['key']} · {_clean(item.get('author'))}"
         f"{' → ' + ', '.join(_clean(name) for name in item['addressees']) if item.get('addressees') else ''}"
         f" · {str(item.get('created') or '')[:10]} · "
-        f"{item.get('age_days')} days: {_clean(item.get('excerpt'))}"
+        f"{item.get('age_days')} days: {_question_excerpt(item)}"
         for item in questions
     ])
 
 
 def _render_doc_links(links):
-    return _section("## Doc links", [
-        f"- {link['url']} ({link['epic']}, {link['kind']})" for link in links
-    ])
+    lines, seen = [], set()
+    for link in links:
+        identity, canonical = doc_identity(link["url"])
+        if identity in seen:
+            continue
+        seen.add(identity)
+        lines.append(f"- {canonical} ({link['epic']}, {link['kind']})")
+    return _section("## Doc links", lines)
 
 
 def _person_detail(name, groups):
@@ -516,10 +596,24 @@ def _render_children(epics, collapsed):
     return "\n".join(["## Children", ""] + ["\n\n".join(blocks) if blocks else "None."])
 
 
-def _render_not_started(epics, collapsed):
+def _touched_not_started_line(epic):
+    line = (f"- {epic['key']} {_truncate(_clean(epic.get('summary')), 70)} · created "
+            f"{str(epic.get('created') or '')[:10] or 'unknown'}")
+    status = _clean(epic.get("status"))
+    if status.casefold().split(" ")[0] not in ("to", "backlog", ""):
+        line += f" · {status}"
+    if not _clean(epic.get("description")):
+        line += " · no description on the ticket"
+    if epic.get("refs"):
+        line += f" · refs: {', '.join(epic['refs'])}"
+    return line
+
+
+def _render_not_started(epics, collapsed, touched=()):
     ordered = sorted(epics, key=lambda epic: -(epic.get("age_days") or 0))
     kept = ordered[:NOT_STARTED_KEPT] if collapsed else ordered
-    lines = [f"- {epic['key']} {_clean(epic.get('summary'))} · created "
+    lines = [_touched_not_started_line(epic) for epic in touched] + [
+             f"- {epic['key']} {_clean(epic.get('summary'))} · created "
              f"{str(epic.get('created') or '')[:10]} · {epic.get('age_days')} days old"
              for epic in kept]
     dropped = len(ordered) - len(kept)
@@ -605,12 +699,18 @@ def render_digest(data: dict, scope: str, word_limit: int, person: str | None = 
         raise ValueError("person scope needs a person")
     epics, flagged, unassigned, high_priority, questions, links, not_started, people = _scoped(
         data, scope, person)
-    flagged_text, comments_cut = _render_flagged(flagged, data.get("child_to_epic") or {})
+    kinds = {epic["key"]: epic_kind(epic) if scope == "team" else "active" for epic in epics}
+    active = [epic for epic in epics if kinds[epic["key"]] == "active"]
+    closed = [epic for epic in epics if kinds[epic["key"]] in ("closed", "ongoing")]
+    touched = [epic for epic in epics if kinds[epic["key"]] == "not_started"]
+    epic_keys = {epic["key"] for epic in epics} | {epic["key"] for epic in not_started}
+    flagged_text, comments_cut = _render_flagged(flagged, data.get("child_to_epic") or {}, epic_keys)
     never = [_header(data, scope, person)]
     if data.get("failures"):
         never.append(_section("## Not measured", [f"- {key}" for key in data["failures"]]))
     never += [
-        _render_epics(epics, data.get("count_jql"), with_open_children=scope == "team"),
+        _render_epics(active, data.get("count_jql"), with_open_children=scope == "team"),
+        _render_closed(closed),
         flagged_text,
         _render_unassigned(unassigned),
         _render_high_priority(high_priority),
@@ -624,7 +724,8 @@ def render_digest(data: dict, scope: str, word_limit: int, person: str | None = 
         parts = never + [detail_text]
         not_started_cut = 0
         if scope != "epic":
-            not_started_text, not_started_cut = _render_not_started(not_started, collapse_not_started)
+            not_started_text, not_started_cut = _render_not_started(not_started, collapse_not_started,
+                                                                    touched)
             parts.append(not_started_text)
         parts.append(_omitted_line(omitted, issues_cut, not_started_cut, comments_cut, word_limit))
         if _word_count(parts) <= word_limit:
@@ -699,7 +800,7 @@ EPIC_FIELDS = "key,summary,status,assignee,description,priority"
 EPIC_VIEW_FIELDS = "summary,description,priority,parent,assignee,status,created,updated,comment"
 NOT_STARTED_VIEW_FIELDS = "created,summary,description,assignee,priority"
 FLAGGED_VIEW_FIELDS = "comment,statuscategorychangedate"
-DESCRIPTION_LIMIT = 200
+DESCRIPTION_LIMIT = 120
 COMMENT_LIMIT = 300
 QUESTION_EXCERPT_LIMIT = 200
 
@@ -758,6 +859,14 @@ def _child_entry(issue, roster):
             "category": _category(issue)}
 
 
+def description_refs(description, own_key, child_keys):
+    refs = []
+    for ref in ISSUE_KEY.findall(adf_text(description, 10 ** 9)):
+        if ref != own_key and ref not in child_keys and ref not in refs:
+            refs.append(ref)
+    return refs[:MAX_REFS]
+
+
 def _epic_entry(key, fields, children, children_jql, roster):
     parent = fields.get("parent")
     assignee = fields.get("assignee")
@@ -769,12 +878,14 @@ def _epic_entry(key, fields, children, children_jql, roster):
         "summary": fields.get("summary") or "",
         "created": fields.get("created") or "",
         "status": ((fields.get("status") or {}).get("name")) or "",
+        "status_category": ((fields.get("status") or {}).get("statusCategory") or {}).get("key"),
         "priority": (fields.get("priority") or {}).get("name"),
         "parent": ({"key": parent["key"],
                     "summary": (parent.get("fields") or {}).get("summary") or ""}
                    if parent else None),
         "assignee": owner,
         "description": adf_text(fields.get("description"), DESCRIPTION_LIMIT),
+        "refs": description_refs(fields.get("description"), key, {child["key"] for child in children}),
         "progress": epic_progress(children),
         "jql": {"total": children_jql,
                 "done": children_jql + " AND statusCategory = Done",
