@@ -46,7 +46,8 @@ offer to set it up:
 If they say yes, fill it in from what you can observe — `git remote -v` for the org and repos,
 recent PR authors and ticket assignees for a first-draft roster, and on Jira each roster member's
 Jira Account ID from the `assignee.accountId` of their recent tickets (leave it blank when none
-turns up) — then save to `references/team.local.md` and **show the file and ask them to correct
+turns up), and, if a connected tool records meetings, ask whether to name it on the Meeting
+sources line (leave the line out otherwise) — then save to `references/team.local.md` and **show the file and ask them to correct
 it.** Never guess a person's role, and never invent a teammate. A wrong roster produces a
 confidently wrong status report about real people. Never write a real roster into the tracked
 `references/team.md`.
@@ -150,8 +151,11 @@ Parse the user's request for:
 - **Word budget** — compute `{WORD_LIMIT} = 50 x (people in scope) x (days in window)` and pass
   it to every required agent. Optional agent D takes a flat 200; optional agent E takes 200 and
   agent F takes `{WORD_LIMIT_F}` (below).
-- **Meeting result cap** — compute `{WINDOW_MEETING_LIMIT} = 10 x (days in window)` and pass it to
-  Agent C, so batching does not shrink its capacity below what per-day agents had.
+- **Meeting sources, for Agent C** — `{USER_MEETING_SOURCES}`: any transcripts, files, links or
+  meeting titles the user named in the request (empty if none). `{MEETING_SOURCES}`: the tool on
+  the team config's Meeting sources line (empty if the line is missing). `{ROSTER_NAMES}`: the
+  roster's names. Agent C reads the user's sources plus the configured tool, and looks for a
+  connected meeting or transcript tool only when no tool is configured.
 - **Excluded resolutions** — read the team config's Excluded resolutions line: the resolutions that
   mean "not delivered" (for example Won't Do, Declined, Duplicate). They go to `jira_scan.py` as
   `--excluded-resolutions` and to Agent A as `{EXCLUDED_RESOLUTIONS}`, each value double-quoted and
@@ -230,10 +234,11 @@ See [references/agent-prompts.md](references/agent-prompts.md) for the exact pro
 | Tracker (Jira) | Step 2a, `jira_scan.py` | `acli` | none: the orchestrator runs it |
 | Tracker (not Jira, or Step 2a exited 1) | Agent A: Tracker Activity (fallback) | issue search by JQL or equivalent | that MCP server + `Write` |
 | GitHub PRs | Step 2b, `pr_scan.py` | `gh` CLI | none: the orchestrator runs it |
-| Meetings | Agent C | meeting + content search | that MCP server + `Write` |
+| Meetings | Agent C | the configured meeting tool, else any connected meeting or transcript tool, plus anything the user named | that MCP server + `Write` |
 
-If the meeting source needs re-authentication, do not authenticate from a sub-agent: write
-"Meeting source unavailable" to the digest and say so in the report.
+If the meeting source is not connected or needs a login, do not authenticate from a sub-agent:
+Agent C writes "Meeting source unavailable" and the reason to the digest. Say in the report that
+meeting notes were not available, without naming the tool.
 
 ### Optional Agents
 

@@ -165,3 +165,46 @@ def test_epic_start_reads_active_or_not_started():
 def test_skill_says_how_to_build_done_and_in_progress_count_queries():
     step2a = _between(read(SKILL_MD), "## Step 2a", "## Step 2b")
     assert "AND statusCategory = Done" in step2a
+
+
+SHIPPED_TEXT_FILES = ["SKILL.md", "references/agent-prompts.md", "references/team.md", "references/report-format.md"]
+
+
+@pytest.mark.parametrize("name", SHIPPED_TEXT_FILES)
+def test_no_meeting_vendor_is_named(name):
+    text = read(SKILL / name).casefold()
+    for vendor in ("krisp", "search_meetings"):
+        assert vendor not in text, f"{name} names {vendor}"
+
+
+def _agent_c():
+    return _between(read(AGENT_PROMPTS), "## Agent C", "## Agent F")
+
+
+def test_agent_c_follows_the_source_order():
+    agent_c = _agent_c()
+    positions = [agent_c.index(marker) for marker in
+                 ("{USER_MEETING_SOURCES}", "{MEETING_SOURCES}", "connected")]
+    assert positions == sorted(positions)
+
+
+def test_agent_c_reads_are_bounded_paged_and_read_only():
+    agent_c = _agent_c()
+    assert "at most 12" in agent_c
+    assert "never create, update or delete" in agent_c
+    assert "oldest" in agent_c and "truncated" in agent_c
+    assert "one search per person" not in agent_c
+
+
+def test_agent_c_does_not_fall_back_when_a_configured_source_fails():
+    assert "no fallback" in _agent_c()
+
+
+def test_skill_resolves_meeting_sources():
+    resolve = _between(read(SKILL_MD), "## Step 1", "## Step 2")
+    assert "{MEETING_SOURCES}" in resolve and "{USER_MEETING_SOURCES}" in resolve
+
+
+def test_team_template_has_meeting_sources_line_without_a_placeholder():
+    line = next(l for l in read(SKILL / "references/team.md").splitlines() if "**Meeting sources:**" in l)
+    assert "[" not in line
