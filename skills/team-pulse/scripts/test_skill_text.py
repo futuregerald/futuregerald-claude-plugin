@@ -184,7 +184,7 @@ def _agent_c():
 def test_agent_c_follows_the_source_order():
     agent_c = _agent_c()
     positions = [agent_c.index(marker) for marker in
-                 ("{USER_MEETING_SOURCES}", "{MEETING_SOURCES}", "connected")]
+                 ("1. User-named sources", "2. Configured meeting tool", "3. No tool configured")]
     assert positions == sorted(positions)
 
 
@@ -192,7 +192,7 @@ def test_agent_c_reads_are_bounded_paged_and_read_only():
     agent_c = _agent_c()
     assert "at most 12" in agent_c
     assert "never create, update or delete" in agent_c
-    assert "oldest" in agent_c and "truncated" in agent_c
+    assert "oldest" in agent_c and "dropped" in agent_c
     assert "one search per person" not in agent_c
 
 
@@ -205,6 +205,41 @@ def test_skill_resolves_meeting_sources():
     assert "{MEETING_SOURCES}" in resolve and "{USER_MEETING_SOURCES}" in resolve
 
 
-def test_team_template_has_meeting_sources_line_without_a_placeholder():
-    line = next(l for l in read(SKILL / "references/team.md").splitlines() if "**Meeting sources:**" in l)
-    assert "[" not in line
+def test_team_template_shows_meeting_sources_as_an_example_not_a_value():
+    team = read(SKILL / "references/team.md")
+    assert "`- **Meeting sources:** " in team
+    assert not any(line.startswith("- **Meeting sources:**") for line in team.splitlines())
+
+
+def test_agent_c_runs_discovery_when_no_tool_is_configured():
+    agent_c = _agent_c()
+    assert "`none`" in agent_c and "go to 3" in agent_c
+
+
+def test_agent_c_still_reads_user_sources_when_the_tool_is_unavailable():
+    assert "still read the sources from 1" in _agent_c()
+
+
+def test_agent_c_ranks_by_the_epics_in_scope():
+    assert "{EPIC_KEYS}" in _agent_c()
+    assert "{EPIC_KEYS}" in _between(read(SKILL_MD), "## Step 1", "## Step 2")
+
+
+def test_agent_c_reads_summaries_not_whole_transcripts():
+    agent_c = _agent_c()
+    assert "plus the speaker names" not in agent_c
+    assert "only when there is no summary" in agent_c
+
+
+def test_agent_c_treats_only_dropped_items_as_missing():
+    agent_c = _agent_c()
+    assert "dropped" in agent_c and "smaller page" in agent_c
+
+
+def test_report_format_names_meeting_sources_generically():
+    assert "never by tool name" in read(SKILL / "references/report-format.md")
+
+
+def test_meetings_grant_includes_read_for_user_files():
+    row = next(l for l in read(SKILL_MD).splitlines() if l.startswith("| Meetings | Agent C"))
+    assert "`Read`" in row

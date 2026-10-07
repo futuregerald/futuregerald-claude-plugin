@@ -36,7 +36,8 @@ Which tool holds your meeting notes or transcripts, by its MCP server name. Leav
 and the skill uses whatever meeting or transcript tool is connected. Name one and it uses only
 that one, so a document or wiki tool is never mistaken for meeting notes.
 
-- **Meeting sources:** the MCP server name of your meeting-notes or transcription tool
+To name one, add a line here such as `- **Meeting sources:** <mcp-server-name>`, using the
+server's name as it appears in your MCP configuration.
 
 ## Standing documents (optional)
 

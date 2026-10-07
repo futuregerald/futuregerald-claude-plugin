@@ -152,10 +152,12 @@ Parse the user's request for:
   it to every required agent. Optional agent D takes a flat 200; optional agent E takes 200 and
   agent F takes `{WORD_LIMIT_F}` (below).
 - **Meeting sources, for Agent C** — `{USER_MEETING_SOURCES}`: any transcripts, files, links or
-  meeting titles the user named in the request (empty if none). `{MEETING_SOURCES}`: the tool on
-  the team config's Meeting sources line (empty if the line is missing). `{ROSTER_NAMES}`: the
-  roster's names. Agent C reads the user's sources plus the configured tool, and looks for a
-  connected meeting or transcript tool only when no tool is configured.
+  meeting titles the user named in the request, or `none`. `{MEETING_SOURCES}`: the tool on the
+  team config's Meeting sources line, or `none` when the line is missing. `{ROSTER_NAMES}`: the
+  roster's names. `{EPIC_KEYS}`: the keys and titles from `jira.md`'s `## Active epics` (Step 2a
+  has run by the time Agent C is dispatched), or `none` on the fallback path. Agent C always reads
+  the user's sources, searches the configured tool, and looks for a connected meeting or
+  transcript tool only when no tool is configured.
 - **Excluded resolutions** — read the team config's Excluded resolutions line: the resolutions that
   mean "not delivered" (for example Won't Do, Declined, Duplicate). They go to `jira_scan.py` as
   `--excluded-resolutions` and to Agent A as `{EXCLUDED_RESOLUTIONS}`, each value double-quoted and
@@ -234,11 +236,12 @@ See [references/agent-prompts.md](references/agent-prompts.md) for the exact pro
 | Tracker (Jira) | Step 2a, `jira_scan.py` | `acli` | none: the orchestrator runs it |
 | Tracker (not Jira, or Step 2a exited 1) | Agent A: Tracker Activity (fallback) | issue search by JQL or equivalent | that MCP server + `Write` |
 | GitHub PRs | Step 2b, `pr_scan.py` | `gh` CLI | none: the orchestrator runs it |
-| Meetings | Agent C | the configured meeting tool, else any connected meeting or transcript tool, plus anything the user named | that MCP server + `Write` |
+| Meetings | Agent C | the configured meeting tool, else any connected meeting or transcript tool, plus anything the user named | that MCP server + `Write`, plus `Read` (and a fetch tool for links) when the user names files |
 
 If the meeting source is not connected or needs a login, do not authenticate from a sub-agent:
-Agent C writes "Meeting source unavailable" and the reason to the digest. Say in the report that
-meeting notes were not available, without naming the tool.
+Agent C writes "Meeting source unavailable" and the reason to the digest, and still reads anything
+the user named. Say in the report that meeting notes were not available only when nothing was read,
+and never name the tool.
 
 ### Optional Agents
 
