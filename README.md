@@ -202,7 +202,7 @@ If symlinked to `~/.claude/skills` (installed as personal skills), invoke them b
 
 ## Skills and Agents Reference
 
-### Skills (56)
+### Skills (57)
 
 **Planning & Specs:**
 
@@ -211,6 +211,7 @@ If symlinked to `~/.claude/skills` (installed as personal skills), invoke them b
 | `brainstorming` | Explore intent, requirements, and design before implementation |
 | `writing-plans` | Turn a spec into a bite-sized, TDD-driven implementation plan |
 | `plan-review` | Staff-engineer review of a plan before implementing; one pass, never re-reviewed |
+| `visualize-plan` | Turn a plan into a visual HTML page (flows, ER diagram, worked example, decisions) alongside the markdown |
 | `executing-plans` | Execute a written plan with review checkpoints |
 | `subagent-driven-development` | Execute independent plan tasks via fresh sub-agents |
 | `dispatching-parallel-agents` | Run 2+ independent tasks concurrently |
