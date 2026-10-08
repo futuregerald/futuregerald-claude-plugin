@@ -1,0 +1,386 @@
+<title>{{TITLE}}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root {
+  --ground: #f5f7fb;
+  --surface: #ffffff;
+  --ink: #18202e;
+  --muted: #5a6478;
+  --rule: #dfe4ee;
+  --link: #2b5bd7;
+  --link-soft: #e8eefc;
+  --on-link: #ffffff;
+  --rec: #1d7a55;
+  --rec-soft: #e5f4ec;
+  --focus: #2b5bd7;
+  --display: "Bricolage Grotesque", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Sans 3", -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --ground: #10141c;
+    --surface: #171d28;
+    --ink: #e6eaf2;
+    --muted: #9aa4b8;
+    --rule: #2a3242;
+    --link: #8aa8ff;
+    --link-soft: #1f2a44;
+    --on-link: #0d1220;
+    --rec: #6fd3a5;
+    --rec-soft: #16302a;
+    --focus: #8aa8ff;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ground: #10141c;
+  --surface: #171d28;
+  --ink: #e6eaf2;
+  --muted: #9aa4b8;
+  --rule: #2a3242;
+  --link: #8aa8ff;
+  --link-soft: #1f2a44;
+  --on-link: #0d1220;
+  --rec: #6fd3a5;
+  --rec-soft: #16302a;
+  --focus: #8aa8ff;
+}
+body {
+  background: var(--ground);
+  color: var(--ink);
+  font: 16px/1.55 var(--body);
+}
+.wrap {
+  max-width: 780px;
+  margin: 0 auto;
+  padding-inline: 16px;
+  padding-block: 0 64px;
+}
+header.top {
+  position: sticky;
+  top: env(safe-area-inset-top, 0px);
+  z-index: 5;
+  background: var(--ground);
+  border-bottom: 1px solid var(--rule);
+}
+header.top .wrap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-block: 12px;
+  flex-wrap: wrap;
+}
+.label {
+  font: 600 15px/1.2 var(--display);
+  letter-spacing: 0.01em;
+}
+.progress {
+  font: 500 13px/1 var(--mono);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.progress b { color: var(--ink); font-weight: 500; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+button {
+  font: 600 14px/1 var(--body);
+  border-radius: 6px;
+  padding: 9px 14px;
+  cursor: pointer;
+  border: 1px solid var(--rule);
+  background: var(--surface);
+  color: var(--ink);
+}
+button.primary { background: var(--link); border-color: var(--link); color: var(--on-link); }
+button:focus-visible, textarea:focus-visible, .opt input:focus-visible + .opt-body {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.intro { padding-block: 36px 8px; }
+h1 {
+  font: 700 clamp(28px, 5vw, 40px)/1.1 var(--display);
+  margin: 0 0 12px;
+  text-wrap: balance;
+}
+.intro p { margin: 0 0 10px; max-width: 64ch; color: var(--muted); }
+.legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 14px; color: var(--muted); margin-top: 14px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.pill {
+  font: 500 11px/1 var(--mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 4px 7px;
+  border-radius: 4px;
+}
+.pill.rec { background: var(--rec-soft); color: var(--rec); }
+.pill.id { background: var(--link-soft); color: var(--link); }
+section.q {
+  border-top: 1px solid var(--rule);
+  padding-block: 32px 8px;
+  display: grid;
+  gap: 14px;
+}
+.q-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.q-head h2 { font: 600 22px/1.25 var(--display); margin: 0; text-wrap: balance; flex: 1 1 320px; }
+.q-head .answered { font: 500 12px/1 var(--mono); color: var(--rec); }
+.context { margin: 0; max-width: 66ch; }
+.context code, .opt code, .why code, .intro code { font: 13px var(--mono); background: var(--link-soft); padding: 1px 4px; border-radius: 3px; }
+.why { margin: 0; padding: 12px 14px; background: var(--rec-soft); border-radius: 6px; font-size: 15px; max-width: 66ch; }
+.why strong { color: var(--rec); }
+.opts { display: grid; gap: 8px; }
+.opt { display: block; cursor: pointer; position: relative; }
+.opt input { position: absolute; opacity: 0; pointer-events: none; }
+.opt-body {
+  display: grid;
+  grid-template-columns: 22px 1fr;
+  gap: 4px 10px;
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+}
+.mark {
+  width: 16px; height: 16px; margin-top: 3px;
+  box-sizing: border-box;
+  border: 2px solid var(--muted);
+  border-radius: 50%;
+}
+.opt input[type="checkbox"] + .opt-body .mark { border-radius: 4px; }
+.opt input:checked + .opt-body { border-color: var(--link); background: var(--link-soft); }
+.opt input:checked + .opt-body .mark { border-color: var(--link); background: var(--link); box-shadow: inset 0 0 0 3px var(--surface); }
+.opt-title { font-weight: 600; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.opt-desc { grid-column: 2; color: var(--muted); font-size: 15px; }
+textarea {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 64px;
+  font: 15px/1.45 var(--body);
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  padding: 10px 12px;
+  resize: vertical;
+}
+label.note { font: 500 12px/1 var(--mono); letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); display: block; margin-bottom: 6px; }
+section.out { border-top: 2px solid var(--ink); margin-top: 32px; padding-block: 28px 0; display: grid; gap: 12px; }
+section.out h2 { font: 700 24px/1.2 var(--display); margin: 0; }
+section.out p { margin: 0; color: var(--muted); }
+#answers { min-height: 280px; font: 13px/1.5 var(--mono); }
+.status { font: 500 13px/1 var(--mono); color: var(--rec); min-height: 1em; }
+@media (prefers-reduced-motion: no-preference) {
+  .opt-body { transition: border-color .12s, background-color .12s; }
+}
+</style>
+
+<header class="top">
+  <div class="wrap">
+    <span class="label">{{LABEL}}</span>
+    <span class="progress"><b id="count">0</b> / <span id="total">0</span> answered</span>
+    <div class="actions">
+      <button id="use-recommended" type="button">Use recommendations for the rest</button>
+      <button id="copy-top" type="button" class="primary">Copy answers</button>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="intro">
+    <h1>{{HEADING}}</h1>
+    <p>Each question explains what's at stake, what each option means for you, and which one I'd pick and why. Earlier answers feed later ones, so they're in that order.</p>
+    <p>{{INTRO}}</p>
+    <div class="legend">
+      <span><span class="pill rec">Recommended</span> my pick, with the reason in green</span>
+      <span>Your picks and notes are kept in this browser until you copy them.</span>
+    </div>
+  </div>
+  <div id="questions"></div>
+
+  <section class="out" id="output">
+    <h2>Your answers</h2>
+    <p>This updates as you answer. Copy it and paste it into the chat.</p>
+    <textarea id="answers" readonly aria-label="Your answers as text"></textarea>
+    <div class="actions">
+      <button id="copy" type="button" class="primary">Copy answers</button>
+      <span class="status" id="status" role="status"></span>
+    </div>
+  </section>
+</main>
+
+<script type="application/json" id="page-data">
+{
+  "storeKey": "{{STORE_KEY}}",
+  "answerHeading": "{{ANSWER_HEADING}}",
+  "questions": [
+    {
+      "id": "D4",
+      "title": "Who can see a recipe when someone first saves it?",
+      "context": "A saved recipe can be private, shared with the people in your household, or public so anyone with the link can open it. Whatever we pick is what happens when someone saves without thinking about it, which is most saves. People can change it per recipe afterwards.",
+      "why": "Starting private means nobody shares a family recipe by accident. Sharing with the household is one tap, so the cost is small.",
+      "type": "radio",
+      "options": [
+        { "key": "A", "rec": true, "title": "Private until shared", "desc": "Only the person who saved it sees it. They tap Share to show it to their household." },
+        { "key": "B", "title": "Shared with the household", "desc": "Everyone in the household sees it straight away. A recipe meant to stay private has to be switched back." },
+        { "key": "C", "title": "Public", "desc": "Anyone with the link can open it. Easy to pass on; easy to share more than intended." }
+      ]
+    },
+    {
+      "id": "D5",
+      "title": "How should people find a recipe they saved?",
+      "context": "Pick all that apply. Searching by ingredient means storing each ingredient as its own line rather than one block of text, so imported recipes have to be split into lines when they are saved. That split is sometimes wrong, and people would need a way to fix it.",
+      "why": "Name and ingredient search cover most lookups. Fridge filtering is the feature people mention most and needs the same ingredient lines, so it costs little extra.",
+      "type": "checkbox",
+      "options": [
+        { "key": "search", "rec": true, "title": "Search by name or ingredient", "desc": "Type <em>lentil</em> and see every recipe that uses lentils, not just ones with lentil in the name." },
+        { "key": "fridge", "rec": true, "title": "Filter by what's in the fridge", "desc": "Tick what you have and see recipes you can cook without shopping." },
+        { "key": "tags", "title": "Browse by tag", "desc": "Recipes grouped under tags people add, such as quick or vegetarian. Only as good as the tagging." },
+        { "key": "most-cooked", "title": "Sort by most cooked", "desc": "Needs people to mark when they cook something, which most won't do." }
+      ]
+    },
+    {
+      "id": "D6",
+      "title": "What happens to recipes when someone leaves a household?",
+      "context": "This builds on D4: a recipe belongs to the person who saved it, and the household can see the ones they share. When that person leaves, the household either keeps a copy or loses the recipe.",
+      "why": "Losing a recipe the family cooks every week is the complaint we most want to avoid. The person leaving keeps their own copy either way.",
+      "type": "radio",
+      "options": [
+        { "key": "A", "rec": true, "title": "The household keeps a copy", "desc": "Shared recipes stay where they are. The person who left keeps theirs too." },
+        { "key": "B", "title": "The recipes leave with them", "desc": "The household loses every recipe that person saved, with no warning." },
+        { "key": "C", "title": "Ask them when they leave", "desc": "They choose per recipe. Slower to leave, and most people will skip the question." }
+      ]
+    }
+  ]
+}
+</script>
+
+<script>
+const PAGE = JSON.parse(document.getElementById("page-data").textContent);
+const QUESTIONS = PAGE.questions;
+
+let state = {};
+try { state = JSON.parse(localStorage.getItem(PAGE.storeKey) || "{}") || {}; } catch (e) { state = {}; }
+const save = () => { try { localStorage.setItem(PAGE.storeKey, JSON.stringify(state)); } catch (e) {} };
+
+QUESTIONS.forEach((q) => {
+  const known = new Set(q.options.map((o) => o.key));
+  const picks = (state[q.id]?.picks || []).filter((k) => known.has(k));
+  state[q.id] = { ...(state[q.id] || {}), picks };
+});
+
+const root = document.getElementById("questions");
+document.getElementById("total").textContent = QUESTIONS.length;
+
+function el(tag, attrs, html) {
+  const node = document.createElement(tag);
+  Object.entries(attrs || {}).forEach(([k, v]) => node.setAttribute(k, v));
+  if (html != null) node.innerHTML = html;
+  return node;
+}
+
+function plain(html) {
+  const node = document.createElement("span");
+  node.innerHTML = html;
+  return node.textContent;
+}
+
+QUESTIONS.forEach((q) => {
+  const section = el("section", { class: "q", id: q.id });
+  const head = el("div", { class: "q-head" });
+  head.append(el("span", { class: "pill id" }, q.id), el("h2", {}, q.title), el("span", { class: "answered", id: q.id + "-done" }, ""));
+  section.append(head, el("p", { class: "context" }, q.context), el("p", { class: "why" }, "<strong>Why I recommend it:</strong> " + q.why));
+  const opts = el("div", { class: "opts", role: q.type === "radio" ? "radiogroup" : "group", "aria-label": plain(q.title) });
+  q.options.forEach((o) => {
+    const id = `${q.id}-${o.key}`;
+    const label = el("label", { class: "opt", for: id });
+    const input = el("input", { type: q.type, name: q.id, id, value: o.key });
+    if (state[q.id].picks.includes(o.key)) input.checked = true;
+    input.addEventListener("change", () => {
+      const picks = [...document.querySelectorAll(`input[name="${q.id}"]:checked`)].map((i) => i.value);
+      state[q.id] = { ...state[q.id], picks };
+      save(); render();
+    });
+    const body = el("span", { class: "opt-body" });
+    const prefix = q.type === "radio" ? o.key + ". " : "";
+    const badge = o.rec ? ' <span class="pill rec">Recommended</span>' : "";
+    body.append(el("span", { class: "mark", "aria-hidden": "true" }), el("span", { class: "opt-title" }, prefix + o.title + badge));
+    if (o.desc) body.append(el("span", { class: "opt-desc" }, o.desc));
+    label.append(input, body);
+    opts.append(label);
+  });
+  section.append(opts);
+  const noteWrap = el("div", {});
+  const noteId = q.id + "-note";
+  noteWrap.append(el("label", { class: "note", for: noteId }, "Note (optional)"));
+  const note = el("textarea", { id: noteId, placeholder: "Anything to add or change" });
+  note.value = state[q.id].note || "";
+  note.addEventListener("input", () => { state[q.id] = { ...state[q.id], note: note.value }; save(); render(); });
+  noteWrap.append(note);
+  section.append(noteWrap);
+  root.append(section);
+});
+
+function answerText() {
+  const lines = [PAGE.answerHeading, ""];
+  QUESTIONS.forEach((q) => {
+    const answer = state[q.id];
+    const picks = answer.picks;
+    const names = picks.map((k) => {
+      const o = q.options.find((x) => x.key === k);
+      return plain(q.type === "radio" ? `${k}. ${o.title}` : o.title);
+    });
+    const recommended = q.options.filter((o) => o.rec).map((o) => o.key).sort().join(",");
+    const isRecommended = picks.length > 0 && [...picks].sort().join(",") === recommended;
+    lines.push(`${q.id} ${plain(q.title)}`);
+    lines.push(`  Answer: ${names.length ? names.join("; ") + (isRecommended ? " (recommended)" : "") : "(not answered)"}`);
+    if (answer.note && answer.note.trim()) lines.push(`  Note: ${answer.note.trim()}`);
+    lines.push("");
+  });
+  return lines.join("\n").trim();
+}
+
+function render() {
+  let answered = 0;
+  QUESTIONS.forEach((q) => {
+    const done = state[q.id].picks.length > 0;
+    if (done) answered++;
+    document.getElementById(q.id + "-done").textContent = done ? "answered" : "";
+  });
+  document.getElementById("count").textContent = answered;
+  document.getElementById("answers").value = answerText();
+}
+
+document.getElementById("use-recommended").addEventListener("click", () => {
+  QUESTIONS.forEach((q) => {
+    if (state[q.id].picks.length) return;
+    const picks = q.options.filter((o) => o.rec).map((o) => o.key);
+    state[q.id] = { ...state[q.id], picks };
+    picks.forEach((k) => { const input = document.getElementById(`${q.id}-${k}`); if (input) input.checked = true; });
+  });
+  save(); render();
+});
+
+async function copyAnswers() {
+  const answers = document.getElementById("answers");
+  const status = document.getElementById("status");
+  try {
+    await navigator.clipboard.writeText(answers.value);
+    status.textContent = "Copied. Paste it into the chat.";
+  } catch (e) {
+    answers.focus(); answers.select();
+    status.textContent = "Selected. Press Cmd+C or Ctrl+C to copy.";
+  }
+}
+
+document.getElementById("copy-top").addEventListener("click", () => {
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  document.getElementById("output").scrollIntoView({ behavior: reduce ? "auto" : "smooth" });
+  copyAnswers();
+});
+document.getElementById("copy").addEventListener("click", copyAnswers);
+
+render();
+</script>
