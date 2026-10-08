@@ -74,6 +74,24 @@ def test_missing_dark_palette():
     assert problems_mentioning(text, "data-theme")
 
 
+def test_missing_page_part():
+    text = valid_page().replace('id="use-recommended"', 'id="fill"')
+    assert problems_mentioning(text, "Use recommendations button")
+    text = valid_page().replace("navigator.clipboard.writeText", "copyText")
+    assert problems_mentioning(text, "clipboard")
+
+
+def test_unsafe_question_id():
+    assert problems_mentioning(edited(lambda d: d["questions"][0].update(id='D"4')), "letters, digits")
+
+
+def test_unsafe_option_key():
+    def change(data):
+        data["questions"][0]["options"][1]["key"] = "B 2"
+
+    assert problems_mentioning(edited(change), "letters, digits")
+
+
 def test_missing_data_block():
     text = DATA.sub("", valid_page())
     assert problems_mentioning(text, "page-data")

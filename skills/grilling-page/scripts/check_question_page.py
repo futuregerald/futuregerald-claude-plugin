@@ -21,6 +21,14 @@ THEME_MARKERS = {
     "a dark palette under :root[data-theme=\"dark\"]": re.compile(r":root\[data-theme=\"dark\"\]\s*\{"),
     "a body background from a token": re.compile(r"body\s*\{[^}]*background\s*:\s*var\(", re.DOTALL),
 }
+PAGE_PARTS = {
+    "the progress count": 'id="count"',
+    "the answer block": 'id="answers"',
+    "the Use recommendations button": 'id="use-recommended"',
+    "the Copy answers button": 'id="copy"',
+    "the clipboard copy": "navigator.clipboard.writeText",
+}
+SAFE_NAME = re.compile(r"[A-Za-z0-9_-]+")
 MAX_WORDS = {"title": 16, "context": 130, "why": 50, "desc": 50}
 QUESTION_TYPES = ("radio", "checkbox")
 
@@ -53,6 +61,9 @@ def check_options(problems, where, question):
         problems.append(f"{where}: every option needs a key")
     elif len(set(keys)) != len(keys):
         problems.append(f"{where}: option keys repeat")
+    for key in keys:
+        if isinstance(key, str) and key and not SAFE_NAME.fullmatch(key):
+            problems.append(f"{where}: option key {key!r} may only use letters, digits, - and _")
     for index, option in enumerate(options, start=1):
         if not isinstance(option, dict):
             continue
@@ -91,6 +102,8 @@ def check_questions(data):
         where = qid if has_id else f"question {index}"
         if not has_id:
             problems.append(f"{where}: no id")
+        elif not SAFE_NAME.fullmatch(qid):
+            problems.append(f"{where}: id may only use letters, digits, - and _")
         elif qid in seen:
             problems.append(f"{where}: id used twice")
         else:
@@ -126,6 +139,10 @@ def check(text):
     for label, pattern in THEME_MARKERS.items():
         if not pattern.search(text):
             problems.append(f"missing {label}")
+
+    for label, marker in PAGE_PARTS.items():
+        if marker not in text:
+            problems.append(f"missing {label}; keep the template's markup and script as they are")
 
     block = PAGE_DATA.search(text)
     if not block:

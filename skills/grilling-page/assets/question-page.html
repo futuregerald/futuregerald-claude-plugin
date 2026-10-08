@@ -191,11 +191,11 @@ section.out p { margin: 0; color: var(--muted); }
 <main class="wrap">
   <div class="intro">
     <h1>{{HEADING}}</h1>
-    <p>Each question explains what's at stake, what each option means for you, and which one I'd pick and why. Earlier answers feed later ones, so they're in that order.</p>
+    <p>Each question explains what's at stake, what each option means for you, and which one I'd pick and why. They're ordered so the ones others build on come first.</p>
     <p>{{INTRO}}</p>
     <div class="legend">
       <span><span class="pill rec">Recommended</span> my pick, with the reason in green</span>
-      <span>Your picks and notes are kept in this browser until you copy them.</span>
+      <span>Your picks and notes are saved in this browser, so you can come back later.</span>
     </div>
   </div>
   <div id="questions"></div>
@@ -288,13 +288,13 @@ function plain(html) {
 }
 
 QUESTIONS.forEach((q) => {
-  const section = el("section", { class: "q", id: q.id });
+  const section = el("section", { class: "q", id: "q-" + q.id });
   const head = el("div", { class: "q-head" });
-  head.append(el("span", { class: "pill id" }, q.id), el("h2", {}, q.title), el("span", { class: "answered", id: q.id + "-done" }, ""));
+  head.append(el("span", { class: "pill id" }, q.id), el("h2", {}, q.title), el("span", { class: "answered", id: "done-" + q.id }, ""));
   section.append(head, el("p", { class: "context" }, q.context), el("p", { class: "why" }, "<strong>Why I recommend it:</strong> " + q.why));
   const opts = el("div", { class: "opts", role: q.type === "radio" ? "radiogroup" : "group", "aria-label": plain(q.title) });
   q.options.forEach((o) => {
-    const id = `${q.id}-${o.key}`;
+    const id = `opt-${q.id}-${o.key}`;
     const label = el("label", { class: "opt", for: id });
     const input = el("input", { type: q.type, name: q.id, id, value: o.key });
     if (state[q.id].picks.includes(o.key)) input.checked = true;
@@ -313,7 +313,7 @@ QUESTIONS.forEach((q) => {
   });
   section.append(opts);
   const noteWrap = el("div", {});
-  const noteId = q.id + "-note";
+  const noteId = "note-" + q.id;
   noteWrap.append(el("label", { class: "note", for: noteId }, "Note (optional)"));
   const note = el("textarea", { id: noteId, placeholder: "Anything to add or change" });
   note.value = state[q.id].note || "";
@@ -347,10 +347,11 @@ function render() {
   QUESTIONS.forEach((q) => {
     const done = state[q.id].picks.length > 0;
     if (done) answered++;
-    document.getElementById(q.id + "-done").textContent = done ? "answered" : "";
+    document.getElementById("done-" + q.id).textContent = done ? "answered" : "";
   });
   document.getElementById("count").textContent = answered;
   document.getElementById("answers").value = answerText();
+  document.getElementById("status").textContent = "";
 }
 
 document.getElementById("use-recommended").addEventListener("click", () => {
@@ -358,7 +359,7 @@ document.getElementById("use-recommended").addEventListener("click", () => {
     if (state[q.id].picks.length) return;
     const picks = q.options.filter((o) => o.rec).map((o) => o.key);
     state[q.id] = { ...state[q.id], picks };
-    picks.forEach((k) => { const input = document.getElementById(`${q.id}-${k}`); if (input) input.checked = true; });
+    picks.forEach((k) => { const input = document.getElementById(`opt-${q.id}-${k}`); if (input) input.checked = true; });
   });
   save(); render();
 });

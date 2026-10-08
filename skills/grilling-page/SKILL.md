@@ -45,8 +45,8 @@ options make sense whichever way the earlier one goes.
 
 1. **Gather the questions.** Look up anything the code, docs or tools can answer; only
    decisions go on the page. Don't re-ask what earlier decisions or the
-   `craftsmans-wisdom` brief settle. Give each an id that continues the session's
-   numbering (check the decisions file for the last one).
+   `craftsmans-wisdom` brief settle. Give each an id that carries on from the last one
+   asked this session (D1, D2… if none were numbered), so the user can refer to them.
 2. **Order them by dependency**, the ones others build on first.
 3. **Copy the template.** Copy `<skill-dir>/assets/question-page.html` to
    `docs/grilling/round-<N>.html` in the project, where `N` is the next round number.
@@ -58,11 +58,12 @@ options make sense whichever way the earlier one goes.
    questions entirely. Change nothing else; the page already meets the Artifact rules.
 4. **Write each question** to the standards below.
 5. **Check it:** `python3 <skill-dir>/scripts/check_question_page.py docs/grilling/round-<N>.html`.
-   Fix every line it prints until it exits 0. Then read each question against standards
-   2, 3, 6, 7 and 8, whose substance the script can't judge.
+   Fix every line it prints until it exits 0. Then read every question against all eight
+   standards: the script checks that fields exist and fit, not that they say the right
+   thing.
 6. **Commit the page**, so the record shows the options that were weighed.
-7. **Publish**, if an Artifact tool is available: load `artifact-design` first (the
-   Artifact tool requires it), then publish the local file with a short generic icon word
+7. **Publish**, if an Artifact tool is available: load `artifact-design` first if it is
+   installed (the Artifact tool requires it), then publish the local file with a short generic icon word
    and a one-sentence description. Look at it once; fix what you see. Without an Artifact
    tool, give the local path to open in a browser.
 8. **Hand it over:** the link, the local path, and one line: fill it in, press Copy
@@ -75,8 +76,8 @@ republish the same path so the link stays the same.
 
 Each question in the `questions` array has `id`, `title`, `context`, `why`, `type`
 (`radio` for one answer, `checkbox` for "pick all that apply") and `options`, each with
-`key`, `title`, `desc` and `rec: true` on the recommended ones. Text may use `<code>`,
-`<em>` and `<strong>`; nothing else.
+`key`, `title`, `desc` and `rec: true` on the recommended ones. Ids and keys use only
+letters, digits, `-` and `_`. Text may use `<code>`, `<em>` and `<strong>`; nothing else.
 
 The standards. The script checks those marked *(checked)*; the rest are yours to read for.
 
@@ -95,7 +96,8 @@ The standards. The script checks those marked *(checked)*; the rest are yours to
    Don't: "...generates embeddings for semantic retrieval."
    ```
 4. **Every option says what picking it means for users**, in at most 50 words. No option
-   without one, including "decide later", which says what happens meanwhile. *(checked)*
+   without one, including "decide later", which says what happens meanwhile. *(checked:
+   present and length)*
 
    ```
    Do:    "The household loses every recipe that person saved, with no warning."
@@ -112,7 +114,9 @@ The standards. The script checks those marked *(checked)*; the rest are yours to
    Don't: "This is the most flexible and scalable option."
    ```
 7. **The options are real alternatives**, each one a person might sensibly pick. No
-   strawman listed to make the recommendation look good.
+   strawman listed to make the recommendation look good. A checkbox question where
+   "none of these" is a fair answer gets a "None" option, because an empty question
+   reads as unanswered and "Use recommendations for the rest" would fill it.
 8. **Recommendations respect the brief.** None conflicts with the brief's **For** or
    **Good means**; where the honest recommendation does, say so in the context.
 
@@ -128,8 +132,11 @@ recommendation, and `Note:` when the user wrote one.
    does. A conflict is held back too: say which part of the brief it contradicts and ask
    which gives way.
 3. **Record the rest immediately**, before discussing anything else. Append each decision
-   to the project's decisions file (`docs/decisions/<topic>.md` unless the project keeps
-   them elsewhere): a heading that states the decision with its number and question id,
+   to the project's decisions file: `docs/decisions/<slug>.md`, where the slug is the
+   brief's slug or the kebab-case name of the work, unless the project keeps decisions
+   elsewhere. If the file doesn't exist yet, create it and record the decisions already
+   settled in chat this session first, so the record is complete and numbered in order.
+   Each entry gets a heading that states the decision with its number and question id,
    the date, the reason (the why when the user took the recommendation, otherwise their
    note, or ask), and what the note changed. Commit right after. Record each held-back
    decision, and commit, as soon as it is settled.
