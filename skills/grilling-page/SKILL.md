@@ -56,6 +56,10 @@ options make sense whichever way the earlier one goes.
    `{{STORE_KEY}}` (`<project>-grilling-round-<N>`, so rounds don't share saved answers)
    and `{{ANSWER_HEADING}}` (the first line of the pasted answers). Replace the example
    questions entirely. Change nothing else; the page already meets the Artifact rules.
+   Its look is modelled on the GOV.UK Design System: a numbered list of the decisions
+   down the left showing each pick, the recommendation and its reason above large radio
+   buttons or checkboxes, and a "Check your answers" list, with a Change link per row,
+   above the plain text to copy.
 4. **Write each question** to the standards below.
 5. **Check it:** `python3 <skill-dir>/scripts/check_question_page.py docs/grilling/round-<N>.html`.
    Fix every line it prints until it exits 0. Then read every question against all eight
