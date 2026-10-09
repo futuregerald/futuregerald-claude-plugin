@@ -1,6 +1,6 @@
 ---
 name: writing-plans
-description: Use when you have a spec or requirements for a multi-step task, before touching code
+description: Use when you have a spec or requirements for a multi-step task, before touching code. Also writes and keeps current the committed roadmap (docs/roadmap.md) when the work spans more than one plan - phases, an initiative, or a PRD whose stories ship over more than one plan.
 tags: [workflow]
 model: inherit
 effort: medium
@@ -30,6 +30,43 @@ other documents refer here rather than restating it.
 
 **Never commit a plan.** Add `docs/plans/` to `.git/info/exclude` if it is not already
 ignored.
+
+## Roadmap: work that spans more than one plan
+
+A plan is disposable; the strategy behind a run of plans is not. When the work spans more
+than one plan — phases, an initiative, a PRD whose stories ship over more than one plan —
+write the roadmap before the first phase plan. For a single-plan change, skip it: the plan's
+Goal is the record.
+
+**Save it to `docs/roadmap.md` and commit it** on the branch the work happens on, each status
+change in that phase's pull request. This is the deliberate contrast with plans:
+a plan is never committed, the roadmap always is, because it is the only durable record of
+the strategy the user agreed to. Without it the next session re-derives phases the user
+already argued through.
+
+It contains:
+
+- **Status** — a table: phase, one-line scope, status (not started / in progress / done), plan slug (not a path: plans stay local)
+- **Strategy** — why this order: what each phase unblocks, proves or de-risks
+- **Each phase** — the work; acceptance criteria someone can check; the PRD user stories it
+  delivers, by number. Every story sits in exactly one phase
+- **Stop rules** — what halts or re-plans the sequence: a phase's criteria fail, a premise proves wrong
+- **Agreement record** — the user's words agreeing to the strategy, quoted, with the date
+
+Get the user's explicit agreement to the strategy before the first phase plan. Without it,
+stop and ask; never paraphrase or infer one.
+
+| Don't | Do |
+|---|---|
+| "Phase 2: search works well" | "Phase 2: searching `pasta` over the 500-recipe fixture returns its 12 pasta recipes in under 200 ms" |
+| "User agreed to the phases" | "2026-03-04 — user: 'yes, ship import before sharing, sharing needs real data'" |
+
+Keep it current:
+
+- Update the status when a phase starts and when it finishes.
+- When the user changes the strategy, update the roadmap and add a new Agreement record
+  entry; never rewrite an earlier one.
+- Each phase plan's header links to it.
 
 ## Required sections
 
@@ -68,6 +105,8 @@ Each step is one action, 2–5 minutes:
 **Tech Stack:** [Key technologies/libraries]
 
 **Base SHA:** [git rev-parse HEAD]
+
+**Roadmap:** [`docs/roadmap.md`, phase N — omit for a single-plan change]
 
 ---
 ```

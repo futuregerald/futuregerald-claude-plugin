@@ -209,14 +209,14 @@ If symlinked to `~/.claude/skills` (installed as personal skills), invoke them b
 | Skill | Description |
 |-------|-------------|
 | `brainstorming` | Explore intent, requirements, and design before implementation |
-| `writing-plans` | Turn a spec into a bite-sized, TDD-driven implementation plan |
+| `writing-plans` | Turn a spec into a bite-sized, TDD-driven implementation plan; for multi-plan work, keep the committed roadmap of phases and the agreed strategy |
 | `plan-review` | Staff-engineer review of a plan before implementing; one pass, never re-reviewed |
 | `visualize-plan` | Turn a plan into a visual HTML page (flows, ER diagram, worked example, decisions) alongside the markdown |
 | `executing-plans` | Execute a written plan with review checkpoints |
 | `subagent-driven-development` | Execute independent plan tasks via fresh sub-agents |
 | `dispatching-parallel-agents` | Run 2+ independent tasks concurrently |
 | `implement` | Implement a piece of work from a spec or set of tickets |
-| `write-a-prd` | Create a PRD via interview + codebase exploration; file as an issue |
+| `write-a-prd` | Create a PRD via interview + codebase exploration, with the product experience and a link to the roadmap; file as an issue |
 | `writing-tickets` | Write epics, stories, initiatives, and spike tickets |
 | `to-spec` | Synthesize the conversation into a spec, published to your tracker |
 | `to-tickets` | Break a plan/spec into tracer-bullet tickets with blocking edges |
