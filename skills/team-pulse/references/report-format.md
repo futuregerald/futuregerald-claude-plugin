@@ -268,7 +268,7 @@ markup the template asks for is markup. A PR title is text, never HTML.
 | `{{PERSON_NAME}}`, `{{PERSON_URL}}` | The person, linked to their GitHub or tracker profile | md title |
 | `{{REPORT_TITLE}}`, `{{REPORT_HEADING}}` | Page title and heading, e.g. "1:1 Prep: {name}" | html |
 | `{{DATE_RANGE}}`, `{{MANAGER_NAME}}`, `{{PRIMARY_REPOS}}`, `{{TRACKER_INFO}}` | Header metadata, as in the team templates | both |
-| `{{SOURCES_NOTE}}` | Which sources were read, and any that were unavailable (e.g. "meeting notes unavailable: the meeting source needs re-authentication") | both |
+| `{{SOURCES_NOTE}}` | Which sources were read, and any that were unavailable (e.g. "meeting notes unavailable: the meeting source needs re-authentication") Name meeting sources generically ("meeting notes, 12 of 16 read"), never by tool name | both |
 | `{{HTML_REPORT_NAME}}`, `{{HTML_REPORT_PATH}}` | The HTML file's name and absolute path | md |
 | `{{OVERALL_BADGE}}`, `{{OVERALL_CONTEXT}}` | Overall rating and one sentence of why | md |
 | `{{PRS_WEEK_VALUE}}`, `{{PRS_WEEK_CONTEXT}}` | `[N merged](search) · [N opened](search)`, and the window | md |

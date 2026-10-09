@@ -165,3 +165,81 @@ def test_epic_start_reads_active_or_not_started():
 def test_skill_says_how_to_build_done_and_in_progress_count_queries():
     step2a = _between(read(SKILL_MD), "## Step 2a", "## Step 2b")
     assert "AND statusCategory = Done" in step2a
+
+
+SHIPPED_TEXT_FILES = ["SKILL.md", "references/agent-prompts.md", "references/team.md", "references/report-format.md"]
+
+
+@pytest.mark.parametrize("name", SHIPPED_TEXT_FILES)
+def test_no_meeting_vendor_is_named(name):
+    text = read(SKILL / name).casefold()
+    for vendor in ("krisp", "search_meetings"):
+        assert vendor not in text, f"{name} names {vendor}"
+
+
+def _agent_c():
+    return _between(read(AGENT_PROMPTS), "## Agent C", "## Agent F")
+
+
+def test_agent_c_follows_the_source_order():
+    agent_c = _agent_c()
+    positions = [agent_c.index(marker) for marker in
+                 ("1. User-named sources", "2. Configured meeting tool", "3. No tool configured")]
+    assert positions == sorted(positions)
+
+
+def test_agent_c_reads_are_bounded_paged_and_read_only():
+    agent_c = _agent_c()
+    assert "at most 12" in agent_c
+    assert "never create, update or delete" in agent_c
+    assert "oldest" in agent_c and "dropped" in agent_c
+    assert "one search per person" not in agent_c
+
+
+def test_agent_c_does_not_fall_back_when_a_configured_source_fails():
+    assert "no fallback" in _agent_c()
+
+
+def test_skill_resolves_meeting_sources():
+    resolve = _between(read(SKILL_MD), "## Step 1", "## Step 2")
+    assert "{MEETING_SOURCES}" in resolve and "{USER_MEETING_SOURCES}" in resolve
+
+
+def test_team_template_shows_meeting_sources_as_an_example_not_a_value():
+    team = read(SKILL / "references/team.md")
+    assert "`- **Meeting sources:** " in team
+    assert not any(line.startswith("- **Meeting sources:**") for line in team.splitlines())
+
+
+def test_agent_c_runs_discovery_when_no_tool_is_configured():
+    agent_c = _agent_c()
+    assert "`none`" in agent_c and "go to 3" in agent_c
+
+
+def test_agent_c_still_reads_user_sources_when_the_tool_is_unavailable():
+    assert "still read the sources from 1" in _agent_c()
+
+
+def test_agent_c_ranks_by_the_epics_in_scope():
+    assert "{EPIC_KEYS}" in _agent_c()
+    assert "{EPIC_KEYS}" in _between(read(SKILL_MD), "## Step 1", "## Step 2")
+
+
+def test_agent_c_reads_summaries_not_whole_transcripts():
+    agent_c = _agent_c()
+    assert "plus the speaker names" not in agent_c
+    assert "only when there is no summary" in agent_c
+
+
+def test_agent_c_treats_only_dropped_items_as_missing():
+    agent_c = _agent_c()
+    assert "dropped" in agent_c and "smaller page" in agent_c
+
+
+def test_report_format_names_meeting_sources_generically():
+    assert "never by tool name" in read(SKILL / "references/report-format.md")
+
+
+def test_meetings_grant_includes_read_for_user_files():
+    row = next(l for l in read(SKILL_MD).splitlines() if l.startswith("| Meetings | Agent C"))
+    assert "`Read`" in row

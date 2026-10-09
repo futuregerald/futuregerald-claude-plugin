@@ -30,6 +30,15 @@ and not others).
 - **Frontend repos:** [repo-one]
 - **Backend repos:** [repo-two, repo-three]
 
+## Meetings (optional)
+
+Which tool holds your meeting notes or transcripts, by its MCP server name. Leave this section out
+and the skill uses whatever meeting or transcript tool is connected. Name one and it uses only
+that one, so a document or wiki tool is never mistaken for meeting notes.
+
+To name one, add a line here such as `- **Meeting sources:** <mcp-server-name>`, using the
+server's name as it appears in your MCP configuration.
+
 ## Standing documents (optional)
 
 Docs worth checking every run even when no epic links them: a roadmap sheet, a decision log, the
