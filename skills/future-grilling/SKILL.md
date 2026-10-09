@@ -38,7 +38,8 @@ ask which applies.
 ## Rules
 
 1. **One question at a time.** Wait for the answer before the next one; several at once
-   is bewildering.
+   is bewildering. Exception: with 4 or more decisions left that don't depend on each
+   other's answers, or when the user asks for a page, use `grilling-page`.
 2. **Give your recommended answer** with each question, and why.
 3. **Facts are looked up, decisions are asked.** If the filesystem, code, docs or tools
    can answer it, look it up instead of asking. Every decision goes to the user.

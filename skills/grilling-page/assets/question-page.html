@@ -1,0 +1,656 @@
+<title>{{TITLE}}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Overpass:ital,wght@0,400;0,700;0,800;1,400&family=Overpass+Mono:wght@400;600&display=swap">
+<style>
+:root {
+  --ground: #ffffff;
+  --ink: #0b0c0c;
+  --secondary: #484949;
+  --border: #cecece;
+  --input: #0b0c0c;
+  --link: #1a65a6;
+  --link-hover: #0f385c;
+  --brand: #1d70b8;
+  --brand-ink: #ffffff;
+  --panel: #f3f2f1;
+  --focus: #ffdd00;
+  --focus-ink: #0b0c0c;
+  --go: #0f7a52;
+  --go-shadow: #003d26;
+  --go-ink: #ffffff;
+  --btn2: #f3f2f1;
+  --btn2-shadow: #858686;
+  --btn2-ink: #0b0c0c;
+  --tag-bg: #d2e2f1;
+  --tag-ink: #0c2d4a;
+  --sans: "Overpass", "Helvetica Neue", Arial, sans-serif;
+  --mono: "Overpass Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --ground: #141516;
+    --ink: #f3f2f1;
+    --secondary: #b8bbbd;
+    --border: #3e4142;
+    --input: #e2e2e1;
+    --link: #8fbbe6;
+    --link-hover: #c4dcf3;
+    --brand: #0f385c;
+    --brand-ink: #ffffff;
+    --panel: #1f2122;
+    --go: #11875b;
+    --go-shadow: #00301e;
+    --go-ink: #ffffff;
+    --btn2: #2b2d2e;
+    --btn2-shadow: #000000;
+    --btn2-ink: #f3f2f1;
+    --tag-bg: #183a5a;
+    --tag-ink: #d2e2f1;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ground: #141516;
+  --ink: #f3f2f1;
+  --secondary: #b8bbbd;
+  --border: #3e4142;
+  --input: #e2e2e1;
+  --link: #8fbbe6;
+  --link-hover: #c4dcf3;
+  --brand: #0f385c;
+  --brand-ink: #ffffff;
+  --panel: #1f2122;
+  --go: #11875b;
+  --go-shadow: #00301e;
+  --go-ink: #ffffff;
+  --btn2: #2b2d2e;
+  --btn2-shadow: #000000;
+  --btn2-ink: #f3f2f1;
+  --tag-bg: #183a5a;
+  --tag-ink: #d2e2f1;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font: 400 19px/1.45 var(--sans);
+  overflow-wrap: break-word;
+  -webkit-font-smoothing: antialiased;
+}
+code { font: 600 0.84em var(--mono); background: var(--panel); padding: 0 4px; }
+a { color: var(--link); text-decoration-thickness: 1px; text-underline-offset: 0.18em; }
+a:hover { color: var(--link-hover); text-decoration-thickness: 3px; }
+a:focus-visible {
+  outline: 3px solid transparent;
+  color: var(--focus-ink);
+  background: var(--focus);
+  box-shadow: 0 -2px var(--focus), 0 4px var(--focus-ink);
+  text-decoration: none;
+}
+.vh { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+.masthead { background: var(--brand); color: var(--brand-ink); border-bottom: 10px solid var(--brand); }
+.masthead .in { max-width: 1280px; margin: 0 auto; padding: 14px 32px 4px; }
+.masthead .mark { font: 800 24px/1.1 var(--sans); letter-spacing: -0.01em; }
+
+.frame { max-width: 1280px; margin: 0 auto; padding: 0 32px; display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 64px; }
+
+.ledger { position: sticky; top: 0; align-self: start; max-height: 100vh; overflow-y: auto; padding: 32px 4px 32px 0; }
+.ledger-bar { display: block; }
+.ledger-toggle { display: none; }
+.tally { font: 800 27px/1.1 var(--sans); margin: 0 0 4px; }
+.tally-sub { color: var(--secondary); font-size: 16px; margin: 0 0 12px; }
+.segs { display: grid; grid-auto-flow: column; gap: 3px; margin: 0 0 22px; }
+.segs i { height: 6px; background: var(--border); }
+.segs i.on { background: var(--ink); }
+.ledger .actions { display: grid; gap: 14px; margin: 0 0 28px; }
+
+.btn {
+  font: 700 19px/1.2 var(--sans);
+  border: 2px solid transparent;
+  border-radius: 0;
+  padding: 9px 12px 8px;
+  cursor: pointer;
+  text-align: center;
+  -webkit-appearance: none;
+  appearance: none;
+  position: relative;
+}
+.btn.go { background: var(--go); color: var(--go-ink); box-shadow: 0 2px 0 var(--go-shadow); }
+.btn.alt { background: var(--btn2); color: var(--btn2-ink); box-shadow: 0 2px 0 var(--btn2-shadow); }
+.btn:active { top: 2px; box-shadow: none; }
+.btn:focus-visible { outline: 3px solid transparent; border-color: var(--focus); background: var(--focus); color: var(--focus-ink); box-shadow: inset 0 0 0 1px var(--focus), 0 2px 0 var(--focus-ink); }
+
+.steps-h { font: 700 16px/1.2 var(--sans); margin: 0 0 10px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+ol.steps { list-style: none; margin: 0; padding: 0; position: relative; }
+ol.steps li { position: relative; }
+ol.steps li:not(:last-child)::after { content: ""; position: absolute; left: 15px; top: 34px; bottom: -2px; width: 2px; background: var(--border); }
+.step { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 0 14px; padding: 8px 8px 10px 0; color: var(--ink); text-decoration: none; }
+.step:hover { color: var(--ink); }
+.step:hover .s-title { text-decoration: underline; text-decoration-thickness: 2px; }
+.step .num {
+  grid-row: 1 / span 3;
+  width: 32px; height: 32px;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: var(--ground);
+  display: grid; place-items: center;
+  font: 700 15px/1 var(--sans);
+  position: relative; z-index: 1;
+}
+.step.done .num { background: var(--ink); color: var(--ground); }
+.s-id { font: 600 12px/1.4 var(--mono); letter-spacing: 0.04em; color: var(--secondary); padding-top: 1px; }
+.s-title { font: 400 16px/1.3 var(--sans); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.s-pick { font: 400 15px/1.35 var(--sans); color: var(--secondary); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.step.done .s-pick { color: var(--ink); font-weight: 700; }
+.step.here .s-title { font-weight: 700; }
+.step.here { background: linear-gradient(to right, transparent 15px, var(--panel) 15px); }
+.step:focus-visible { box-shadow: none; background: var(--focus); color: var(--focus-ink); outline: 3px solid transparent; }
+.step:focus-visible .s-id, .step:focus-visible .s-pick { color: var(--focus-ink); }
+
+main { padding: 40px 0 96px; max-width: 760px; min-width: 0; }
+.caption { display: block; font: 400 19px/1.25 var(--sans); color: var(--secondary); margin: 0 0 6px; }
+.caption .cid { font: 600 17px/1 var(--mono); color: var(--ink); }
+.caption .sep { margin: 0 0.45em; }
+#questions { margin-top: 64px; }
+h1 { font: 800 48px/1.04 var(--sans); letter-spacing: -0.015em; margin: 0 0 28px; text-wrap: balance; }
+.lead { font-size: 24px; line-height: 1.32; margin: 0 0 18px; max-width: 34em; }
+.intro p { margin: 0 0 18px; max-width: 38em; }
+.legend { display: flex; gap: 10px 14px; align-items: center; flex-wrap: wrap; font-size: 16px; color: var(--secondary); margin: 24px 0 0; }
+.legend .tag { margin-right: 6px; }
+
+.tag { display: inline-block; font: 700 16px/1.2 var(--sans); padding: 2px 8px 1px; background: var(--tag-bg); color: var(--tag-ink); white-space: nowrap; }
+
+.rule { border: 0; border-top: 1px solid var(--border); margin: 56px 0; }
+
+section.q { scroll-margin-top: 24px; }
+fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+legend { padding: 0; display: table; max-width: 100%; white-space: normal; }
+legend h2 { font: 800 36px/1.1 var(--sans); letter-spacing: -0.01em; margin: 0 0 22px; text-wrap: balance; }
+.done-flag { font: 700 16px/1.2 var(--sans); color: var(--go); margin: -10px 0 16px; }
+.done-flag:empty { display: none; }
+.context { margin: 0 0 24px; max-width: 36em; }
+
+.advice { display: grid; grid-template-columns: 35px minmax(0, 1fr); gap: 0 16px; margin: 0 0 30px; max-width: 36em; }
+.advice .ico { width: 35px; height: 35px; border-radius: 50%; background: var(--ink); color: var(--ground); display: grid; place-items: center; margin-top: -3px; }
+.advice .ico svg { width: 19px; height: 19px; }
+.advice p { margin: 0; font-weight: 700; }
+.advice p .reason { font-weight: 400; }
+
+.hint { color: var(--secondary); margin: -6px 0 18px; }
+
+.opts { display: grid; gap: 14px; margin: 0 0 32px; }
+.opt { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 0 14px; position: relative; cursor: pointer; }
+.opt input { position: absolute; top: 0; left: 0; width: 40px; height: 40px; margin: 0; opacity: 0; cursor: pointer; z-index: 1; }
+.opt .box { width: 40px; height: 40px; border: 2px solid var(--input); background: var(--ground); border-radius: 50%; position: relative; }
+.opt input[type="checkbox"] ~ .box { border-radius: 0; }
+.opt input[type="radio"]:checked ~ .box::after { content: ""; position: absolute; inset: 8px; border-radius: 50%; background: var(--input); }
+.opt input[type="checkbox"]:checked ~ .box::after { content: ""; position: absolute; left: 9px; top: 11px; width: 18px; height: 7px; border: solid var(--input); border-width: 0 0 5px 5px; transform: rotate(-45deg); }
+.opt .txt { padding-top: 7px; min-width: 0; }
+.o-title { display: block; }
+.o-title .key { font-weight: 700; }
+.o-title .tag { margin-left: 6px; vertical-align: 1px; }
+.o-desc { display: block; color: var(--secondary); margin-top: 4px; max-width: 34em; }
+.opt:hover .box { box-shadow: 0 0 0 10px var(--panel); }
+.opt input:focus-visible ~ .box, .opt:hover input:focus-visible ~ .box { border-width: 4px; box-shadow: 0 0 0 4px var(--focus); }
+
+.note label { display: block; font-weight: 700; margin: 0 0 6px; }
+.note .opt-l { font-weight: 400; color: var(--secondary); }
+textarea {
+  display: block;
+  width: 100%;
+  min-height: 84px;
+  font: 400 19px/1.35 var(--sans);
+  color: var(--ink);
+  background: var(--ground);
+  border: 2px solid var(--input);
+  border-radius: 0;
+  padding: 6px 8px;
+  resize: vertical;
+}
+textarea:focus-visible { outline: 3px solid var(--focus); outline-offset: 0; box-shadow: inset 0 0 0 2px var(--input); }
+
+section.out { border-top: 5px solid var(--ink); margin-top: 72px; padding-top: 30px; scroll-margin-top: 24px; }
+section.out h2 { font: 800 36px/1.1 var(--sans); margin: 0 0 14px; }
+section.out > p { margin: 0 0 28px; max-width: 36em; }
+dl.summary { margin: 0 0 44px; border-top: 1px solid var(--border); }
+.row { display: grid; grid-template-columns: 1fr 1.3fr auto; gap: 6px 20px; padding: 12px 0 11px; border-bottom: 1px solid var(--border); }
+.row dt { font-weight: 700; font-size: 17px; line-height: 1.35; min-width: 0; }
+.row dt .rid { display: block; font: 600 13px/1.4 var(--mono); color: var(--secondary); letter-spacing: 0.04em; }
+.row dd { margin: 0; font-size: 17px; line-height: 1.35; min-width: 0; }
+.row dd.none { color: var(--secondary); }
+.row dd .rn { display: block; color: var(--secondary); margin-top: 4px; }
+.row dd.act { text-align: right; }
+h3.plain { font: 700 24px/1.2 var(--sans); margin: 0 0 8px; }
+.plain-hint { color: var(--secondary); margin: 0 0 12px; }
+#answers { min-height: 300px; font: 400 14px/1.55 var(--mono); }
+.copy-row { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; margin-top: 22px; }
+.status { font-weight: 700; color: var(--go); }
+
+@media (prefers-reduced-motion: no-preference) {
+  html { scroll-behavior: smooth; }
+  .opt .box { transition: box-shadow 0.12s ease-out; }
+  .segs i { transition: background-color 0.2s; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+}
+
+@media (max-width: 980px) {
+  .frame { grid-template-columns: 290px minmax(0, 1fr); gap: 40px; padding: 0 24px; }
+  .masthead .in { padding-inline: 24px; }
+}
+
+@media (max-width: 760px) {
+  body { font-size: 16px; line-height: 1.4; }
+  .masthead .in { padding: 12px 16px 2px; }
+  .masthead .mark { font-size: 20px; }
+  .frame { display: block; padding: 0 16px; }
+  .ledger {
+    position: sticky; top: 0; z-index: 10;
+    max-height: none; overflow: visible;
+    margin: 0 -16px; padding: 0;
+    background: var(--ground);
+    border-bottom: 1px solid var(--border);
+  }
+  .ledger-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px 8px; }
+  .tally { font-size: 19px; margin: 0; }
+  .tally-sub { display: none; }
+  .segs { margin: 0 16px 0; padding-bottom: 10px; }
+  .segs i { height: 4px; }
+  .ledger-toggle {
+    display: inline-flex; align-items: center; gap: 8px;
+    font: 700 16px/1 var(--sans); color: var(--link);
+    background: none; border: 0; padding: 8px 0; cursor: pointer;
+    text-decoration: underline; text-underline-offset: 0.18em;
+  }
+  .ledger-toggle .chev { width: 10px; height: 10px; border: solid currentColor; border-width: 0 2px 2px 0; transform: rotate(45deg) translateY(-3px); }
+  .ledger-toggle[aria-expanded="true"] .chev { transform: rotate(-135deg) translateY(-2px); }
+  .ledger-toggle:focus-visible { outline: 3px solid transparent; background: var(--focus); color: var(--focus-ink); box-shadow: 0 -2px var(--focus), 0 4px var(--focus-ink); text-decoration: none; }
+  .ledger-body { display: none; padding: 6px 16px 18px; max-height: calc(100vh - 64px); overflow-y: auto; border-top: 1px solid var(--border); }
+  .ledger.open .ledger-body { display: block; }
+  .ledger .actions { margin: 10px 0 20px; }
+  main { padding: 28px 0 64px; }
+  .caption { font-size: 16px; }
+  .caption .cid { font-size: 15px; }
+  h1 { font-size: 32px; margin-bottom: 20px; }
+  .lead { font-size: 19px; }
+  legend h2 { font-size: 24px; margin-bottom: 16px; }
+  section.out h2 { font-size: 27px; }
+  .rule { margin: 40px 0; }
+  #questions { margin-top: 44px; }
+  .advice { grid-template-columns: 30px minmax(0, 1fr); gap: 0 12px; }
+  .advice .ico { width: 30px; height: 30px; }
+  .advice .ico svg { width: 16px; height: 16px; }
+  .opt { gap: 0 12px; }
+  .opt .txt { padding-top: 9px; }
+  .tag { font-size: 14px; }
+  .btn { font-size: 16px; }
+  textarea { font-size: 16px; }
+  .row { grid-template-columns: minmax(0, 1fr) auto; }
+  .row dt { grid-column: 1 / -1; font-size: 16px; }
+  .row dd { font-size: 16px; }
+  .row dd.act { grid-column: 2; grid-row: 2; }
+  #answers { font-size: 13px; }
+}
+</style>
+
+<header class="masthead">
+  <div class="in">
+    <span class="mark">{{LABEL}}</span>
+  </div>
+</header>
+
+<div class="frame">
+  <aside class="ledger" id="ledger" aria-label="Decision index">
+    <div class="ledger-bar">
+      <p class="tally"><span id="count">0</span> of <span id="total">0</span> answered</p>
+      <button type="button" class="ledger-toggle" id="toggle" aria-expanded="false" aria-controls="ledger-body">All decisions <span class="chev" aria-hidden="true"></span></button>
+    </div>
+    <p class="tally-sub">The ones others build on come first.</p>
+    <div class="segs" id="segs" aria-hidden="true"></div>
+    <div class="ledger-body" id="ledger-body">
+      <div class="actions">
+        <button id="use-recommended" type="button" class="btn alt">Use recommendations for the rest</button>
+        <button id="copy-top" type="button" class="btn go">Copy answers</button>
+      </div>
+      <h2 class="steps-h">Decisions</h2>
+      <ol class="steps" id="steps"></ol>
+    </div>
+  </aside>
+
+  <main id="main">
+    <div class="intro">
+      <span class="caption" id="range">Decision record</span>
+      <h1>{{HEADING}}</h1>
+      <p class="lead">Each question explains what's at stake, what each option means for you, and which one I'd pick and why. The ones others build on come first.</p>
+      <p>Pick an option for each (some allow several), add a note if you like, then copy everything at the bottom and paste it into the chat. {{INTRO}}</p>
+      <div class="legend">
+        <span><span class="tag">Recommended</span> marks my pick; the reason sits above the options.</span>
+        <span>Your picks and notes are kept in this browser, so you can come back later.</span>
+      </div>
+    </div>
+
+    <div id="questions"></div>
+
+    <section class="out" id="output" aria-labelledby="out-h">
+      <h2 id="out-h">Check your answers</h2>
+      <p>This updates as you answer. Change anything here, then copy the plain text and paste it into the chat.</p>
+      <dl class="summary" id="summary"></dl>
+      <h3 class="plain"><label for="answers">Plain text for the chat</label></h3>
+      <p class="plain-hint">This is exactly what gets copied.</p>
+      <textarea id="answers" readonly></textarea>
+      <div class="copy-row">
+        <button id="copy" type="button" class="btn go">Copy answers</button>
+        <span class="status" id="status" role="status"></span>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script type="application/json" id="page-data">
+{
+  "storeKey": "{{STORE_KEY}}",
+  "answerHeading": "{{ANSWER_HEADING}}",
+  "questions": [
+    {
+      "id": "D4",
+      "title": "Who can see a recipe when someone first saves it?",
+      "context": "A saved recipe can be private, shared with the people in your household, or public so anyone with the link can open it. Whatever we pick is what happens when someone saves without thinking about it, which is most saves. People can change it per recipe afterwards.",
+      "why": "Starting private means nobody shares a family recipe by accident. Sharing with the household is one tap, so the cost is small.",
+      "type": "radio",
+      "options": [
+        { "key": "A", "rec": true, "title": "Private until shared", "desc": "Only the person who saved it sees it. They tap Share to show it to their household." },
+        { "key": "B", "title": "Shared with the household", "desc": "Everyone in the household sees it straight away. A recipe meant to stay private has to be switched back." },
+        { "key": "C", "title": "Public", "desc": "Anyone with the link can open it. Easy to pass on; easy to share more than intended." }
+      ]
+    },
+    {
+      "id": "D5",
+      "title": "How should people find a recipe they saved?",
+      "context": "Pick all that apply. Searching by ingredient means storing each ingredient as its own line rather than one block of text, so imported recipes have to be split into lines when they are saved. That split is sometimes wrong, and people would need a way to fix it.",
+      "why": "Name and ingredient search cover most lookups. Fridge filtering is the feature people mention most and needs the same ingredient lines, so it costs little extra.",
+      "type": "checkbox",
+      "options": [
+        { "key": "search", "rec": true, "title": "Search by name or ingredient", "desc": "Type <em>lentil</em> and see every recipe that uses lentils, not just ones with lentil in the name." },
+        { "key": "fridge", "rec": true, "title": "Filter by what's in the fridge", "desc": "Tick what you have and see recipes you can cook without shopping." },
+        { "key": "tags", "title": "Browse by tag", "desc": "Recipes grouped under tags people add, such as quick or vegetarian. Only as good as the tagging." },
+        { "key": "most-cooked", "title": "Sort by most cooked", "desc": "Needs people to mark when they cook something, which most won't do." }
+      ]
+    },
+    {
+      "id": "D6",
+      "title": "What happens to recipes when someone leaves a household?",
+      "context": "This builds on D4: a recipe belongs to the person who saved it, and the household can see the ones they share. When that person leaves, the household either keeps a copy or loses the recipe.",
+      "why": "Losing a recipe the family cooks every week is the complaint we most want to avoid. The person leaving keeps their own copy either way.",
+      "type": "radio",
+      "options": [
+        { "key": "A", "rec": true, "title": "The household keeps a copy", "desc": "Shared recipes stay where they are. The person who left keeps theirs too." },
+        { "key": "B", "title": "The recipes leave with them", "desc": "The household loses every recipe that person saved, with no warning." },
+        { "key": "C", "title": "Ask them when they leave", "desc": "They choose per recipe. Slower to leave, and most people will skip the question." }
+      ]
+    }
+  ]
+}
+</script>
+
+<script>
+const PAGE = JSON.parse(document.getElementById("page-data").textContent);
+const QUESTIONS = PAGE.questions;
+
+let state = {};
+try { state = JSON.parse(localStorage.getItem(PAGE.storeKey) || "{}") || {}; } catch (e) { state = {}; }
+const save = () => { try { localStorage.setItem(PAGE.storeKey, JSON.stringify(state)); } catch (e) {} };
+
+QUESTIONS.forEach((q) => {
+  const known = new Set(q.options.map((o) => o.key));
+  const picks = (state[q.id]?.picks || []).filter((k) => known.has(k));
+  state[q.id] = { ...(state[q.id] || {}), picks };
+});
+
+const root = document.getElementById("questions");
+const stepsEl = document.getElementById("steps");
+const segsEl = document.getElementById("segs");
+const ledger = document.getElementById("ledger");
+const toggle = document.getElementById("toggle");
+const phone = matchMedia("(max-width: 760px)");
+const reduced = matchMedia("(prefers-reduced-motion: reduce)");
+document.getElementById("total").textContent = QUESTIONS.length;
+
+const CHECK = '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 10.5l4.2 4.2L17 5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="square"/></svg>';
+
+function el(tag, attrs, html) {
+  const node = document.createElement(tag);
+  Object.entries(attrs || {}).forEach(([k, v]) => node.setAttribute(k, v));
+  if (html != null) node.innerHTML = html;
+  return node;
+}
+
+function plain(html) {
+  const node = document.createElement("span");
+  node.innerHTML = html;
+  return node.textContent;
+}
+
+if (QUESTIONS.length) {
+  const first = QUESTIONS[0].id;
+  const last = QUESTIONS[QUESTIONS.length - 1].id;
+  const range = document.getElementById("range");
+  range.append(el("span", { class: "sep", "aria-hidden": "true" }, "·"));
+  range.append(document.createTextNode(first === last ? first : `${first} to ${last}`));
+}
+
+function goTo(id) {
+  const target = document.getElementById(id);
+  if (!target) return;
+  const offset = phone.matches ? ledger.querySelector(".ledger-bar").offsetHeight + 24 : 24;
+  const top = target.getBoundingClientRect().top + window.scrollY - offset;
+  window.scrollTo({ top, behavior: reduced.matches ? "auto" : "smooth" });
+}
+
+function setOpen(open) {
+  ledger.classList.toggle("open", open);
+  toggle.setAttribute("aria-expanded", String(open));
+}
+toggle.addEventListener("click", () => setOpen(!ledger.classList.contains("open")));
+
+function optionName(q, key) {
+  const o = q.options.find((x) => x.key === key);
+  return plain(q.type === "radio" ? `${o.key}. ${o.title}` : o.title);
+}
+
+function pickLabel(q, picks) {
+  if (!picks.length) return "Not answered";
+  if (q.type === "checkbox" && picks.length > 1) return `${picks.length} picked`;
+  return optionName(q, picks[0]);
+}
+
+QUESTIONS.forEach((q, i) => {
+  const li = el("li");
+  const step = el("a", { class: "step", href: "#q-" + q.id, id: "step-" + q.id });
+  step.append(
+    el("span", { class: "num", "aria-hidden": "true" }, String(i + 1)),
+    el("span", { class: "s-id" }, q.id),
+    el("span", { class: "s-title" }, q.title),
+    el("span", { class: "s-pick", id: "pick-" + q.id }, "Not answered")
+  );
+  step.addEventListener("click", (e) => { e.preventDefault(); setOpen(false); goTo("q-" + q.id); });
+  li.append(step);
+  stepsEl.append(li);
+  segsEl.append(el("i", { id: "seg-" + q.id }));
+
+  if (i > 0) root.append(el("hr", { class: "rule" }));
+  const section = el("section", { class: "q", id: "q-" + q.id });
+  const fieldset = el("fieldset", { "aria-describedby": `ctx-${q.id} why-${q.id}` });
+  const legend = el("legend");
+  legend.append(
+    el("span", { class: "caption" }, `<span class="cid">${q.id}</span><span class="sep">·</span>Decision ${i + 1} of ${QUESTIONS.length}`),
+    el("h2", {}, q.title)
+  );
+  fieldset.append(legend, el("p", { class: "done-flag", id: "done-" + q.id }, ""));
+  fieldset.append(el("p", { class: "context", id: "ctx-" + q.id }, q.context));
+
+  const recs = q.options.filter((o) => o.rec);
+  const recLine = q.type === "radio"
+    ? `I recommend ${recs.map((o) => o.key).join(", ")}.`
+    : `I recommend the ${recs.length} marked below.`;
+  const advice = el("div", { class: "advice", id: "why-" + q.id });
+  advice.append(el("span", { class: "ico" }, CHECK), el("p", {}, `<span class="vh">Recommendation: </span>${recLine} <span class="reason">${q.why}</span>`));
+  fieldset.append(advice);
+
+  if (q.type === "checkbox") fieldset.append(el("p", { class: "hint" }, "Select all that apply."));
+
+  const opts = el("div", { class: "opts" });
+  q.options.forEach((o) => {
+    const id = `opt-${q.id}-${o.key}`;
+    const label = el("label", { class: "opt", for: id });
+    const input = el("input", { type: q.type, name: q.id, id, value: o.key });
+    if (state[q.id].picks.includes(o.key)) input.checked = true;
+    input.addEventListener("change", () => {
+      const picks = [...document.querySelectorAll(`input[name="${q.id}"]:checked`)].map((x) => x.value);
+      state[q.id] = { ...state[q.id], picks };
+      save(); render();
+    });
+    const txt = el("span", { class: "txt" });
+    const prefix = q.type === "radio" ? `<span class="key">${o.key}.</span> ` : "";
+    const badge = o.rec ? ' <span class="tag">Recommended</span>' : "";
+    txt.append(el("span", { class: "o-title" }, prefix + o.title + badge));
+    if (o.desc) txt.append(el("span", { class: "o-desc" }, o.desc));
+    label.append(input, el("span", { class: "box", "aria-hidden": "true" }), txt);
+    opts.append(label);
+  });
+  fieldset.append(opts);
+
+  const noteWrap = el("div", { class: "note" });
+  const noteId = "note-" + q.id;
+  noteWrap.append(el("label", { for: noteId }, 'Note <span class="opt-l">(optional)</span>'));
+  const note = el("textarea", { id: noteId, rows: "3" });
+  note.value = state[q.id].note || "";
+  note.addEventListener("input", () => { state[q.id] = { ...state[q.id], note: note.value }; save(); render(); });
+  noteWrap.append(note);
+  fieldset.append(noteWrap);
+  section.append(fieldset);
+  root.append(section);
+});
+
+function answerFor(q) {
+  const answer = state[q.id];
+  const picks = answer.picks;
+  const names = picks.map((k) => optionName(q, k));
+  const recommended = q.options.filter((o) => o.rec).map((o) => o.key).sort().join(",");
+  const isRecommended = picks.length > 0 && [...picks].sort().join(",") === recommended;
+  const summary = names.length ? names.join("; ") + (isRecommended ? " (recommended)" : "") : "";
+  return { summary, note: (answer.note || "").trim() };
+}
+
+function answerText() {
+  const lines = [PAGE.answerHeading, ""];
+  QUESTIONS.forEach((q) => {
+    const r = answerFor(q);
+    lines.push(`${q.id} ${plain(q.title)}`);
+    lines.push(`  Answer: ${r.summary || "(not answered)"}`);
+    if (r.note) lines.push(`  Note: ${r.note}`);
+    lines.push("");
+  });
+  return lines.join("\n").trim();
+}
+
+function renderSummary() {
+  const list = document.getElementById("summary");
+  list.textContent = "";
+  QUESTIONS.forEach((q) => {
+    const r = answerFor(q);
+    const row = el("div", { class: "row" });
+    const dt = el("dt");
+    dt.append(el("span", { class: "rid" }, q.id), document.createTextNode(plain(q.title)));
+    const dd = el("dd", r.summary ? {} : { class: "none" });
+    dd.textContent = r.summary || "Not answered";
+    if (r.note) {
+      const noteLine = el("span", { class: "rn" });
+      noteLine.textContent = "Note: " + r.note;
+      dd.append(noteLine);
+    }
+    const act = el("dd", { class: "act" });
+    const change = el("a", { href: "#q-" + q.id }, `Change<span class="vh"> ${q.id}</span>`);
+    change.addEventListener("click", (e) => {
+      e.preventDefault();
+      goTo("q-" + q.id);
+      const firstInput = document.querySelector(`input[name="${q.id}"]`);
+      if (firstInput) firstInput.focus({ preventScroll: true });
+    });
+    act.append(change);
+    row.append(dt, dd, act);
+    list.append(row);
+  });
+}
+
+function render() {
+  let answered = 0;
+  QUESTIONS.forEach((q) => {
+    const picks = state[q.id].picks;
+    const done = picks.length > 0;
+    if (done) answered++;
+    document.getElementById("done-" + q.id).textContent = done ? "Answered" : "";
+    document.getElementById("step-" + q.id).classList.toggle("done", done);
+    document.getElementById("pick-" + q.id).textContent = pickLabel(q, picks);
+    document.getElementById("seg-" + q.id).classList.toggle("on", done);
+  });
+  document.getElementById("count").textContent = answered;
+  document.getElementById("answers").value = answerText();
+  document.getElementById("status").textContent = "";
+  renderSummary();
+}
+
+document.getElementById("use-recommended").addEventListener("click", () => {
+  QUESTIONS.forEach((q) => {
+    if (state[q.id].picks.length) return;
+    const picks = q.options.filter((o) => o.rec).map((o) => o.key);
+    state[q.id] = { ...state[q.id], picks };
+    picks.forEach((k) => { const input = document.getElementById(`opt-${q.id}-${k}`); if (input) input.checked = true; });
+  });
+  save(); render();
+});
+
+function copyAnswers() {
+  const answers = document.getElementById("answers");
+  const status = document.getElementById("status");
+  const fallback = () => {
+    answers.focus({ preventScroll: true });
+    answers.select();
+    status.textContent = "Selected. Press Cmd+C or Ctrl+C to copy.";
+  };
+  try {
+    navigator.clipboard.writeText(answers.value).then(() => { status.textContent = "Copied. Paste it into the chat."; }, fallback);
+  } catch (e) {
+    fallback();
+  }
+}
+
+document.getElementById("copy-top").addEventListener("click", () => {
+  setOpen(false);
+  copyAnswers();
+  goTo("output");
+});
+document.getElementById("copy").addEventListener("click", copyAnswers);
+
+if ("IntersectionObserver" in window) {
+  const visible = new Map();
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => visible.set(entry.target.id, entry.isIntersecting));
+    const current = QUESTIONS.find((q) => visible.get("q-" + q.id));
+    QUESTIONS.forEach((q) => {
+      const step = document.getElementById("step-" + q.id);
+      const here = Boolean(current && current.id === q.id);
+      step.classList.toggle("here", here);
+      if (here) step.setAttribute("aria-current", "step"); else step.removeAttribute("aria-current");
+    });
+  }, { rootMargin: "-20% 0px -55% 0px" });
+  QUESTIONS.forEach((q) => observer.observe(document.getElementById("q-" + q.id)));
+}
+
+render();
+</script>
