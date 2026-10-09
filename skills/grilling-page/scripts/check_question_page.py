@@ -12,7 +12,12 @@ PAGE_DATA = re.compile(
     r"<script type=\"application/json\" id=\"page-data\">(.*?)</script>", re.IGNORECASE | re.DOTALL
 )
 TAG = re.compile(r"</?([a-zA-Z][a-zA-Z0-9]*)[^>]*>")
-ALLOWED_TAGS = {"code", "em", "strong"}
+PLAIN_MARKUP = re.compile(r"</?(?:code|em|strong)>")
+SOURCE_MARKUP = re.compile(r'</?(?:code|em|strong)>|<a href="https://[^"\s<>]+">|</a>')
+MARKUP_RULE = {
+    PLAIN_MARKUP: "only bare <code>, <em> and <strong> are allowed",
+    SOURCE_MARKUP: 'only bare <code>, <em>, <strong> and <a href="https://..."> are allowed',
+}
 THEME_MARKERS = {
     "light tokens on :root": re.compile(r":root\s*\{[^}]*--ground\s*:", re.DOTALL),
     "a dark palette under prefers-color-scheme": re.compile(
@@ -29,7 +34,7 @@ PAGE_PARTS = {
     "the clipboard copy": "navigator.clipboard.writeText",
 }
 SAFE_NAME = re.compile(r"[A-Za-z0-9_-]+")
-MAX_WORDS = {"title": 16, "context": 130, "why": 50, "desc": 50}
+MAX_WORDS = {"title": 16, "context": 130, "why": 50, "desc": 50, "blocks": 40, "source": 40, "cost": 40}
 QUESTION_TYPES = ("radio", "checkbox")
 
 
@@ -37,14 +42,14 @@ def words(html):
     return len(TAG.sub("", html).split())
 
 
-def text_field(problems, where, item, field, required=True):
+def text_field(problems, where, item, field, required=True, markup=PLAIN_MARKUP):
     value = item.get(field)
     if not isinstance(value, str) or not value.strip():
         if required:
             problems.append(f"{where}: no {field}")
         return ""
-    for tag in sorted({name.lower() for name in TAG.findall(value)} - ALLOWED_TAGS):
-        problems.append(f"{where}: <{tag}> in {field}; only <code>, <em> and <strong> are allowed")
+    if "<" in markup.sub("", value):
+        problems.append(f"{where}: markup in {field}; {MARKUP_RULE[markup]}")
     limit = MAX_WORDS.get(field)
     if limit and words(value) > limit:
         problems.append(f"{where}: {field} is {words(value)} words; keep it to {limit}")
@@ -71,6 +76,8 @@ def check_options(problems, where, question):
         text_field(problems, label, option, "title")
         if not text_field(problems, label, option, "desc", required=False):
             problems.append(f"{label}: no desc; say what picking it means for users")
+        if not text_field(problems, label, option, "cost", required=False):
+            problems.append(f"{label}: no cost; say what picking it costs or risks")
     flags = [option.get("rec") is True for option in options if isinstance(option, dict)]
     recommended = sum(flags)
     if question.get("type") == "radio" and recommended != 1:
@@ -113,6 +120,8 @@ def check_questions(data):
             problems.append(f"{where}: title must be a question ending in ?")
         text_field(problems, where, question, "context")
         text_field(problems, where, question, "why")
+        text_field(problems, where, question, "blocks")
+        text_field(problems, where, question, "source", markup=SOURCE_MARKUP)
         if question.get("type") not in QUESTION_TYPES:
             problems.append(f"{where}: type must be radio or checkbox")
         check_options(problems, where, question)

@@ -173,7 +173,11 @@ legend { padding: 0; display: table; max-width: 100%; white-space: normal; }
 legend h2 { font: 800 36px/1.1 var(--sans); letter-spacing: -0.01em; margin: 0 0 22px; text-wrap: balance; }
 .done-flag { font: 700 16px/1.2 var(--sans); color: var(--go); margin: -10px 0 16px; }
 .done-flag:empty { display: none; }
-.context { margin: 0 0 24px; max-width: 36em; }
+.context { margin: 0 0 20px; max-width: 36em; }
+.facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 8px 16px; margin: 0 0 28px; padding: 14px 16px; background: var(--panel); max-width: 36em; font-size: 16px; }
+.facts dt { font-weight: 700; }
+.facts dd { margin: 0; }
+.facts code { background: var(--ground); }
 
 .advice { display: grid; grid-template-columns: 35px minmax(0, 1fr); gap: 0 16px; margin: 0 0 30px; max-width: 36em; }
 .advice .ico { width: 35px; height: 35px; border-radius: 50%; background: var(--ink); color: var(--ground); display: grid; place-items: center; margin-top: -3px; }
@@ -194,7 +198,8 @@ legend h2 { font: 800 36px/1.1 var(--sans); letter-spacing: -0.01em; margin: 0 0
 .o-title { display: block; }
 .o-title .key { font-weight: 700; }
 .o-title .tag { margin-left: 6px; vertical-align: 1px; }
-.o-desc { display: block; color: var(--secondary); margin-top: 4px; max-width: 34em; }
+.o-desc, .o-cost { display: block; color: var(--secondary); margin-top: 4px; max-width: 34em; }
+.o-cost b { color: var(--ink); }
 .opt:hover .box { box-shadow: 0 0 0 10px var(--panel); }
 .opt input:focus-visible ~ .box, .opt:hover input:focus-visible ~ .box { border-width: 4px; box-shadow: 0 0 0 4px var(--focus); }
 
@@ -284,6 +289,8 @@ h3.plain { font: 700 24px/1.2 var(--sans); margin: 0 0 8px; }
   .rule { margin: 40px 0; }
   #questions { margin-top: 44px; }
   .advice { grid-template-columns: 30px minmax(0, 1fr); gap: 0 12px; }
+  .facts { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  .facts dd + dt { margin-top: 10px; }
   .advice .ico { width: 30px; height: 30px; }
   .advice .ico svg { width: 16px; height: 16px; }
   .opt { gap: 0 12px; }
@@ -306,10 +313,10 @@ h3.plain { font: 700 24px/1.2 var(--sans); margin: 0 0 8px; }
 </header>
 
 <div class="frame">
-  <aside class="ledger" id="ledger" aria-label="Decision index">
+  <aside class="ledger" id="ledger" aria-label="Question index">
     <div class="ledger-bar">
       <p class="tally"><span id="count">0</span> of <span id="total">0</span> answered</p>
-      <button type="button" class="ledger-toggle" id="toggle" aria-expanded="false" aria-controls="ledger-body">All decisions <span class="chev" aria-hidden="true"></span></button>
+      <button type="button" class="ledger-toggle" id="toggle" aria-expanded="false" aria-controls="ledger-body">All questions <span class="chev" aria-hidden="true"></span></button>
     </div>
     <p class="tally-sub">The ones others build on come first.</p>
     <div class="segs" id="segs" aria-hidden="true"></div>
@@ -318,16 +325,16 @@ h3.plain { font: 700 24px/1.2 var(--sans); margin: 0 0 8px; }
         <button id="use-recommended" type="button" class="btn alt">Use recommendations for the rest</button>
         <button id="copy-top" type="button" class="btn go">Copy answers</button>
       </div>
-      <h2 class="steps-h">Decisions</h2>
+      <h2 class="steps-h">Questions</h2>
       <ol class="steps" id="steps"></ol>
     </div>
   </aside>
 
   <main id="main">
     <div class="intro">
-      <span class="caption" id="range">Decision record</span>
+      <span class="caption" id="range">Question record</span>
       <h1>{{HEADING}}</h1>
-      <p class="lead">Each question explains what's at stake, what each option means for you, and which one I'd pick and why. The ones others build on come first.</p>
+      <p class="lead">Each question explains what's at stake, what is waiting on the answer and where it came from, what each option means and costs, and which one I'd pick and why. The ones others build on come first.</p>
       <p>Pick an option for each (some allow several), add a note if you like, then copy everything at the bottom and paste it into the chat. {{INTRO}}</p>
       <div class="legend">
         <span><span class="tag">Recommended</span> marks my pick; the reason sits above the options.</span>
@@ -362,11 +369,13 @@ h3.plain { font: 700 24px/1.2 var(--sans); margin: 0 0 8px; }
       "title": "Who can see a recipe when someone first saves it?",
       "context": "A saved recipe can be private, shared with the people in your household, or public so anyone with the link can open it. Whatever we pick is what happens when someone saves without thinking about it, which is most saves. People can change it per recipe afterwards.",
       "why": "Starting private means nobody shares a family recipe by accident. Sharing with the household is one tap, so the cost is small.",
+      "blocks": "The save screen design and the sharing settings page, both due in the first build.",
+      "source": "Raised while writing the brief, <code>docs/point-of-view/recipe-app.md</code>, under <em>Open</em>. Compare <a href=\"https://www.gov.uk/service-manual/design/question-pages\">GOV.UK question pages</a>.",
       "type": "radio",
       "options": [
-        { "key": "A", "rec": true, "title": "Private until shared", "desc": "Only the person who saved it sees it. They tap Share to show it to their household." },
-        { "key": "B", "title": "Shared with the household", "desc": "Everyone in the household sees it straight away. A recipe meant to stay private has to be switched back." },
-        { "key": "C", "title": "Public", "desc": "Anyone with the link can open it. Easy to pass on; easy to share more than intended." }
+        { "key": "A", "rec": true, "title": "Private until shared", "desc": "Only the person who saved it sees it. They tap Share to show it to their household.", "cost": "One extra tap for every recipe a household wants to share." },
+        { "key": "B", "title": "Shared with the household", "desc": "Everyone in the household sees it straight away. A recipe meant to stay private has to be switched back.", "cost": "A private recipe is visible until someone notices and hides it." },
+        { "key": "C", "title": "Public", "desc": "Anyone with the link can open it. Easy to pass on; easy to share more than intended.", "cost": "Needs moderation and abuse reporting before launch, about two weeks of work." }
       ]
     },
     {
@@ -374,12 +383,14 @@ h3.plain { font: 700 24px/1.2 var(--sans); margin: 0 0 8px; }
       "title": "How should people find a recipe they saved?",
       "context": "Pick all that apply. Searching by ingredient means storing each ingredient as its own line rather than one block of text, so imported recipes have to be split into lines when they are saved. That split is sometimes wrong, and people would need a way to fix it.",
       "why": "Name and ingredient search cover most lookups. Fridge filtering is the feature people mention most and needs the same ingredient lines, so it costs little extra.",
+      "blocks": "How imported recipes are stored, which the import job needs settled before it is built.",
+      "source": "Interview notes, <code>docs/research/interviews.md</code>: 7 of 9 people asked to search by ingredient.",
       "type": "checkbox",
       "options": [
-        { "key": "search", "rec": true, "title": "Search by name or ingredient", "desc": "Type <em>lentil</em> and see every recipe that uses lentils, not just ones with lentil in the name." },
-        { "key": "fridge", "rec": true, "title": "Filter by what's in the fridge", "desc": "Tick what you have and see recipes you can cook without shopping." },
-        { "key": "tags", "title": "Browse by tag", "desc": "Recipes grouped under tags people add, such as quick or vegetarian. Only as good as the tagging." },
-        { "key": "most-cooked", "title": "Sort by most cooked", "desc": "Needs people to mark when they cook something, which most won't do." }
+        { "key": "search", "rec": true, "title": "Search by name or ingredient", "desc": "Type <em>lentil</em> and see every recipe that uses lentils, not just ones with lentil in the name.", "cost": "Every imported recipe is split into ingredient lines, and a wrong split needs a fix screen." },
+        { "key": "fridge", "rec": true, "title": "Filter by what's in the fridge", "desc": "Tick what you have and see recipes you can cook without shopping.", "cost": "Builds on the ingredient lines; a few days more on top of search." },
+        { "key": "tags", "title": "Browse by tag", "desc": "Recipes grouped under tags people add, such as quick or vegetarian. Only as good as the tagging.", "cost": "A tag editor, and empty browse pages until people tag." },
+        { "key": "most-cooked", "title": "Sort by most cooked", "desc": "Needs people to mark when they cook something, which most won't do.", "cost": "A cooked-it button on every recipe that most people ignore." }
       ]
     },
     {
@@ -387,11 +398,13 @@ h3.plain { font: 700 24px/1.2 var(--sans); margin: 0 0 8px; }
       "title": "What happens to recipes when someone leaves a household?",
       "context": "This builds on D4: a recipe belongs to the person who saved it, and the household can see the ones they share. When that person leaves, the household either keeps a copy or loses the recipe.",
       "why": "Losing a recipe the family cooks every week is the complaint we most want to avoid. The person leaving keeps their own copy either way.",
+      "blocks": "The leave-household flow and what the data model stores about who owns a recipe.",
+      "source": "Follows from D4. Support asked about it in <code>docs/support/faq-draft.md</code>.",
       "type": "radio",
       "options": [
-        { "key": "A", "rec": true, "title": "The household keeps a copy", "desc": "Shared recipes stay where they are. The person who left keeps theirs too." },
-        { "key": "B", "title": "The recipes leave with them", "desc": "The household loses every recipe that person saved, with no warning." },
-        { "key": "C", "title": "Ask them when they leave", "desc": "They choose per recipe. Slower to leave, and most people will skip the question." }
+        { "key": "A", "rec": true, "title": "The household keeps a copy", "desc": "Shared recipes stay where they are. The person who left keeps theirs too.", "cost": "Copies drift apart: an edit by one side doesn't reach the other." },
+        { "key": "B", "title": "The recipes leave with them", "desc": "The household loses every recipe that person saved, with no warning.", "cost": "Support tickets from households that lost recipes they cook weekly." },
+        { "key": "C", "title": "Ask them when they leave", "desc": "They choose per recipe. Slower to leave, and most people will skip the question.", "cost": "A per-recipe screen in the leave flow, and a default for those who skip it." }
       ]
     }
   ]
@@ -485,14 +498,18 @@ QUESTIONS.forEach((q, i) => {
 
   if (i > 0) root.append(el("hr", { class: "rule" }));
   const section = el("section", { class: "q", id: "q-" + q.id });
-  const fieldset = el("fieldset", { "aria-describedby": `ctx-${q.id} why-${q.id}` });
+  const fieldset = el("fieldset", { "aria-describedby": `ctx-${q.id} facts-${q.id} why-${q.id}` });
   const legend = el("legend");
   legend.append(
-    el("span", { class: "caption" }, `<span class="cid">${q.id}</span><span class="sep">·</span>Decision ${i + 1} of ${QUESTIONS.length}`),
+    el("span", { class: "caption" }, `<span class="cid">${q.id}</span><span class="sep">·</span>Question ${i + 1} of ${QUESTIONS.length}`),
     el("h2", {}, q.title)
   );
   fieldset.append(legend, el("p", { class: "done-flag", id: "done-" + q.id }, ""));
   fieldset.append(el("p", { class: "context", id: "ctx-" + q.id }, q.context));
+  const facts = el("dl", { class: "facts", id: "facts-" + q.id });
+  facts.append(el("dt", {}, "Waiting on this"), el("dd", {}, q.blocks), el("dt", {}, "Where this came from"), el("dd", {}, q.source));
+  facts.querySelectorAll("a").forEach((a) => { a.target = "_blank"; a.rel = "noopener"; });
+  fieldset.append(facts);
 
   const recs = q.options.filter((o) => o.rec);
   const recLine = q.type === "radio"
@@ -520,6 +537,7 @@ QUESTIONS.forEach((q, i) => {
     const badge = o.rec ? ' <span class="tag">Recommended</span>' : "";
     txt.append(el("span", { class: "o-title" }, prefix + o.title + badge));
     if (o.desc) txt.append(el("span", { class: "o-desc" }, o.desc));
+    if (o.cost) txt.append(el("span", { class: "o-cost" }, "<b>Cost:</b> " + o.cost));
     label.append(input, el("span", { class: "box", "aria-hidden": "true" }), txt);
     opts.append(label);
   });

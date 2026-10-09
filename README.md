@@ -224,7 +224,7 @@ If symlinked to `~/.claude/skills` (installed as personal skills), invoke them b
 | `research` | Investigate a question against primary sources; capture as Markdown |
 | `grilling` | Stress-test a plan, decision, or idea through relentless questioning |
 | `future-grilling` | Fork of grilling that reads a craftsmans-wisdom brief and checks each answer against it |
-| `grilling-page` | Puts the remaining grilling decisions on one HTML question page; the answers come back in one paste and are recorded |
+| `grilling-page` | Puts any series of 3+ questions (grilling, handoff or plan open questions, reviews) on one HTML page with context, what each blocks, its source, and each option's cost; the answers come back in one paste and are recorded |
 | `grill-with-docs` | Grilling that also produces ADRs and a glossary as it goes |
 | `craftsmans-wisdom` | Runs before any plan: one-question-at-a-time challenge on what good means, what's written down for agents, and whether done is good; writes a point-of-view brief, then offers future-grilling on the details |
 
