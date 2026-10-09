@@ -1,6 +1,6 @@
 ---
 name: write-a-prd
-description: Create a PRD through user interview, codebase exploration, and module design, then submit as an issue. Use when user wants to write a PRD, create a product requirements document, or plan a new feature. Supports both GitHub Issues and Jira.
+description: Create a PRD through user interview, codebase exploration, and module design, then submit as an issue. Carries the product experience for user-facing work and is coupled to the delivery roadmap. Use when user wants to write a PRD, create a product requirements document, or plan a new feature. Supports both GitHub Issues and Jira.
 tags: [workflow, planning, project-management]
 ---
 
@@ -10,7 +10,7 @@ This skill will be invoked when the user wants to create a PRD. You may skip ste
 
 2. Explore the repo to verify their assertions and understand the current state of the codebase.
 
-3. Interview the user relentlessly about every aspect of this plan until you reach a shared understanding. Walk down each branch of the design tree, resolving dependencies between decisions one-by-one.
+3. Interview the user relentlessly about every aspect of this plan until you reach a shared understanding. Walk down each branch of the design tree, resolving dependencies between decisions one-by-one. For user-facing work, cover the product experience too — feel, look, screens, copy tone — and collect links to any designs.
 
 4. Sketch out the major modules you will need to build or modify to complete the implementation. Actively look for opportunities to extract deep modules that can be tested in isolation.
 
@@ -26,6 +26,8 @@ Check with the user that these modules match their expectations. Check with the 
 - If GitHub Issues is used: create via `gh issue create`
 - If neither is configured: ask the user where to submit
 - When posting to Jira, always set `contentFormat: "markdown"` for the description
+
+6. **The PRD and the roadmap change together.** When the stories ship over more than one plan, `writing-plans` keeps the phases in `docs/roadmap.md`, and the PRD's Delivery section links it. A new or changed story gets a phase in the roadmap; a change of strategy in the roadmap is reflected in the PRD. When either changes, update the other in the same pass.
 
 <prd-template>
 
@@ -49,6 +51,20 @@ A LONG, numbered list of user stories. Each user story should be in the format o
 
 This list of user stories should be extremely extensive and cover all aspects of the feature.
 
+## Product Experience
+
+For user-facing work. For work no user sees, replace this section with one line saying so.
+
+- **Feel** — the product's personality in a few words, and what it must never feel like
+- **Look** — visual direction: palette, type, density, reference products
+- **Screens** — each screen, what it is for, and what the user does there
+- **Copy tone** — how the product talks, with one example line
+- **Designs** — links to mockups and prototypes, and to the design history: the directions tried and why each was dropped
+
+<feel-example>
+Not "clean and modern", which fits every product. A recipe app: "a well-thumbed cookbook — warm, unhurried, type large enough to read from the stove; never gamified, no streaks."
+</feel-example>
+
 ## Implementation Decisions
 
 A list of implementation decisions that were made. This can include:
@@ -70,6 +86,10 @@ A list of testing decisions that were made. Include:
 - A description of what makes a good test (only test external behavior, not implementation details)
 - Which modules will be tested
 - Prior art for the tests (i.e. similar types of tests in the codebase)
+
+## Delivery
+
+A link to the roadmap by its full repository URL (a relative `docs/roadmap.md` does not resolve inside an issue). Which phase delivers which story lives only in the roadmap, so it cannot drift here. If the roadmap does not exist yet, say so; `writing-plans` writes it before the first phase plan. For work that fits in one plan, say so in one line.
 
 ## Out of Scope
 
