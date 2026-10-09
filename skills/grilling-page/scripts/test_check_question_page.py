@@ -163,7 +163,7 @@ def test_disallowed_markup():
     def change(data):
         data["questions"][0]["context"] += ' <a href="https://example.com">link</a>'
 
-    assert problems_mentioning(edited(change), "<a>")
+    assert problems_mentioning(edited(change), "markup in context")
 
 
 def test_bad_type():
@@ -218,6 +218,86 @@ def test_recommended_not_first():
         data["questions"][0]["options"].reverse()
 
     assert problems_mentioning(edited(change), "listed first")
+
+
+def test_missing_blocks_and_source():
+    def change(data):
+        data["questions"][0]["blocks"] = ""
+        data["questions"][0].pop("source")
+
+    text = edited(change)
+    assert problems_mentioning(text, "D4: no blocks")
+    assert problems_mentioning(text, "D4: no source")
+
+
+def test_blocks_too_long():
+    def change(data):
+        data["questions"][0]["blocks"] = " ".join(["word"] * 41)
+
+    assert problems_mentioning(edited(change), "blocks is 41 words; keep it to 40")
+
+
+def test_option_without_cost():
+    def change(data):
+        data["questions"][0]["options"][1].pop("cost")
+
+    assert problems_mentioning(edited(change), "D4 option B: no cost")
+
+
+def test_option_cost_too_long():
+    def change(data):
+        data["questions"][0]["options"][1]["cost"] = " ".join(["word"] * 41)
+
+    assert problems_mentioning(edited(change), "cost is 41 words")
+
+
+def test_https_link_in_source_is_allowed():
+    def change(data):
+        data["questions"][0]["source"] = 'Raised in <a href="https://example.com/plan">the plan</a>, <code>plan.md:12</code>.'
+
+    assert check_question_page.check(edited(change)) == []
+
+
+def test_unsafe_links_in_source():
+    for link in (
+        '<a href="javascript:alert(1)">x</a>',
+        '<a href="http://example.com">x</a>',
+        '<a href="https://example.com" onclick="x()">x</a>',
+        '<a href="https://example.com"onclick=x()>x</a>',
+        "<A HREF=https://example.com ONCLICK=x()>x</A>",
+        "<a/onmouseover=alert(1)>x</a>",
+        '<a/href="javascript:alert(1)">x</a>',
+        '<a href="https://x" href="javascript:y">x</a>',
+        "<a>x</a>",
+    ):
+        def change(data, link=link):
+            data["questions"][0]["source"] = "See " + link
+
+        assert problems_mentioning(edited(change), "markup in source"), link
+
+
+def test_attributes_on_allowed_tags():
+    def change(data):
+        data["questions"][0]["source"] = "See <em onclick=x()>this</em>"
+        data["questions"][1]["context"] += ' <code class="x">y</code>'
+
+    text = edited(change)
+    assert problems_mentioning(text, "D4: markup in source")
+    assert problems_mentioning(text, "D5: markup in context")
+
+
+def test_unclosed_tag():
+    def change(data):
+        data["questions"][0]["why"] = "Because <img src=x onerror=alert(1) "
+
+    assert problems_mentioning(edited(change), "markup in why")
+
+
+def test_disallowed_markup_in_option():
+    def change(data):
+        data["questions"][0]["options"][0]["cost"] += " <img src=x>"
+
+    assert problems_mentioning(edited(change), "D4 option A: markup in cost")
 
 
 def run_cli(*args, stdin=""):
