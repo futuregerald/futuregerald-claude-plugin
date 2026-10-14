@@ -1,6 +1,6 @@
 ---
 name: baton-pass
-description: Pass the baton between sessions with a deterministic ACTIVE_CONTEXT.md snapshot. Use when approaching turn 40-45 in any coding session, when approaching the ~200k-250k token context limit before auto-compaction hits, when switching between sessions, when preparing a handoff snapshot, or when asked to 'pass the baton', 'baton pass', 'save active context', 'snapshot context', 'clear context', 'handoff snapshot', or 'continue from active context'.
+description: MANDATORY IN ALL SESSIONS. Pass the baton between sessions with a deterministic ACTIVE_CONTEXT.md snapshot. Must be invoked across all sessions (Antigravity, Claude Code, Gemini) when approaching turn 40-45 or the ~160k-250k token context limit before auto-compaction hits, when switching between sessions, when preparing a handoff snapshot, or when asked to 'pass the baton', 'baton pass', 'save active context', 'snapshot context', 'clear context', 'handoff snapshot', or 'continue from active context'.
 author: Gerald Onyango
 tags: [workflow, context, tokens, handoff, architecture]
 ---
