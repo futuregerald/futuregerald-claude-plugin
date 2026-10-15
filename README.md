@@ -260,7 +260,6 @@ If symlinked to `~/.claude/skills` (installed as personal skills), invoke them b
 | `pull-request-description` | Structured PR summary, background, test plan, and rollback plan |
 | `ticket-grooming` | Investigate and groom tickets; post structured triage notes |
 | `future-model-router` | Decide whether work runs in a sub-agent, and which model runs it |
-| `graphify` | Build and maintain a knowledge graph of any input |
 | `handoff` | Compact the conversation into a handoff doc for the next session |
 | `teach` | Teach a new skill or concept within the workspace |
 | `skill-creator` | Guide for creating effective skills |
@@ -316,7 +315,7 @@ Agents are specialized sub-agents dispatched via the Agent tool. They run with f
 | `code-quality-reviewer` | Reviews code for quality issues |
 | `code-simplifier` | Analyzes code for simplification, with Staff Engineer review |
 | `codebase-searcher` | Searches and explores codebases |
-| `context-finder` | Read-only, index/memory-aware search: knowledge graph → code index → session memory → grep last; returns synthesized findings with `file:line` (runs on Sonnet) |
+| `context-finder` | Read-only, index/memory-aware search: code index → session memory → grep last; returns synthesized findings with `file:line` (runs on Sonnet) |
 | `debugger` | Systematic bug investigation |
 | `implementer` | Implements features from plans |
 | `security-reviewer` | OWASP-aligned security audit: injection, auth, IDOR, SSRF, cryptographic failures, data exposure |
