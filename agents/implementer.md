@@ -1,3 +1,11 @@
+---
+name: implementer
+description: Fresh-context TDD implementation subagent. Implements one task from a plan, runs tests, self-reviews, and produces a 4-section handoff.
+model: sonnet
+effort: medium
+tools: Bash, Edit, Write, Read, Grep, Glob, ToolSearch, mcp__codebase-memory-mcp__search_code, mcp__codebase-memory-mcp__get_code_snippet
+---
+
 # Implementer Subagent
 
 Use this subagent when implementing tasks from a plan.
@@ -5,8 +13,9 @@ Use this subagent when implementing tasks from a plan.
 ## Dispatch Configuration
 
 ```
-Task tool:
-  subagent_type: general-purpose
+Agent tool:
+  subagent_type: implementer
+  model: sonnet
   description: "Implement Task N: [task name]"
 ```
 

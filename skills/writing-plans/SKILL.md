@@ -96,7 +96,7 @@ Each step is one action, 2–5 minutes:
 ```markdown
 # [Feature Name] Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development to implement this plan task-by-task.
 
 **Goal:** [One sentence describing what this builds]
 
@@ -147,20 +147,8 @@ line numbers still hold after the earlier ones have run.
 
 ## Execution handoff
 
-After saving the plan, offer the execution choice:
+After saving the plan, proceed to execution:
 
-**"Plan complete, saved to `docs/plans/<filename>.md`. Two execution options:**
+**"Plan complete, saved to `docs/plans/<filename>.md`. Ready to execute using `subagent-driven-development` — I will dispatch a fresh subagent per task, with two-stage review between tasks."**
 
-**1. Subagent-Driven (this session)** — I dispatch a fresh subagent per task, review between
-tasks, fast iteration
-
-**2. Parallel Session (separate)** — new session with executing-plans, batch execution with
-checkpoints
-
-**Which approach?"**
-
-If Subagent-Driven: use superpowers:subagent-driven-development, stay in this session, fresh
-subagent per task plus code review.
-
-If Parallel Session: guide them to open a new session in the worktree, which uses
-superpowers:executing-plans.
+Use `superpowers:subagent-driven-development` to execute: stay in this session, fresh subagent per task plus code review.

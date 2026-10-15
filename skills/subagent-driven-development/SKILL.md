@@ -1,6 +1,6 @@
 ---
 name: subagent-driven-development
-description: Use when executing implementation plans with independent tasks in the current session
+description: Execute implementation plans with independent tasks using orchestrated subagents and two-stage review
 tags: [development]
 ---
 
@@ -10,6 +10,49 @@ Execute plan by dispatching fresh subagent per task, with two-stage review after
 
 **Core principle:** Fresh subagent per task + two-stage review (spec then quality) = high quality, fast iteration
 
+## Execution Roles & Dual-Harness Dispatch
+
+| Role | Claude Code (Anthropic 2026) | Antigravity (Google 2026) | Purpose & Constraints |
+|---|---|---|---|
+| **Lead Orchestrator** | Opus 5.5 (`model: "opus"`), Effort: `medium` | Argon (`Model: 'pro'`), Thinking: `low` | Coordinates, traces, writes discovered context to `/tmp/subagent-context-<project>-<stream>.md`, verifies fast gates in own shell, deletes temp file after review approval, commits. Never writes implementation code inline. Never halts prematurely between streams. |
+| **Implementer Subagent** | Sonnet 5.5 (`model: "sonnet"`, subagent: `implementer`), Effort: `medium` | Gemini 3.8 Flash (`Model: 'flash'`), Thinking: `medium` | Fresh context per cohesive stream. Reads `/tmp/subagent-context-<project>-<stream>.md` first, reads additional files in 600–800 line chunks (never 30–50 line slices), follows TDD using **fast unit tests only** (never E2E or `pretest` builds), zero comments, returns 4-section handoff. Never use Haiku. |
+| **Spec / Safety Reviewer** | Opus 5.5 (`subagent_type: "spec-reviewer"` / `"security-reviewer"`), Effort: `high` | Argon (`Model: 'pro'`), Thinking: `high` | **Strictly read-only.** Reads `/tmp/subagent-context-<project>-<stream>.md` (which includes the `git diff` and orchestrator's passing fast-test output). Never executes tests, builds, or E2E suites. |
+| **Code Quality Reviewer** | Opus 5.5 (`subagent_type: "code-quality-reviewer"`), Effort: `high` | Argon (`Model: 'pro'`), Thinking: `high` | **Strictly read-only.** Adversarial quality, architecture, defensive patterns, and test depth against `/tmp/subagent-context-<project>-<stream>.md`. Never executes tests, builds, or E2E suites. |
+
+### Ephemeral Shared Context File (`/tmp/subagent-context-<project>-<stream>.md`) & Fast-Test Rules
+
+To eliminate duplicate file reads, redundant searches, and $O(N^2)$ token re-billing across subagents:
+1. **Save Orchestrator Context to a Temp Flat File:** Before dispatching the implementer for a stream, the orchestrator writes all relevant pre-traced data (exact target file snippets with line numbers, interfaces/contracts, call sites, and task requirements) to `/tmp/subagent-context-<project>-<stream>.md`.
+2. **Subagents Read the Temp File First:** Instruct every subagent in the stream to read `/tmp/subagent-context-<project>-<stream>.md` on its first tool call (`view_file` / `Read` up to 800 lines) and **never** re-search or re-read unchanged files already covered in that file. When reading any other file, subagents must read **600–800 lines per call** (never 30–50 line micro-slices).
+3. **Fast Local Tests Only (No Local E2E, No `pretest` Builds):**
+   - Implementers and orchestrators run **only fast unit tests and typecheck/lint** (`npx vitest run <spec>`, `npm run typecheck`, `go test ./pkg/...`, `bundle exec rspec <spec>`). Never run `pretest` multi-bundle builds on unit test runs.
+   - **Never run E2E suites (`playwright test`, `npm run e2e`) locally between fixes, changes, or streams.**
+4. **Append Diff & Gate Output for Read-Only Reviewers:** After the implementer finishes, the orchestrator runs the fast unit/lint gate in its own shell, appends the `git diff` and passing gate output to `/tmp/subagent-context-<project>-<stream>.md`, and dispatches the parallel read-only reviewers (`code-quality-reviewer` + `security-reviewer`) to read that file. Reviewers **never** run tests, builds, or E2E suites.
+5. **Targeted Single-Reviewer Re-Verification & Cleanup:** If one reviewer returns `APPROVED` and the other requests localized changes, re-dispatch **only the reviewer that requested changes** after the fix is verified and appended to the temp file. Once the stream is `APPROVED`, **delete the temp file** (`rm -f /tmp/subagent-context-<project>-<stream>.md`).
+
+### Dispatch Syntax
+
+**Claude Code:**
+```typescript
+Agent({
+  subagent_type: "implementer",
+  model: "sonnet",
+  prompt: "Read /tmp/subagent-context-<project>-<stream>.md first..."
+})
+```
+
+**Antigravity:**
+```typescript
+invoke_subagent({
+  Subagents: [{
+    TypeName: "self",
+    Role: "Task Implementer",
+    Model: "flash",
+    Prompt: "Read /tmp/subagent-context-<project>-<stream>.md first..."
+  }]
+})
+```
+
 **PRECONDITION — the plan must contain an Impact Analysis.** The per-task spec and quality reviews below review *code against the plan*, so a wrong plan propagates into every task dispatched from it. Read the plan before dispatching the first implementer, and raise anything that looks wrong with your human partner rather than building on it.
 
 ## When to Use
@@ -18,26 +61,15 @@ Execute plan by dispatching fresh subagent per task, with two-stage review after
 digraph when_to_use {
     "Have implementation plan?" [shape=diamond];
     "Tasks mostly independent?" [shape=diamond];
-    "Stay in this session?" [shape=diamond];
     "subagent-driven-development" [shape=box];
-    "executing-plans" [shape=box];
     "Manual execution or brainstorm first" [shape=box];
 
     "Have implementation plan?" -> "Tasks mostly independent?" [label="yes"];
     "Have implementation plan?" -> "Manual execution or brainstorm first" [label="no"];
-    "Tasks mostly independent?" -> "Stay in this session?" [label="yes"];
+    "Tasks mostly independent?" -> "subagent-driven-development" [label="yes"];
     "Tasks mostly independent?" -> "Manual execution or brainstorm first" [label="no - tightly coupled"];
-    "Stay in this session?" -> "subagent-driven-development" [label="yes"];
-    "Stay in this session?" -> "executing-plans" [label="no - parallel session"];
 }
 ```
-
-**vs. Executing Plans (parallel session):**
-
-- Same session (no context switch)
-- Fresh subagent per task (no context pollution)
-- Two-stage review after each task: spec compliance first, then code quality
-- Faster iteration (no human-in-loop between tasks)
 
 ## The Process
 
@@ -177,12 +209,6 @@ Done!
 - Parallel-safe (subagents don't interfere)
 - Subagent can ask questions (before AND during work)
 
-**vs. Executing Plans:**
-
-- Same session (no handoff)
-- Continuous progress (no waiting)
-- Review checkpoints automatic
-
 **Efficiency gains:**
 
 - No file reading overhead (controller provides full text)
@@ -247,10 +273,10 @@ Done!
 - **superpowers:requesting-code-review** - Code review template for reviewer subagents
 - **superpowers:finishing-a-development-branch** - Complete development after all tasks
 
+**Long orchestrations:**
+
+- **baton-pass** - At turn 40-45 of orchestrating, write `ACTIVE_CONTEXT.md` and keep dispatching from it: derive each stream's `/tmp/subagent-context-<project>-<stream>.md` from its Sections 1, 3 and 4, and fold each implementer handoff back into it. It is a brief, not a handoff; regular handoffs are saved as usual.
+
 **Subagents should use:**
 
 - **superpowers:test-driven-development** - Subagents follow TDD for each task
-
-**Alternative workflow:**
-
-- **superpowers:executing-plans** - Use for parallel session instead of same-session execution

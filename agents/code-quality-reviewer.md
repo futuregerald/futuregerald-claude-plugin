@@ -1,8 +1,9 @@
 ---
 name: code-quality-reviewer
 description: Adversarially reviews code quality for correctness, architecture, defensive coding, testing, and consistency with existing codebase patterns. Use after spec compliance is verified.
-model: inherit
+model: opus
 effort: high
+tools: Read, Grep, Glob, ToolSearch, Bash, mcp__codebase-memory-mcp__search_code, mcp__codebase-memory-mcp__get_code_snippet
 ---
 
 # Code Quality Reviewer Subagent

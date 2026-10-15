@@ -92,7 +92,7 @@
 **The orchestrating agent NEVER writes code.** It coordinates:
 - Branch management, plan management, task dispatch, and (optionally) PR creation
 - Every implementation task gets a fresh sub-agent pointed at the feature branch
-- Use `superpowers:subagent-driven-development` (preferred) or `superpowers:executing-plans`
+- Use `superpowers:subagent-driven-development`
 - Independent tasks can run in parallel via `superpowers:dispatching-parallel-agents`
 
 **How it works (without worktrees):**

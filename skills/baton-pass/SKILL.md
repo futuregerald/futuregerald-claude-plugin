@@ -1,13 +1,20 @@
 ---
 name: baton-pass
-description: MANDATORY IN ALL SESSIONS. Pass the baton between sessions with a deterministic ACTIVE_CONTEXT.md snapshot. Must be invoked across all sessions (Antigravity, Claude Code, Gemini) when approaching turn 40-45 or the ~160k-250k token context limit before auto-compaction hits, when switching between sessions, when preparing a handoff snapshot, or when asked to 'pass the baton', 'baton pass', 'save active context', 'snapshot context', 'clear context', 'handoff snapshot', or 'continue from active context'.
+description: Pass the baton with a deterministic ACTIVE_CONTEXT.md snapshot so fresh context picks up the work. MANDATORY in Antigravity and Gemini at turn 40-45 or the ~160k-250k token limit, before auto-compaction hits. In Claude Code, use it at turn 40-45 of a long orchestration to hand the next pending step to a fresh sub-agent (with subagent-driven-development), or when asked to 'pass the baton', 'baton pass', 'save active context', 'snapshot context', or 'continue from active context'. Not a replacement for regular handoffs.
 author: Gerald Onyango
 tags: [workflow, context, tokens, handoff, architecture]
 ---
 
 # Baton Pass
 
-The Baton Pass is a deterministic state snapshot that transfers execution context across session boundaries. It prevents auto-compaction amnesia, eliminates token bloat, stabilizes prompt caches, and guarantees zero token debt when transitioning between sessions or subagents.
+The Baton Pass is a deterministic state snapshot that transfers execution context to fresh context: a new session in Antigravity and Gemini, a new sub-agent in Claude Code. It prevents auto-compaction amnesia and keeps the working context small.
+
+## Not a Handoff
+
+`ACTIVE_CONTEXT.md` is a brief for the next agent, used only by this skill. It is not a handoff, and it never replaces one.
+
+- Regular handoffs keep working unchanged: Prism `session_save_handoff`, any SessionEnd handoff store you use (such as `~/.claude/handoffs/`), and the 4-section phase handoffs (Changes Made, Flawed Assumptions, Carried Risks, Verification Evidence). They hold more than the active context and are saved persistently.
+- Never write `ACTIVE_CONTEXT.md` into `~/.claude/handoffs/`, and never save it as the Prism handoff. Save the regular handoff as you otherwise would.
 
 ## What Good Looks Like
 
@@ -18,16 +25,22 @@ The Baton Pass is a deterministic state snapshot that transfers execution contex
 
 ## When to Trigger
 
-Evaluate turn count and token accumulation continuously:
-
 ```
-Is conversation at Turn 40-45 or token usage near ~200k-250k? -> Execute Baton Pass immediately
-Did user say 'pass the baton', 'snapshot context', or '/clear'?   -> Execute Baton Pass immediately
-Is a multi-phase implementation subagent concluding its phase?   -> Write Handoff snapshot
-Under 30 turns with low token usage and active work ongoing?     -> Continue in-session
+Antigravity / Gemini:
+  Turn 40-45 or token usage near ~160k-250k?                   -> Execute Baton Pass immediately
+  User said 'pass the baton' or 'snapshot context'?            -> Execute Baton Pass immediately
+  Under 30 turns with low token usage?                         -> Continue in-session
+
+Claude Code:
+  Turn 40-45 while orchestrating multi-step work?              -> Snapshot, hand the next step to a fresh sub-agent
+  User said 'pass the baton' or 'snapshot context'?            -> Snapshot, hand the next step to a fresh sub-agent
+  Conversational work (decisions, synthesis, review with user)? -> Continue in-session; compaction hooks cover it
+  Token count alone?                                           -> Not a trigger (see below)
 ```
 
-Never let a session run into auto-compaction. In-flight compaction causes silent amnesia, drops edge-case constraints, and burns context re-reading previously examined files.
+In Antigravity and Gemini, never let a session run into auto-compaction: it compacts early, drops edge-case constraints mid-generation, and burns context re-reading files.
+
+Claude Code is different. Its context window is much larger (up to 1M), compaction comes late, and the model cannot see its own token count, so a token threshold would force a restart while most of the window is still usable. Long orchestrations still drift as stale tool output piles up, which is what the turn trigger catches. Work that cannot be delegated (decisions, synthesis, anything in the user's voice) stays in-session.
 
 ## The Canonical 4-Section Schema
 
@@ -49,45 +62,60 @@ Enumerate forbidden patterns, rejected alternatives, known dead ends, and system
 
 ### 1. Antigravity & Gemini CLI
 
-Determine the repository project key:
+Determine the repository project key (not a git repo: `dev`):
 ```bash
-git rev-parse --path-format=absolute --git-common-dir | sed 's|/\.git$||' | xargs basename | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g'
+git rev-parse --path-format=absolute --git-common-dir | sed 's|/\.git$||' | xargs basename | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '-' | sed 's/^-//; s/-$//'
 ```
 
 1. Write snapshot file to collision-safe path:
    `~/.gemini/handoffs/<project-key>/<YYYY-MM-DD-HHMMSS>-<branch-or-topic-slug>-ACTIVE_CONTEXT.md`
 2. In Antigravity IDE, also mirror to:
    `<appDataDir>/brain/<conversation-id>/ACTIVE_CONTEXT.md`
-3. If Prism MCP is active, call `session_save_handoff` with the snapshot content and current `expected_version`.
+3. If Prism MCP is active, save the regular Prism handoff as usual (`session_save_handoff` with the current `expected_version`). Do not save the snapshot as the handoff; it would replace the richer one (see Not a Handoff).
 4. Output ready-to-paste prompt for the user:
    `Ingest ~/.gemini/handoffs/<project-key>/<YYYY-MM-DD-HHMMSS>-<slug>-ACTIVE_CONTEXT.md and continue from Pending Steps.`
 
 ### 2. Claude Code
 
-1. Write snapshot file to canonical path:
-   `~/.gemini/handoffs/<project-key>/ACTIVE_CONTEXT.md`
-2. Instruct the user to clear session state:
-   Run `/clear`
-3. Provide the resumption prompt:
-   `Ingest ~/.gemini/handoffs/<project-key>/ACTIVE_CONTEXT.md and continue from Pending Steps.`
+Claude Code passes the baton to a fresh sub-agent, not a fresh session. The orchestrator keeps its conversation with the user; the heavy work moves out of its context.
 
-#### Prompt Caching Stability
-Claude Code relies on prompt caching for fast, cost-effective responses. Unbounded sessions create token bloat that causes cache churn and write thrashing. Running `/clear` and ingesting a compact 4-section snapshot establishes a clean cache prefix, reducing latency and token costs on every subsequent turn.
+1. Write the snapshot (project key as above):
+   `~/.claude/baton-pass/<project-key>/<YYYY-MM-DD-HHMMSS>-<branch-or-topic-slug>-ACTIVE_CONTEXT.md`
+   Never under `~/.claude/handoffs/`; that store belongs to regular handoffs.
+2. Hand Section 3's next step to a fresh sub-agent using `subagent-driven-development`. The snapshot is its brief: derive the stream context file from Sections 1, 3 and 4, and include Section 4 verbatim.
+3. Fold the sub-agent's 4-section handoff back in, after every return and before the next dispatch. Verify its gate yourself, then update the same file in place: correct Section 1 from its Changes Made and Flawed Assumptions, record results in Section 2, advance Section 3, add new traps to Section 4, and set `Commit:` to the new HEAD.
+4. Run `/clear` only when the user asks. Then give the resume prompt:
+   `Ingest ~/.claude/baton-pass/<project-key>/<YYYY-MM-DD-HHMMSS>-<branch-or-topic-slug>-ACTIVE_CONTEXT.md and continue from Pending Steps.`
+
+#### Compaction safety net (hooks)
+
+`scripts/compact_checkpoint.py` runs on two Claude Code hook events:
+
+- **PreCompact:** writes `~/.claude/baton-pass/<project-key>/<timestamp>-<session-id>-precompact.md` with the branch, HEAD, uncommitted changes, the files edited this session (sub-agents included) and the path of the full transcript. It never blocks compaction.
+- **SessionStart, matcher `compact`:** tells Claude the summary is lossy, and points it at this session's checkpoint and at the full transcript to grep for dropped detail before re-reading files. It does not point at any `ACTIVE_CONTEXT.md`.
+
+Register both in `~/.claude/settings.json`, appending these entries to any existing `PreCompact` and `SessionStart` arrays rather than replacing them. The path assumes the skills directory is symlinked to `~/.claude/skills`; for any other install, point `f` at wherever `compact_checkpoint.py` lives. The command must never exit 2, because exit 2 on PreCompact blocks compaction, and `python3` exits 2 when the script is missing (for example after the plugin checkout switches branch):
+
+The first entry goes in `PreCompact`, the second in `SessionStart`:
+
+```json
+{"hooks": [{"type": "command", "timeout": 30, "command": "f=\"$HOME/.claude/skills/baton-pass/scripts/compact_checkpoint.py\"; [ -f \"$f\" ] && python3 \"$f\"; exit 0"}]}
+{"matcher": "compact", "hooks": [{"type": "command", "timeout": 30, "command": "f=\"$HOME/.claude/skills/baton-pass/scripts/compact_checkpoint.py\"; [ -f \"$f\" ] && python3 \"$f\"; exit 0"}]}
+```
+
+#### Cost
+A long session does not rewrite the prompt cache; each turn writes only its new part. What grows is the cost of reading the cache: every turn re-reads the whole context at about a tenth of the input price. Moving heavy work into sub-agents keeps the orchestrator's context, and so that per-turn cost, small.
 
 ### 3. Subagent Delegation (Brief In, Handoff Out)
 
-In autonomous multi-phase workflows:
-1. **Orchestrator to Worker (Brief In):** Orchestrator extracts Section 1 contracts and Section 3 next steps into the subagent's task brief.
-2. **Worker Execution:** Subagent operates in bounded context without inheriting parent chat history.
-3. **Worker to Orchestrator (Handoff Out):** Subagent writes a handoff detailing Changes Made, Flawed Assumptions, Carried Risks, and Verification Evidence.
-4. **State Fold:** Orchestrator validates verification claims with real commands, updates `ACTIVE_CONTEXT.md`, and advances to the next step.
+On any platform, a worker sub-agent gets its brief from Sections 1, 3 and 4 and returns a handoff with Changes Made, Flawed Assumptions, Carried Risks and Verification Evidence. The orchestrator verifies and folds it back exactly as in Claude Code steps 2 and 3 above.
 
 ## Turn 1 Rehydration Protocol
 
 When starting Session B with `Ingest <path> and continue from Pending Steps`:
 
 1. **Read Snapshot:** Load the file directly via filesystem read.
-2. **Absorb Contracts:** Ingest Section 1 schemas into memory. Treat documented interfaces as authoritative. Do not run `grep`, `find`, or file-reading tools on files documented in Section 1.
+2. **Absorb Contracts:** Ingest Section 1 schemas into memory. Before trusting them, run two cheap checks: `git diff --stat <snapshot Commit>` and `git status --short`. Tracked files in this repo that neither lists are as documented, so do not re-read or grep them. Re-read the ones that changed, untracked files, and anything outside this repo, which git cannot vouch for.
 3. **Internalize Constraints:** Treat Section 4 rules as inviolable negative constraints.
 4. **Execute Step 1:** Immediately begin working on Step 1 of Section 3. Run the designated gate command to verify the baseline before making modifications.
 
