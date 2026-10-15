@@ -88,11 +88,6 @@ You: [Fix progress indicators]
 - Catch issues before they compound
 - Fix before moving to next task
 
-**Executing Plans:**
-
-- Review after each batch (3 tasks)
-- Get feedback, apply, continue
-
 **Ad-Hoc Development:**
 
 - Review before merge

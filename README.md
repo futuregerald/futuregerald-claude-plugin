@@ -212,7 +212,6 @@ If symlinked to `~/.claude/skills` (installed as personal skills), invoke them b
 | `writing-plans` | Turn a spec into a bite-sized, TDD-driven implementation plan; for multi-plan work, keep the committed roadmap of phases and the agreed strategy |
 | `plan-review` | Staff-engineer review of a plan before implementing; one pass, never re-reviewed |
 | `visualize-plan` | Turn a plan into a visual HTML page (flows, ER diagram, worked example, decisions) alongside the markdown |
-| `executing-plans` | Execute a written plan with review checkpoints |
 | `subagent-driven-development` | Execute independent plan tasks via fresh sub-agents |
 | `dispatching-parallel-agents` | Run 2+ independent tasks concurrently |
 | `implement` | Implement a piece of work from a spec or set of tickets |
@@ -257,6 +256,7 @@ If symlinked to `~/.claude/skills` (installed as personal skills), invoke them b
 | Skill | Description |
 |-------|-------------|
 | `using-git-worktrees` | Isolated git worktrees for feature work |
+| `baton-pass` | Pass the baton between sessions with a deterministic ACTIVE_CONTEXT.md snapshot |
 | `pull-request-description` | Structured PR summary, background, test plan, and rollback plan |
 | `ticket-grooming` | Investigate and groom tickets; post structured triage notes |
 | `future-model-router` | Decide whether work runs in a sub-agent, and which model runs it |

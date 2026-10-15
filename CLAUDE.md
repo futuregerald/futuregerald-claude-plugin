@@ -174,7 +174,7 @@ If steps 1–2 leave you confident, stop and cite the evidence. Spiking what you
 **The orchestrating agent NEVER writes code.** It coordinates:
 - Branch management, plan management, task dispatch, and (optionally) PR creation
 - Every implementation task gets a fresh sub-agent pointed at the feature branch
-- Use `subagent-driven-development` (preferred) or `executing-plans`
+- Use `subagent-driven-development`
 - Independent tasks can run in parallel via `dispatching-parallel-agents`
 
 **How it works (without worktrees):**

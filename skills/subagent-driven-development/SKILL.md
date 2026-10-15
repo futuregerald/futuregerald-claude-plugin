@@ -1,6 +1,6 @@
 ---
 name: subagent-driven-development
-description: Use when executing implementation plans with independent tasks in the current session
+description: Execute implementation plans with independent tasks using orchestrated subagents and two-stage review
 tags: [development]
 ---
 
@@ -10,6 +10,14 @@ Execute plan by dispatching fresh subagent per task, with two-stage review after
 
 **Core principle:** Fresh subagent per task + two-stage review (spec then quality) = high quality, fast iteration
 
+## Model Tiering & Execution Roles
+
+- **Lead Orchestrator (Argon `pro`, Thinking: Low):** The root session orchestrator MUST run on Argon (`Model: 'pro'`) with Low thinking. The orchestrator coordinates, traces, prepares task briefs, dispatches implementation subagents, verifies gates itself in its own shell, dispatches reviews, commits, and updates tracking artifacts.
+  - **Hard Rule 1:** The orchestrator **NEVER writes implementation code directly inline** in the main session. Inline implementation causes massive context re-billing, context bloat, amnesia, and premature turn halting.
+  - **Hard Rule 2:** The orchestrator **NEVER halts prematurely** mid-stream or between planned streams; it executes the streams sequentially to completion without yielding control until all planned work is finished.
+- **Implementer Subagent (3.8 Flash Medium `flash`, Capped Context ~30k tokens):** Dispatched per task with full task text and context into a fresh, isolated, turn-capped ~30k-token context. Follows TDD (RED → GREEN → REFACTOR), enforces zero code comments, runs tests, and produces a 4-section handoff. High-speed, token-efficient.
+- **Reviewer Subagents (Argon `pro`, Thinking: High):** Mandatory for spec compliance, comprehensive code reviews on diffs, and SQL reviews before commit. Always evaluate adversarially before any commit.
+
 **PRECONDITION — the plan must contain an Impact Analysis.** The per-task spec and quality reviews below review *code against the plan*, so a wrong plan propagates into every task dispatched from it. Read the plan before dispatching the first implementer, and raise anything that looks wrong with your human partner rather than building on it.
 
 ## When to Use
@@ -18,26 +26,15 @@ Execute plan by dispatching fresh subagent per task, with two-stage review after
 digraph when_to_use {
     "Have implementation plan?" [shape=diamond];
     "Tasks mostly independent?" [shape=diamond];
-    "Stay in this session?" [shape=diamond];
     "subagent-driven-development" [shape=box];
-    "executing-plans" [shape=box];
     "Manual execution or brainstorm first" [shape=box];
 
     "Have implementation plan?" -> "Tasks mostly independent?" [label="yes"];
     "Have implementation plan?" -> "Manual execution or brainstorm first" [label="no"];
-    "Tasks mostly independent?" -> "Stay in this session?" [label="yes"];
+    "Tasks mostly independent?" -> "subagent-driven-development" [label="yes"];
     "Tasks mostly independent?" -> "Manual execution or brainstorm first" [label="no - tightly coupled"];
-    "Stay in this session?" -> "subagent-driven-development" [label="yes"];
-    "Stay in this session?" -> "executing-plans" [label="no - parallel session"];
 }
 ```
-
-**vs. Executing Plans (parallel session):**
-
-- Same session (no context switch)
-- Fresh subagent per task (no context pollution)
-- Two-stage review after each task: spec compliance first, then code quality
-- Faster iteration (no human-in-loop between tasks)
 
 ## The Process
 
@@ -177,12 +174,6 @@ Done!
 - Parallel-safe (subagents don't interfere)
 - Subagent can ask questions (before AND during work)
 
-**vs. Executing Plans:**
-
-- Same session (no handoff)
-- Continuous progress (no waiting)
-- Review checkpoints automatic
-
 **Efficiency gains:**
 
 - No file reading overhead (controller provides full text)
@@ -250,7 +241,3 @@ Done!
 **Subagents should use:**
 
 - **superpowers:test-driven-development** - Subagents follow TDD for each task
-
-**Alternative workflow:**
-
-- **superpowers:executing-plans** - Use for parallel session instead of same-session execution
