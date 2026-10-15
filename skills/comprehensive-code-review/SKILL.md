@@ -21,15 +21,24 @@ You are a **Staff Engineer** orchestrating a multi-dimensional code review. You 
 ## Execution Flow
 
 ```
-1. Gather Context  ->  2. Dispatch 2 Sub-Agents in PARALLEL  ->  3. Consolidate  ->  4. Present Report
+1. Gather Context & Write Temp File (/tmp/subagent-context-<project>-<stream>.md)
+   -> 2. Dispatch 2 Read-Only Sub-Agents in PARALLEL (reading the temp file)
+   -> 3. Consolidate & Delete Temp File (once APPROVED)
+   -> 4. Present Report
 Any CRITICAL or IMPORTANT? -> CHANGES REQUIRED | else -> APPROVED
 * SQL section only activated if DB-touching files changed
 * If a sub-agent fails: re-dispatch once, then mark "Review Incomplete"
+* On localized re-review: if one reviewer already returned APPROVED and the fix only touches the other reviewer's domain, re-dispatch ONLY the reviewer that requested changes.
 ```
 
-## Phase 1: Gather Context
+## Phase 1: Gather Context & Save to Ephemeral Flat File
 
-The orchestrator precomputes ALL context and forwards it to sub-agents.
+The orchestrator precomputes ALL context (including the `git diff` and the orchestrator's passing fast-test/lint gate output) and writes it ONCE to a shared flat temp file (`/tmp/subagent-context-<project>-<stream>.md`). Both parallel reviewers read this file on their first turn so neither the orchestrator's transcript nor the reviewers waste tokens duplicating work.
+
+**CRITICAL — Reviewers Are Strictly Read-Only (No Test, Build, or E2E Execution):**
+- The orchestrator has *already* executed the fast unit test and linter/typecheck gate in its own shell and recorded the output in `/tmp/subagent-context-<project>-<stream>.md`.
+- Review sub-agents (`code-quality-reviewer` and `security-reviewer`) **MUST NEVER run test suites (`npm test`, `vitest`, `go test`, `rspec`), builds (`npm run build`), linters, or E2E suites (`playwright test`, `npm run e2e`)**.
+- At the end of the review run (once the stream is `APPROVED`), the orchestrator **deletes `/tmp/subagent-context-<project>-<stream>.md`** (`rm -f /tmp/subagent-context-<project>-<stream>.md`).
 
 ```bash
 BASE_SHA=$(git merge-base origin/main HEAD)
@@ -37,16 +46,17 @@ HEAD_SHA=$(git rev-parse HEAD)
 DIFF=$(git diff $BASE_SHA..$HEAD_SHA)
 FILE_LIST=$(git diff --name-only $BASE_SHA..$HEAD_SHA)
 COMMITS=$(git log --oneline $BASE_SHA..$HEAD_SHA)
-# If diff exceeds ~2000 lines, prioritize security-relevant files and summarize the rest
+# Write all gathered context, DIFF, and passing fast-test gate output to /tmp/subagent-context-<project>-<stream>.md
 ```
 
 For PR reviews, also fetch PR metadata via `gh` CLI or GitHub API.
 
-**Placeholders to populate before dispatch:**
+**Sections to populate in `/tmp/subagent-context-<project>-<stream>.md` (or placeholders before dispatch):**
 
 | Placeholder | Source |
 |-------------|--------|
-| `{DIFF}` | `git diff {BASE_SHA}..{HEAD_SHA}` — gathered ONCE by orchestrator |
+| `{DIFF}` | `git diff {BASE_SHA}..{HEAD_SHA}` — gathered ONCE by orchestrator and written to the temp context file |
+| `{FAST_TEST_GATE_OUTPUT}` | Passing fast unit test & linter/typecheck output from the orchestrator's shell |
 | `{PR_DESCRIPTION}` | PR body from `gh pr view --json body` or user-provided context |
 | `{FILE_LIST}`, `{BASE_SHA}`, `{HEAD_SHA}`, `{PR_URL}` | Git commands or PR metadata |
 | `{PLAN_OR_REQUIREMENTS}` | See Requirements Resolution below |

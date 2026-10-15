@@ -8,13 +8,12 @@ Task tool (general-purpose):
   prompt: |
     You are implementing Task N: [task name]
 
-    ## Task Description
+    ## Shared Context File (Read First — Zero Duplicate Work)
 
-    [FULL TEXT of task from plan - paste it here, don't make subagent read file]
-
-    ## Context
-
-    [Scene-setting: where this fits, dependencies, architectural context]
+    Read `/tmp/subagent-context-<project>-<stream>.md` on your first tool call (`view_file` / `Read` up to 800 lines).
+    It contains all pre-traced file snippets with exact line ranges, interfaces/contracts, call sites, and requirements gathered by the orchestrator.
+    - **Do NOT** re-search or re-read unchanged files already covered in that context file.
+    - When reading any additional file, read **600–800 lines per call** (never page in 30–50 line micro-slices).
 
     ## Before You Begin
 
@@ -29,12 +28,11 @@ Task tool (general-purpose):
     ## Your Job
 
     Once you're clear on requirements:
-    1. Implement exactly what the task specifies
-    2. Write tests (following TDD if task says to)
-    3. Verify implementation works
-    4. Commit your work
-    5. Self-review (see below)
-    6. Report back
+    1. Implement exactly what the task specifies (zero code comments unless explicitly approved)
+    2. Write unit tests following TDD (RED → GREEN → REFACTOR)
+    3. Verify implementation using **fast unit tests and typecheck/lint only** (e.g., `npx vitest run <spec>`, `npm run typecheck`, `go test ./pkg/...`, `bundle exec rspec <spec>`). **NEVER run E2E suites (`playwright test` / `npm run e2e`) or `pretest` multi-bundle builds locally.**
+    4. Self-review (see below)
+    5. Report back with the 4-section handoff ((1) Changes Made, (2) Flawed Assumptions, (3) Carried Risks, (4) Verification Evidence)
 
     Work from: [directory]
 
