@@ -13,7 +13,7 @@ The Baton Pass is a deterministic state snapshot that transfers execution contex
 
 `ACTIVE_CONTEXT.md` is a brief for the next agent, used only by this skill. It is not a handoff, and it never replaces one.
 
-- Regular handoffs keep working unchanged: Prism `session_save_handoff`, the SessionEnd handoff in `~/.claude/handoffs/`, and the 4-section phase handoffs (Changes Made, Flawed Assumptions, Carried Risks, Verification Evidence). They hold more than the active context and are saved persistently.
+- Regular handoffs keep working unchanged: Prism `session_save_handoff`, any SessionEnd handoff store you use (such as `~/.claude/handoffs/`), and the 4-section phase handoffs (Changes Made, Flawed Assumptions, Carried Risks, Verification Evidence). They hold more than the active context and are saved persistently.
 - Never write `ACTIVE_CONTEXT.md` into `~/.claude/handoffs/`, and never save it as the Prism handoff. Save the regular handoff as you otherwise would.
 
 ## What Good Looks Like
@@ -64,7 +64,7 @@ Enumerate forbidden patterns, rejected alternatives, known dead ends, and system
 
 Determine the repository project key (not a git repo: `dev`):
 ```bash
-git rev-parse --path-format=absolute --git-common-dir | sed 's|/\.git$||' | xargs basename | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '-' | sed 's/-$//'
+git rev-parse --path-format=absolute --git-common-dir | sed 's|/\.git$||' | xargs basename | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '-' | sed 's/^-//; s/-$//'
 ```
 
 1. Write snapshot file to collision-safe path:
@@ -83,10 +83,9 @@ Claude Code passes the baton to a fresh sub-agent, not a fresh session. The orch
    `~/.claude/baton-pass/<project-key>/<YYYY-MM-DD-HHMMSS>-<branch-or-topic-slug>-ACTIVE_CONTEXT.md`
    Never under `~/.claude/handoffs/`; that store belongs to regular handoffs.
 2. Hand Section 3's next step to a fresh sub-agent using `subagent-driven-development`. The snapshot is its brief: derive the stream context file from Sections 1, 3 and 4, and include Section 4 verbatim.
-3. Fold the sub-agent's 4-section handoff back in: verify its gate yourself, then update the snapshot (Sections 2 and 3, new Section 4 traps) before dispatching the next step.
-4. Keep the snapshot current after every sub-agent return, so it never describes a finished state.
-5. Run `/clear` only when the user asks. Then give the resume prompt:
-   `Ingest ~/.claude/baton-pass/<project-key>/<file>-ACTIVE_CONTEXT.md and continue from Pending Steps.`
+3. Fold the sub-agent's 4-section handoff back in, after every return and before the next dispatch. Verify its gate yourself, then update the same file in place: correct Section 1 from its Changes Made and Flawed Assumptions, record results in Section 2, advance Section 3, add new traps to Section 4, and set `Commit:` to the new HEAD.
+4. Run `/clear` only when the user asks. Then give the resume prompt:
+   `Ingest ~/.claude/baton-pass/<project-key>/<YYYY-MM-DD-HHMMSS>-<branch-or-topic-slug>-ACTIVE_CONTEXT.md and continue from Pending Steps.`
 
 #### Compaction safety net (hooks)
 
@@ -95,11 +94,13 @@ Claude Code passes the baton to a fresh sub-agent, not a fresh session. The orch
 - **PreCompact:** writes `~/.claude/baton-pass/<project-key>/<timestamp>-<session-id>-precompact.md` with the branch, HEAD, uncommitted changes, the files edited this session (sub-agents included) and the path of the full transcript. It never blocks compaction.
 - **SessionStart, matcher `compact`:** tells Claude the summary is lossy, and points it at this session's checkpoint and at the full transcript to grep for dropped detail before re-reading files. It does not point at any `ACTIVE_CONTEXT.md`.
 
-Register both in `~/.claude/settings.json`. The command must never exit 2, because exit 2 on PreCompact blocks compaction, and `python3` exits 2 when the script is missing (for example after the plugin checkout switches branch):
+Register both in `~/.claude/settings.json`, appending these entries to any existing `PreCompact` and `SessionStart` arrays rather than replacing them. The path assumes the skills directory is symlinked to `~/.claude/skills`; for any other install, point `f` at wherever `compact_checkpoint.py` lives. The command must never exit 2, because exit 2 on PreCompact blocks compaction, and `python3` exits 2 when the script is missing (for example after the plugin checkout switches branch):
+
+The first entry goes in `PreCompact`, the second in `SessionStart`:
 
 ```json
-"PreCompact": [{"hooks": [{"type": "command", "command": "f=\"$HOME/.claude/skills/baton-pass/scripts/compact_checkpoint.py\"; [ -f \"$f\" ] && python3 \"$f\"; exit 0"}]}],
-"SessionStart": [{"matcher": "compact", "hooks": [{"type": "command", "command": "f=\"$HOME/.claude/skills/baton-pass/scripts/compact_checkpoint.py\"; [ -f \"$f\" ] && python3 \"$f\"; exit 0"}]}]
+{"hooks": [{"type": "command", "timeout": 30, "command": "f=\"$HOME/.claude/skills/baton-pass/scripts/compact_checkpoint.py\"; [ -f \"$f\" ] && python3 \"$f\"; exit 0"}]}
+{"matcher": "compact", "hooks": [{"type": "command", "timeout": 30, "command": "f=\"$HOME/.claude/skills/baton-pass/scripts/compact_checkpoint.py\"; [ -f \"$f\" ] && python3 \"$f\"; exit 0"}]}
 ```
 
 #### Cost
@@ -107,18 +108,14 @@ A long session does not rewrite the prompt cache; each turn writes only its new 
 
 ### 3. Subagent Delegation (Brief In, Handoff Out)
 
-In autonomous multi-phase workflows:
-1. **Orchestrator to Worker (Brief In):** Orchestrator extracts Section 1 contracts and Section 3 next steps into the subagent's task brief.
-2. **Worker Execution:** Subagent operates in bounded context without inheriting parent chat history.
-3. **Worker to Orchestrator (Handoff Out):** Subagent writes a handoff detailing Changes Made, Flawed Assumptions, Carried Risks, and Verification Evidence.
-4. **State Fold:** Orchestrator validates verification claims with real commands, updates `ACTIVE_CONTEXT.md`, and advances to the next step.
+On any platform, a worker sub-agent gets its brief from Sections 1, 3 and 4 and returns a handoff with Changes Made, Flawed Assumptions, Carried Risks and Verification Evidence. The orchestrator verifies and folds it back exactly as in Claude Code steps 2 and 3 above.
 
 ## Turn 1 Rehydration Protocol
 
 When starting Session B with `Ingest <path> and continue from Pending Steps`:
 
 1. **Read Snapshot:** Load the file directly via filesystem read.
-2. **Absorb Contracts:** Ingest Section 1 schemas into memory. Before trusting them, run one cheap check: `git diff --stat <snapshot Commit>`. Files it does not list are as documented, so do not re-read or grep them; re-read only the ones that changed.
+2. **Absorb Contracts:** Ingest Section 1 schemas into memory. Before trusting them, run two cheap checks: `git diff --stat <snapshot Commit>` and `git status --short`. Tracked files in this repo that neither lists are as documented, so do not re-read or grep them. Re-read the ones that changed, untracked files, and anything outside this repo, which git cannot vouch for.
 3. **Internalize Constraints:** Treat Section 4 rules as inviolable negative constraints.
 4. **Execute Step 1:** Immediately begin working on Step 1 of Section 3. Run the designated gate command to verify the baseline before making modifications.
 

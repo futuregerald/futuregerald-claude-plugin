@@ -92,9 +92,9 @@ def test_precompact_writes_checkpoint_with_edited_files(setup):
     assert "/x/written.py" in text
     assert "/x/nb.ipynb" in text
     assert "/x/only_read.py" not in text
-    assert "work" in text
-    assert str(transcript) in text
-    assert "s1" in text
+    assert "**Branch:** work" in text
+    assert f"**Transcript (JSONL, full pre-compaction history):** {transcript}" in text
+    assert "**Session:** s1" in text
 
 
 def test_precompact_lists_subagent_edits(setup):
@@ -108,11 +108,79 @@ def test_precompact_lists_subagent_edits(setup):
     assert "/x/by_subagent.py" in checkpoint.read_text()
 
 
+def test_checkpoint_records_head_and_unstaged_changes(setup):
+    repo, transcript, baton = setup
+    (repo / "f.txt").write_text("one")
+    subprocess.run(["git", "add", "f.txt"], cwd=repo, check=True)
+    subprocess.run(
+        ["git", "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false", "commit", "-qm", "c"],
+        cwd=repo,
+        check=True,
+    )
+    (repo / "f.txt").write_text("two")
+    head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True).stdout.strip()
+    run_hook(precompact("s1", transcript, repo), baton, repo)
+    text = checkpoints(baton, "my-repo")[0].read_text()
+    assert f"**HEAD:** {head}" in text
+    assert "\n M f.txt\n" in text
+
+
+def test_malformed_transcript_records_still_write_a_checkpoint(setup):
+    repo, transcript, baton = setup
+    write_transcript(
+        transcript,
+        [
+            {"type": "assistant", "message": None},
+            {"type": "assistant", "message": "text"},
+            {"type": "assistant", "message": {"content": [{"type": "tool_use", "name": "Edit", "input": "x"}]}},
+            tool_use("Edit", file_path="/x/still_found.py"),
+        ],
+    )
+    run_hook(precompact("s1", transcript, repo), baton, repo)
+    text = checkpoints(baton, "my-repo")[0].read_text()
+    assert "**Branch:** work" in text
+    assert "/x/still_found.py" in text
+
+
+def test_missing_transcript_path_is_reported_as_unknown(setup):
+    repo, _, baton = setup
+    payload = precompact("s1", "", repo)
+    payload["transcript_path"] = None
+    run_hook(payload, baton, repo)
+    assert "full pre-compaction history):** unknown" in checkpoints(baton, "my-repo")[0].read_text()
+
+
+def test_checkpoint_is_private_to_the_user(setup):
+    repo, transcript, baton = setup
+    run_hook(precompact("s1", transcript, repo), baton, repo)
+    [checkpoint] = checkpoints(baton, "my-repo")
+    assert baton.stat().st_mode & 0o077 == 0
+    assert checkpoint.parent.stat().st_mode & 0o077 == 0
+    assert checkpoint.stat().st_mode & 0o077 == 0
+
+
+def test_session_id_cannot_steer_the_subagent_scan(setup):
+    repo, transcript, baton = setup
+    write_transcript(
+        transcript.parent / "elsewhere" / "subagents" / "agent-x.jsonl",
+        [tool_use("Edit", file_path="/x/outside.py")],
+    )
+    run_hook(precompact("../projects/elsewhere", transcript, repo), baton, repo)
+    [checkpoint] = checkpoints(baton, "my-repo")
+    assert "/x/outside.py" not in checkpoint.read_text()
+
+
 def test_key_collapses_runs_of_special_characters(tmp_path):
     repo = make_repo(tmp_path, "a__b")
     result = run_hook(precompact("s1", tmp_path / "none.jsonl", repo), tmp_path / "baton", repo)
     assert result.returncode == 0
     assert checkpoints(tmp_path / "baton", "a-b")
+
+
+def test_key_strips_leading_separator(tmp_path):
+    repo = make_repo(tmp_path, "_lead")
+    run_hook(precompact("s1", tmp_path / "none.jsonl", repo), tmp_path / "baton", repo)
+    assert checkpoints(tmp_path / "baton", "lead")
 
 
 def test_precompact_outside_git_uses_dev_key(tmp_path):
@@ -132,6 +200,8 @@ def test_bad_input_never_fails(tmp_path, stdin):
 
 def test_compact_session_start_points_at_this_sessions_checkpoint(setup):
     repo, transcript, baton = setup
+    (baton / "my-repo").mkdir(parents=True)
+    (baton / "my-repo" / "2099-01-01-000000-old-ACTIVE_CONTEXT.md").write_text("stale")
     run_hook(precompact("s1", transcript, repo), baton, repo)
     [mine] = checkpoints(baton, "my-repo")
     run_hook(precompact("other-session", transcript, repo), baton, repo)

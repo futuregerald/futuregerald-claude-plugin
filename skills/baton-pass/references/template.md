@@ -5,7 +5,7 @@
 
 Project: <project-key>
 Branch: <branch-name>
-Commit: <git-rev-parse-HEAD>  (Session B runs `git diff --stat` against this)
+Commit: <git-rev-parse-HEAD>  (reset after every folded sub-agent handoff; the next reader runs `git diff --stat` against it)
 Turn / Token Depth: <turn-number> / <estimated-tokens>
 
 ## 1. Active File Schemas & Contracts

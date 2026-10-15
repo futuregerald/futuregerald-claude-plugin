@@ -8,11 +8,20 @@ from datetime import datetime
 from pathlib import Path
 
 EDIT_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
+SESSION_ID = re.compile(r"[A-Za-z0-9-]{1,64}")
 
 
 def git(cwd, *args):
-    result = subprocess.run(["git", "-C", str(cwd), *args], capture_output=True, text=True)
-    return result.stdout.strip() if result.returncode == 0 else ""
+    try:
+        result = subprocess.run(
+            ["git", "--no-optional-locks", "-c", "core.fsmonitor=false", "-C", str(cwd), *args],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except subprocess.TimeoutExpired:
+        return ""
+    return result.stdout.rstrip() if result.returncode == 0 else ""
 
 
 def project_key(cwd):
@@ -42,20 +51,24 @@ def edited_paths_in(transcript):
             record = json.loads(line)
         except ValueError:
             continue
-        content = record.get("message", {}).get("content") if isinstance(record, dict) else None
+        message = record.get("message") if isinstance(record, dict) else None
+        content = message.get("content") if isinstance(message, dict) else None
         if not isinstance(content, list):
             continue
         for block in content:
-            if isinstance(block, dict) and block.get("type") == "tool_use" and block.get("name") in EDIT_TOOLS:
-                tool_input = block.get("input") or {}
-                path = tool_input.get("file_path") or tool_input.get("notebook_path")
-                if path:
-                    paths.append(path)
+            if not (isinstance(block, dict) and block.get("type") == "tool_use" and block.get("name") in EDIT_TOOLS):
+                continue
+            tool_input = block.get("input")
+            path = (tool_input.get("file_path") or tool_input.get("notebook_path")) if isinstance(tool_input, dict) else None
+            if isinstance(path, str) and path:
+                paths.append(path)
     return paths
 
 
 def session_edited_paths(transcript, session_id):
-    transcripts = [transcript] + sorted((transcript.parent / session_id / "subagents").glob("*.jsonl"))
+    transcripts = [transcript]
+    if SESSION_ID.fullmatch(session_id):
+        transcripts += sorted((transcript.parent / session_id / "subagents").glob("*.jsonl"))
     seen = {}
     for path in transcripts:
         for edited in edited_paths_in(path):
@@ -66,17 +79,17 @@ def session_edited_paths(transcript, session_id):
 def write_checkpoint(payload):
     session_id = str(payload.get("session_id") or "")
     cwd = Path(payload.get("cwd") or os.getcwd())
-    transcript = Path(payload.get("transcript_path") or "")
+    transcript_path = str(payload.get("transcript_path") or "")
     out_dir = baton_dir() / project_key(cwd)
     out_dir.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y-%m-%d-%H%M%S")
-    edited = session_edited_paths(transcript, session_id) if transcript.name else []
+    edited = session_edited_paths(Path(transcript_path), session_id) if transcript_path else []
     lines = [
         f"# Pre-compaction checkpoint — {stamp}",
         "",
         f"- **Session:** {session_id}",
         f"- **Trigger:** {payload.get('trigger') or 'unknown'}",
-        f"- **Transcript (JSONL, full pre-compaction history):** {transcript}",
+        f"- **Transcript (JSONL, full pre-compaction history):** {transcript_path or 'unknown'}",
         f"- **Directory:** {cwd}",
         f"- **Branch:** {git(cwd, 'branch', '--show-current') or 'N/A'}",
         f"- **HEAD:** {git(cwd, 'rev-parse', 'HEAD') or 'N/A'}",
@@ -114,6 +127,7 @@ def compact_context(payload):
 
 
 def main():
+    os.umask(0o077)
     try:
         payload = json.loads(sys.stdin.read() or "null")
         if not isinstance(payload, dict):
@@ -123,8 +137,8 @@ def main():
             write_checkpoint(payload)
         elif event == "SessionStart" and payload.get("source") == "compact":
             print(json.dumps({"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": compact_context(payload)}}))
-    except Exception:
-        return
+    except Exception as error:
+        print(f"compact_checkpoint failed: {type(error).__name__}: {error}", file=sys.stderr)
 
 
 if __name__ == "__main__":
