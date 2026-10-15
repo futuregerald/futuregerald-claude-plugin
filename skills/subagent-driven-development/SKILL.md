@@ -273,6 +273,10 @@ Done!
 - **superpowers:requesting-code-review** - Code review template for reviewer subagents
 - **superpowers:finishing-a-development-branch** - Complete development after all tasks
 
+**Long orchestrations:**
+
+- **baton-pass** - At turn 40-45 of orchestrating, write `ACTIVE_CONTEXT.md` and keep dispatching from it: derive each stream's `/tmp/subagent-context-<project>-<stream>.md` from its Sections 1, 3 and 4, and fold each implementer handoff back into it. It is a brief, not a handoff; regular handoffs are saved as usual.
+
 **Subagents should use:**
 
 - **superpowers:test-driven-development** - Subagents follow TDD for each task

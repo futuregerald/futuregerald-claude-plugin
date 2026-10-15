@@ -5,7 +5,7 @@
 
 Project: <project-key>
 Branch: <branch-name>
-Commit: <git-rev-parse-HEAD>
+Commit: <git-rev-parse-HEAD>  (Session B runs `git diff --stat` against this)
 Turn / Token Depth: <turn-number> / <estimated-tokens>
 
 ## 1. Active File Schemas & Contracts
