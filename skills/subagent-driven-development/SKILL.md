@@ -14,7 +14,7 @@ Execute plan by dispatching fresh subagent per task, with two-stage review after
 
 | Role | Claude Code (Anthropic 2026) | Antigravity (Google 2026) | Purpose & Constraints |
 |---|---|---|---|
-| **Lead Orchestrator** | Opus 5.5 (`model: "opus"`), Effort: `low`/`medium` | Argon (`Model: 'pro'`), Thinking: `low` | Coordinates, traces, writes briefs, verifies gates in own shell, commits. Never writes implementation code inline. Never halts prematurely between streams. |
+| **Lead Orchestrator** | Opus 5.5 (`model: "opus"`), Effort: `medium` | Argon (`Model: 'pro'`), Thinking: `low` | Coordinates, traces, writes briefs, verifies gates in own shell, commits. Never writes implementation code inline. Never halts prematurely between streams. |
 | **Implementer Subagent** | Sonnet 5.5 (`model: "sonnet"`, subagent: `implementer`), Effort: `medium` | Gemini 3.8 Flash (`Model: 'flash'`), Thinking: `medium` | Fresh context per task. Follows TDD (RED → GREEN → REFACTOR), zero comments, returns 4-section handoff. Never use Haiku (too dumb for multi-file coding). |
 | **Spec Reviewer Subagent** | Opus 5.5 (`subagent_type: "spec-reviewer"`), Effort: `high` | Argon (`Model: 'pro'`), Thinking: `high` | Verifies code matches spec (nothing missing, nothing extra) before code quality review. |
 | **Code Quality Reviewer** | Opus 5.5 (`subagent_type: "code-quality-reviewer"`), Effort: `high` | Argon (`Model: 'pro'`), Thinking: `high` | Adversarial quality, architecture, defensive patterns, and test depth. |
