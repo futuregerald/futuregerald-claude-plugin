@@ -10,13 +10,37 @@ Execute plan by dispatching fresh subagent per task, with two-stage review after
 
 **Core principle:** Fresh subagent per task + two-stage review (spec then quality) = high quality, fast iteration
 
-## Model Tiering & Execution Roles
+## Execution Roles & Dual-Harness Dispatch
 
-- **Lead Orchestrator (Argon `pro`, Thinking: Low):** The root session orchestrator MUST run on Argon (`Model: 'pro'`) with Low thinking. The orchestrator coordinates, traces, prepares task briefs, dispatches implementation subagents, verifies gates itself in its own shell, dispatches reviews, commits, and updates tracking artifacts.
-  - **Hard Rule 1:** The orchestrator **NEVER writes implementation code directly inline** in the main session. Inline implementation causes massive context re-billing, context bloat, amnesia, and premature turn halting.
-  - **Hard Rule 2:** The orchestrator **NEVER halts prematurely** mid-stream or between planned streams; it executes the streams sequentially to completion without yielding control until all planned work is finished.
-- **Implementer Subagent (3.8 Flash Medium `flash`, Capped Context ~30k tokens):** Dispatched per task with full task text and context into a fresh, isolated, turn-capped ~30k-token context. Follows TDD (RED → GREEN → REFACTOR), enforces zero code comments, runs tests, and produces a 4-section handoff. High-speed, token-efficient.
-- **Reviewer Subagents (Argon `pro`, Thinking: High):** Mandatory for spec compliance, comprehensive code reviews on diffs, and SQL reviews before commit. Always evaluate adversarially before any commit.
+| Role | Claude Code (Anthropic 2026) | Antigravity (Google 2026) | Purpose & Constraints |
+|---|---|---|---|
+| **Lead Orchestrator** | Opus 5.5 (`model: "opus"`), Effort: `low`/`medium` | Argon (`Model: 'pro'`), Thinking: `low` | Coordinates, traces, writes briefs, verifies gates in own shell, commits. Never writes implementation code inline. Never halts prematurely between streams. |
+| **Implementer Subagent** | Sonnet 5.5 (`model: "sonnet"`, subagent: `implementer`), Effort: `medium` | Gemini 3.8 Flash (`Model: 'flash'`), Thinking: `medium` | Fresh context per task. Follows TDD (RED → GREEN → REFACTOR), zero comments, returns 4-section handoff. Never use Haiku (too dumb for multi-file coding). |
+| **Spec Reviewer Subagent** | Opus 5.5 (`subagent_type: "spec-reviewer"`), Effort: `high` | Argon (`Model: 'pro'`), Thinking: `high` | Verifies code matches spec (nothing missing, nothing extra) before code quality review. |
+| **Code Quality Reviewer** | Opus 5.5 (`subagent_type: "code-quality-reviewer"`), Effort: `high` | Argon (`Model: 'pro'`), Thinking: `high` | Adversarial quality, architecture, defensive patterns, and test depth. |
+
+### Dispatch Syntax
+
+**Claude Code:**
+```typescript
+Agent({
+  subagent_type: "implementer",
+  model: "sonnet",
+  prompt: "..."
+})
+```
+
+**Antigravity:**
+```typescript
+invoke_subagent({
+  Subagents: [{
+    TypeName: "self",
+    Role: "Task Implementer",
+    Model: "flash",
+    Prompt: "..."
+  }]
+})
+```
 
 **PRECONDITION — the plan must contain an Impact Analysis.** The per-task spec and quality reviews below review *code against the plan*, so a wrong plan propagates into every task dispatched from it. Read the plan before dispatching the first implementer, and raise anything that looks wrong with your human partner rather than building on it.
 

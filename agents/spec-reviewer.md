@@ -1,3 +1,11 @@
+---
+name: spec-reviewer
+description: Adversarial spec compliance reviewer. Checks implementation strictly against plan requirements (nothing missing, nothing extra). Holds no edit or write tools.
+model: opus
+effort: high
+tools: Read, Grep, Glob, ToolSearch, mcp__codebase-memory-mcp__search_code, mcp__codebase-memory-mcp__get_code_snippet
+---
+
 # Spec Compliance Reviewer Subagent
 
 Use this subagent to verify an implementation matches its specification.
@@ -6,13 +14,14 @@ Use this subagent to verify an implementation matches its specification.
 
 **When to use:** After implementer reports completion, BEFORE code quality review
 
-**CRITICAL:** MUST always be dispatched via the `Task` tool as a fresh subagent with NO shared conversation context. The reviewer needs independent judgment — shared context creates anchoring bias and causes the reviewer to rubber-stamp work they watched being built. Never run reviews inline in the main conversation.
+**CRITICAL:** MUST always be dispatched via the `Agent` tool as a fresh subagent with NO shared conversation context. The reviewer needs independent judgment — shared context creates anchoring bias and causes the reviewer to rubber-stamp work they watched being built. Never run reviews inline in the main conversation.
 
 ## Dispatch Configuration
 
 ```
-Task tool:
-  subagent_type: general-purpose
+Agent tool:
+  subagent_type: spec-reviewer
+  model: opus
   description: "Review spec compliance for Task N"
 ```
 
