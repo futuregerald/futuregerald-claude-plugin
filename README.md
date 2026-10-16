@@ -58,7 +58,7 @@ skill-installer --mode config-only --target claude --yes
 
 ### Skills — Teaching Claude How to Work
 
-Skills are markdown-based instruction sets that give Claude specialized knowledge and workflows. When invoked, Claude follows the skill's process exactly. The plugin includes 51 skills covering:
+Skills are markdown-based instruction sets that give Claude specialized knowledge and workflows. When invoked, Claude follows the skill's process exactly. The plugin includes 53 skills covering:
 
 - **Test-driven development** — RED/GREEN/REFACTOR cycle
 - **Systematic debugging** — root-cause-first protocol with feedback-loop construction
@@ -221,8 +221,7 @@ If symlinked to `~/.claude/skills` (installed as personal skills), invoke them b
 | `to-tickets` | Break a plan/spec into tracer-bullet tickets with blocking edges |
 | `wayfinder` | Plan work too big for one session as a map of decision tickets |
 | `research` | Investigate a question against primary sources; capture as Markdown |
-| `grilling` | Stress-test a plan, decision, or idea through relentless questioning |
-| `future-grilling` | Fork of grilling that reads a craftsmans-wisdom brief and checks each answer against it |
+| `future-grilling` | Fork of Matt Pocock's grilling that reads a craftsmans-wisdom brief and checks each answer against it |
 | `grilling-page` | Puts any series of 3+ questions (grilling, handoff or plan open questions, reviews) on one HTML page with context, what each blocks, its source, and each option's cost; the answers come back in one paste and are recorded |
 | `grill-with-docs` | Grilling that also produces ADRs and a glossary as it goes |
 | `craftsmans-wisdom` | Runs before any plan: one-question-at-a-time challenge on what good means, what's written down for agents, and whether done is good; writes a point-of-view brief, then offers future-grilling on the details |
@@ -235,7 +234,6 @@ If symlinked to `~/.claude/skills` (installed as personal skills), invoke them b
 | `test-driven-development` | RED → GREEN → REFACTOR discipline |
 | `comprehensive-code-review` | Parallel sub-agent review (correctness + safety) into one report |
 | `code-simplifier` | Simplify recently changed code, with Staff Engineer review |
-| `requesting-code-review` | Request review before merge to verify requirements are met |
 | `skill-reviewer` | Review skills for quality, size, progressive disclosure, and encoded judgment |
 | `editor-pass` | Post-build quality review that returns a lettered crit sheet of pinned, specific fixes |
 | `review-lens` | Surface similar past reviewer objections to calibrate findings |
@@ -262,14 +260,12 @@ If symlinked to `~/.claude/skills` (installed as personal skills), invoke them b
 | `future-model-router` | Decide whether work runs in a sub-agent, and which model runs it |
 | `handoff` | Compact the conversation into a handoff doc for the next session |
 | `teach` | Teach a new skill or concept within the workspace |
-| `skill-creator` | Guide for creating effective skills |
-| `future-skill-creator` | Fork of skill-creator that encodes judgment: decision trees, do/don't pairs, check scripts, and editing the skill's output |
+| `future-skill-creator` | Fork of Anthropic's skill-creator that encodes judgment: decision trees, do/don't pairs, check scripts, and editing the skill's output |
 
 **Frontend & Design:**
 
 | Skill | Description |
 |-------|-------------|
-| `frontend-design` | Distinctive, production-grade frontend interfaces |
 | `impeccable` | Frontend design, UX review, and UI polish |
 | `no-slop-ui` | Eleven visual tells that make a UI read as AI slop, and what to do instead |
 | `huashu-design` | HTML-native prototypes, slide decks, animations and infographics; 20 design philosophies, 5-dimension expert critique, MP4/GIF/PDF/editable-PPTX export |

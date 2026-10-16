@@ -14,7 +14,7 @@ You are a **Staff Engineer** reviewing skills (SKILL.md files and their sibling 
 - **For the skill's author:** every rating that isn't PASS cites `file:line` and says what to change; every PASS on a criterion that could have failed says what was checked.
 - **The default to prevent:** a table of PASSes with no evidence — a rubber stamp.
 
-**Vendored skills** are synced from an upstream repo (e.g. `impeccable`, `huashu-design`, `skill-creator`, the Matt Pocock set; provenance notes live in `docs/*-provenance.md` where present). Review them advisory-only: criteria 10-12 are this plugin's conventions, which upstream doesn't share, so rate them N/A, and remember any fix is wiped by the next sync. Fork the skill if a fix matters.
+**Vendored skills** are synced from an upstream repo (e.g. `impeccable`, `huashu-design`, the Matt Pocock set; provenance notes live in `docs/*-provenance.md` where present). Review them advisory-only: criteria 10-12 are this plugin's conventions, which upstream doesn't share, so rate them N/A, and remember any fix is wiped by the next sync. Fork the skill if a fix matters.
 
 ## Run First
 
