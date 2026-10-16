@@ -28,7 +28,7 @@ To eliminate duplicate file reads, redundant searches, and $O(N^2)$ token re-bil
    - Implementers and orchestrators run **only fast unit tests and typecheck/lint** (`npx vitest run <spec>`, `npm run typecheck`, `go test ./pkg/...`, `bundle exec rspec <spec>`). Never run `pretest` multi-bundle builds on unit test runs.
    - **Never run E2E suites (`playwright test`, `npm run e2e`) locally between fixes, changes, or streams.**
 4. **Append Diff & Gate Output for Read-Only Reviewers:** After the implementer finishes, the orchestrator runs the fast unit/lint gate in its own shell, appends the `git diff` and passing gate output to `/tmp/subagent-context-<project>-<stream>.md`, and dispatches the parallel read-only reviewers (`code-quality-reviewer` + `security-reviewer`) to read that file. Reviewers **never** run tests, builds, or E2E suites.
-5. **Targeted Single-Reviewer Re-Verification & Cleanup:** If one reviewer returns `APPROVED` and the other requests localized changes, re-dispatch **only the reviewer that requested changes** after the fix is verified and appended to the temp file. Once the stream is `APPROVED`, **delete the temp file** (`rm -f /tmp/subagent-context-<project>-<stream>.md`).
+5. **Targeted Single-Reviewer Re-Verification & Cleanup:** If one reviewer returns `APPROVED` and the other requests localized changes, verify the fix with `fix-check` (findings list + fix diff + gate output), never a fresh reviewer. Once the stream is `APPROVED`, **delete the temp file** (`rm -f /tmp/subagent-context-<project>-<stream>.md`).
 
 ### Dispatch Syntax
 
@@ -105,11 +105,15 @@ digraph process {
     "Implementer subagent implements, tests, commits, self-reviews" -> "Dispatch spec reviewer subagent (./spec-reviewer-prompt.md)";
     "Dispatch spec reviewer subagent (./spec-reviewer-prompt.md)" -> "Spec reviewer subagent confirms code matches spec?";
     "Spec reviewer subagent confirms code matches spec?" -> "Implementer subagent fixes spec gaps" [label="no"];
-    "Implementer subagent fixes spec gaps" -> "Dispatch spec reviewer subagent (./spec-reviewer-prompt.md)" [label="re-review"];
+    "Implementer subagent fixes spec gaps" -> "Orchestrator runs fix-check against the spec findings" [label="verify fixes"];
     "Spec reviewer subagent confirms code matches spec?" -> "Dispatch code quality reviewer subagent (./code-quality-reviewer-prompt.md)" [label="yes"];
     "Dispatch code quality reviewer subagent (./code-quality-reviewer-prompt.md)" -> "Code quality reviewer subagent approves?";
     "Code quality reviewer subagent approves?" -> "Implementer subagent fixes quality issues" [label="no"];
-    "Implementer subagent fixes quality issues" -> "Dispatch code quality reviewer subagent (./code-quality-reviewer-prompt.md)" [label="re-review"];
+    "Implementer subagent fixes quality issues" -> "Orchestrator runs fix-check against the quality findings" [label="verify fixes"];
+    "Orchestrator runs fix-check against the spec findings" -> "Dispatch code quality reviewer subagent (./code-quality-reviewer-prompt.md)" [label="all fixed"];
+    "Orchestrator runs fix-check against the spec findings" -> "Implementer subagent fixes spec gaps" [label="rows open"];
+    "Orchestrator runs fix-check against the quality findings" -> "Mark task complete in TodoWrite" [label="all fixed"];
+    "Orchestrator runs fix-check against the quality findings" -> "Implementer subagent fixes quality issues" [label="rows open"];
     "Code quality reviewer subagent approves?" -> "Mark task complete in TodoWrite" [label="yes"];
     "Mark task complete in TodoWrite" -> "More tasks remain?";
     "More tasks remain?" -> "Dispatch implementer subagent (./implementer-prompt.md)" [label="yes"];
@@ -177,8 +181,8 @@ Spec reviewer: ❌ Issues:
 [Implementer fixes issues]
 Implementer: Removed --json flag, added progress reporting
 
-[Spec reviewer reviews again]
-Spec reviewer: ✅ Spec compliant now
+[Orchestrator runs fix-check on the two spec findings: both FIXED]
+fix-check: 2 of 2 FIXED, no unrequested changes
 
 [Dispatch code quality reviewer]
 Code reviewer: Strengths: Solid. Issues (Important): Magic number (100)
@@ -186,8 +190,8 @@ Code reviewer: Strengths: Solid. Issues (Important): Magic number (100)
 [Implementer fixes]
 Implementer: Extracted PROGRESS_INTERVAL constant
 
-[Code reviewer reviews again]
-Code reviewer: ✅ Approved
+[Orchestrator runs fix-check on the quality finding: FIXED]
+fix-check: ready to merge
 
 [Mark Task 2 complete]
 
@@ -220,7 +224,7 @@ Done!
 
 - Self-review catches issues before handoff
 - Two-stage review: spec compliance, then code quality
-- Review loops ensure fixes actually work
+- fix-check confirms each fix against its finding without a new review
 - Spec compliance prevents over/under-building
 - Code quality ensures implementation is well-built
 
@@ -242,7 +246,7 @@ Done!
 - Skip scene-setting context (subagent needs to understand where task fits)
 - Ignore subagent questions (answer before letting them proceed)
 - Accept "close enough" on spec compliance (spec reviewer found issues = not done)
-- Skip review loops (reviewer found issues = implementer fixes = review again)
+- Skip the fix-check after a fix round (reviewer found issues = implementer fixes = fix-check those findings)
 - Let implementer self-review replace actual review (both are needed)
 - **Start code quality review before spec compliance is ✅** (wrong order)
 - Move to next task while either review has open issues
@@ -256,9 +260,9 @@ Done!
 **If reviewer finds issues:**
 
 - Implementer (same subagent) fixes them
-- Reviewer reviews again
-- Repeat until approved
-- Don't skip the re-review
+- The orchestrator runs `fix-check` on the fix diff against those findings. No fresh review
+- Send back only the rows fix-check marks NOT FIXED or PARTIAL; repeat fix-check on the next fix
+- Don't dispatch a new comprehensive review after a fix round: it re-reads everything, finds new MINORs and the loop never closes
 
 **If subagent fails task:**
 

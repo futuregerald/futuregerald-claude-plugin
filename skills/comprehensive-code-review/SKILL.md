@@ -28,7 +28,7 @@ You are a **Staff Engineer** orchestrating a multi-dimensional code review. You 
 Any CRITICAL or IMPORTANT? -> CHANGES REQUIRED | else -> APPROVED
 * SQL section only activated if DB-touching files changed
 * If a sub-agent fails: re-dispatch once, then mark "Review Incomplete"
-* On localized re-review: if one reviewer already returned APPROVED and the fix only touches the other reviewer's domain, re-dispatch ONLY the reviewer that requested changes.
+* After fixes: verify them with the `fix-check` skill against these findings. Do not re-run this review on a fix diff.
 ```
 
 ## Phase 1: Gather Context & Save to Ephemeral Flat File
