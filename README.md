@@ -58,7 +58,7 @@ skill-installer --mode config-only --target claude --yes
 
 ### Skills — Teaching Claude How to Work
 
-Skills are markdown-based instruction sets that give Claude specialized knowledge and workflows. When invoked, Claude follows the skill's process exactly. The plugin includes 53 skills covering:
+Skills are markdown-based instruction sets that give Claude specialized knowledge and workflows. When invoked, Claude follows the skill's process exactly. The plugin includes 54 skills covering:
 
 - **Test-driven development** — RED/GREEN/REFACTOR cycle
 - **Systematic debugging** — root-cause-first protocol with feedback-loop construction
@@ -493,7 +493,7 @@ futuregerald-claude-plugin/
 │   ├── config/                  # /config:export, /config:import
 │   └── init-claude-md/
 │       └── COMMAND.md           # /init-claude-md command
-├── skills/                      # 53 skill directories, each with SKILL.md
+├── skills/                      # 54 skill directories, each with SKILL.md
 ├── agents/                      # 14 files: 10 dispatchable agents + 4 prompt templates
 ├── templates/
 │   ├── CLAUDE-BASE.md           # Base template for generated CLAUDE.md files
