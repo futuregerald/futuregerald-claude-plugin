@@ -1,6 +1,6 @@
 ---
 name: future-skill-creator
-description: Create or update a skill so it encodes judgment, not just knowledge — decision trees, do/don't pairs, on-demand references, a check script with tests, and a stated picture of good output. Preferred over skill-creator in this plugin. Use when the user wants to create a new skill, fork or rework an existing one, or turn a method, talk, checklist or workflow into a skill.
+description: Create or update a skill so it encodes judgment, not just knowledge — decision trees, do/don't pairs, on-demand references, a check script with tests, and a stated picture of good output. Use when the user wants to create a new skill, fork or rework an existing one, or turn a method, talk, checklist or workflow into a skill.
 author: Gerald Onyango
 tags: [authoring]
 license: Complete terms in LICENSE.txt

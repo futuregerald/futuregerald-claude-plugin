@@ -1,6 +1,6 @@
 ---
 name: future-grilling
-description: Grill the user relentlessly about a plan, design or decision — an interview with the user, not a review of a written plan file (that is plan-review) — one question at a time, each with a recommended answer, walking every branch of the decision tree in dependency order until there is shared understanding. Preferred over grilling in this plugin. Runs after craftsmans-wisdom's brief, checking each answer against it, or when the user asks to be grilled.
+description: Grill the user relentlessly about a plan, design or decision — an interview with the user, not a review of a written plan file (that is plan-review) — one question at a time, each with a recommended answer, walking every branch of the decision tree in dependency order until there is shared understanding. Runs after craftsmans-wisdom's brief, checking each answer against it, or when the user asks to be grilled.
 author: Gerald Onyango
 tags: [planning, interview]
 license: MIT, see LICENSE.txt
