@@ -233,6 +233,7 @@ If symlinked to `~/.claude/skills` (installed as personal skills), invoke them b
 | `systematic-debugging` | Root-cause-first debugging with tight feedback-loop construction |
 | `test-driven-development` | RED → GREEN → REFACTOR discipline |
 | `comprehensive-code-review` | Parallel sub-agent review (correctness + safety) into one report |
+| `fix-check` | After a fix round: per finding, fixed or not, where, and which test covers it; replaces a re-review |
 | `code-simplifier` | Simplify recently changed code, with Staff Engineer review |
 | `skill-reviewer` | Review skills for quality, size, progressive disclosure, and encoded judgment |
 | `editor-pass` | Post-build quality review that returns a lettered crit sheet of pinned, specific fixes |
