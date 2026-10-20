@@ -35,7 +35,7 @@
 | 4. IMPLEMENT | Write code following TDD | `test-driven-development` | Tests exist and pass |
 | 5. TEST | `go test ./...` | — | Zero failures |
 | 6. SIMPLIFY | `Agent(subagent_type="code-simplifier")` | `code-simplifier` agent | Staff review complete |
-| 7. CODE REVIEW | `comprehensive-code-review` — parallel correctness + safety sub-agents | Fresh sub-agents | Reviewer approves |
+| 7. CODE REVIEW | `comprehensive-code-review` — parallel correctness + safety sub-agents, once per stream; fix rounds are verified with `fix-check` | Fresh sub-agents | Reviewer approves, or `fix-check` says ready |
 | 8. SQL REVIEW | If DB touched: `Agent(subagent_type="sql-reviewer")` | `sql-optimization-patterns` skill | Reviewer approves |
 | 9. BLAST-RADIUS VERIFY | Walk the IMPACT ANALYSIS caller list; confirm each still holds. **Runs last, after every code-mutating phase** | — | Every caller verified with evidence |
 | 10. COMMIT | `git commit` | — | Commit created |
@@ -50,7 +50,7 @@
 
 - **SIMPLIFY, CODE REVIEW, and SQL REVIEW** MUST use fresh sub-agents via the Agent tool — no shared context
 - NEVER review your own code — you wrote it, you cannot objectively review it
-- If a reviewer finds CRITICAL/IMPORTANT issues: fix, re-run tests, re-review with a fresh agent
+- If a reviewer finds CRITICAL/IMPORTANT issues: fix, re-run tests, then verify the fixes with `fix-check`, never a second comprehensive review. `fix-check` walks each original finding against the fix diff and reports FIXED / PARTIAL / NOT FIXED with `file:line` and the covering test. Send back only the rows that are not FIXED, and run it again on the next fix
 - Only proceed after explicit reviewer approval
 - **Plan tasks give signatures, test cases and gates, not full function bodies.** Code is written once, during IMPLEMENT, where the tests and CODE REVIEW check it. Write literal code in a plan only where the text itself is the decision: a regex, a config or lint rule, a migration, a data format
 - **A plan review (`plan-review`) reads; it never builds the plan.** It checks premises, callers and design against the code, and spikes only a load-bearing premise it cannot settle by reading, sized as *Prove It, Don't Assume It* says. Measured: a review that built a plan end to end cost ~161k tokens and found two issues the build's first gate would have shown within a minute
