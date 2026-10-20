@@ -28,141 +28,97 @@
 
 ## Development Lifecycle (MASTER WORKFLOW)
 
-**MANDATORY: Create a todo list using TaskCreate for every non-trivial task.**
+**Every code change follows this workflow. A one-line fix follows the same lifecycle as a major feature.**
 
-| Phase | Action | Skill/Tool | Gate |
-|-------|--------|------------|------|
-| 1. RECEIVE | Understand task, create todo list | `TaskCreate` | Todo list exists |
-| 2. PLAN | Write implementation plan | `superpowers:writing-plans` | Plan document created |
-| 3. IMPLEMENT | Write code following TDD | `superpowers:test-driven-development` | Tests exist and pass |
-| 4. TEST | `{{TEST_COMMAND}}` + `{{TYPECHECK_COMMAND}}` | — | Zero failures |
-| 5. SIMPLIFY | `Task(subagent_type="code-simplifier")` | `code-simplifier` agent | Staff review complete |
-| 6. REVIEW | `comprehensive-code-review` skill — dispatches 5 parallel sub-agents (code quality, pattern consistency, SQL, security, simplification) | Fresh sub-agents | Findings documented by severity |
-| 7. FIX FINDINGS | Address all CRITICAL findings; address or explicitly defer IMPORTANT findings (tracking issue + user approval); track MINOR findings | — | All CRITICAL + IMPORTANT resolved; MINOR tracked |
-| 8. COMMIT | `git commit` | — | Commit created |
-| 9. PUSH | Push feature branch; `gh pr create` with `Closes #N` if `gh` available | — | Branch pushed (PR created if `gh`) |
-| 10. VERIFY CI | If `gh`: `gh run list`, autonomous PR review, auto-merge when green | — | CI green (if applicable) |
+| Phase | Action | Gate |
+|-------|--------|------|
+| 1. RECEIVE | Understand the task; create a todo list (`TaskCreate`) for anything non-trivial | Task understood |
+| 2. TRACE | Trace the call chain, up and down, of every symbol the change touches. See **Trace Before You Touch** | Chain traced; affected and untested callers identified |
+| 3. PLAN | Write the plan with `writing-plans`. Never commit it | Plan exists and has an Affected Callers section |
+| 3½. PLAN REVIEW | `plan-review` in a **fresh** sub-agent, every plan, once. Fix every CRITICAL and IMPORTANT before implementing | Review run; findings fixed |
+| 4. IMPLEMENT | TDD (`test-driven-development`): RED → GREEN → REFACTOR. Run the reuse check first (**Reuse Before You Build**) | Fast tests exist and pass; nothing duplicates an existing symbol |
+| 5. TEST | `{{TEST_COMMAND}}`, fast unit tests for the affected code only. Never run E2E suites or multi-build `pretest` steps between changes | Zero failures |
+| 6. LINT | The project's typecheck and linter (see Quick Reference and the language section) | Zero offenses |
+| 7. SIMPLIFY | `code-simplifier` agent; implement only approved simplifications, then re-run tests | Simplified |
+| 8. CODE REVIEW | `comprehensive-code-review` in fresh, read-only sub-agents (code quality, patterns, SQL, security, simplification). One review per stream | Review passes |
+| 9. FIX FINDINGS | Fix every CRITICAL and IMPORTANT. Verify the fixes with `fix-check`, never a second comprehensive review | `fix-check` verdict: ready |
+| 10. BLAST-RADIUS VERIFY | Walk the Affected Callers list, plus the callers of every symbol the final diff touches that the plan did not list. **Runs last, after every code-mutating phase** | Every caller verified with evidence |
+| 11. COMMIT | `git commit`, conventional format | Commit created |
+| 12. PUSH + PR | Push the branch and open the PR (`pull-request-description`) in the same pass. **Never merge**: merging is the user's decision | PR URL reported |
 
 **Exceptions that skip planning:** pure doc updates, `git revert`.
 
-### Mandatory Phase Rules
+### Phase Rules
 
-**All phases are MANDATORY. No exceptions. No skipping "simple" changes.**
+- Never skip phases for "simple" changes. **No source file is edited before TRACE and PLAN have run**, including "while I'm in here" fixes.
+- **Reviews run in fresh sub-agents with no shared context.** Never review your own code, and never review a plan in the context that wrote it: shared context makes a reviewer rubber-stamp what it watched being built.
+- **A plan review reads; it never builds the plan.** It checks premises, callers and design against the code, and spikes only a load-bearing premise it cannot settle by reading. Measured: a review that built a plan end to end cost ~161k tokens and found two issues the first gate would have shown within a minute. It runs once; never send a plan back for a second round.
+- **After a fix round, run `fix-check`, not another review.** It walks each original finding against the fix diff and reports FIXED / PARTIAL / NOT FIXED with `file:line` and the covering test. A fresh full review after every fix round costs a full review each time and keeps surfacing new, smaller findings, so the loop never closes. Send back only the rows that are not FIXED, and run `fix-check` again on the next fix.
+- **Any phase that mutates code re-opens BLAST-RADIUS VERIFY.** SIMPLIFY edits, and fix rounds edit. Re-running tests is not enough: a fix that alters a return contract regresses exactly the callers recorded as having no test.
+- **Multi-phase plans:** re-run `plan-review` on the remaining tasks at each phase boundary. Tasks planned against a codebase that no longer exists drift, and a drifted task's gate usually still passes.
 
-- **Phases 5, 6** MUST use `Task` tool or `Agent` tool (fresh sub-agents, no shared context)
-- NEVER review your own code — you wrote it, you cannot objectively review it
-- If reviewer finds CRITICAL/IMPORTANT issues: fix, re-run tests, re-review
-- Only proceed after explicit reviewer approval
+### Review Findings Are Mandatory Fixes
 
-**Code simplifier rules:**
-- Run after tests pass (Phase 4), before review (Phase 6)
-- Only implement APPROVED simplifications
-- Re-run tests after applying changes
+- **CRITICAL and IMPORTANT:** fix every one, from every source (review agents, CI bots, human reviewers, self-review). Never accept one as "low risk" without the user's explicit permission. A finding you believe is factually wrong: explain why to the user rather than skipping it.
+- **MINOR:** fix it when the fix is trivial (wording, a stale reference, a one-line correction). When it needs real work, surface it to the user with the reviewer's evidence.
+- **Pre-existing issues in code you touch:** fix them; you own that code path.
+- **Never silently drop follow-up work.** Anything not fixed in this branch is surfaced to the user and tracked (issue tracker if available, else the todo list).
 
-**Review rules (Phase 6 — `comprehensive-code-review`):**
-- Invoke the `comprehensive-code-review` skill — it orchestrates all review dimensions in parallel
-- Covers: code quality, pattern consistency, SQL performance, security (OWASP), and simplification
-- SQL sub-agent is automatically dispatched if DB-touching files changed; skipped otherwise
-- **CRITICAL findings:** MUST be fixed before commit — hard block on Phase 7. Re-run tests and re-review after fixes.
-- **IMPORTANT findings:** MUST be addressed before commit — fix the code, or (if scope-expanding) open a tracking issue AND get explicit user approval to defer. Cannot silently skip.
-- **MINOR findings:** address if straightforward; otherwise open a tracking issue. Do not block commit.
-- Max 3 review cycles before escalating to user
-
-**Pre-existing issues found during review:**
-- If reviewer flags a pre-existing issue in code you're touching, **fix it** — you own that code path
-- Only exception: issue is in completely unrelated code your changes don't touch
-
-**Unaddressed work MUST be tracked:**
-- Any improvement, follow-up, or deferred fix identified during work (code simplifier suggestions, reviewer findings, TODOs) that is NOT addressed in the current branch MUST be tracked
-- If `gh` is available: file as a GitHub issue. Otherwise: add to the todo list or note in a `TODO.md`
-- This includes: approved simplifications deferred to a follow-up, pre-existing issues in unrelated code, scope-expanding suggestions
-- Never silently drop findings — if you're not fixing it now, track it
+**Code-scanning false positives** (CodeQL, SAST bots): verify each finding against the code. A real finding is fixed or surfaced, never dismissed. A confirmed false positive gets a reply on its comment with one or two sentences on why there is no risk; tell the user which ones you marked.
 
 ---
 
-## Branching and Sub-Agents
+## Plans
 
-### Branch Protection
+**Every code change gets a written plan, including one-line fixes.** It records what was considered, and BLAST-RADIUS VERIFY consumes its Affected Callers section.
 
-- **Never commit to main.** All changes go through feature branches (and PRs when `gh` is available).
-- Branch naming: `<type>/<short-description>` (e.g., `feat/user-profiles`, `fix/login-redirect`)
+- **Never commit a plan.** Add its path to `.git/info/exclude` if it is not ignored already.
+- **Sections:** Goal · **Affected Callers** · Approach · step-by-step TDD tasks with exact file paths · Risks · Rollback · Out of scope.
+- **Tasks give signatures, test cases and gates, not function bodies.** Code is written once, in IMPLEMENT, where tests and review check it. Write literal code only where the text is the decision: a regex, a lint rule, a migration, a data format.
+- **Affected Callers** records only callers the change breaks (with the consequence) plus callers it does not break that have no test. It is not an inventory of everything touched.
+- **Keep the plan current, in every phase.** When a task finishes, a sub-agent reports a flawed assumption, a measurement settles a number, a review finding changes a task, or the scope changes, edit the plan in the same turn: a Status table, "as built" notes, measured numbers, and each departure with its reason. The handoff summarises; the plan is the working truth.
 
-### Sub-Agent Workflow
+### Multi-Phase Work: Brief In, Handoff Out
 
-**The orchestrating agent NEVER writes code.** It coordinates:
-- Branch management, plan management, task dispatch, and (optionally) PR creation
-- Every implementation task gets a fresh sub-agent pointed at the feature branch
-- Use `superpowers:subagent-driven-development`
-- Independent tasks can run in parallel via `superpowers:dispatching-parallel-agents`
+A plan whose phases all run in one context drifts: by phase 3 it carries stale output from phase 1. Run each stream in a fresh sub-agent and carry state in files:
 
-**How it works (without worktrees):**
+1. **Model tiers.** The orchestrator coordinates, traces, verifies gates in its own shell, dispatches reviews and commits; it does not write implementation code and does not halt between planned streams. Implementation sub-agents (`implementer`) use a mid-tier model, never the smallest one for multi-file code. Planning and review sub-agents use the strongest model at high effort. Group work into 4–5 cohesive streams, not 10+ micro-tasks.
+2. **Shared context file.** Before dispatching a stream, write the pre-traced material (file snippets with line ranges, contracts, call sites, requirements) to `/tmp/subagent-context-<project>-<stream>.md`. Every sub-agent in the stream reads it first and does not re-search what it covers; other files are read in 600–800 line chunks. Delete it once the stream's review passes.
+3. **Every phase agent ends with a 4-section handoff:** Changes Made (each with its covering test) · Flawed Assumptions (what the plan claimed vs what the code is) · Carried Risks · Verification Evidence (exact commands and output).
+4. **Verify the gate yourself,** append the passing output and the diff to the context file, then dispatch read-only reviewers that never run tests or builds.
 
-1. Create a feature branch from main: `git checkout -b <type>/<short-description>`
-2. Dispatch sub-agents to implement tasks on the current branch
-3. Sub-agents write code, run tests, and commit to the feature branch
-4. After all tasks complete, push the branch and create a PR (if `gh` is available)
-
-Sub-agents work in the current working directory on the active feature branch. No worktrees are needed — the orchestrator simply checks out the feature branch and dispatches work.
-
-### PRs (when `gh` is available)
-
-- **Always use the `pull-request-description` skill when creating or updating a PR.** This is mandatory, no exceptions.
-- Use `Closes #N` (not Fixes/Resolves) in PR body to auto-close issues
-- Include `Refs #N` in commit message bodies
+**The 45-turn boundary (`baton-pass`).** At turn 40–45 of orchestrating multi-step work, or when the user says "pass the baton", write the 4-section snapshot the skill describes and hand the next step to a fresh sub-agent with the snapshot as its brief. It is a brief, not a handoff; regular handoffs are saved as usual. Conversational work (decisions, synthesis, anything in the user's voice) stays in-session.
 
 ---
 
-## Codebase Graph (codebase-memory-mcp)
+## Understanding the Code
 
-If the codebase-memory-mcp server is configured, use these tools proactively — don't wait to be asked.
+### Prove It, Don't Assume It
 
-| Context | Tool | Purpose |
-|---------|------|---------|
-| Phase 2 (PLAN) | `get_architecture` | Understand affected areas before planning |
-| Phase 6 (REVIEW) | `search_graph` | Check impact radius. Callers come from grep — see the caveat below; SQL callers traced by SQL sub-agent |
-| Debugging (`systematic-debugging`) | `search_graph`, `trace_call_path` | Understand call chains before guessing — corroborate any caller claim with grep |
-| Searching for relationships | `search_graph` | Prefer over text grep when searching for function/class relationships |
+Reasoning from memory about runtime behaviour is how wrong premises reach a plan. Settle it cheapest first: **trace it** (graph tools, call paths) → **read the source** (the installed library version, the schema, the migration) → **spike it**, last, only for runtime behaviour you cannot read.
 
-**Rules:**
-- During **debugging**, use `trace_call_path` and `search_graph` to understand the call chain before proposing fixes. Don't guess — trace. Corroborate callers with grep before acting on them.
-- During **review** (Phase 6), ALWAYS use `search_graph` to check the impact radius of changes.
-- During **planning** (Phase 2), use `get_architecture` to understand the affected areas.
-- Use `search_graph` over text grep when searching for function relationships, not just text matches.
+When you spike: use a scratch or temp directory, never the working tree. Write down the one question it answers first. Two attempts, a few minutes; if it hasn't answered, state only what you can support. **Building the whole thing is never a spike**: if proving it means rebuilding the app, booting the framework or standing up a database, abandon it.
 
-**What the graph does and does not prove.** A row proves a symbol EXISTS at that file:line. A symbol's ABSENCE proves nothing, and a zero-caller result is a prompt to grep — not a conclusion that nothing calls it. Call graphs cannot see reflection, interface dispatch, registry maps, config-driven wiring, or handler names held as strings, and in codebases built on those the graph will confidently report no callers for symbols that have them. **Never close "verify no callers are broken" on graph output alone.**
+### Search Hierarchy
 
-### Reuse Before You Build
+**Branch on the question before picking a tool.**
 
-**Before writing a new function, type, helper, or job, check whether it already exists.** Duplication caught in review is duplication someone already paid to write.
+- **Existence and shape** ("does X exist", "where is it defined") → graph and index tools first (`search_graph`, `query_graph`, `get_architecture`), then indexed code search, then Grep/Read.
+- **Reachability** ("who calls this", "is this dead", "what breaks if I change it") → **grep first.** A call graph cannot see reflection, interface dispatch, registry maps, config-driven wiring, `send`/`constantize`, or handler names held as strings. A zero-caller answer from the graph is a prompt to grep, never a conclusion.
 
-- Search the **name** — `search_graph(name_pattern="<stem>")`.
-- Search the **body**, because a duplicate is usually named differently. Pull distinctive tokens out of what you are about to write — constants, called functions, type names — and search those too. A new `AddTwoBusinessDays` is found by its name; an existing `skipWeekend` that references a weekday table is only found by the body token.
-- Count it — `query_graph("MATCH (m:Method) WHERE m.name CONTAINS '<stem>' RETURN m.name AS name, count(*) AS n ORDER BY n DESC")`. Read the top rows — the count alone means nothing, because a common verb matches every class of its kind. Skip framework verbs and single short words; a stem worth counting is specific and multi-word.
-- **Read the candidate's body before reusing or rejecting it.** A matching name is a coincidence until you have read the code.
+A row from the graph proves a symbol exists at that `file:line`; its absence proves nothing. Any negative or exhaustive claim ("nothing else calls this") must name the scopes it checked. If the index offers a coverage check, run it on every path you cite.
 
-Absence of a name is not absence of the capability. "I found nothing" is only credible with the queries attached.
+### Trace Before You Touch
 
-### Match the Pattern When You Do Build
+**The dominant failure is a locally-correct change with unconsidered downstream effects.** Before modifying any function, type, endpoint or schema:
 
-Reuse says don't write it. This says: when you must write it, make it look like the code next to it. New code that solves an old problem a new way is the most common defect in AI-assisted changes, and it passes tests every time.
+- **Upward:** every caller, out to real entry points (handlers, jobs, CLI commands, schedulers, public APIs, other services reading the same table). What does each do with the return value: shape, nil/empty case, ordering, errors, side effects?
+- **Downward:** everything it calls and its side effects: DB writes, HTTP calls, queue enqueues, cache writes, file IO; which are inside a transaction; what raises and who catches it.
+- **Invisible edges:** grep deliberately for reflection, string-named dispatch, serializers, callbacks and config-driven wiring, every time.
+- **Contract:** state current behaviour precisely, which parts the change alters, and which callers that affects.
+- **Coverage:** which affected callers have tests, and which have none. A caller with no test is an Affected Callers row, not something to ignore.
 
-**Find the canonical exemplar first — one file, not a survey.** The most recently changed sibling in the same directory is the pattern, because it is the one that most recently passed review:
-
-```bash
-# Exclude the files you are changing: yours is by construction the newest in
-# the directory, so without this you rank the change as its own gold standard.
-for f in "$(dirname "$FILE")"/*.<ext>; do
-  [ "$f" = "$FILE" ] && continue
-  echo "$(git log -1 --format=%ad --date=short -- "$f") $f"
-done | sort -r | head -3
-```
-
-Match it on **naming, structure, error handling, logging, dependency wiring, and the shape and location of its tests.** Then confirm the family agrees with `search_graph(file_pattern=...)` and `search_graph(qn_pattern=...)`.
-
-- **Cite the exemplar in the plan.** "Modelled on `<path>:<line>`" is checkable; "follows codebase conventions" is not.
-- **Where the neighbours disagree with each other, the newest one wins** — and say that you found disagreement, because an inconsistent directory is itself worth reporting.
-- **A convention you can quote from the repo's own docs outranks one you inferred from code.**
-- **Diverge only deliberately, and say so in the PR with the reason.** An undocumented divergence reads to every future reader as an accident.
+"I read the function and it looks fine" is not a trace. Record the trace commands and their scope in the plan, so a partial trace is distinguishable from a complete one. This applies to debugging too: a fix aimed at a symptom without tracing the chain that produced it is a guess.
 
 ### Pre-Work: Read the Repo's Written Conventions
 
@@ -173,7 +129,58 @@ ls docs/adr/*.md 2>/dev/null | head -60
 ls docs/good-practices.md docs/*GUIDELINES*.md docs/*PATTERNS*.md CONTRIBUTING.md docs/CONTRIBUTING.md 2>/dev/null
 ```
 
-Read `CONTRIBUTING.md` for branching, testing and deployment; the `docs/adr/` titles, then the two or three that bear on the change; and any guideline document in full. These are far more specific than anything you would infer from reading code, and a convention you can quote outranks one you inferred.
+Read `CONTRIBUTING.md` for branching, testing and deployment; the `docs/adr/` titles, then the two or three that bear on the change; and any guideline document in full. A convention you can quote outranks one you inferred from code.
+
+### Reuse Before You Build
+
+**Before writing a new function, type, helper, or job, check whether it already exists.** Duplication caught in review is duplication someone already paid to write.
+
+- Search the **name**: `search_graph(name_pattern="<stem>")`.
+- Search the **body**, because a duplicate is usually named differently. Pull distinctive tokens out of what you are about to write (constants, called functions, type names) and search those too. A new `AddTwoBusinessDays` is found by its name; an existing `skipWeekend` that references a weekday table is only found by the body token.
+- Count it: `query_graph("MATCH (m:Method) WHERE m.name CONTAINS '<stem>' RETURN m.name AS name, count(*) AS n ORDER BY n DESC")`. Read the top rows. Skip framework verbs and single short words; a stem worth counting is specific and multi-word.
+- **Read the candidate's body before reusing or rejecting it.** A matching name is a coincidence until you have read the code.
+
+Absence of a name is not absence of the capability. "I found nothing" is only credible with the queries attached.
+
+### Match the Pattern When You Do Build
+
+New code that solves an old problem a new way is the most common defect in AI-assisted changes, and it passes tests every time.
+
+**Find the canonical exemplar first — one file, not a survey.** The most recently changed sibling in the same directory is the pattern, because it most recently passed review:
+
+```bash
+# Exclude the files you are changing: yours is by construction the newest in
+# the directory, so without this you rank the change as its own gold standard.
+for f in "$(dirname "$FILE")"/*.<ext>; do
+  [ "$f" = "$FILE" ] && continue
+  echo "$(git log -1 --format=%ad --date=short -- "$f") $f"
+done | sort -r | head -3
+```
+
+Match it on **naming, structure, error handling, logging, dependency wiring, and the shape and location of its tests.**
+
+- **Cite the exemplar in the plan.** "Modelled on `<path>:<line>`" is checkable; "follows codebase conventions" is not.
+- **Where the neighbours disagree, the newest one wins**, and say that you found disagreement.
+- **Diverge only deliberately, and say so in the PR with the reason.**
+
+---
+
+## Code Comments — Hard Rule
+
+**Write no code comments. Ask the user before adding any, every time.**
+
+If one seems warranted, stop and ask, saying what a reader would get wrong without it. The bar: a competent engineer would reach a *wrong conclusion* without it. "It's helpful" or "it explains the why" does not clear it. Rename the thing, extract a function, or write a test that states the case; all three age with the code, and a comment does not.
+
+Never write: what the code does · how the language or library works · your reasoning or rejected alternatives (that belongs in the commit or PR) · a ticket reference. Leave existing comments alone unless the change makes them wrong.
+
+---
+
+## Branches, Commits and PRs
+
+- **Never commit to main.** Check the branch before implementing; if on `main`/`master`, stop and say so. Branch naming: `<type>/<short-description>` (e.g. `feat/user-profiles`, `fix/login-redirect`).
+- **Commits:** conventional commit format; reference the issue in the body when there is one.
+- **PRs:** always write them with `pull-request-description`. Use `Closes #N` to link an issue. Finishing a change means pushing the branch and opening the PR; report its URL. **Never merge or enable auto-merge**; that is the user's decision. Outstanding manual gates go in the PR body as an unchecked checklist instead of holding the PR back. If push or PR creation fails, say so with the error.
+- **Public repos:** keep real names, personal data and private content out of branches, commits and PR bodies.
 
 ---
 
@@ -181,13 +188,35 @@ Read `CONTRIBUTING.md` for branching, testing and deployment; the `docs/adr/` ti
 
 | Trigger | Skill |
 |---------|-------|
-| Settling a routing question — is a cheaper model actually cheaper, is it safe to batch these, what does a dispatch cost | `future-model-router` — the measurements. **Consulted, not per-turn**; the every-turn habits are in the delegation block above |
+| Settling a routing question: is a cheaper model actually cheaper, is it safe to batch, what does a dispatch cost | `future-model-router`, **consulted, not per-turn**; the every-turn habits are in the delegation block above |
+| Before planning new or user-facing work (feature, product, page) | `craftsmans-wisdom`, then `future-grilling` if the user wants the details stress-tested |
+| New feature or significant work, before planning | `write-a-prd` |
+| Any code change (PLAN) | `writing-plans` |
+| Every plan, before implementing | `plan-review`, in a fresh sub-agent |
+| Three or more questions for the user | `grilling-page`: one page with each question's context, options and a recommendation. One or two questions: ask in chat |
 | Bug investigation | `systematic-debugging` |
-| New feature | `superpowers:test-driven-development` (RED→GREEN→REFACTOR) |
-| Database queries/mutations changed | `sql-optimization-patterns` + `sql-reviewer` agent |
-| Code review (Phase 6+7), reviewing a PR, or GitHub code review requested | `comprehensive-code-review` — orchestrates parallel sub-agents for code quality, patterns, SQL, security, and simplification |
-| Creating or updating a pull request | `pull-request-description` — structured summary, background, test plan, rollback plan. **Mandatory for both new PRs and PR description updates.** |
-| About to claim completion | `verification-before-completion` |
+| New feature | `test-driven-development` (RED → GREEN → REFACTOR) |
+| Running a multi-stream plan through sub-agents | `subagent-driven-development` |
+| Database queries or mutations changed | `sql-optimization-patterns` + `sql-reviewer` agent |
+| Code review (phase 8), reviewing a PR | `comprehensive-code-review` |
+| After a review's fix round | `fix-check` |
+| Creating or updating a pull request | `pull-request-description`, **mandatory for new PRs and description updates** |
+| Turn 40–45 of orchestration, or "pass the baton" | `baton-pass` |
+
+Before acting on a task, check whether an installed skill applies and use it.
+
+---
+
+## Verification Before Completion (Always On)
+
+**Evidence before claims.** Never say something is done, fixed, passing or working without having run the check in this turn and read its output:
+
+1. Identify the command that proves it.
+2. Run it fresh and complete.
+3. Read the full output and the exit code.
+4. Only then claim it, with the evidence.
+
+Don't trust a sub-agent's "success": verify the diff and the output yourself. Stop and verify at the red flags: "should work", "probably", "looks correct", or "Done!" before anything has run, and committing or opening a PR without a green check.
 
 ---
 
@@ -226,15 +255,16 @@ Concise does not mean vague. Keep the details that let the user act or check you
 
 ---
 
-## Jira Integration (when Atlassian MCP is configured)
+## Issue Tracker
 
-### Posting Comments
+- **Ask before creating a ticket**, and before any tracker write (comments, edits, transitions). Reads are free.
+- Suggest follow-up work as a ticket and wait for confirmation; don't file automatically.
 
-When posting comments to Jira via `addCommentToJiraIssue`, you **MUST** set `contentFormat: "markdown"`. Write all comment bodies in standard markdown. Omitting `contentFormat` causes the API to default to ADF, which renders markdown as broken plain text.
+### Jira (when the Atlassian MCP is configured)
 
-### acli Fallback
+When posting comments via `addCommentToJiraIssue`, you **MUST** set `contentFormat: "markdown"`. Omitting it makes the API default to ADF, which renders markdown as broken plain text.
 
-When an operation is not available via the Atlassian MCP server (e.g., deleting comments, bulk edits), use the `acli` CLI instead:
+When the MCP lacks an operation (deleting comments, bulk edits), use the `acli` CLI:
 
 ```bash
 # Delete a comment
@@ -244,21 +274,17 @@ acli jira workitem comment delete --key PROJ-1234 --id 12345
 acli jira workitem comment list --key PROJ-1234
 ```
 
-Always prefer MCP tools for reads and writes. Use `acli` only when MCP lacks the capability.
+Prefer MCP tools for reads and writes. Use `acli` only when MCP lacks the capability.
 
 ---
 
 ## Emergency Procedures
 
-**CI fails 3+ times:** Stop pushing. Run `{{BUILD_COMMAND}}` locally. If still failing, branch from last good state + cherry-pick. If blocked >30min, ask user.
+**CI fails 3+ times:** Stop pushing. Run `{{BUILD_COMMAND}}` locally. If still failing, branch from the last good state and cherry-pick. If blocked >30 min, ask the user.
 
-**Task blocked:** Document blocker, update task status, ask user with options A/B/C. Never guess.
+**Task blocked:** document the blocker, update the task status, and ask the user with options A/B/C. Never guess.
 
 ---
-
-## Commits
-
-- Conventional commit format
 
 ## Quick Reference
 
