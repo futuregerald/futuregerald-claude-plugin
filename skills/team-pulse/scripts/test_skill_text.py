@@ -401,3 +401,13 @@ def test_forecast_report_format_does_not_assume_markdown_always_exists():
     text = read(SKILL / "references" / "forecast" / "report-format.md")
     assert "every ticket key, PR number and file path in the markdown report is a link" not in text.casefold()
     assert "when written" in text
+
+
+def test_epic_reports_use_the_epic_key_file_name():
+    skill_text = SKILL_MD.read_text()
+    format_text = (SKILL / "references" / "report-format.md").read_text()
+    assert "pulse-<epic-key>-<END_DATE>.html" in skill_text
+    assert "pulse-<epic-key>" in format_text
+    for text in (skill_text, format_text):
+        assert not re.search(r"is written \(`team-pulse-<END_DATE>\.md`, ready", text)
+        assert not re.search(r"epic[^\n]*saves? as `team-pulse-<END_DATE>", text)
