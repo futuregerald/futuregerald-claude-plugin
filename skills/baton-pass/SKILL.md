@@ -1,13 +1,13 @@
 ---
 name: baton-pass
-description: Pass the baton with a deterministic ACTIVE_CONTEXT.md snapshot so fresh context picks up the work. MANDATORY in Antigravity and Gemini at turn 40-45 or the ~160k-250k token limit, before auto-compaction hits. In Claude Code, use it at turn 40-45 of a long orchestration to hand the next pending step to a fresh sub-agent (with subagent-driven-development), or when asked to 'pass the baton', 'baton pass', 'save active context', 'snapshot context', or 'continue from active context'. Not a replacement for regular handoffs.
+description: Pass the baton with a deterministic ACTIVE_CONTEXT.md snapshot so fresh context picks up the work. MANDATORY in Antigravity and Gemini at turn 40-45 or the ~160k-250k token limit, before auto-compaction hits, or when asked to 'pass the baton', 'baton pass', 'save active context', 'snapshot context', or 'continue from active context'. Antigravity and Gemini only: never used in Claude Code. Not a replacement for regular handoffs.
 author: Gerald Onyango
 tags: [workflow, context, tokens, handoff, architecture]
 ---
 
 # Baton Pass
 
-The Baton Pass is a deterministic state snapshot that transfers execution context to fresh context: a new session in Antigravity and Gemini, a new sub-agent in Claude Code. It prevents auto-compaction amnesia and keeps the working context small.
+The Baton Pass is a deterministic state snapshot that transfers execution context to a fresh session in Antigravity and Gemini. It prevents auto-compaction amnesia and keeps the working context small.
 
 ## Not a Handoff
 
@@ -32,15 +32,12 @@ Antigravity / Gemini:
   Under 30 turns with low token usage?                         -> Continue in-session
 
 Claude Code:
-  Turn 40-45 while orchestrating multi-step work?              -> Snapshot, hand the next step to a fresh sub-agent
-  User said 'pass the baton' or 'snapshot context'?            -> Snapshot, hand the next step to a fresh sub-agent
-  Conversational work (decisions, synthesis, review with user)? -> Continue in-session; compaction hooks cover it
-  Token count alone?                                           -> Not a trigger (see below)
+  Any trigger                                                  -> Not used; continue in-session
 ```
 
 In Antigravity and Gemini, never let a session run into auto-compaction: it compacts early, drops edge-case constraints mid-generation, and burns context re-reading files.
 
-Claude Code is different. Its context window is much larger (up to 1M), compaction comes late, and the model cannot see its own token count, so a token threshold would force a restart while most of the window is still usable. Long orchestrations still drift as stale tool output piles up, which is what the turn trigger catches. Work that cannot be delegated (decisions, synthesis, anything in the user's voice) stays in-session.
+Claude Code does not use this skill. Its context window is much larger (up to 1M), compaction comes late, and the model cannot see its own token count, so a snapshot-and-restart interrupts work while most of the window is still usable.
 
 ## The Canonical 4-Section Schema
 
@@ -75,19 +72,11 @@ git rev-parse --path-format=absolute --git-common-dir | sed 's|/\.git$||' | xarg
 4. Output ready-to-paste prompt for the user:
    `Ingest ~/.gemini/handoffs/<project-key>/<YYYY-MM-DD-HHMMSS>-<slug>-ACTIVE_CONTEXT.md and continue from Pending Steps.`
 
-### 2. Claude Code
+### 2. Claude Code: compaction checkpoint only
 
-Claude Code passes the baton to a fresh sub-agent, not a fresh session. The orchestrator keeps its conversation with the user; the heavy work moves out of its context.
+Claude Code never writes an `ACTIVE_CONTEXT.md` and never hands work off through this skill. The one piece it keeps is the compaction checkpoint script below, which runs from hooks, not from the model.
 
-1. Write the snapshot (project key as above):
-   `~/.claude/baton-pass/<project-key>/<YYYY-MM-DD-HHMMSS>-<branch-or-topic-slug>-ACTIVE_CONTEXT.md`
-   Never under `~/.claude/handoffs/`; that store belongs to regular handoffs.
-2. Hand Section 3's next step to a fresh sub-agent using `subagent-driven-development`. The snapshot is its brief: derive the stream context file from Sections 1, 3 and 4, and include Section 4 verbatim.
-3. Fold the sub-agent's 4-section handoff back in, after every return and before the next dispatch. Verify its gate yourself, then update the same file in place: correct Section 1 from its Changes Made and Flawed Assumptions, record results in Section 2, advance Section 3, add new traps to Section 4, and set `Commit:` to the new HEAD.
-4. Run `/clear` only when the user asks. Then give the resume prompt:
-   `Ingest ~/.claude/baton-pass/<project-key>/<YYYY-MM-DD-HHMMSS>-<branch-or-topic-slug>-ACTIVE_CONTEXT.md and continue from Pending Steps.`
-
-#### Compaction safety net (hooks)
+#### Compaction checkpoint (hooks)
 
 `scripts/compact_checkpoint.py` runs on two Claude Code hook events:
 
@@ -103,12 +92,9 @@ The first entry goes in `PreCompact`, the second in `SessionStart`:
 {"matcher": "compact", "hooks": [{"type": "command", "timeout": 30, "command": "f=\"$HOME/.claude/skills/baton-pass/scripts/compact_checkpoint.py\"; [ -f \"$f\" ] && python3 \"$f\"; exit 0"}]}
 ```
 
-#### Cost
-A long session does not rewrite the prompt cache; each turn writes only its new part. What grows is the cost of reading the cache: every turn re-reads the whole context at about a tenth of the input price. Moving heavy work into sub-agents keeps the orchestrator's context, and so that per-turn cost, small.
+### 3. Subagent Delegation in Antigravity and Gemini (Brief In, Handoff Out)
 
-### 3. Subagent Delegation (Brief In, Handoff Out)
-
-On any platform, a worker sub-agent gets its brief from Sections 1, 3 and 4 and returns a handoff with Changes Made, Flawed Assumptions, Carried Risks and Verification Evidence. The orchestrator verifies and folds it back exactly as in Claude Code steps 2 and 3 above.
+A worker sub-agent gets its brief from Sections 1, 3 and 4 and returns a handoff with Changes Made, Flawed Assumptions, Carried Risks and Verification Evidence. The orchestrator verifies its gate, then updates the snapshot in place: corrects Section 1 from Changes Made and Flawed Assumptions, records results in Section 2, advances Section 3, adds new traps to Section 4, and sets `Commit:` to the new HEAD.
 
 ## Turn 1 Rehydration Protocol
 
