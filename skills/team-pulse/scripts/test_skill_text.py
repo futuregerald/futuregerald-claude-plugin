@@ -315,3 +315,19 @@ def test_step_4_renders_with_force():
 
 def test_step_4_keeps_confluence_and_slack_adaptation():
     assert "Confluence or Slack" in _step_4()
+
+
+def test_report_format_says_html_only_by_default():
+    text = read(SKILL / "references" / "report-format.md")
+    assert "markdown only" in text.casefold()
+    assert "Every team pulse run generates" not in text
+
+
+def test_forecast_has_one_deliverable_by_default():
+    method = read(SKILL / "references" / "forecast" / "method.md")
+    report_format = read(SKILL / "references" / "forecast" / "report-format.md")
+    for text in (method, report_format):
+        for phrase in ("exactly two files", "two files", "Two deliverables"):
+            assert phrase.casefold() not in text.casefold(), phrase
+    phase_7 = method[method.index("## Phase 7"):]
+    assert "only when the user asks" in phase_7 and "markdown" in phase_7.casefold()

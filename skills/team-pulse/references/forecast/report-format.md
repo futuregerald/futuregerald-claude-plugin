@@ -1,7 +1,8 @@
 # Report format
 
-Two files, same numbers, generated from one source so they cannot drift: a Markdown report and a
-single HTML page. Nothing else — no spreadsheet, no manifest, no diagram.
+One HTML page is the deliverable. A Markdown report with the same numbers is written only when the
+user asks, generated from the same source so the two cannot drift. Nothing else — no spreadsheet,
+no manifest, no diagram.
 
 ## One template, sections driven by the question
 
@@ -265,7 +266,7 @@ second time.
 
 ## The HTML page — a primary deliverable
 
-**This is the artefact people actually read.** Generate it, and the Markdown, **from the same data
+**This is the artefact people actually read.** Generate it, and the Markdown when asked for, **from the same data
 structure in one script** — never hand-built, and never one generated from the other, because two
 copies of the same numbers diverge and the one in the room is the stale one.
 
@@ -290,12 +291,12 @@ No diagram.
 
 ## Handing it over
 
-**Two deliverables: the Markdown report and the HTML page** (styled from `assets/forecast.html`). Everything else — the shared brief, the baseline,
+**One deliverable: the HTML page** (styled from `assets/forecast.html`); the Markdown report only when the user asks. Everything else — the shared brief, the baseline,
 the per-agent findings, the manifest — lives in `research/` and is named once,
 as a directory, not file by file. A virtualenv belongs in the scratchpad and never in the output
-directory. A caller who opens the folder should see the two things they asked for.
+directory. A caller who opens the folder should see the thing they asked for.
 
-Give clickable file links for both artefacts and the research directory. Lead the chat response with
+Give clickable file links for the deliverable and the research directory. Lead the chat response with
 section 1 — what changed — then the headline, then the open questions. Everything else is in the
 files; do not re-narrate it in chat.
 
