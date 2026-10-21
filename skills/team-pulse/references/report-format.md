@@ -190,7 +190,7 @@ questions to ask have their own sections. See "Bundled 1:1 Templates".}
 
 ### Fallback Template: `assets/template.md`
 
-Used only when pulsed is missing and the user asked for markdown. Populate `assets/template.md` by replacing its placeholders:
+Used only when pulsed is missing; the fallback writes HTML only, so this markdown template is not filled on that path. Populate `assets/template.md` by replacing its placeholders:
 
 | Placeholder | Holds |
 |---|---|
@@ -247,11 +247,11 @@ order, and the HTML page mirrors the markdown:
 Scorecard (this week) → 01 Wins to Recognise → 02 Epics → 02b Work Breakdown by Epic → 03 Open PRs
 → 04 Talking Points (then questions to ask) → 05 Bottom Line.
 
-There is no roster, person card, risk register or EM section. What those carry in a team pulse
+In the fallback template there is no roster, person card, risk register or EM section (pulsed's `pulse-1on1` renders `people` and `risks`; see `references/payload.md`). What those carry in a team pulse
 goes here instead: wins and documents the person wrote go under Wins; blockers and risks go on the
 epic they affect or into Talking Points; meeting context goes into Talking Points.
 
-Save the HTML as `team-pulse-<person-slug>-<END_DATE>.html`, and the `.md` only when the user asks (slug rule in `SKILL.md` Step 4).
+Save the HTML as `team-pulse-<person-slug>-<END_DATE>.html`, and the `.md` only when the user asks. With pulsed the slug comes from the full `one_on_one.person_name`, e.g. `team-pulse-jules-marlow-<end>.html`; the first-name-or-handle rule in `SKILL.md` Step 4 is fallback-only.
 They are **private local files**: never post a single-person report to a tracker, wiki, issue,
 chat channel or repository. The chat summary is fine.
 
@@ -259,7 +259,7 @@ chat channel or repository. The chat summary is fine.
 "this week" labels say. For any other window, change those labels to name it ("these two
 weeks").
 
-**Escape what you did not write.** In the HTML file, escape `<`, `>`, `&` and `"` in every value
+**Escape what you did not write (fallback template only).** With pulsed, follow `references/payload.md` sections 3 and 4 instead: escaping `&` into `&amp;` in a plain field fails submit. In the fallback HTML file, escape `<`, `>`, `&` and `"` in every value
 taken from GitHub, the tracker, documents or meetings (titles, descriptions, names). Only the
 markup the template asks for is markup. A PR title is text, never HTML.
 

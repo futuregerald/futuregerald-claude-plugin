@@ -468,7 +468,7 @@ Follow the format in [references/report-format.md](references/report-format.md).
 1. Run `command -v pulsed`. If it is missing, fall back: fill the bundled HTML template for the
    scope (`assets/template-1on1.html` for any single-person scope, else `assets/template.html`),
    save it as `team-pulse-<END_DATE>.html` (`team-pulse-<person-slug>-<END_DATE>.html` for a person;
-   `<person-slug>` is the first name or GitHub handle, lowercased, `a-z`, `0-9` and `-` only),
+   `<person-slug>` is the first name or GitHub handle, lowercased, `a-z`, `0-9` and `-` only; this slug rule is fallback-only, since with pulsed the file name uses the full `one_on_one.person_name`, e.g. `team-pulse-jules-marlow-<end>.html`),
    write HTML only, say "pulsed not found; rendered from the bundled template" in chat, and go to
    item 6. Never copy an earlier report as the starting point.
 2. Run `pulsed config show --json` and read `links`. It decides which URLs the payload can leave
@@ -478,9 +478,9 @@ Follow the format in [references/report-format.md](references/report-format.md).
 4. Run `pulsed report submit .updates/payload.json`; it prints the report id. On exit 2 the payload
    is invalid: fix every error path it lists and resubmit, never stripping content to pass. On exit 3
    or any other failure, stop and show the error.
-5. Run `pulsed report render <id> --force --out ~/team-pulse-reports/`; it prints the HTML path.
-   Only when the user asked for markdown, also run
-   `pulsed report render <id> --format md --force --out ~/team-pulse-reports/`.
+5. Run `pulsed report render <id> --force --out <reports-dir>/` (default `~/team-pulse-reports/`); it prints the HTML path.
+   The trailing slash is required: without it pulsed treats the path as a file. Run the markdown render only when the user asks for markdown:
+   `pulsed report render <id> --format md --force --out <reports-dir>/`.
 6. Open the HTML in the default browser (macOS / Linux, safe in headless):
 ```bash
 open "<html-path>" 2>/dev/null || xdg-open "<html-path>" 2>/dev/null || true

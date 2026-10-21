@@ -49,25 +49,30 @@ This is the one content edit allowed under section 8.
 
 ## 5. Links
 
-Run `pulsed config show --json` and read `links`. `pulsed` fills only empty URLs, and each kind needs its own base. Decide per field:
+Run `pulsed config show --json` and read `links`. `pulsed` fills only empty URLs, and only where it can compute one. Decide per field:
 
 | URL | Leave it out only when |
 |-----|------------------------|
-| Ticket URLs (`url`, `ticket_url`, `parent_url`) | `tracker_browse` is set and the key's project is in `project_keys` |
-| PR and repo URLs (`pr_url`, `repo_url`, `url` on a PR) | `code_host_org_url` is set |
-| Person URLs (`profile_url`, `lead_url`, `author_url`, `person_url`) | `person_host` is set |
+| Ticket URLs (`url`, `ticket_url`, `parent_url`, breakdown `epic_url`) | `tracker_browse` is set and the key's project is in `project_keys` |
+| `one_on_one.person_url` | Never. Always write it; `pulsed` never derives it |
+| `epics[].lead_url` | `person_host` is set and `lead` equals the handle or name of an entry in `people` or `manager`. In a 1:1, `people` holds at most the subject |
+| `prs[].author_url` | `person_host` is set and `author` is a bare handle |
+| `profile_url` on `people` and `manager` | `person_host` is set and `handle` is a bare handle |
+| `url` on a PR, and `url` in a PR's `extra` | `code_host_org_url` is set and the `repo` field names the repo |
+| Work-breakdown rows' `pr_url` and a side's `repo_url` | Never when the side uses `repos`. `pulsed` derives them from the side's `repo` only, so write them |
+| `key_urls` | Every key that appears only in a `keys` or `ticket_keys` array (`epic_lists[].items[].keys`, `dependencies[].keys`, `prs[].ticket_keys`, rows' and `still_to_do` `ticket_keys`) needs an entry in `key_urls`, unless `tracker_browse` is set and its project is in `project_keys` |
 
-In every other case write the URL. `links` is absent when nothing is configured: write every URL. A missing URL does not fail validation; it renders unlinked.
+In every other case write the URL. `links` is absent when nothing is configured: write every URL. A missing URL does not fail validation; it renders unlinked. The example payloads leave some links out on purpose; fill every URL per these rules.
 
 ## 6. Section notes
 
-`section_notes[key]` takes one of `summary`, `epics`, `breakdown`, `prs`, `people`, `risks`. In the `pulse-1on1` template it replaces the section's static description. In the `pulse` templates it is appended after it.
+`section_notes[key]` takes one of `summary`, `epics`, `breakdown`, `prs`, `people`, `risks`. In the `pulse-1on1` template it replaces the section's static description. In the non-1:1 template, `pulse.html`, it is appended after it.
 
 ## 7. Status and risk values
 
-Status: `on_track`, `needs_attention`, `at_risk`, `blocked`, `not_rated`. They map to the Assessment Scale in `SKILL.md`: On Track, Needs Attention, At Risk, Blocked; `not_rated` when there is no evidence to rate.
+Status: `on_track`, `needs_attention`, `at_risk`, `blocked`. They map to the Assessment Scale in `SKILL.md`: On Track, Needs Attention, At Risk, Blocked. `not_rated` is valid only on `people[].status` and `manager.status`, and needs a non-empty `status_label`; every other status field takes one of the four ratings.
 
-Risk bands: `p0` (critical), `p1` (high), `p2` (watch). `band_label` is the text shown on the badge.
+Risk bands: `p0` (critical), `p1` (high), `p2` (watch). `band_label` is free text shown on the badge (the examples use `Critical`, `High`, `Medium` or `P1`).
 
 ## 8. pulsed is the authority
 
@@ -75,4 +80,4 @@ Risk bands: `p0` (critical), `p1` (high), `p2` (watch). `band_label` is the text
 
 ## 9. Meta fields
 
-Leave `generated_at` out; `pulsed` fills it. Set `dashboard_path` only for the markdown render, to the HTML path `pulsed` printed.
+Leave `generated_at` out; `pulsed` fills it. Leave `dashboard_path` out.

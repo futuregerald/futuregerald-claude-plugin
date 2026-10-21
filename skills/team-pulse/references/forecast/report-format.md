@@ -245,9 +245,9 @@ unanswered. Sort by age × consequence.
 can act on; naming each ticket, what it describes, and the merged PR that deleted that code is one a
 reader can execute or reject in a minute.
 
-### Linking — every reference is clickable, in both artefacts
+### Linking — every reference is clickable, in the HTML page and the Markdown when written
 
-**Every ticket key, PR number and file path in the Markdown report is a link.** A reader who has to
+**Every ticket key, PR number and file path in the HTML page (and the Markdown, when written) is a link.** A reader who has to
 copy a key into a search box to check your claim will not check it, which defeats the point of citing
 evidence at all. Link them as you write, then verify with a pass that strips complete `[text](url)`
 links and greps the remainder for bare keys — a naive "is it linked" check will match the key
@@ -303,7 +303,7 @@ files; do not re-narrate it in chat.
 ## The HTML page: `assets/forecast.html`
 
 The page shares the pulse template's colours, type and components, so a forecast and a pulse read as
-one family. Fill its placeholders from the same data structure as the Markdown report.
+one family. Fill its placeholders from the same data structure as the Markdown report, when one is written.
 
 | Placeholder | Holds | When empty |
 |---|---|---|
