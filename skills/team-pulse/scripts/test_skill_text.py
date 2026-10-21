@@ -167,7 +167,7 @@ def test_skill_says_how_to_build_done_and_in_progress_count_queries():
     assert "AND statusCategory = Done" in step2a
 
 
-SHIPPED_TEXT_FILES = ["SKILL.md", "references/agent-prompts.md", "references/team.md", "references/report-format.md"]
+SHIPPED_TEXT_FILES = ["SKILL.md", "references/agent-prompts.md", "references/team.md", "references/report-format.md", "references/payload.md"]
 
 
 @pytest.mark.parametrize("name", SHIPPED_TEXT_FILES)
@@ -243,3 +243,161 @@ def test_report_format_names_meeting_sources_generically():
 def test_meetings_grant_includes_read_for_user_files():
     row = next(l for l in read(SKILL_MD).splitlines() if l.startswith("| Meetings | Agent C"))
     assert "`Read`" in row
+
+
+PAYLOAD_MD = SKILL / "references" / "payload.md"
+PAYLOAD_EXAMPLES = ["team", "person", "initiative"]
+
+
+@pytest.mark.parametrize("stem", PAYLOAD_EXAMPLES)
+def test_example_payloads_are_v2_and_match_their_scope(stem):
+    import json
+
+    payload = json.loads(read(SKILL / "assets" / "payloads" / f"{stem}.json"))
+    assert payload["schema_version"] == 2
+    assert payload["scope"] == stem
+    assert "generated_at" not in payload
+    assert "dashboard_path" not in payload
+
+
+def test_payload_reference_covers_plain_text_fields():
+    text = read(PAYLOAD_MD)
+    assert "&amp;" in text and "plain" in text
+
+
+def _sentences(text):
+    return re.split(r"(?<=[.!?])\s+|\n", text)
+
+
+def _section(text, heading):
+    start = text.index(heading)
+    nxt = text.find("\n## ", start + len(heading))
+    return text[start:] if nxt == -1 else text[start:nxt]
+
+
+def test_payload_reference_requires_backticking_angle_brackets():
+    section = _section(read(PAYLOAD_MD), "## 3. Prose fields")
+    assert re.search(r"backtick", section) and "<" in section
+    assert any("backtick" in s and "<" in s for s in _sentences(section))
+
+
+def test_payload_reference_names_the_links_check():
+    assert "pulsed config show --json" in read(PAYLOAD_MD)
+
+
+def test_payload_reference_states_section_notes_difference():
+    sentences = _sentences(read(PAYLOAD_MD))
+    assert any("pulse-1on1" in s and "replaces" in s for s in sentences)
+    assert any("appended" in s and "pulse." in s for s in sentences)
+
+
+def test_payload_reference_limits_not_rated_to_people():
+    sentences = _sentences(read(PAYLOAD_MD))
+    assert any(
+        "not_rated" in s and "people" in s and "status_label" in s for s in sentences
+    )
+
+
+def test_payload_reference_lists_key_urls():
+    sentences = _sentences(read(PAYLOAD_MD))
+    assert any("key_urls" in s and "ticket_keys" in s for s in sentences)
+    assert "key_urls" in _section(read(PAYLOAD_MD), "## 5. Links")
+
+
+def test_payload_reference_always_writes_person_url():
+    text = read(PAYLOAD_MD)
+    assert any(
+        "one_on_one.person_url" in line and "always write it" in line.casefold()
+        for line in text.splitlines()
+    )
+
+
+def test_payload_reference_leaves_dashboard_path_out():
+    text = read(PAYLOAD_MD)
+    assert any(
+        "dashboard_path" in s and "out" in s and "Set" not in s
+        for s in _sentences(text)
+    )
+    assert "Set `dashboard_path`" not in text
+
+
+def test_payload_reference_says_examples_leave_links_out():
+    assert any(
+        "example payloads" in s and "on purpose" in s for s in _sentences(read(PAYLOAD_MD))
+    )
+
+
+def test_examples_carry_no_real_identifiers():
+    for path in (SKILL / "assets" / "payloads").iterdir():
+        assert not re.search(r"(?i)cobalt|atlassian\.net", read(path)), path.name
+
+
+def _step_4():
+    text = read(SKILL_MD)
+    return text[text.index("## Step 4: Deliver"):text.index("## Scoping Variations")]
+
+
+def test_step_4_submits_and_renders_through_pulsed():
+    step4 = _step_4()
+    assert "pulsed report submit" in step4 and "pulsed report render" in step4
+
+
+def test_step_4_writes_markdown_only_on_request():
+    step4 = _step_4()
+    assert "--format md" in step4
+    md_lines = [line for line in step4.splitlines() if "--format md" in line]
+    assert md_lines
+    window = step4[step4.index("--format md") - 200 : step4.index("--format md") + 200]
+    assert "only when the user asked" in window or "only when the user asks" in window
+    assert "<reports-dir>/" in step4 and "trailing slash" in step4
+    assert "Save a publication-grade markdown document" not in step4
+
+
+def test_step_4_has_a_fallback_when_pulsed_is_missing():
+    assert "command -v pulsed" in _step_4()
+
+
+def test_step_4_reads_links_config():
+    assert "pulsed config show --json" in _step_4()
+
+
+def test_step_4_renders_with_force():
+    lines = [line for line in _step_4().splitlines() if "pulsed report render" in line]
+    assert lines and all("--force" in line for line in lines)
+
+
+def test_step_4_keeps_confluence_and_slack_adaptation():
+    assert "Confluence or Slack" in _step_4()
+
+
+def test_report_format_says_html_only_by_default():
+    text = read(SKILL / "references" / "report-format.md")
+    assert "markdown only" in text.casefold()
+    assert "Every team pulse run generates" not in text
+
+
+def test_forecast_has_one_deliverable_by_default():
+    method = read(SKILL / "references" / "forecast" / "method.md")
+    report_format = read(SKILL / "references" / "forecast" / "report-format.md")
+    for text in (method, report_format):
+        for phrase in ("exactly two files", "two files", "Two deliverables"):
+            assert phrase.casefold() not in text.casefold(), phrase
+    phase_7 = method[method.index("## Phase 7"):]
+    assert "only when the user asks" in phase_7 and "markdown" in phase_7.casefold()
+
+
+def test_report_format_fallback_template_is_html_only():
+    text = read(SKILL / "references" / "report-format.md")
+    assert "Used only when pulsed is missing and the user asked for markdown" not in text
+
+
+def test_person_slug_rule_is_fallback_only():
+    step4 = _step_4()
+    assert "person_name" in step4
+    assert "fallback" in step4.casefold()
+
+
+def test_forecast_report_format_does_not_assume_markdown_always_exists():
+    text = read(SKILL / "references" / "forecast" / "report-format.md")
+    assert "every ticket key, PR number and file path in the markdown report is a link" not in text.casefold()
+    assert "when written" in text

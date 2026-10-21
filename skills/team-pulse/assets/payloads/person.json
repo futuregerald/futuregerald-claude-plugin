@@ -1,0 +1,233 @@
+{
+  "schema_version": 2,
+  "scope": "person",
+  "scope_label": "1:1 Prep",
+  "subject": "Jules Marlow",
+  "window_start": "2026-10-05",
+  "window_end": "2026-10-12",
+  "window_note": "two days of leave",
+  "title": "1:1 Preparation — Jules Marlow",
+  "heading": "Jules Marlow — Oct 12, 2026",
+  "headline": "Jules shipped the importer streaming change and reviewed **five** PRs.",
+  "bottom_line": [
+    "Keep Jules on the importer; pair on the billing import next."
+  ],
+  "key_urls": {
+    "LAN-2": "https://tracker.example.com/browse/LAN-2",
+    "LAN-21": "https://tracker.example.com/browse/LAN-21"
+  },
+  "section_titles": {
+    "scorecard": "This week in numbers",
+    "wins": "What went well",
+    "epics": "Epics Jules touched",
+    "prs": "Pull requests",
+    "people": "Jules at a glance",
+    "risks": "Things to watch",
+    "talking_points": "To discuss",
+    "bottom_line": "Where this leaves us"
+  },
+  "section_notes": {
+    "summary": "Numbers cover the window only.",
+    "epics": "Whole-epic progress, not just Jules's share.",
+    "breakdown": "One table per repository.",
+    "prs": "Merged PRs are listed first.",
+    "people": "Self-assessment was not collected.",
+    "risks": "Ordered by urgency."
+  },
+  "tiles": [
+    {
+      "label": "This week",
+      "value": "2 PRs merged",
+      "context": "One large; 3 tickets done and 4 reviews given"
+    }
+  ],
+  "work_breakdown_title": "What Jules worked on, by epic",
+  "one_on_one": {
+    "person_name": "Jules Marlow",
+    "overall": "on_track",
+    "overall_context": "Steady week",
+    "prs_this_week": {
+      "value": "2 merged",
+      "context": "One was large"
+    },
+    "open_prs_now": {
+      "value": "1 open",
+      "context": "Waiting on review"
+    },
+    "tickets_done": {
+      "value": "3 done",
+      "context": "On plan"
+    },
+    "reviews_given": {
+      "value": "5 reviews",
+      "context": "Across 2 repositories"
+    },
+    "wins": [
+      "Cut importer memory use by streaming rows."
+    ],
+    "closed_unmerged_note": "PR #11 was closed after the approach changed.",
+    "talking_points": [
+      "Billing import ownership.",
+      "Growth goals for next quarter."
+    ],
+    "questions": "What blocks the schema freeze?",
+    "person_url": "https://people.example.com/jmarlow"
+  },
+  "epics": [
+    {
+      "key": "LAN-2",
+      "url": "https://tracker.example.com/browse/LAN-2",
+      "title": "Lantern Importer",
+      "lead": "Sage Marlow",
+      "status": "at_risk",
+      "done": 3,
+      "total": 9,
+      "summary": "Importer waits on the schema freeze."
+    }
+  ],
+  "work_breakdown": [
+    {
+      "epic_key": "LAN-2",
+      "epic_title": "Lantern Importer",
+      "epic_url": "https://tracker.example.com/browse/LAN-2",
+      "summary": "Importer work this window.",
+      "sides": [
+        {
+          "name": "Backend",
+          "repo": "lantern-core",
+          "repo_url": "https://code.example.com/acme/lantern-core",
+          "rows": [
+            {
+              "ticket_key": "LAN-21",
+              "pr_number": 14,
+              "pr_url": "https://code.example.com/acme/lantern-core/pull/14",
+              "status": "Merged",
+              "what_it_does": "Streams rows instead of loading the file."
+            }
+          ]
+        }
+      ],
+      "closed_unmerged": [
+        {
+          "repo": "lantern-core",
+          "number": 11,
+          "url": "https://code.example.com/acme/lantern-core/pull/11",
+          "closed": "2026-10-07",
+          "note": "Approach changed."
+        }
+      ],
+      "for_the_one_on_one": "Ask about **ownership** of the importer."
+    }
+  ],
+  "prs": [
+    {
+      "repo": "lantern-core",
+      "number": 14,
+      "url": "https://code.example.com/acme/lantern-core/pull/14",
+      "title": "Stream importer rows",
+      "group": "Merged",
+      "opened": "2026-10-06",
+      "merged": "2026-10-09",
+      "additions": 120,
+      "deletions": 80,
+      "author": "jmarlow",
+      "author_url": "https://people.example.com/jmarlow"
+    },
+    {
+      "repo": "lantern-core",
+      "number": 15,
+      "url": "https://code.example.com/acme/lantern-core/pull/15",
+      "title": "Retry failed batches",
+      "group": "Open",
+      "opened": "2026-10-10",
+      "merged": "open",
+      "age": "2d",
+      "status": "Review",
+      "severity": "needs_attention",
+      "action": "Needs a second reviewer"
+    }
+  ],
+  "people": [
+    {
+      "handle": "jmarlow",
+      "name": "Jules Marlow",
+      "role": "Software Engineer",
+      "profile_url": "https://people.example.com/jmarlow",
+      "status": "on_track",
+      "summary": "Reliable delivery on the importer.",
+      "stats": [
+        {
+          "label": "PRs",
+          "value": "2 merged"
+        },
+        {
+          "value": "Owns the importer streaming path"
+        }
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "band": "p1",
+      "band_label": "P1",
+      "title": "Single owner for the importer",
+      "body": "Only Jules knows the streaming path.",
+      "action": "Pair on the next change.",
+      "marker": "amber"
+    }
+  ],
+  "sections": [
+    {
+      "id": "context",
+      "heading": "Context for this 1:1",
+      "after": "summary",
+      "block": {
+        "prose": {
+          "paragraphs": [
+            "Jules asked to talk about **scope**."
+          ]
+        }
+      }
+    },
+    {
+      "id": "reading-list",
+      "heading": "Reading list",
+      "after": "people",
+      "level": 3,
+      "block": {
+        "table": {
+          "columns": [
+            "Item",
+            "Why"
+          ],
+          "rows": [
+            {
+              "cells": [
+                {
+                  "text": "Streaming design note"
+                },
+                {
+                  "text": "Background"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "closing-note",
+      "heading": "Closing note",
+      "after": "end",
+      "block": {
+        "prose": {
+          "paragraphs": [
+            "Agree next steps before ending."
+          ],
+          "tone": "good"
+        }
+      }
+    }
+  ],
+  "provenance": "Generated by pulsed"
+}

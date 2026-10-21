@@ -2,9 +2,10 @@
 
 ## Detail Depends on Scope
 
-Team and epic scopes share one skeleton (`assets/template.md` / `.html`); a 1:1 uses its own
-layout (`assets/template-1on1.md` / `.html`, see "Bundled 1:1 Templates"). How deep each section
-goes depends on scope.
+Team and epic scopes share one skeleton (pulsed's `pulse` template); a 1:1 uses its own layout
+(`pulse-1on1`). Each is one HTML file rendered by pulsed; markdown only on request. The bundled
+`assets/template*.html` files are the fallback used only when pulsed is missing. How deep each
+section goes depends on scope.
 
 | Scope | Epic cards | Work breakdown | Person sections |
 |-------|-----------|----------------|-----------------|
@@ -64,7 +65,7 @@ leaves the manager unable to say what the person actually built.
 
 ## Structure
 
-For team and epic scopes, the pulse is delivered both as a concise summary in chat, and as a complete, publication-grade markdown document (`team-pulse-<END_DATE>.md`) ready to post into a GitHub Issue/Discussion, Jira ticket, or Confluence document:
+For team and epic scopes, the pulse is delivered as a concise summary in chat and one HTML file rendered by pulsed. The markdown layout below is written (`team-pulse-<END_DATE>.md`, ready to post into a GitHub Issue/Discussion, Jira ticket, or Confluence document) only when the user asks for markdown:
 
 ```markdown
 # 📊 Team Pulse — {scope}
@@ -187,9 +188,9 @@ questions to ask have their own sections. See "Bundled 1:1 Templates".}
 > **Bottom Line:** {2-3 sentences: synthesis of team health, top 3 priorities for today's standup, and escalations needed}
 ```
 
-### Bundled Template: `assets/template.md`
+### Fallback Template: `assets/template.md`
 
-Populate `assets/template.md` by replacing its placeholders:
+Used only when pulsed is missing; the fallback writes HTML only, so this markdown template is not filled on that path. Populate `assets/template.md` by replacing its placeholders:
 
 | Placeholder | Holds |
 |---|---|
@@ -220,13 +221,13 @@ needs, and must not be hard-coded to On Track.
 
 ## Standalone HTML Dashboard Specification
 
-Every team pulse run generates a standalone visual HTML dashboard (`team-pulse-<END_DATE>.html`, or `team-pulse-<person-slug>-<END_DATE>.html` for a single person) by populating the bundled template at `assets/template.html` (team and epic scopes; a 1:1 uses `assets/template-1on1.html`), and opens it in the browser.
+Every team pulse run produces one standalone visual HTML dashboard (`team-pulse-<END_DATE>.html`, or `team-pulse-<person-slug>-<END_DATE>.html` for a single person), rendered by pulsed from the payload, and opens it in the browser. Only when pulsed is missing is it filled from the bundled template at `assets/template.html` (team and epic scopes; a 1:1 uses `assets/template-1on1.html`).
 
 ### Zero External Dependencies (Offline-Safe)
 The dashboard and template must **never reference external files, CDN scripts, remote stylesheets, or external fonts (such as Google Fonts)**. All styling, SVG icons, and interaction logic must be completely self-contained. Typography relies on local fonts with robust system font fallbacks so the dashboard renders identically and instantly offline or behind corporate firewalls.
 
-### Bundled Template: `assets/template.html`
-Populate `assets/template.html` by replacing its semantic placeholders:
+### Fallback Template: `assets/template.html`
+Used only when pulsed is missing. Populate `assets/template.html` by replacing its semantic placeholders:
 - `{{REPORT_TITLE}}` & `{{REPORT_HEADING}}`: Report title and header banner.
 - `{{DATE_RANGE}}`, `{{MANAGER_NAME}}`, `{{PRIMARY_REPOS}}`, `{{TRACKER_INFO}}`: Metadata bar items.
 - `{{METRIC_TILES}}`: 4 metric summary tiles (Overall Health, PR Velocity, Net Impact, Review Bottlenecks).
@@ -246,11 +247,11 @@ order, and the HTML page mirrors the markdown:
 Scorecard (this week) → 01 Wins to Recognise → 02 Epics → 02b Work Breakdown by Epic → 03 Open PRs
 → 04 Talking Points (then questions to ask) → 05 Bottom Line.
 
-There is no roster, person card, risk register or EM section. What those carry in a team pulse
+In the fallback template there is no roster, person card, risk register or EM section (pulsed's `pulse-1on1` renders `people` and `risks`; see `references/payload.md`). What those carry in a team pulse
 goes here instead: wins and documents the person wrote go under Wins; blockers and risks go on the
 epic they affect or into Talking Points; meeting context goes into Talking Points.
 
-Save the files as `team-pulse-<person-slug>-<END_DATE>.md` and `.html` (slug rule in `SKILL.md` Step 4).
+Save the HTML as `team-pulse-<person-slug>-<END_DATE>.html`, and the `.md` only when the user asks. With pulsed the slug comes from the full `one_on_one.person_name`, e.g. `team-pulse-jules-marlow-<end>.html`; the first-name-or-handle rule in `SKILL.md` Step 4 is fallback-only.
 They are **private local files**: never post a single-person report to a tracker, wiki, issue,
 chat channel or repository. The chat summary is fine.
 
@@ -258,7 +259,7 @@ chat channel or repository. The chat summary is fine.
 "this week" labels say. For any other window, change those labels to name it ("these two
 weeks").
 
-**Escape what you did not write.** In the HTML file, escape `<`, `>`, `&` and `"` in every value
+**Escape what you did not write (fallback template only).** With pulsed, follow `references/payload.md` sections 3 and 4 instead: escaping `&` into `&amp;` in a plain field fails submit. In the fallback HTML file, escape `<`, `>`, `&` and `"` in every value
 taken from GitHub, the tracker, documents or meetings (titles, descriptions, names). Only the
 markup the template asks for is markup. A PR title is text, never HTML.
 

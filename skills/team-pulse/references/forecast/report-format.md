@@ -1,7 +1,8 @@
 # Report format
 
-Two files, same numbers, generated from one source so they cannot drift: a Markdown report and a
-single HTML page. Nothing else — no spreadsheet, no manifest, no diagram.
+One HTML page is the deliverable. A Markdown report with the same numbers is written only when the
+user asks, generated from the same source so the two cannot drift. Nothing else — no spreadsheet,
+no manifest, no diagram.
 
 ## One template, sections driven by the question
 
@@ -244,9 +245,9 @@ unanswered. Sort by age × consequence.
 can act on; naming each ticket, what it describes, and the merged PR that deleted that code is one a
 reader can execute or reject in a minute.
 
-### Linking — every reference is clickable, in both artefacts
+### Linking — every reference is clickable, in the HTML page and the Markdown when written
 
-**Every ticket key, PR number and file path in the Markdown report is a link.** A reader who has to
+**Every ticket key, PR number and file path in the HTML page (and the Markdown, when written) is a link.** A reader who has to
 copy a key into a search box to check your claim will not check it, which defeats the point of citing
 evidence at all. Link them as you write, then verify with a pass that strips complete `[text](url)`
 links and greps the remainder for bare keys — a naive "is it linked" check will match the key
@@ -265,7 +266,7 @@ second time.
 
 ## The HTML page — a primary deliverable
 
-**This is the artefact people actually read.** Generate it, and the Markdown, **from the same data
+**This is the artefact people actually read.** Generate it, and the Markdown when asked for, **from the same data
 structure in one script** — never hand-built, and never one generated from the other, because two
 copies of the same numbers diverge and the one in the room is the stale one.
 
@@ -290,19 +291,19 @@ No diagram.
 
 ## Handing it over
 
-**Two deliverables: the Markdown report and the HTML page** (styled from `assets/forecast.html`). Everything else — the shared brief, the baseline,
+**One deliverable: the HTML page** (styled from `assets/forecast.html`); the Markdown report only when the user asks. Everything else — the shared brief, the baseline,
 the per-agent findings, the manifest — lives in `research/` and is named once,
 as a directory, not file by file. A virtualenv belongs in the scratchpad and never in the output
-directory. A caller who opens the folder should see the two things they asked for.
+directory. A caller who opens the folder should see the thing they asked for.
 
-Give clickable file links for both artefacts and the research directory. Lead the chat response with
+Give clickable file links for the deliverable and the research directory. Lead the chat response with
 section 1 — what changed — then the headline, then the open questions. Everything else is in the
 files; do not re-narrate it in chat.
 
 ## The HTML page: `assets/forecast.html`
 
 The page shares the pulse template's colours, type and components, so a forecast and a pulse read as
-one family. Fill its placeholders from the same data structure as the Markdown report.
+one family. Fill its placeholders from the same data structure as the Markdown report, when one is written.
 
 | Placeholder | Holds | When empty |
 |---|---|---|
