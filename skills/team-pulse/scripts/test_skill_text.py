@@ -167,7 +167,7 @@ def test_skill_says_how_to_build_done_and_in_progress_count_queries():
     assert "AND statusCategory = Done" in step2a
 
 
-SHIPPED_TEXT_FILES = ["SKILL.md", "references/agent-prompts.md", "references/team.md", "references/report-format.md"]
+SHIPPED_TEXT_FILES = ["SKILL.md", "references/agent-prompts.md", "references/team.md", "references/report-format.md", "references/payload.md"]
 
 
 @pytest.mark.parametrize("name", SHIPPED_TEXT_FILES)
@@ -243,3 +243,42 @@ def test_report_format_names_meeting_sources_generically():
 def test_meetings_grant_includes_read_for_user_files():
     row = next(l for l in read(SKILL_MD).splitlines() if l.startswith("| Meetings | Agent C"))
     assert "`Read`" in row
+
+
+PAYLOAD_MD = SKILL / "references" / "payload.md"
+PAYLOAD_EXAMPLES = ["team", "person", "initiative"]
+
+
+@pytest.mark.parametrize("stem", PAYLOAD_EXAMPLES)
+def test_example_payloads_are_v2_and_match_their_scope(stem):
+    import json
+
+    payload = json.loads(read(SKILL / "assets" / "payloads" / f"{stem}.json"))
+    assert payload["schema_version"] == 2
+    assert payload["scope"] == stem
+    assert "generated_at" not in payload
+    assert "dashboard_path" not in payload
+
+
+def test_payload_reference_covers_plain_text_fields():
+    text = read(PAYLOAD_MD)
+    assert "&amp;" in text and "plain" in text
+
+
+def test_payload_reference_requires_backticking_angle_brackets():
+    text = read(PAYLOAD_MD)
+    assert "backtick" in text and "<" in text
+
+
+def test_payload_reference_names_the_links_check():
+    assert "pulsed config show --json" in read(PAYLOAD_MD)
+
+
+def test_payload_reference_states_section_notes_difference():
+    text = read(PAYLOAD_MD)
+    assert "replaces" in text and "appended" in text
+
+
+def test_examples_carry_no_real_identifiers():
+    for path in (SKILL / "assets" / "payloads").iterdir():
+        assert not re.search(r"(?i)cobalt|atlassian\.net", read(path)), path.name

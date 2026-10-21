@@ -1,0 +1,115 @@
+{
+  "schema_version": 2,
+  "scope": "initiative",
+  "scope_label": "Lantern Rollout",
+  "subject": "Lantern Rollout",
+  "window_start": "2026-10-05",
+  "window_end": "2026-10-12",
+  "title": "Lantern Rollout Pulse",
+  "heading": "Lantern Rollout — Oct 12, 2026",
+  "headline": "The **Lantern** rollout is two epics from done; billing is the open risk.",
+  "strategic_context": [
+    "Rollout scope is tracked in [LAN-1](https://tracker.example.com/browse/LAN-1)."
+  ],
+  "bottom_line": [
+    "Finish the importer, then schedule the cutover."
+  ],
+  "key_urls": {
+    "LAN-1": "https://tracker.example.com/browse/LAN-1",
+    "LAN-2": "https://tracker.example.com/browse/LAN-2",
+    "LAN-21": "https://tracker.example.com/browse/LAN-21"
+  },
+  "section_titles": {
+    "epics": "Rollout epics",
+    "risks": "What could slip",
+    "bottom_line": "Where this leaves us"
+  },
+  "section_notes": {
+    "epics": "Only epics inside the rollout are shown."
+  },
+  "tiles": [
+    {
+      "label": "Epics done",
+      "value": "1/2",
+      "severity": "needs_attention",
+      "context": "Importer is the long pole"
+    },
+    {
+      "label": "Open PRs",
+      "value": "3"
+    }
+  ],
+  "epics": [
+    {
+      "key": "LAN-1",
+      "url": "https://tracker.example.com/browse/LAN-1",
+      "title": "Lantern Gateway",
+      "lead": "Rowan Quill",
+      "status": "on_track",
+      "done": 9,
+      "total": 10,
+      "summary": "Gateway cutover is rehearsed."
+    },
+    {
+      "key": "LAN-2",
+      "url": "https://tracker.example.com/browse/LAN-2",
+      "title": "Lantern Importer",
+      "lead": "Sage Marlow",
+      "status": "at_risk",
+      "done": 3,
+      "total": 9,
+      "summary": "Importer waits on the schema freeze.",
+      "why_title": "Schema freeze",
+      "why": "The freeze slipped by a week."
+    }
+  ],
+  "work_breakdown": [
+    {
+      "epic_key": "LAN-2",
+      "epic_title": "Lantern Importer",
+      "epic_url": "https://tracker.example.com/browse/LAN-2",
+      "summary": "Importer work this window.",
+      "sides": [
+        {
+          "name": "Backend",
+          "repo": "lantern-core",
+          "repo_url": "https://code.example.com/acme/lantern-core",
+          "rows": [
+            {
+              "ticket_key": "LAN-21",
+              "pr_number": 14,
+              "pr_url": "https://code.example.com/acme/lantern-core/pull/14",
+              "status": "Merged",
+              "what_it_does": "Streams rows instead of loading the file."
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "prs": [
+    {
+      "repo": "lantern-core",
+      "number": 15,
+      "url": "https://code.example.com/acme/lantern-core/pull/15",
+      "title": "Retry failed batches",
+      "author": "sage",
+      "age": "2d",
+      "status": "Review",
+      "severity": "needs_attention",
+      "additions": 40,
+      "deletions": 6,
+      "action": "Needs a second reviewer"
+    }
+  ],
+  "risks": [
+    {
+      "band": "p1",
+      "band_label": "P1",
+      "title": "Billing import not started",
+      "body": "No owner yet.",
+      "action": "Assign an owner this week.",
+      "marker": "amber"
+    }
+  ]
+}
