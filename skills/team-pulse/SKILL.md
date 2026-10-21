@@ -55,6 +55,9 @@ confidently wrong status report about real people. Never write a real roster int
 If they say no, or ask you to continue anyway, run against whatever scope they name in the
 request and say plainly in the report that the roster was not configured.
 
+**pulsed.** Step 4 renders through the `pulsed` command. Check `command -v pulsed`; when it is
+missing, the skill still works from its bundled HTML templates, and says so in chat.
+
 Once configured, skip this section entirely.
 
 ## Defaults
@@ -93,7 +96,7 @@ aggressively or keep the window short.
 1. **Resolve scope** (orchestrator) — parse request, load team roster, compute date range
 2. **Collect** (orchestrator) — run `jira_scan.py`, then dispatch the agents in one message and run `pr_scan.py` while they work; everything lands in `.updates/`
 3. **Synthesize report** (orchestrator) — read the small digest files and produce the final report
-4. **Deliver** (orchestrator) — output the report, clean up `.updates/`
+4. **Deliver** (orchestrator) — write the payload, render it with `pulsed`, summarise in chat, clean up `.updates/`
 
 ### Sub-Agent Design Rules
 
@@ -459,27 +462,35 @@ Follow the format in [references/report-format.md](references/report-format.md).
 
 ## Step 4: Deliver
 
-**Reports hold per-person data, so they default to a directory outside any git repository** — for
-example `~/team-pulse-reports/` — rather than the current working tree. Create it if it does not
-exist, and use it for both files below unless the user names another location.
+**Reports hold per-person data, so they go to a directory outside any git repository**, by default
+`~/team-pulse-reports/`, unless the user names another location. `pulsed` creates it if missing.
 
-**Pick the templates by scope.** **Any single-person scope** ("prep me for 1:1 with <person>" and
-"how is <person> doing" alike) uses `assets/template-1on1.md` and `assets/template-1on1.html`, saved as
-`team-pulse-<person-slug>-<END_DATE>.md` / `.html`, where `<person-slug>` is the person's first name or
-GitHub handle, lowercased, with only `a-z`, `0-9` and `-`. Every other scope uses `assets/template.md`
-and `assets/template.html`, saved as `team-pulse-<END_DATE>.md` / `.html`.
-Fill the template; never copy an earlier report as the starting point. `<report-file>` below is the
-chosen name.
-
-1. Output the scannable markdown report directly in chat.
-2. Save a publication-grade markdown document (`<report-file>.md`) using the bundled template for the scope. A team or epic report (`assets/template.md`) is ready to paste into GitHub issues, Jira tickets, or Confluence docs, with 100% hyperlinked keys, Unicode progress meters, and callouts. **A single-person report (`assets/template-1on1.md`) is a private local file:** it holds ratings, talking points and meeting context about one person, so never post it to a tracker, wiki, issue, chat channel or repository.
-3. Generate a publication-grade standalone HTML dashboard (`<report-file>.html`) using the bundled template for the scope (`assets/template.html` or `assets/template-1on1.html`) (zero external CDN or font dependencies, offline-safe, matching the design system in [references/report-format.md](references/report-format.md)).
-4. Open the dashboard in default browser (macOS / Linux, safe in headless):
+1. Run `command -v pulsed`. If it is missing, fall back: fill the bundled HTML template for the
+   scope (`assets/template-1on1.html` for any single-person scope, else `assets/template.html`),
+   save it as `team-pulse-<END_DATE>.html` (`team-pulse-<person-slug>-<END_DATE>.html` for a person;
+   `<person-slug>` is the first name or GitHub handle, lowercased, `a-z`, `0-9` and `-` only),
+   write HTML only, say "pulsed not found; rendered from the bundled template" in chat, and go to
+   item 6. Never copy an earlier report as the starting point.
+2. Run `pulsed config show --json` and read `links`. It decides which URLs the payload can leave
+   out (see [references/payload.md](references/payload.md), section 5).
+3. Write `.updates/payload.json` following [references/payload.md](references/payload.md). Start
+   from the example for the scope in `assets/payloads/`.
+4. Run `pulsed report submit .updates/payload.json`; it prints the report id. On exit 2 the payload
+   is invalid: fix every error path it lists and resubmit, never stripping content to pass. On exit 3
+   or any other failure, stop and show the error.
+5. Run `pulsed report render <id> --force --out ~/team-pulse-reports/`; it prints the HTML path.
+   Only when the user asked for markdown, also run
+   `pulsed report render <id> --format md --force --out ~/team-pulse-reports/`.
+6. Open the HTML in the default browser (macOS / Linux, safe in headless):
 ```bash
-open "<report-dir>/<report-file>.html" 2>/dev/null || xdg-open "<report-dir>/<report-file>.html" 2>/dev/null || true
+open "<html-path>" 2>/dev/null || xdg-open "<html-path>" 2>/dev/null || true
 ```
-5. Always print the clickable local file links in the chat response: `file://<report-dir>/<report-file>.md` and `file://<report-dir>/<report-file>.html`.
-6. If the user asked for Confluence or Slack format, adapt chat output accordingly.
+   Then reply in chat with the headline, the bottom-line bullets and the risk titles, followed by
+   the clickable `file://<html-path>` link (and the markdown link when one was written). Do not
+   paste the full report into chat. If the user asked for Confluence or Slack format, adapt the
+   chat output accordingly. **A single-person report is a private local file:** it holds ratings,
+   talking points and meeting context about one person, so never post it to a tracker, wiki, issue,
+   chat channel or repository, and remember `pulsed` keeps a copy in its store.
 7. Clean up intermediates:
 ```bash
 rm -rf .updates
@@ -494,7 +505,7 @@ rm -rf .updates
 | "how is <person> doing" | Single person across all their work |
 | "pulse on ABC-123" | Single initiative/epic and everyone assigned |
 | "what did we ship this week" | Merged PRs + completed Jira issues only |
-| "prep me for 1:1 with <person>" | Single person, full depth: Steps 2a and 2b plus agents C, E and F; statistics for the window only (default: the past week); epic progress covers the whole epic; wins, reviews given, talking points and questions; laid out by `assets/template-1on1.md` / `.html` |
+| "prep me for 1:1 with <person>" | Single person, full depth: Steps 2a and 2b plus agents C, E and F; statistics for the window only (default: the past week); epic progress covers the whole epic; wins, reviews given, talking points and questions; laid out by the `pulse-1on1` template |
 
 ## Assessment Scale
 

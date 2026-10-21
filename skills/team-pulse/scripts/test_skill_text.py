@@ -282,3 +282,36 @@ def test_payload_reference_states_section_notes_difference():
 def test_examples_carry_no_real_identifiers():
     for path in (SKILL / "assets" / "payloads").iterdir():
         assert not re.search(r"(?i)cobalt|atlassian\.net", read(path)), path.name
+
+
+def _step_4():
+    text = read(SKILL_MD)
+    return text[text.index("## Step 4: Deliver"):text.index("## Scoping Variations")]
+
+
+def test_step_4_submits_and_renders_through_pulsed():
+    step4 = _step_4()
+    assert "pulsed report submit" in step4 and "pulsed report render" in step4
+
+
+def test_step_4_writes_markdown_only_on_request():
+    step4 = _step_4()
+    assert "--format md" in step4
+    assert "Save a publication-grade markdown document" not in step4
+
+
+def test_step_4_has_a_fallback_when_pulsed_is_missing():
+    assert "command -v pulsed" in _step_4()
+
+
+def test_step_4_reads_links_config():
+    assert "pulsed config show --json" in _step_4()
+
+
+def test_step_4_renders_with_force():
+    lines = [line for line in _step_4().splitlines() if "pulsed report render" in line]
+    assert lines and all("--force" in line for line in lines)
+
+
+def test_step_4_keeps_confluence_and_slack_adaptation():
+    assert "Confluence or Slack" in _step_4()
