@@ -87,8 +87,6 @@ A plan whose phases all run in one context drifts: by phase 3 it carries stale o
 3. **Every phase agent ends with a 4-section handoff:** Changes Made (each with its covering test) · Flawed Assumptions (what the plan claimed vs what the code is) · Carried Risks · Verification Evidence (exact commands and output).
 4. **Verify the gate yourself,** append the passing output and the diff to the context file, then dispatch read-only reviewers that never run tests or builds.
 
-**The 45-turn boundary (`baton-pass`).** At turn 40–45 of orchestrating multi-step work, or when the user says "pass the baton", write the 4-section snapshot the skill describes and hand the next step to a fresh sub-agent with the snapshot as its brief. It is a brief, not a handoff; regular handoffs are saved as usual. Conversational work (decisions, synthesis, anything in the user's voice) stays in-session.
-
 ---
 
 ## Understanding the Code
@@ -201,7 +199,6 @@ Never write: what the code does · how the language or library works · your rea
 | Code review (phase 8), reviewing a PR | `comprehensive-code-review` |
 | After a review's fix round | `fix-check` |
 | Creating or updating a pull request | `pull-request-description`, **mandatory for new PRs and description updates** |
-| Turn 40–45 of orchestration, or "pass the baton" | `baton-pass` |
 
 Before acting on a task, check whether an installed skill applies and use it.
 
