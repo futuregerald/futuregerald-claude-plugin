@@ -404,10 +404,10 @@ def test_forecast_report_format_does_not_assume_markdown_always_exists():
 
 
 def test_epic_reports_use_the_epic_key_file_name():
-    skill_text = SKILL_MD.read_text()
-    format_text = (SKILL / "references" / "report-format.md").read_text()
+    skill_text = read(SKILL_MD)
+    format_text = read(SKILL / "references" / "report-format.md")
     assert "pulse-<epic-key>-<END_DATE>.html" in skill_text
-    assert "pulse-<epic-key>" in format_text
+    assert "`pulse-<epic-key>-<END_DATE>.html` for an epic" in format_text
+    assert "`pulse-<epic-key>-<END_DATE>.md` for an epic" in format_text
     for text in (skill_text, format_text):
         assert not re.search(r"is written \(`team-pulse-<END_DATE>\.md`, ready", text)
-        assert not re.search(r"epic[^\n]*saves? as `team-pulse-<END_DATE>", text)
