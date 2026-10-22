@@ -1,0 +1,177 @@
+{
+  "autonomous-circuit-breaker": {
+    "enabled": true,
+    "PreToolUse": [
+      {
+        "matcher": "read_file",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/you/.gemini/config/hooks/autonomous-breaker.sh",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "view_file",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/you/.gemini/config/hooks/autonomous-breaker.sh",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "run_command",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/you/.gemini/config/hooks/autonomous-breaker.sh",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "call_mcp_tool",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/you/.gemini/config/hooks/autonomous-breaker.sh",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "edit_file",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/you/.gemini/config/hooks/autonomous-breaker.sh",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "replace_file_content",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/you/.gemini/config/hooks/autonomous-breaker.sh",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "write_file",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/you/.gemini/config/hooks/autonomous-breaker.sh",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "write_to_file",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/you/.gemini/config/hooks/autonomous-breaker.sh",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "invoke_subagent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/you/.gemini/config/hooks/autonomous-breaker.sh",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "send_message",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/you/.gemini/config/hooks/autonomous-breaker.sh",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "grep_search",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/you/.gemini/config/hooks/autonomous-breaker.sh",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "list_dir",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/you/.gemini/config/hooks/autonomous-breaker.sh",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "find_by_name",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/you/.gemini/config/hooks/autonomous-breaker.sh",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "search_web",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/you/.gemini/config/hooks/autonomous-breaker.sh",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "read_url_content",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/you/.gemini/config/hooks/autonomous-breaker.sh",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "manage_task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/you/.gemini/config/hooks/autonomous-breaker.sh",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "schedule",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/you/.gemini/config/hooks/autonomous-breaker.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
