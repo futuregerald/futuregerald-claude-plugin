@@ -1,3 +1,8 @@
+---
+trigger: always_on
+description: Organization, team roster, issue tracker, and repository conventions.
+---
+
 # Organization, Tracker and Repo Configuration (example)
 
 Copy this file to `~/.gemini/config/rules/<org>.local.md` (git-ignored) and fill in your organization's team, tracker and repository rules.
