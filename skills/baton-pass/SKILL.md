@@ -1,6 +1,6 @@
 ---
 name: baton-pass
-description: Pass the baton with a deterministic ACTIVE_CONTEXT.md snapshot so fresh context picks up the work. MANDATORY in Antigravity and Gemini when the breaker hook warns that the context estimate has reached ~105k tokens (it blocks at ~130k), before auto-compaction hits, or when asked to 'pass the baton', 'baton pass', 'save active context', 'snapshot context', or 'continue from active context'. Antigravity and Gemini only: never used in Claude Code. Not a replacement for regular handoffs.
+description: Pass the baton with a deterministic ACTIVE_CONTEXT.md snapshot so fresh context picks up the work. MANDATORY in Antigravity and Gemini when the breaker hook warns that the context estimate has reached ~105k tokens (it blocks at ~130k), before auto-compaction hits, or when asked to 'pass the baton', 'baton pass', 'save active context', 'snapshot context', or 'continue from active context'. Antigravity and Gemini only (never used in Claude Code). Not a replacement for regular handoffs.
 author: Gerald Onyango
 tags: [workflow, context, tokens, handoff, architecture]
 ---
