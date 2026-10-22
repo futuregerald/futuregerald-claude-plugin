@@ -1,3 +1,8 @@
+---
+trigger: always_on
+description: Antigravity-tuned workflow skills, subagent orchestration, fast MCP/script delegation, Prism session memory, and verification rules.
+---
+
 # Skills, Delegation, Memory & Verification (Antigravity)
 
 Trigger table, MCP and Prism signatures, model routing detail and breaker rules live in the `antigravity-orchestration` skill. Organization and repo specifics live in local rule files under `~/.gemini/config/rules/` and `antigravity-orchestration/references/config.md`.
