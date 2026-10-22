@@ -98,7 +98,7 @@ class TestBreakerRules(unittest.TestCase):
         self.assertFalse(is_code_file("package.json"))
         self.assertFalse(is_code_file("config.yaml"))
         self.assertFalse(is_code_file("deploy.yml"))
-        self.assertFalse(is_code_file("/Users/you/.gemini/antigravity/brain/session/file.py"))
+        self.assertFalse(is_code_file("/Users/dev/.gemini/antigravity/brain/session/file.py"))
         self.assertFalse(is_code_file("/tmp/scratch.py"))
         self.assertFalse(is_code_file("/repo/docs/plans/2026-10-21-plan.md"))
         self.assertTrue(is_code_file("app/models/user.rb"))

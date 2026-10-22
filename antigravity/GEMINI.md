@@ -1,6 +1,6 @@
 # Global Agent Guidelines (Antigravity & Gemini)
 
-Mechanics (Prism signatures, review-lens commands, search hierarchy, model routing, breaker rules, baton-pass) live in the `antigravity-orchestration` skill. Load it when you need them.
+Mechanics (Prism signatures, review-lens commands, search hierarchy, model routing, breaker rules, baton-pass) live in the `antigravity-orchestration` skill. Organization, tracker and repo specifics live in local rule files under `~/.gemini/config/rules/` and `antigravity-orchestration/references/config.md`.
 
 ## 0. Execution Discipline (Read First)
 
@@ -12,7 +12,7 @@ Mechanics (Prism signatures, review-lens commands, search hierarchy, model routi
 6. **Intercepted output:** when tool output lands in a file (`output.txt`, a JSON dump), write one `/tmp/parse_<name>.py` and run it. Never probe the same file with repeated `python3 -c` one-liners.
 7. **Few shell round-trips:** chain deterministic commands in one `run_command` (`a && b`) and filter bulky output at the shell: `cmd > /tmp/out.log 2>&1; rc=$?; tail -20 /tmp/out.log; echo $rc`.
 8. **Large documents:** over 150 lines without a renderer, write section 1 with `Overwrite: true`, then append the rest section by section.
-9. **Adapt to the task:** project management, planning, writing and review are not coding. Run the lifecycle (§2) only for code changes; for reports, Jira lookups, 1:1 prep and questions, execute directly.
+9. **Adapt to the task:** project management, planning, writing and review are not coding. Run the lifecycle (§2) only for code changes; for reports, tracker lookups, 1:1 prep and questions, execute directly.
 
 ## 1. Check-in vs Authorized Runs
 
@@ -32,17 +32,17 @@ Choose the tier first. If unsure, go one tier up.
 
 | Phase | Action | Gate |
 |---|---|---|
-| 1. Receive | Understand task and constraints; offer a Jira ticket if appropriate (ask first) | Understood |
+| 1. Receive | Understand task and constraints; offer a tracker ticket if appropriate (ask first) | Understood |
 | 2. Trace | Trace callers up and callees down for every symbol touched, including invisible edges (`send`, `constantize`, serializers, callbacks, string-named jobs) | Affected and untested callers identified |
 | 3. Plan | `writing-plans`; never commit the plan | Plan has Affected Callers |
-| 3½. Plan review | `plan-review` in a fresh `pro` subagent, once. Fix every CRITICAL and IMPORTANT. work-org repos: also the review-lens corpus check | Fixed |
+| 3½. Plan review | `plan-review` in a fresh `pro` subagent, once. Fix every CRITICAL and IMPORTANT. Where configured in `antigravity-orchestration/references/config.md`, also run the `review-lens` corpus check | Fixed |
 | 4. Implement | TDD (RED → GREEN → REFACTOR); only planned files; reuse check before adding any symbol. Orchestrator dispatches `flash` implementers with a `/tmp/subagent-context-<project>-<stream>.md` brief | Fast tests pass |
 | 5. Test & lint | Fast unit tests for affected specs plus linter/typecheck. Never run E2E or `pretest` multi-builds locally between fixes | Zero failures and offenses |
 | 6. Simplify | Reuse, clarity, dead code | Done |
-| 7. Code review | Fresh read-only `pro` reviewer reading the context file (never re-running tests); work-org repos: corpus check on the diff. Delete the context file once approved | Approved |
+| 7. Code review | Fresh read-only `pro` reviewer reading the context file (never re-running tests); where configured, run the corpus check on the diff. Delete the context file once approved | Approved |
 | 7½. SQL review | If queries or mutations changed: fresh `pro` audit for performance, indexes, security | Reviewed |
 | 8. Blast radius | Walk the Affected Callers list plus callers of every symbol the final diff touched that the plan missed. Runs last | Verified with evidence |
-| 9. Commit | Conventional commit; summarize; on `futuregerald/*` push and open the PR | the user acknowledged |
+| 9. Commit | Conventional commit; summarize; on personal repos configured for auto-PR, push and open the PR | User acknowledged |
 
 **Independence:** never review a plan, code or SQL in the context that wrote it. A plan review reads and checks premises against code; it never builds the plan. After fixing a reviewer's findings, re-dispatch only that reviewer.
 
@@ -60,9 +60,9 @@ Choose the tier first. If unsure, go one tier up.
 
 **Code comments:** write none. Ask before adding any, every time. Prefer longer names that say what the code does, never ticket keys. Leave existing comments alone unless your change makes them wrong.
 
-**Branches, commits, PRs:** never commit to main. Work branches: `<type>/<TICKET>/<summary>` (`feature`, `fix`, `chore`, `maintenance` + uppercase Jira key, or `docs/NO-TICKET/...`). Conventional commits. Always use `pull-request-description` for PRs (`Closes PROJ-XXXX` on work repos). Never auto-merge. On `futuregerald/*`, push and open the PR after commit; no real names or personal data in public repos.
+**Branches, commits, PRs:** never commit to main. Follow the branch and PR conventions in your local org rule file (`~/.gemini/config/rules/`). Conventional commits. Always use `pull-request-description` for PRs. Never auto-merge. No real names, company details or personal data in public repos.
 
-**Tickets:** never create GitHub issues. Jira at `your-site.atlassian.net` (cloud ID and project keys in your local config). Reads are free; ask before writes.
+**Tickets:** never create GitHub issues unless the repo uses them. Use the tracker configured in your local org rule file (`~/.gemini/config/rules/`). Reads are free; ask before writes.
 
 **CI fails 3+ times:** stop pushing, reproduce locally. Blocked over 30 minutes: ask the user with options A/B/C.
 
@@ -72,7 +72,7 @@ Choose the tier first. If unsure, go one tier up.
 
 ## 4. Stack Conventions
 
-- **Ruby/Rails (work repos):** 2-space indent, `snake_case`, `&&`/`||`, `present?`/`blank?`, `find_by`, thin controllers, Interactors, Pundit, Packwerk, RSpec. Structured logging is mandatory: `Rails.logger.info('event_name', key: value)` (`structured-logging`).
+- **Ruby/Rails:** 2-space indent, `snake_case`, `&&`/`||`, `present?`/`blank?`, `find_by`, thin controllers, Interactors, Pundit, Packwerk, RSpec. Structured logging: `Rails.logger.info('event_name', key: value)`.
 - **Go:** use `go-api-structure` during trace and plan. Consumer-declared interfaces, domain decoupled from SQL, DTOs at the HTTP edge, `context.Context` first, table-driven tests. Gates: `test -z "$(gofmt -l .)"`, `go vet ./...`, `golangci-lint run`, `CGO_ENABLED=0 go test ./... -race -shuffle=on`, `govulncheck ./...`.
 
 ## 5. Communication

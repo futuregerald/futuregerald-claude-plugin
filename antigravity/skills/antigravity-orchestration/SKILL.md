@@ -1,11 +1,11 @@
 ---
 name: antigravity-orchestration
-description: Reference for running Antigravity sessions — Prism memory signatures, review-lens corpus commands, the code search hierarchy, model routing for subagents, data-gathering subagent rules, baton-pass mechanics and the workflow-skill trigger table. Load when dispatching subagents, saving or loading Prism memory, running a review-lens corpus check on work-org repos, choosing graph vs grep for code exploration, or when the breaker hook warns about context size (baton).
+description: Reference for running Antigravity sessions — Prism memory signatures, review-lens corpus commands, the code search hierarchy, model routing for subagents, data-gathering subagent rules, baton-pass mechanics and the workflow-skill trigger table. Load when dispatching subagents, saving or loading Prism memory, running a review-lens corpus check, choosing graph vs grep for code exploration, or when the breaker hook warns about context size (baton).
 ---
 
 # Antigravity Orchestration Reference
 
-On-demand detail moved out of `~/.gemini/GEMINI.md` and `~/.gemini/config/rules/skills-and-delegation.md`. The always-on files keep the rule; this file keeps the mechanics.
+On-demand detail moved out of `~/.gemini/GEMINI.md` and `~/.gemini/config/rules/skills-and-delegation.md`. The always-on files keep the rule; this file keeps the mechanics. Organization and local path settings live in [references/config.md](references/config.md) (copied from [references/config.example.md](references/config.example.md)).
 
 ## 1. Workflow Skill Triggers
 
@@ -21,7 +21,7 @@ On-demand detail moved out of `~/.gemini/GEMINI.md` and `~/.gemini/config/rules/
 | Feature implementation | `test-driven-development` |
 | Code review before commit | `comprehensive-code-review` (read-only `pro` subagents) |
 | Creating or updating a PR | `pull-request-description` |
-| PR / plan / local review on `work-org/*` | `review-lens` (§3 below) |
+| PR / plan / local review on repos configured in `references/config.md` | `review-lens` (§3 below) |
 | Breaker baton warn, or context estimate near 105k | `baton-pass` (§6 below) |
 
 Read `SKILL.md` only when triggered; never pre-read `references/*`, `assets/*`, or `scripts/test_*.py` unless the active step requires it.
@@ -36,17 +36,17 @@ Call directly with `call_mcp_tool`, `ServerName: "prism"`. Do not read the schem
 - `session_save_handoff` → `{"project", "expected_version": <int>, "current_state", "next_steps", "blockers"}`. When project state or TODOs change.
 - `session_save_experience` → `{"project", "event_type": "correction|learning|failure|success", "context", "action", "outcome", "correction"}`.
 
-## 3. review-lens Corpus Check (`work-org/*` only)
+## 3. review-lens Corpus Check
 
-Run yourself after the fresh reviewer returns; never put it in the reviewer's prompt. Never for `futuregerald/*`.
+Applies only to organizations listed under `review_lens.orgs` in [references/config.md](references/config.md) (never to `review_lens.exclude_orgs`). Read `references/config.md` for `analyzer_dir`, `venv_bin`, `binary`, `db`, and `<org>`. Run it yourself after the fresh reviewer returns; never put it in the reviewer's prompt.
 
 ```bash
-AN=~/Documents/dev/review-corpus/analyzer; RL=$AN/review-lens/review-lens-darwin-arm64
-export PATH=~/.venvs/review-lens/bin:$PATH
-$RL similar --concept "<one approach from the plan>" --k 8 --repo work-org/<repo> --db $AN/reviews.db
-$RL similar --concept "<approach>" --k 5 --reviewer <login> --repo work-org/<repo> --db $AN/reviews.db
-git show HEAD:<file> | $RL similar --code - --k 8 --repo work-org/<repo> --db $AN/reviews.db
-git show <sha> -- <file> | $RL similar --code - --k 8 --repo work-org/<repo> --db $AN/reviews.db
+AN="<analyzer_dir>"; RL="$AN/<binary>"
+export PATH="<venv_bin>:$PATH"
+$RL similar --concept "<one approach from the plan>" --k 8 --repo <org>/<repo> --db "$AN/<db>"
+$RL similar --concept "<approach>" --k 5 --reviewer <login> --repo <org>/<repo> --db "$AN/<db>"
+git show HEAD:<file> | $RL similar --code - --k 8 --repo <org>/<repo> --db "$AN/<db>"
+git show <sha> -- <file> | $RL similar --code - --k 8 --repo <org>/<repo> --db "$AN/<db>"
 ```
 
 Run both `--code` and `--concept` every time. Use `--json | jq` to keep output small; put multi-query loops in a script file. Cite matched objections (PR, reviewer, what they said) and fix or record why they don't apply. Report which queries ran, even with no match.

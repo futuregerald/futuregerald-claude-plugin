@@ -172,7 +172,7 @@ class TestReplayBreaker(unittest.TestCase):
         hooks_json_path = Path.home() / ".gemini" / "config" / "hooks.json"
         with open(hooks_json_path, "rb") as f:
             digest = hashlib.sha1(f.read()).hexdigest()
-        self.assertEqual(digest, "51d1f3b1c5ca7a8484fc9e32e5ea94152907c771")
+        self.assertEqual(digest, "87e856f50ed8a7d095256a6d091c3e6d7b95e4a3")
 
     def test_unauthorized_then_authorized_turn_1_checkpoint(self):
         root = Path(self.test_tmpdir) / "brain"

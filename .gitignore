@@ -34,3 +34,6 @@ skills/*/references/team.local.md
 
 # Packaged skill zips (skills ship through the installer)
 *.skill
+antigravity/skills/*/references/config.md
+antigravity/skills/*/references/*.local.md
+antigravity/rules/*.local.md

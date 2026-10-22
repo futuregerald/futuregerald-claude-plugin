@@ -64,7 +64,7 @@ class TestBreakerRulesNew(unittest.TestCase):
         self.assertIsNone(probe_target_path('python3 -c "print(\'/dev/null\')"'))
         self.assertIsNone(probe_target_path('python3 -c "print(\'/dev/stdin\')"'))
 
-        bfa3cfd7_cmd = 'gh pr list --repo work-org/example-repo --state all --limit 100 | python3 -c "\nimport sys, json\nfor p in team_prs:\n    print(f\\\"(+{p[\'additions\']}/-{p[\'deletions\']})\\\")\n"'
+        bfa3cfd7_cmd = 'gh pr list --repo example-org/example-repo --state all --limit 100 | python3 -c "\nimport sys, json\nfor p in team_prs:\n    print(f\\\"(+{p[\'additions\']}/-{p[\'deletions\']})\\\")\n"'
         self.assertIsNone(probe_target_path(bfa3cfd7_cmd))
 
         cmd_rel = "python3 - <<'EOF'\nopen('docs/plans/a.md')\nEOF"
@@ -107,7 +107,7 @@ class TestBreakerRulesNew(unittest.TestCase):
 
     def test_extract_conversation_id(self):
         payload1 = {
-            "transcriptPath": "/Users/you/.gemini/antigravity/brain/5c16b26c-b0a8-43f4-85cc-cd31c35c059c/.system_generated/logs/transcript.jsonl"
+            "transcriptPath": "/tmp/antigravity/brain/5c16b26c-b0a8-43f4-85cc-cd31c35c059c/.system_generated/logs/transcript.jsonl"
         }
         self.assertEqual(extract_conversation_id(payload1), "5c16b26c-b0a8-43f4-85cc-cd31c35c059c")
 

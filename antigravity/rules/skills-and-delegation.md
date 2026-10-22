@@ -1,11 +1,11 @@
 # Skills, Delegation, Memory & Verification (Antigravity)
 
-Trigger table, MCP and Prism signatures, model routing detail and breaker rules live in the `antigravity-orchestration` skill.
+Trigger table, MCP and Prism signatures, model routing detail and breaker rules live in the `antigravity-orchestration` skill. Organization and repo specifics live in local rule files under `~/.gemini/config/rules/` and `antigravity-orchestration/references/config.md`.
 
 ## 1. Skills
 
 - Domain and stack skills load on demand when the task matches their description. Read `SKILL.md` only when triggered; never pre-read `references/*`, `assets/*` or `scripts/test_*.py` unless the active step names the file.
-- Mandatory regardless of task size: `writing-plans` + `plan-review` for Medium/High code changes, `test-driven-development` for implementation, `comprehensive-code-review` before commit, `pull-request-description` for every PR, `review-lens` on `work-org/*` reviews, `baton-pass` when the breaker warns about context size.
+- Mandatory regardless of task size: `writing-plans` + `plan-review` for Medium/High code changes, `test-driven-development` for implementation, `comprehensive-code-review` before commit, `pull-request-description` for every PR, `review-lens` on repos configured in `antigravity-orchestration/references/config.md`, `baton-pass` when the breaker warns about context size.
 - Three or more questions for the user go on one `grilling-page`; one or two stay in chat.
 
 ## 2. Orchestration
@@ -17,7 +17,7 @@ Trigger table, MCP and Prism signatures, model routing detail and breaker rules 
 2. **Implementers (`flash`):** one cohesive vertical stream each (4–5 per phase). The brief gives exact `file:line` ranges, signatures and the fast test command so no open-ended exploration is needed. Implementers search before reading, use TDD with fast unit tests only (never E2E or `pretest` builds), write no comments, and return a 4-section handoff: Changes Made · Flawed Assumptions · Carried Risks · Verification Evidence.
 3. **Reviewers (`pro`, thinking High, read-only):** read the context file and evaluate adversarially; never run tests, builds, linters or E2E. When only one reviewer requested changes, re-dispatch only that one. For UI changes, get the user's approval on a live preview before code review.
 4. **Baton gate:** when the breaker warns or blocks on context size, write the `ACTIVE_CONTEXT.md` handoff, save the Prism handoff, give the user the Session B prompt, and stop.
-5. **Circuit breaker:** `~/.gemini/config/hooks/autonomous_breaker.py` enforces duplicate-call, explore-budget (**100** exploratory calls per helper) and 4-strike test-failure rules; newer rules run in log mode. When a `flash` helper trips the strike or explore limit, it writes its handoff with the failing diff and test output; the orchestrator diagnoses in one turn and resolves without stopping for confirmation.
+5. **Circuit breaker:** `~/.gemini/config/hooks/autonomous_breaker.py` enforces duplicate-call, explore-budget (**100** exploratory calls per helper), 4-strike test-failure and context-size (baton) rules; newer rules run in log mode. When a `flash` helper trips the strike or explore limit, it writes its handoff with the failing diff and test output; the orchestrator diagnoses in one turn and resolves without stopping for confirmation.
 
 ### B. Data-gathering subagents
 Lazy MCP tools make naive subagents waste dozens of turns on schema discovery. Use `flash_lite` for mechanical MCP/file gathering and `flash` when filtering judgment is needed.
