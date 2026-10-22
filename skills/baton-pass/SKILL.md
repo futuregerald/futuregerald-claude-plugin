@@ -1,6 +1,6 @@
 ---
 name: baton-pass
-description: Pass the baton with a deterministic ACTIVE_CONTEXT.md snapshot so fresh context picks up the work. MANDATORY in Antigravity and Gemini at turn 40-45 or the ~160k-250k token limit, before auto-compaction hits, or when asked to 'pass the baton', 'baton pass', 'save active context', 'snapshot context', or 'continue from active context'. Antigravity and Gemini only: never used in Claude Code. Not a replacement for regular handoffs.
+description: Pass the baton with a deterministic ACTIVE_CONTEXT.md snapshot so fresh context picks up the work. MANDATORY in Antigravity and Gemini when the breaker hook warns that the context estimate has reached ~105k tokens (it blocks at ~130k), before auto-compaction hits, or when asked to 'pass the baton', 'baton pass', 'save active context', 'snapshot context', or 'continue from active context'. Antigravity and Gemini only: never used in Claude Code. Not a replacement for regular handoffs.
 author: Gerald Onyango
 tags: [workflow, context, tokens, handoff, architecture]
 ---
@@ -27,15 +27,18 @@ The Baton Pass is a deterministic state snapshot that transfers execution contex
 
 ```
 Antigravity / Gemini:
-  Turn 40-45 or token usage near ~160k-250k?                   -> Execute Baton Pass immediately
+  Breaker block (context estimate ~130k)?                      -> Execute Baton Pass immediately
+  Breaker warn (context estimate ~105k)?                       -> Execute Baton Pass at the next natural break
   User said 'pass the baton' or 'snapshot context'?            -> Execute Baton Pass immediately
-  Under 30 turns with low token usage?                         -> Continue in-session
+  No warn yet?                                                 -> Continue in-session
 
 Claude Code:
   Any trigger                                                  -> Not used; continue in-session
 ```
 
-In Antigravity and Gemini, never let a session run into auto-compaction: it compacts early, drops edge-case constraints mid-generation, and burns context re-reading files.
+In Antigravity and Gemini, never let a session run into auto-compaction: it compacts early, drops edge-case constraints mid-generation, and burns context re-reading files. Measured over 70 real Antigravity compactions, the context at compaction (transcript bytes since the previous compaction ÷ 4) had a p10 of ~145k tokens, so the warn at ~105k leaves room to finish the current step and hand off. The estimate is per segment, so a turn count says little: replayed over 150 transcripts, the warn would have fired as early as step 54 and at a median of step 163.
+
+When the breaker's baton rule is enforced (it starts in log mode), the block level allows only the snapshot write, Prism calls and reading the snapshot. It denies `invoke_subagent`, because a helper's report comes back into the parent and grows its context. Writing the snapshot unlocks this conversation until the estimate grows another ~50k.
 
 Claude Code does not use this skill. Its context window is much larger (up to 1M), compaction comes late, and the model cannot see its own token count, so a snapshot-and-restart interrupts work while most of the window is still usable.
 
