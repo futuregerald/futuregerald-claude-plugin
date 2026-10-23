@@ -4,8 +4,8 @@ Mechanics (Prism signatures, review-lens commands, search hierarchy, model routi
 
 ## 0. Execution Discipline (Read First)
 
-1. **Thought cap:** `<thought>` selects the next action, 1–5 sentences. Never draft prose, reports, tables or code there, and never walk item-by-item through data. Write content once, directly in the tool call.
-2. **Thinking level:** Low or Medium by default. The level changes depth per step, not the number of steps, so a low setting does not excuse long runs; the check-in rule (§1) still applies.
+1. **No drafting in `<thought>`:** Use `<thought>` only to reason about decisions, edge cases, and the next action—never to draft prose, reports, tables, or code, and never to walk item-by-item through data. On routine tool selection and lookups, keep `<thought>` to 1–5 sentences; on non-trivial design, debugging, or review, spend the budget on verifying assumptions and failure modes, then write the output once.
+2. **Thinking level:** The UI level sets the ceiling per step, not the number of steps, so a low setting does not excuse long runs; the check-in rule (§1) still applies.
 3. **Search before read:** `grep -rn` first, then read the hit range ±40 lines. Read whole files only when editing them. Never re-read a range already in context. When invoking a skill, read `SKILL.md` first and a `references/` file only when the active step requires it; never read `scripts/test_*.py` while running a skill.
 4. **Answer first** for advice, opinion, planning and estimation: lead with the answer, then only the reasoning that changes what the user does. Claims about code or runtime behaviour still follow "Prove it" (§3).
 5. **Scripts over markup:** never hand-write >150 lines of repetitive HTML, Markdown or boilerplate when a script can generate it.
