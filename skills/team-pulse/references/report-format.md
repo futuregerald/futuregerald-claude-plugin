@@ -65,7 +65,7 @@ leaves the manager unable to say what the person actually built.
 
 ## Structure
 
-For team and epic scopes, the pulse is delivered as a concise summary in chat and one HTML file rendered by pulsed. The markdown layout below is written (`team-pulse-<END_DATE>.md`, ready to post into a GitHub Issue/Discussion, Jira ticket, or Confluence document) only when the user asks for markdown:
+For team and epic scopes, the pulse is delivered as a concise summary in chat and one HTML file rendered by pulsed. The markdown layout below is written (`team-pulse-<END_DATE>.md` for a team, `pulse-<epic-key>-<END_DATE>.md` for an epic, ready to post into a GitHub Issue/Discussion, Jira ticket, or Confluence document) only when the user asks for markdown:
 
 ```markdown
 # 📊 Team Pulse — {scope}
@@ -73,7 +73,7 @@ For team and epic scopes, the pulse is delivered as a concise summary in chat an
 > **Engineering Manager:** {Manager Name}  
 > **Primary Repos:** {repo links}  
 > **Tracking:** {tracker links}  
-> **Interactive Dashboard:** [`team-pulse-<END_DATE>.html`](file:///path/to/team-pulse-<END_DATE>.html)
+> **Interactive Dashboard:** [`<report-file-name>.html`](file:///path/to/<report-file-name>.html)
 
 ---
 
@@ -221,7 +221,7 @@ needs, and must not be hard-coded to On Track.
 
 ## Standalone HTML Dashboard Specification
 
-Every team pulse run produces one standalone visual HTML dashboard (`team-pulse-<END_DATE>.html`, or `team-pulse-<person-slug>-<END_DATE>.html` for a single person), rendered by pulsed from the payload, and opens it in the browser. Only when pulsed is missing is it filled from the bundled template at `assets/template.html` (team and epic scopes; a 1:1 uses `assets/template-1on1.html`).
+Every team pulse run produces one standalone visual HTML dashboard (`team-pulse-<END_DATE>.html`, `pulse-<epic-key>-<END_DATE>.html` for an epic, or `team-pulse-<person-slug>-<END_DATE>.html` for a single person), rendered by pulsed from the payload, and opens it in the browser. Only when pulsed is missing is it filled from the bundled template at `assets/template.html` (team and epic scopes; a 1:1 uses `assets/template-1on1.html`).
 
 ### Zero External Dependencies (Offline-Safe)
 The dashboard and template must **never reference external files, CDN scripts, remote stylesheets, or external fonts (such as Google Fonts)**. All styling, SVG icons, and interaction logic must be completely self-contained. Typography relies on local fonts with robust system font fallbacks so the dashboard renders identically and instantly offline or behind corporate firewalls.
