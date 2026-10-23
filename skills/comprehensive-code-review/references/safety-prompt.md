@@ -22,31 +22,31 @@ Agent tool:
 
     Verify against the code — never assume framework or library security
     behavior from memory. Where a claim hinges on behavior you are unsure of,
-    settle it in this order: trace it with graph tools and call paths; read the
-    actual source of the installed version; and only then spike it. A spike is
-    the last resort — if tracing and reading leave you confident, stop there.
-    When you do spike, use a scratch temp directory (never the working tree,
-    never repo files), keep it to one file and a few dozen lines isolating the
-    single behavior, and never rebuild the app, boot the framework, or stand up
-    a database — if it requires that, it is not a spike. Two attempts, a few
-    minutes, then abandon it and report only what you can support. Where several
-    independent checks would run serially, dispatch narrowly-scoped sub-agents
-    to run them in parallel.
+    settle it in this order: trace it with graph tools and call paths, and read
+    the actual source of the installed version. **Never write or run spikes
+    during security review** — if tracing and reading source cannot settle a
+    claim, downgrade and frame it as "verify that...".
 
     Most context you need is provided below (or in the orchestrator's shared
     flat file `/tmp/subagent-context-<project>-<stream>.md` if specified).
-    - If a `/tmp/subagent-context-*.md` path is provided, read it in full on
-      your first tool call (`view_file` / `Read` up to 800 lines).
-    - Do NOT use Grep/Glob/Read for anything already covered in the provided
-      context — only search for things genuinely not provided. Authorization
-      and trust-boundary questions are the exception: trace those through the
-      real code.
-    - When you do read a repo file not in the context, read **600–800 lines per
-      call** (never page in 30–50 line micro-slices).
-    - **STRICTLY READ-ONLY / NO TEST OR BUILD EXECUTION:** The orchestrator has
-      already executed the fast unit test and linter/typecheck gate in its own
-      shell. **NEVER run `npm test`, `vitest`, `playwright`, `npm run e2e`,
-      `npm run build`, `go test`, or `rspec`.**
+    - **Trust the written context file:** If a `/tmp/subagent-context-*.md` path
+      is provided, read it in full on your first turn (issue parallel
+      `read_file` calls for `1..800` and `801..1600` if needed). Trust the diff,
+      embedded file contents, and passing test/lint gate output recorded in it
+      as authoritative — do NOT run `git diff`, `git status`, `gh pr diff`, or
+      re-read files whose full contents or diff are already in the context file.
+      Authorization and trust-boundary questions are the exception: trace those
+      through the real code, batching your `read_file` and `grep` calls in
+      parallel turns.
+    - When reading any repo or library file, read **600–800 lines per call**
+      (never page in 30–80 line micro-slices across multiple turns).
+    - Whenever you run `grep -rn`, ALWAYS pass
+      `--exclude-dir={node_modules,dist,build,.git,pb,pb_public,vendor,.next,coverage}`
+      so you never hang scanning minified assets or dependencies.
+    - **STRICTLY READ-ONLY / ZERO SPIKES / NO TEST OR BUILD EXECUTION:** The
+      orchestrator has already executed the fast unit test and linter/typecheck
+      gate in its own shell. **NEVER run `npm test`, `vitest`, `playwright`,
+      `npm run e2e`, `npm run build`, `go test`, `rspec`, or scratch spikes.**
 
     {FRAMEWORK_CONTEXT}
 

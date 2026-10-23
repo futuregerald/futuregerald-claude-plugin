@@ -4,8 +4,8 @@ Mechanics (Prism signatures, review-lens commands, search hierarchy, model routi
 
 ## 0. Execution Discipline (Read First)
 
-1. **Thought cap:** `<thought>` selects the next action, 1–5 sentences. Never draft prose, reports, tables or code there, and never walk item-by-item through data. Write content once, directly in the tool call.
-2. **Thinking level:** Low or Medium by default. The level changes depth per step, not the number of steps, so a low setting does not excuse long runs; the check-in rule (§1) still applies.
+1. **No drafting in `<thought>`:** Use `<thought>` only to reason about decisions, edge cases, and the next action—never to draft prose, reports, tables, or code, and never to walk item-by-item through data. On routine tool selection and lookups, keep `<thought>` to 1–5 sentences; on non-trivial design, debugging, or review, spend the budget on verifying assumptions and failure modes, then write the output once.
+2. **Thinking level:** The UI level sets the ceiling per step, not the number of steps, so a low setting does not excuse long runs; the check-in rule (§1) still applies.
 3. **Search before read:** `grep -rn` first, then read the hit range ±40 lines. Read whole files only when editing them. Never re-read a range already in context. When invoking a skill, read `SKILL.md` first and a `references/` file only when the active step requires it; never read `scripts/test_*.py` while running a skill.
 4. **Answer first** for advice, opinion, planning and estimation: lead with the answer, then only the reasoning that changes what the user does. Claims about code or runtime behaviour still follow "Prove it" (§3).
 5. **Scripts over markup:** never hand-write >150 lines of repetitive HTML, Markdown or boilerplate when a script can generate it.
@@ -27,19 +27,19 @@ Choose the tier first. If unsure, go one tier up.
 | Tier | Examples | Process |
 |---|---|---|
 | Trivial | rule/doc prose edits, obvious one-line fix | edit → check → commit |
-| Medium | contained feature or bugfix; hook code under `~/.gemini/config/hooks/` | short plan → one review → TDD → fast tests |
-| High | shared contracts, DB, money/auth, multi-repo | full lifecycle below |
+| Medium | contained feature or bugfix; hook code under `~/.gemini/config/hooks/` | short plan → fast read-only `plan-review` (no spikes) → TDD → scoped fast tests → commit (`comprehensive-code-review` at PR time) |
+| High | shared contracts, DB, money/auth, multi-repo | full lifecycle below (`comprehensive-code-review` between phases and at PR time) |
 
 | Phase | Action | Gate |
 |---|---|---|
 | 1. Receive | Understand task and constraints; offer a tracker ticket if appropriate (ask first) | Understood |
 | 2. Trace | Trace callers up and callees down for every symbol touched, including invisible edges (`send`, `constantize`, serializers, callbacks, string-named jobs) | Affected and untested callers identified |
 | 3. Plan | `writing-plans`; never commit the plan | Plan has Affected Callers |
-| 3½. Plan review | `plan-review` in a fresh `pro` subagent, once. Fix every CRITICAL and IMPORTANT. Where configured in `antigravity-orchestration/references/config.md`, also run the `review-lens` corpus check | Fixed |
-| 4. Implement | TDD (RED → GREEN → REFACTOR); only planned files; reuse check before adding any symbol. Orchestrator dispatches `flash` implementers with a `/tmp/subagent-context-<project>-<stream>.md` brief | Fast tests pass |
-| 5. Test & lint | Fast unit tests for affected specs plus linter/typecheck. Never run E2E or `pretest` multi-builds locally between fixes | Zero failures and offenses |
+| 3½. Plan review | `plan-review` in a fresh `pro` subagent, once — **short and read-only, zero spikes / zero `run_command`**. Fix every CRITICAL and IMPORTANT. Where configured in `antigravity-orchestration/references/config.md`, also run the `review-lens` corpus check | Fixed |
+| 4. Implement | TDD (RED → GREEN → REFACTOR); reuse check before adding any symbol. Implement inline for single-stream tasks; dispatch `flash` implementers for 2+ parallel streams or multi-phase plans | Fast tests pass |
+| 5. Test & lint | Fast unit tests scoped to affected specs (`-run <AffectedTests>` in Go; <15s target) plus linter/typecheck. Never run unscoped `go test ./...`, slow DB integration suites, E2E, or `pretest` multi-builds locally—leave full-suite sweeps to CI | Zero failures and offenses |
 | 6. Simplify | Reuse, clarity, dead code | Done |
-| 7. Code review | Fresh read-only `pro` reviewer reading the context file (never re-running tests); where configured, run the corpus check on the diff. Delete the context file once approved | Approved |
+| 7. Code review | Run **for the PR when ready, or between phases in large multi-phase projects** (never per commit): fresh read-only `pro` reviewer that trusts the written `/tmp/subagent-context-<project>-<stream>.md` file (never re-fetching its diff/files or running tests/builds); where configured, run the corpus check on the diff. Delete the context file once approved | Approved |
 | 7½. SQL review | If queries or mutations changed: fresh `pro` audit for performance, indexes, security | Reviewed |
 | 8. Blast radius | Walk the Affected Callers list plus callers of every symbol the final diff touched that the plan missed. Runs last | Verified with evidence |
 | 9. Commit | Conventional commit; summarize; on personal repos configured for auto-PR, push and open the PR | User acknowledged |
@@ -73,7 +73,7 @@ Choose the tier first. If unsure, go one tier up.
 ## 4. Stack Conventions
 
 - **Ruby/Rails:** 2-space indent, `snake_case`, `&&`/`||`, `present?`/`blank?`, `find_by`, thin controllers, Interactors, Pundit, Packwerk, RSpec. Structured logging: `Rails.logger.info('event_name', key: value)`.
-- **Go:** use `go-api-structure` during trace and plan. Consumer-declared interfaces, domain decoupled from SQL, DTOs at the HTTP edge, `context.Context` first, table-driven tests. Gates: `test -z "$(gofmt -l .)"`, `go vet ./...`, `golangci-lint run`, `CGO_ENABLED=0 go test ./... -race -shuffle=on`, `govulncheck ./...`.
+- **Go:** use `go-api-structure` during trace and plan. Consumer-declared interfaces, domain decoupled from SQL, DTOs at the HTTP edge, `context.Context` first, table-driven tests. Local gates: `test -z "$(gofmt -l .)"`, `go vet ./...`, `golangci-lint run`, `CGO_ENABLED=0 go test ./<affected-pkg> -run <AffectedTests> -race` (never run unscoped `go test ./...` locally on DB/migration-backed suites; leave full-repo test and `govulncheck` sweeps to CI unless dependencies changed).
 
 ## 5. Communication
 

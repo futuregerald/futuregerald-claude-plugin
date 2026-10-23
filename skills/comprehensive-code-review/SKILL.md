@@ -35,9 +35,10 @@ Any CRITICAL or IMPORTANT? -> CHANGES REQUIRED | else -> APPROVED
 
 The orchestrator precomputes ALL context (including the `git diff` and the orchestrator's passing fast-test/lint gate output) and writes it ONCE to a shared flat temp file (`/tmp/subagent-context-<project>-<stream>.md`). Both parallel reviewers read this file on their first turn so neither the orchestrator's transcript nor the reviewers waste tokens duplicating work.
 
-**CRITICAL — Reviewers Are Strictly Read-Only (No Test, Build, or E2E Execution):**
-- The orchestrator has *already* executed the fast unit test and linter/typecheck gate in its own shell and recorded the output in `/tmp/subagent-context-<project>-<stream>.md`.
-- Review sub-agents (`code-quality-reviewer` and `security-reviewer`) **MUST NEVER run test suites (`npm test`, `vitest`, `go test`, `rspec`), builds (`npm run build`), linters, or E2E suites (`playwright test`, `npm run e2e`)**.
+**CRITICAL — Reviewers Trust the Context File & Are Strictly Read-Only (No Spikes, Test, Build, or E2E Execution):**
+- The orchestrator has *already* gathered the authoritative `git diff`, changed files, and passing fast unit test and linter/typecheck gate output in `/tmp/subagent-context-<project>-<stream>.md`.
+- Review sub-agents (`code-quality-reviewer` and `security-reviewer`) **MUST trust the written `/tmp/subagent-context-<project>-<stream>.md` file** — never re-running `git diff`/`git status`, never re-reading files already embedded in the context file, and **MUST NEVER run spikes, test suites (`npm test`, `vitest`, `go test`, `rspec`), builds (`npm run build`), linters, or E2E suites (`playwright test`, `npm run e2e`)**.
+- When verifying callers, siblings, or library contracts not included in the context file, reviewers must batch their `read_file` (600–800 lines per call, never micro-slices) and `grep -rn` (always with `--exclude-dir={node_modules,dist,build,.git,pb,pb_public,vendor,.next,coverage}`) calls in parallel turns rather than spinning wheels in 30+ serial one-call turns.
 - At the end of the review run (once the stream is `APPROVED`), the orchestrator **deletes `/tmp/subagent-context-<project>-<stream>.md`** (`rm -f /tmp/subagent-context-<project>-<stream>.md`).
 
 ```bash
