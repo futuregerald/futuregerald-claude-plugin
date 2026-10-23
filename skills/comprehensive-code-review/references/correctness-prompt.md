@@ -30,18 +30,26 @@ Agent tool:
 
     Most context you need is provided below (or in the orchestrator's shared
     flat file `/tmp/subagent-context-<project>-<stream>.md` if specified).
-    - If a `/tmp/subagent-context-*.md` path is provided, read it in full on
-      your first tool call (`view_file` / `Read` up to 800 lines).
-    - Do NOT use Grep/Glob/Read for anything already covered in the provided
-      context — only search for things genuinely not provided. **Section B is
-      the deliberate exception: prior-art searches there are mandatory, not
-      optional.**
-    - When you do read a repo file not in the context, read **600–800 lines per
-      call** (never page in 30–50 line micro-slices).
-    - **STRICTLY READ-ONLY / NO TEST OR BUILD EXECUTION:** The orchestrator has
-      already executed the fast unit test and linter/typecheck gate in its own
-      shell. **NEVER run `npm test`, `vitest`, `playwright`, `npm run e2e`,
-      `npm run build`, `go test`, or `rspec`.**
+    - **Trust the written context file:** If a `/tmp/subagent-context-*.md` path
+      is provided, read it in full on your first turn (if it exceeds 800 lines,
+      issue parallel `read_file` calls for lines `1..800` and `801..1600` in the
+      same turn). Trust the diff, embedded file contents, and passing test/lint
+      gate output recorded in it as authoritative — do NOT run `git diff`,
+      `git status`, `gh pr diff`, or re-read files whose full contents or diff
+      are already in the context file.
+    - **Do not spin your wheels (batch your verification calls):** When you need
+      to verify callers, siblings, or library source not in the context file,
+      batch all `grep` and `read_file` calls in parallel in 1–2 turns instead of
+      making 30+ serial one-tool-call turns.
+    - When reading any file, read **full 600–800 line ranges per call** (never
+      page through a 250-line file in 50-line micro-slices across 4 turns).
+    - Whenever you run `grep -rn`, ALWAYS pass
+      `--exclude-dir={node_modules,dist,build,.git,pb,pb_public,vendor,.next,coverage}`
+      so you never hang scanning minified bundles or dependencies.
+    - **STRICTLY READ-ONLY / ZERO SPIKES / NO TEST OR BUILD EXECUTION:** The
+      orchestrator has already executed the fast unit test and linter/typecheck
+      gate in its own shell. **NEVER run `npm test`, `vitest`, `playwright`,
+      `npm run e2e`, `npm run build`, `go test`, `rspec`, or scratch spikes.**
 
     {FRAMEWORK_CONTEXT}
 
@@ -380,33 +388,18 @@ Agent tool:
 
     ### Proving a claim instead of asserting it
 
-    When a finding hinges on behavior you are not certain of, prove it rather
-    than reasoning from memory. **A spike is the last resort, not the first
-    move** — reading the code is faster and cheaper. In this order:
+    When a finding hinges on behavior you are not certain of, prove it by reading
+    rather than reasoning from memory or running spikes:
 
-    1. **Trace it** — graph tools, call paths, the code index. Usually decisive.
+    1. **Trace it** — graph tools, call paths, `grep -rn` (with `--exclude-dir`),
+       and the code index.
     2. **Read the actual source** — the installed library version, the schema,
-       the migration. If you can read the answer, you do not need to run it.
-    3. **Spike** — only for runtime behavior you cannot read off the code.
+       the migration. Batch your `read_file` calls in parallel and read 600–800
+       lines per call.
 
-    If steps 1-2 leave you with high confidence, stop there and cite your
-    evidence. Spiking what you have already established wastes time and tokens.
-
-    When you do spike, use a scratch temp directory, never the working tree,
-    and never modify repo files.
-
-    **Keep it small: one file, a few dozen lines, isolating the single behavior
-    in question.** Never rebuild the app, boot the framework, stand up a
-    database, or reconstruct a large dependency graph — if proving it requires
-    that, it is not a spike. Two attempts, a few minutes; if it has not answered
-    by then, abandon it and downgrade the finding to what you can support.
-
-    Worth it on a CRITICAL or IMPORTANT. Never worth it for a MINOR.
-
-    Where several independent checks would otherwise run serially, dispatch
-    additional sub-agents to run them in parallel — one per question, each
-    given only what it needs. Keep them narrowly scoped; do not spawn agents
-    for work you could finish in a single search.
+    **Never write or execute spikes during code review.** If steps 1–2 still
+    leave a runtime behavior unverified, downgrade the finding to MINOR and
+    frame it as "verify that..." rather than building a scratch program.
 
     Flag as:
     - **IMPORTANT — Pattern Deviation:** Different pattern for same task

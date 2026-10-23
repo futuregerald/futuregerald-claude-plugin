@@ -16,10 +16,10 @@ On-demand detail moved out of `~/.gemini/GEMINI.md` and `~/.gemini/config/rules/
 | Three or more questions for the user | `grilling-page` (1–2 questions stay in chat) |
 | New feature or significant work, before planning | `write-a-prd` |
 | Any Medium/High code change, before writing code | `writing-plans` (must contain Affected Callers) |
-| Every plan, after writing it | `plan-review` in a fresh `pro` subagent, once per pass |
+| Every plan, after writing it | `plan-review` in a fresh `pro` subagent, once per pass (short, read-only, zero spikes / zero `run_command`) |
 | Bug investigation | `systematic-debugging` |
 | Feature implementation | `test-driven-development` |
-| Code review before commit | `comprehensive-code-review` (read-only `pro` subagents) |
+| Code review for the PR or between phases in multi-phase projects (never per commit) | `comprehensive-code-review` (read-only `pro` subagents reading the context file) |
 | Creating or updating a PR | `pull-request-description` |
 | PR / plan / local review on repos configured in `references/config.md` | `review-lens` (§3 below) |
 | Breaker baton warn, or context estimate near 105k | `baton-pass` (§6 below) |
@@ -63,9 +63,9 @@ Run both `--code` and `--concept` every time. Use `--json | jq` to keep output s
 
 | Role | Model | Notes |
 |---|---|---|
-| Lead orchestrator | `pro`, thinking Low | Traces, writes `/tmp/subagent-context-<project>-<stream>.md`, dispatches, runs fast gates, commits. High only for standalone architecture spikes |
-| Implementation | `flash` | One cohesive vertical stream each; paint-by-numbers brief with exact `file:line`, signatures, fast test command; TDD; no comments; 4-section handoff: Changes Made · Flawed Assumptions · Carried Risks · Verification Evidence |
-| Plan / code / SQL review | `pro`, thinking High, read-only | Reads the context file; never runs tests, builds or E2E. Re-dispatch only the reviewer that requested changes |
+| Lead / single-stream implementation | `pro`, thinking Low | Traces, plans, dispatches fast read-only `plan-review`, and implements single-stream Trivial/Medium tasks inline with TDD and scoped fast tests (`-run <AffectedTests>`). Dispatches `flash` implementers for 2+ parallel streams or multi-phase High-tier work |
+| Multi-stream implementation | `flash` | One cohesive vertical stream each; paint-by-numbers brief with exact `file:line`, signatures, scoped fast test command (`-run <AffectedTests>`, never unscoped `go test ./...`); TDD; no comments; 4-section handoff: Changes Made · Flawed Assumptions · Carried Risks · Verification Evidence |
+| Plan / code / SQL review | `pro`, thinking High, read-only | `plan-review` runs once per plan (short, read-only, **zero spikes / zero `run_command`**). `comprehensive-code-review` runs for the PR when ready or between phases in large multi-phase projects (never per commit); does a thorough review without spinning wheels (trusts the written context file as authoritative, never re-runs `git diff` or re-reads embedded files, batches caller/library reads in parallel 600–800 line calls, passes `--exclude-dir` on `grep`, zero spikes/tests/builds) |
 | Mechanical data gathering (MCP, files) | `flash_lite` | `flash` when filtering judgment is needed |
 
 **Data-gathering subagent rules** (lazy MCP tools cause schema-hunting loops):

@@ -52,7 +52,7 @@ Agent tool:
 ```
 
 That is the entire prompt. The agent carries its own methodology — do not restate it. That
-includes its cost rule: it reviews by reading and never builds the plan, so a plan that
+includes its cost rule: it reviews strictly by reading the plan and cited files (**zero spikes, zero builds or test runs**), so a plan that
 contains full function bodies is already too expensive to review (see `writing-plans`).
 
 **Do not steer it.** No suspicions, no "areas of concern", no "please check X". A reviewer
