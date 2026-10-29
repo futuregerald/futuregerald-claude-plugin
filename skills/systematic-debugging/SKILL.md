@@ -60,6 +60,7 @@ You MUST complete each phase before proceeding to the next.
    - They often contain the exact solution
    - Read stack traces completely
    - Note line numbers, file paths, error codes
+   - Locate the entry-point `file:line` first using `git grep -n` before delegating to any subagent; never delegate an untriaged bug or write unverified guesses under `## Known Facts` in a subagent brief (put unproven ideas under `## Hypotheses to Falsify`)
 
 2. **Build a Red-Capable Feedback Loop** *(do this before theorizing — it is the heart of Phase 1)*
    - Construct one command that drives the bug's code path and asserts the user's **exact** symptom, so it goes **red** on this bug and **green** once fixed — not "runs without erroring"
