@@ -6,28 +6,28 @@ tags: [development]
 
 # Subagent-Driven Development
 
-Execute plan by dispatching fresh subagent per task, with two-stage review after each: spec compliance review first, then code quality review.
+Execute plan by dispatching fresh subagents per cohesive stream. Per-stream/task verification runs the implementer's fast unit tests plus the orchestrator's fast unit/lint gate; read-only `pro` reviewers (`spec-reviewer` then `code-quality-reviewer`, or `comprehensive-code-review`) run once per stream/phase boundary or at PR time against `/tmp/subagent-context-<project>-<stream>.md` (never per commit).
 
-**Core principle:** Fresh subagent per task + two-stage review (spec then quality) = high quality, fast iteration
+**Core principle:** Fresh subagent per stream + fast unit verification + read-only review at stream/phase boundaries = high quality, fast iteration without token exhaustion
 
 ## Execution Roles & Dual-Harness Dispatch
 
 | Role | Claude Code (Anthropic 2026) | Antigravity (Google 2026) | Purpose & Constraints |
 |---|---|---|---|
-| **Lead Orchestrator** | Opus 5.5 (`model: "opus"`), Effort: `medium` | Argon (`Model: 'pro'`), Thinking: `low` | Coordinates, traces, writes discovered context to `/tmp/subagent-context-<project>-<stream>.md`, verifies fast gates in own shell, deletes temp file after review approval, commits. Never writes implementation code inline. Never halts prematurely between streams. |
-| **Implementer Subagent** | Sonnet 5.5 (`model: "sonnet"`, subagent: `implementer`), Effort: `medium` | Gemini 3.8 Flash (`Model: 'flash'`), Thinking: `medium` | Fresh context per cohesive stream. Reads `/tmp/subagent-context-<project>-<stream>.md` first, reads additional files in 600–800 line chunks (never 30–50 line slices), follows TDD using **fast unit tests only** (never E2E or `pretest` builds), zero comments, returns 4-section handoff. Never use Haiku. |
-| **Spec / Safety Reviewer** | Opus 5.5 (`subagent_type: "spec-reviewer"` / `"security-reviewer"`), Effort: `high` | Argon (`Model: 'pro'`), Thinking: `high` | **Strictly read-only.** Reads `/tmp/subagent-context-<project>-<stream>.md` (which includes the `git diff` and orchestrator's passing fast-test output). Never executes tests, builds, or E2E suites. |
-| **Code Quality Reviewer** | Opus 5.5 (`subagent_type: "code-quality-reviewer"`), Effort: `high` | Argon (`Model: 'pro'`), Thinking: `high` | **Strictly read-only.** Adversarial quality, architecture, defensive patterns, and test depth against `/tmp/subagent-context-<project>-<stream>.md`. Never executes tests, builds, or E2E suites. |
+| **Lead Orchestrator** | Opus 5.5 (`model: "opus"`), Effort: `medium` | Argon (`Model: 'pro'`), Thinking: `low` | Coordinates, runs initial triage (`git grep -n`, ≤3 inline calls) to identify the entry-point `file:line` first, writes verified `file:line` facts and open questions to `/tmp/subagent-context-<project>-<stream>.md` (never putting unverified hypotheses under `## Known Facts`; use `## Hypotheses to Falsify`), verifies fast gates in own shell, deletes temp file after review approval, commits. Implements inline on quick (<5-turn, low-context) single-stream tasks and contained bugfixes; delegates multi-turn/multi-file streams. Never halts prematurely between streams. |
+| **Implementer Subagent** | Sonnet 5.5 (`model: "sonnet"`, subagent: `implementer`), Effort: `medium` | Gemini 3.8 Flash (`Model: 'flash'`), Thinking: `medium` | Fresh context per cohesive stream. Reads `/tmp/subagent-context-<project>-<stream>.md` first, performs any remaining trace before coding, reads additional files in 600–800 line chunks (never 30–50 line slices), follows TDD using **fast unit tests only** (never E2E or `pretest` builds), zero comments, returns 4-section handoff. Never use Haiku. |
+| **Spec / Safety Reviewer** | Opus 5.5 (`subagent_type: "spec-reviewer"` / `"security-reviewer"`), Effort: `high` | Argon (`Model: 'pro'`), Thinking: `high` | **Strictly read-only.** Runs at stream/phase boundary or PR time (never per commit). Reads `/tmp/subagent-context-<project>-<stream>.md` (which includes the `git diff` and orchestrator's passing fast-test output). Never executes tests, builds, or E2E suites. |
+| **Code Quality Reviewer** | Opus 5.5 (`subagent_type: "code-quality-reviewer"`), Effort: `high` | Argon (`Model: 'pro'`), Thinking: `high` | **Strictly read-only.** Runs at stream/phase boundary or PR time (never per commit). Adversarial quality, architecture, defensive patterns, and test depth against `/tmp/subagent-context-<project>-<stream>.md`. Never executes tests, builds, or E2E suites. |
 
 ### Ephemeral Shared Context File (`/tmp/subagent-context-<project>-<stream>.md`) & Fast-Test Rules
 
 To eliminate duplicate file reads, redundant searches, and $O(N^2)$ token re-billing across subagents:
-1. **Save Orchestrator Context to a Temp Flat File:** Before dispatching the implementer for a stream, the orchestrator writes all relevant pre-traced data (exact target file snippets with line numbers, interfaces/contracts, call sites, and task requirements) to `/tmp/subagent-context-<project>-<stream>.md`.
+1. **Save Orchestrator Context to a Temp Flat File:** After running initial triage (`git grep -n`, ≤3 inline calls) to identify the entry-point `file:line`, the orchestrator writes verified `file:line` facts, contract signatures, task goals, and open questions to `/tmp/subagent-context-<project>-<stream>.md` (never putting unverified hypotheses under `## Known Facts`; use `## Hypotheses to Falsify`). If remaining call-site or source tracing across ≥3 files is needed, the implementer subagent performs that trace first and updates `/tmp/subagent-context-<project>-<stream>.md`.
 2. **Subagents Read the Temp File First:** Instruct every subagent in the stream to read `/tmp/subagent-context-<project>-<stream>.md` on its first tool call (`view_file` / `Read` up to 800 lines) and **never** re-search or re-read unchanged files already covered in that file. When reading any other file, subagents must read **600–800 lines per call** (never 30–50 line micro-slices).
 3. **Fast Local Tests Only (No Local E2E, No `pretest` Builds):**
    - Implementers and orchestrators run **only fast unit tests and typecheck/lint** (`npx vitest run <spec>`, `npm run typecheck`, `go test ./pkg/...`, `bundle exec rspec <spec>`). Never run `pretest` multi-bundle builds on unit test runs.
-   - **Never run E2E suites (`playwright test`, `npm run e2e`) locally between fixes, changes, or streams.**
-4. **Append Diff & Gate Output for Read-Only Reviewers:** After the implementer finishes, the orchestrator runs the fast unit/lint gate in its own shell, appends the `git diff` and passing gate output to `/tmp/subagent-context-<project>-<stream>.md`, and dispatches the parallel read-only reviewers (`code-quality-reviewer` + `security-reviewer`) to read that file. Reviewers **never** run tests, builds, or E2E suites.
+   - **Never run E2E suites (`playwright test`, `npm run e2e`) or full-repo sweeps locally between fixes, changes, or streams.** While E2E and full-repo sweeps are never run as per-turn iteration gates, before opening or merging a PR the agent must check `.github/workflows/` PR triggers (`pull_request`); if a suite (`e2e`, `govulncheck`, `models`) is gated off on PRs (`if: github.event_name != 'pull_request'`), run the targeted check locally or update/trigger the workflow before merging to `main`.
+4. **Append Diff & Gate Output for Read-Only Reviewers:** Per-stream/task verification runs the implementer's fast unit tests plus the orchestrator's fast unit/lint gate in its own shell. Read-only `pro` reviewers (`spec-reviewer`, `code-quality-reviewer`, or `comprehensive-code-review`) run once per stream/phase boundary or at PR time against `/tmp/subagent-context-<project>-<stream>.md` (never per commit). The orchestrator appends the `git diff` and passing gate output to `/tmp/subagent-context-<project>-<stream>.md` and dispatches the read-only reviewers to inspect that file. Reviewers **never** run tests, builds, or E2E suites.
 5. **Targeted Single-Reviewer Re-Verification & Cleanup:** If one reviewer returns `APPROVED` and the other requests localized changes, verify the fix with `fix-check` (findings list + fix diff + gate output), never a fresh reviewer. Once the stream is `APPROVED`, **delete the temp file** (`rm -f /tmp/subagent-context-<project>-<stream>.md`).
 
 ### Dispatch Syntax
@@ -77,48 +77,63 @@ digraph when_to_use {
 digraph process {
     rankdir=TB;
 
-    subgraph cluster_per_task {
-        label="Per Task";
+    subgraph cluster_per_stream {
+        label="Per Stream / Task (Fast Iteration)";
         "Dispatch implementer subagent (./implementer-prompt.md)" [shape=box];
         "Implementer subagent asks questions?" [shape=diamond];
         "Answer questions, provide context" [shape=box];
-        "Implementer subagent implements, tests, commits, self-reviews" [shape=box];
-        "Dispatch spec reviewer subagent (./spec-reviewer-prompt.md)" [shape=box];
-        "Spec reviewer subagent confirms code matches spec?" [shape=diamond];
-        "Implementer subagent fixes spec gaps" [shape=box];
-        "Dispatch code quality reviewer subagent (./code-quality-reviewer-prompt.md)" [shape=box];
-        "Code quality reviewer subagent approves?" [shape=diamond];
-        "Implementer subagent fixes quality issues" [shape=box];
-        "Mark task complete in TodoWrite" [shape=box];
+        "Implementer subagent implements, tests, self-reviews" [shape=box];
+        "Orchestrator runs fast unit/lint gate in own shell" [shape=box];
+        "Fast tests pass?" [shape=diamond];
+        "Implementer subagent fixes fast test/lint failures" [shape=box];
+        "Mark stream/task complete in TodoWrite" [shape=box];
     }
 
-    "Read plan, extract all tasks with full text, note context, create TodoWrite" [shape=box];
-    "More tasks remain?" [shape=diamond];
-    "Dispatch final code reviewer subagent for entire implementation" [shape=box];
-    "Use superpowers:finishing-a-development-branch" [shape=box style=filled fillcolor=lightgreen];
+    subgraph cluster_review_gate {
+        label="At Stream/Phase Boundary or PR Time (Never Per Commit)";
+        "Append diff & gate output to context file" [shape=box];
+        "Dispatch spec reviewer subagent (./spec-reviewer-prompt.md)" [shape=box];
+        "Spec reviewer confirms code matches spec?" [shape=diamond];
+        "Implementer fixes spec gaps" [shape=box];
+        "Orchestrator runs fix-check against spec findings" [shape=box];
+        "Dispatch code quality reviewer subagent (./code-quality-reviewer-prompt.md)" [shape=box];
+        "Code quality reviewer approves?" [shape=diamond];
+        "Implementer fixes quality issues" [shape=box];
+        "Orchestrator runs fix-check against quality findings" [shape=box];
+    }
 
-    "Read plan, extract all tasks with full text, note context, create TodoWrite" -> "Dispatch implementer subagent (./implementer-prompt.md)";
+    "Read plan, extract tasks, write known context to /tmp/subagent-context-*.md" [shape=box];
+    "More tasks remain in stream/phase?" [shape=diamond];
+    "Stream/phase boundary reached or PR ready?" [shape=box];
+    "Ready for merge / PR" [shape=box style=filled fillcolor=lightgreen];
+
+    "Read plan, extract tasks, write known context to /tmp/subagent-context-*.md" -> "Dispatch implementer subagent (./implementer-prompt.md)";
     "Dispatch implementer subagent (./implementer-prompt.md)" -> "Implementer subagent asks questions?";
     "Implementer subagent asks questions?" -> "Answer questions, provide context" [label="yes"];
     "Answer questions, provide context" -> "Dispatch implementer subagent (./implementer-prompt.md)";
-    "Implementer subagent asks questions?" -> "Implementer subagent implements, tests, commits, self-reviews" [label="no"];
-    "Implementer subagent implements, tests, commits, self-reviews" -> "Dispatch spec reviewer subagent (./spec-reviewer-prompt.md)";
-    "Dispatch spec reviewer subagent (./spec-reviewer-prompt.md)" -> "Spec reviewer subagent confirms code matches spec?";
-    "Spec reviewer subagent confirms code matches spec?" -> "Implementer subagent fixes spec gaps" [label="no"];
-    "Implementer subagent fixes spec gaps" -> "Orchestrator runs fix-check against the spec findings" [label="verify fixes"];
-    "Spec reviewer subagent confirms code matches spec?" -> "Dispatch code quality reviewer subagent (./code-quality-reviewer-prompt.md)" [label="yes"];
-    "Dispatch code quality reviewer subagent (./code-quality-reviewer-prompt.md)" -> "Code quality reviewer subagent approves?";
-    "Code quality reviewer subagent approves?" -> "Implementer subagent fixes quality issues" [label="no"];
-    "Implementer subagent fixes quality issues" -> "Orchestrator runs fix-check against the quality findings" [label="verify fixes"];
-    "Orchestrator runs fix-check against the spec findings" -> "Dispatch code quality reviewer subagent (./code-quality-reviewer-prompt.md)" [label="all fixed"];
-    "Orchestrator runs fix-check against the spec findings" -> "Implementer subagent fixes spec gaps" [label="rows open"];
-    "Orchestrator runs fix-check against the quality findings" -> "Mark task complete in TodoWrite" [label="all fixed"];
-    "Orchestrator runs fix-check against the quality findings" -> "Implementer subagent fixes quality issues" [label="rows open"];
-    "Code quality reviewer subagent approves?" -> "Mark task complete in TodoWrite" [label="yes"];
-    "Mark task complete in TodoWrite" -> "More tasks remain?";
-    "More tasks remain?" -> "Dispatch implementer subagent (./implementer-prompt.md)" [label="yes"];
-    "More tasks remain?" -> "Dispatch final code reviewer subagent for entire implementation" [label="no"];
-    "Dispatch final code reviewer subagent for entire implementation" -> "Use superpowers:finishing-a-development-branch";
+    "Implementer subagent asks questions?" -> "Implementer subagent implements, tests, self-reviews" [label="no"];
+    "Implementer subagent implements, tests, self-reviews" -> "Orchestrator runs fast unit/lint gate in own shell";
+    "Orchestrator runs fast unit/lint gate in own shell" -> "Fast tests pass?";
+    "Fast tests pass?" -> "Implementer subagent fixes fast test/lint failures" [label="no"];
+    "Implementer subagent fixes fast test/lint failures" -> "Orchestrator runs fast unit/lint gate in own shell";
+    "Fast tests pass?" -> "Mark stream/task complete in TodoWrite" [label="yes"];
+    "Mark stream/task complete in TodoWrite" -> "More tasks remain in stream/phase?";
+    "More tasks remain in stream/phase?" -> "Dispatch implementer subagent (./implementer-prompt.md)" [label="yes"];
+    "More tasks remain in stream/phase?" -> "Stream/phase boundary reached or PR ready?" [label="no"];
+    "Stream/phase boundary reached or PR ready?" -> "Append diff & gate output to context file";
+    "Append diff & gate output to context file" -> "Dispatch spec reviewer subagent (./spec-reviewer-prompt.md)";
+    "Dispatch spec reviewer subagent (./spec-reviewer-prompt.md)" -> "Spec reviewer confirms code matches spec?";
+    "Spec reviewer confirms code matches spec?" -> "Implementer fixes spec gaps" [label="no"];
+    "Implementer fixes spec gaps" -> "Orchestrator runs fix-check against spec findings" [label="verify fixes"];
+    "Orchestrator runs fix-check against spec findings" -> "Implementer fixes spec gaps" [label="rows open"];
+    "Orchestrator runs fix-check against spec findings" -> "Dispatch code quality reviewer subagent (./code-quality-reviewer-prompt.md)" [label="all fixed"];
+    "Spec reviewer confirms code matches spec?" -> "Dispatch code quality reviewer subagent (./code-quality-reviewer-prompt.md)" [label="yes"];
+    "Dispatch code quality reviewer subagent (./code-quality-reviewer-prompt.md)" -> "Code quality reviewer approves?";
+    "Code quality reviewer approves?" -> "Implementer fixes quality issues" [label="no"];
+    "Implementer fixes quality issues" -> "Orchestrator runs fix-check against quality findings" [label="verify fixes"];
+    "Orchestrator runs fix-check against quality findings" -> "Implementer fixes quality issues" [label="rows open"];
+    "Orchestrator runs fix-check against quality findings" -> "Ready for merge / PR" [label="all fixed"];
+    "Code quality reviewer approves?" -> "Ready for merge / PR" [label="yes"];
 }
 ```
 
@@ -149,31 +164,29 @@ You: "User level (~/.config/superpowers/hooks/)"
 Implementer: "Got it. Implementing now..."
 [Later] Implementer:
   - Implemented install-hook command
-  - Added tests, 5/5 passing
+  - Added fast unit tests, 5/5 passing
   - Self-review: Found I missed --force flag, added it
-  - Committed
+  - Returned 4-section handoff
 
-[Dispatch spec compliance reviewer]
-Spec reviewer: ✅ Spec compliant - all requirements met, nothing extra
-
-[Get git SHAs, dispatch code quality reviewer]
-Code reviewer: Strengths: Good test coverage, clean. Issues: None. Approved.
-
+[Orchestrator runs fast unit/lint gate in own shell: passes]
 [Mark Task 1 complete]
 
 Task 2: Recovery modes
 
-[Get Task 2 text and context (already extracted)]
-[Dispatch implementation subagent with full task text + context]
-
+[Update /tmp/subagent-context-project-stream.md and dispatch implementation subagent]
 Implementer: [No questions, proceeds]
 Implementer:
   - Added verify/repair modes
-  - 8/8 tests passing
-  - Self-review: All good
-  - Committed
+  - 8/8 fast unit tests passing
+  - Returned 4-section handoff
 
-[Dispatch spec compliance reviewer]
+[Orchestrator runs fast unit/lint gate in own shell: passes]
+[Mark Task 2 complete]
+
+...
+
+[Stream/phase boundary reached or PR ready — append git diff & fast gate output to /tmp/subagent-context-project-stream.md]
+[Dispatch read-only spec reviewer]
 Spec reviewer: ❌ Issues:
   - Missing: Progress reporting (spec says "report every 100 items")
   - Extra: Added --json flag (not requested)
@@ -184,7 +197,7 @@ Implementer: Removed --json flag, added progress reporting
 [Orchestrator runs fix-check on the two spec findings: both FIXED]
 fix-check: 2 of 2 FIXED, no unrequested changes
 
-[Dispatch code quality reviewer]
+[Dispatch read-only code quality reviewer]
 Code reviewer: Strengths: Solid. Issues (Important): Magic number (100)
 
 [Implementer fixes]
@@ -193,14 +206,7 @@ Implementer: Extracted PROGRESS_INTERVAL constant
 [Orchestrator runs fix-check on the quality finding: FIXED]
 fix-check: ready to merge
 
-[Mark Task 2 complete]
-
-...
-
-[After all tasks]
-[Dispatch final code-reviewer]
-Final reviewer: All requirements met, ready to merge
-
+[Delete /tmp/subagent-context-project-stream.md]
 Done!
 ```
 
@@ -209,31 +215,30 @@ Done!
 **vs. Manual execution:**
 
 - Subagents follow TDD naturally
-- Fresh context per task (no confusion)
-- Parallel-safe (subagents don't interfere)
+- Fresh context per stream/task (no confusion)
+- Parallel-safe on disjoint files (subagents don't interfere)
 - Subagent can ask questions (before AND during work)
 
 **Efficiency gains:**
 
-- No file reading overhead (controller provides full text)
-- Controller curates exactly what context is needed
+- Shared `/tmp/subagent-context-<project>-<stream>.md` eliminates duplicate file reads and searches
+- Controller curates verified `file:line` context upfront after initial triage
 - Subagent gets complete information upfront
 - Questions surfaced before work begins (not after)
 
 **Quality gates:**
 
-- Self-review catches issues before handoff
-- Two-stage review: spec compliance, then code quality
+- Self-review + orchestrator fast unit/lint gate catches issues per stream
+- Two-stage read-only review (`spec-reviewer` then `code-quality-reviewer`, or `comprehensive-code-review`) runs once at stream/phase boundary or PR time (never per commit)
 - fix-check confirms each fix against its finding without a new review
 - Spec compliance prevents over/under-building
 - Code quality ensures implementation is well-built
 
 **Cost:**
 
-- More subagent invocations (implementer + 2 reviewers per task)
-- Controller does more prep work (extracting all tasks upfront)
-- Review loops add iterations
-- But catches issues early (cheaper than debugging later)
+- Reviewers run only at stream/phase boundaries or PR time (never per commit)
+- Controller does initial triage (`git grep -n`, ≤3 calls) and writes verified context to `/tmp/subagent-context-<project>-<stream>.md`
+- Catches issues without per-task review loops
 
 ## Red Flags
 
@@ -241,7 +246,7 @@ Done!
 
 - Skip reviews (spec compliance OR code quality)
 - Proceed with unfixed issues
-- Dispatch multiple implementation subagents in parallel (conflicts)
+- Dispatch multiple implementation subagents against overlapping files in parallel (independent streams touching disjoint files MAY and SHOULD be dispatched in parallel per GEMINI.md Phase 4)
 - Make subagent read plan file (provide full text instead)
 - Skip scene-setting context (subagent needs to understand where task fits)
 - Ignore subagent questions (answer before letting them proceed)

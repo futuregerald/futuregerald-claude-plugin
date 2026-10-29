@@ -7,8 +7,8 @@ Implement the work described by the user in the spec or tickets.
 
 Use /tdd where possible, at pre-agreed seams.
 
-Run typechecking regularly, single test files regularly, and the full test suite once at the end.
+Run typechecking and scoped fast unit tests regularly (never run unscoped full-repo test suites or E2E as per-turn gates; before opening or merging a PR, check `.github/workflows/` and run any suite gated off on `pull_request`).
 
-Once done, use /code-review to review the work.
+Once done, use `comprehensive-code-review` (or `/code-review`) to review the work.
 
 Commit your work to the current branch.
