@@ -468,6 +468,7 @@ Follow the format in [references/report-format.md](references/report-format.md).
 1. Run `command -v pulsed`. If it is missing, fall back: fill the bundled HTML template for the
    scope (`assets/template-1on1.html` for any single-person scope, else `assets/template.html`),
    save it as `team-pulse-<END_DATE>.html` (`team-pulse-<person-slug>-<END_DATE>.html` for a person;
+   `pulse-<epic-key>-<END_DATE>.html` for an epic scope, the key lowercased, or the subject slug instead when the report covers several epics;
    `<person-slug>` is the first name or GitHub handle, lowercased, `a-z`, `0-9` and `-` only; this slug rule is fallback-only, since with pulsed the file name uses the full `one_on_one.person_name`, e.g. `team-pulse-jules-marlow-<end>.html`),
    write HTML only, say "pulsed not found; rendered from the bundled template" in chat, and go to
    item 6. Never copy an earlier report as the starting point.
