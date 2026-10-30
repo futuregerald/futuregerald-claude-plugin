@@ -141,7 +141,7 @@ class TestReplayBreaker(unittest.TestCase):
         logs_dir = root / conv_id / ".system_generated" / "logs"
         t_path = logs_dir / "transcript.jsonl"
         t_full_path = logs_dir / "transcript_full.jsonl"
-        padding = "x" * 450000
+        padding = "x" * 850000
         steps = [
             {"step_index": 0, "source": "USER_EXPLICIT", "type": "USER_INPUT", "content": "analyze system"},
             {

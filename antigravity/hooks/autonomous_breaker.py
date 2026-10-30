@@ -347,8 +347,8 @@ def _run_breaker(payload, stop_on_enforce=True, collector=None):
         handoff_at_estimate = baton_state.get("handoff_at_estimate")
         is_unlocked = (handoff_at_estimate is not None and estimate <= handoff_at_estimate + 50000)
 
-        baton_block_tokens = int(os.environ.get("BATON_BLOCK_TOKENS", 130000))
-        baton_warn_tokens = int(os.environ.get("BATON_WARN_TOKENS", 105000))
+        baton_block_tokens = int(os.environ.get("BATON_BLOCK_TOKENS", 235000))
+        baton_warn_tokens = int(os.environ.get("BATON_WARN_TOKENS", 205000))
 
         if baton_block_tokens > 0 and estimate >= baton_block_tokens and not is_unlocked:
             is_prism_call = (tool_name == "call_mcp_tool" and tool_args.get("ServerName") == "prism")

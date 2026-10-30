@@ -870,7 +870,7 @@ class TestAutonomousBreaker(unittest.TestCase):
                     "args": {"CommandLine": cmd_pipe}
                 }
             }
-            res = self.execute_breaker(payload, env={"BREAKER_PROBE_MODE": "enforce", "BREAKER_DUP_MODE": "off"})
+            res = self.execute_breaker(payload, env={"BREAKER_PROBE_MODE": "enforce", "BREAKER_DUP_MODE": "off", "BREAKER_TRUELOOP_MODE": "off"})
             self.assertEqual(res.returncode, 0)
             data = json.loads(res.stdout)
             self.assertEqual(data.get("decision"), "deny")
@@ -904,7 +904,7 @@ class TestAutonomousBreaker(unittest.TestCase):
             self.assertEqual(res.returncode, 0)
             self.assertEqual(res.stdout, "")
 
-    def test_probe_tripwire_default_log_mode_allows(self):
+    def test_probe_tripwire_default_enforce_mode_denies_and_log_override_allows(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             t_path = Path(tmpdir) / "transcript.jsonl"
             log_path = Path(tmpdir) / "breaker.jsonl"
@@ -920,7 +920,7 @@ class TestAutonomousBreaker(unittest.TestCase):
                 {"step_index": 4, "source": "SYSTEM", "type": "GENERIC", "content": "2"},
             ])
             payload = {
-                "conversationId": "test-probe-default-log",
+                "conversationId": "test-probe-default-enforce",
                 "transcriptPath": str(t_path),
                 "stepIdx": 5,
                 "toolCall": {
@@ -930,13 +930,18 @@ class TestAutonomousBreaker(unittest.TestCase):
             }
             res = self.execute_breaker(payload, env={"BREAKER_LOG_PATH": str(log_path), "BREAKER_DUP_MODE": "off"})
             self.assertEqual(res.returncode, 0)
-            self.assertEqual(res.stdout, "")
+            data = json.loads(res.stdout)
+            self.assertEqual(data.get("decision"), "deny")
             self.assertTrue(log_path.exists())
             with open(log_path, "r", encoding="utf-8") as f:
                 logs = [json.loads(line) for line in f if line.strip()]
             self.assertEqual(len(logs), 1)
             self.assertEqual(logs[0]["rule"], "PROBE")
-            self.assertEqual(logs[0]["mode"], "log")
+            self.assertEqual(logs[0]["mode"], "enforce")
+
+            res_log = self.execute_breaker(payload, env={"BREAKER_LOG_PATH": str(log_path), "BREAKER_PROBE_MODE": "log", "BREAKER_DUP_MODE": "off"})
+            self.assertEqual(res_log.returncode, 0)
+            self.assertEqual(res_log.stdout, "")
 
     def test_true_loop_5_distinct_ranges_allow(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1151,12 +1156,12 @@ class TestAutonomousBreaker(unittest.TestCase):
             self.assertEqual(res.returncode, 0)
             self.assertEqual(res.stdout, "")
 
-    def test_true_loop_default_log_mode_allows(self):
+    def test_true_loop_default_enforce_mode_denies_and_log_override_allows(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             t_path = Path(tmpdir) / "transcript.jsonl"
             log_path = Path(tmpdir) / "breaker.jsonl"
             self.write_jsonl(t_path, [
-                {"step_index": 0, "source": "USER_EXPLICIT", "type": "USER_INPUT", "content": "overlap log mode"},
+                {"step_index": 0, "source": "USER_EXPLICIT", "type": "USER_INPUT", "content": "overlap default mode"},
                 {"step_index": 1, "source": "MODEL", "type": "PLANNER_RESPONSE", "tool_calls": [
                     {"name": "read_file", "args": {"Path": "/tmp/source.py", "StartLine": 1, "EndLine": 50}}
                 ]},
@@ -1165,7 +1170,7 @@ class TestAutonomousBreaker(unittest.TestCase):
                 ]},
             ])
             payload = {
-                "conversationId": "test-overlap-log-mode",
+                "conversationId": "test-overlap-default-mode",
                 "transcriptPath": str(t_path),
                 "stepIdx": 4,
                 "toolCall": {
@@ -1175,13 +1180,18 @@ class TestAutonomousBreaker(unittest.TestCase):
             }
             res = self.execute_breaker(payload, env={"BREAKER_LOG_PATH": str(log_path), "BREAKER_DUP_MODE": "off"})
             self.assertEqual(res.returncode, 0)
-            self.assertEqual(res.stdout, "")
+            data = json.loads(res.stdout)
+            self.assertEqual(data.get("decision"), "deny")
             self.assertTrue(log_path.exists())
             with open(log_path, "r", encoding="utf-8") as f:
                 logs = [json.loads(line) for line in f if line.strip()]
             self.assertEqual(len(logs), 1)
             self.assertEqual(logs[0]["rule"], "TRUELOOP")
-            self.assertEqual(logs[0]["mode"], "log")
+            self.assertEqual(logs[0]["mode"], "enforce")
+
+            res_log = self.execute_breaker(payload, env={"BREAKER_LOG_PATH": str(log_path), "BREAKER_TRUELOOP_MODE": "log", "BREAKER_DUP_MODE": "off"})
+            self.assertEqual(res_log.returncode, 0)
+            self.assertEqual(res_log.stdout, "")
 
     def test_checkpoint_unauthorized_call_n_denies_n_plus_1_allows_2n_denies(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1376,7 +1386,7 @@ class TestAutonomousBreaker(unittest.TestCase):
             self.assertEqual(res.returncode, 0)
             self.assertEqual(res.stdout, "")
 
-    def test_checkpoint_default_log_mode_allows(self):
+    def test_checkpoint_default_enforce_mode_denies_and_log_override_allows(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             t_path = Path(tmpdir) / "transcript.jsonl"
             log_path = Path(tmpdir) / "breaker.jsonl"
@@ -1388,20 +1398,25 @@ class TestAutonomousBreaker(unittest.TestCase):
                 })
             self.write_jsonl(t_path, steps)
             payload = {
-                "conversationId": "test-checkpoint-log-mode",
+                "conversationId": "test-checkpoint-default-mode",
                 "transcriptPath": str(t_path),
                 "stepIdx": 6,
                 "toolCall": {"name": "run_command", "args": {"CommandLine": "echo call_5"}}
             }
             res = self.execute_breaker(payload, env={"BREAKER_LOG_PATH": str(log_path), "BREAKER_CHECKPOINT_CALLS": "5", "BREAKER_DUP_MODE": "off"})
             self.assertEqual(res.returncode, 0)
-            self.assertEqual(res.stdout, "")
+            data = json.loads(res.stdout)
+            self.assertEqual(data.get("decision"), "deny")
             self.assertTrue(log_path.exists())
             with open(log_path, "r", encoding="utf-8") as f:
                 logs = [json.loads(line) for line in f if line.strip()]
             self.assertEqual(len(logs), 1)
             self.assertEqual(logs[0]["rule"], "CHECKPOINT")
-            self.assertEqual(logs[0]["mode"], "log")
+            self.assertEqual(logs[0]["mode"], "enforce")
+
+            res_log = self.execute_breaker(payload, env={"BREAKER_LOG_PATH": str(log_path), "BREAKER_CHECKPOINT_CALLS": "5", "BREAKER_CHECKPOINT_MODE": "log", "BREAKER_DUP_MODE": "off"})
+            self.assertEqual(res_log.returncode, 0)
+            self.assertEqual(res_log.stdout, "")
 
 
     def test_default_env_helper_does_not_write_to_real_metrics_file(self):
@@ -1484,7 +1499,7 @@ class TestAutonomousBreaker(unittest.TestCase):
                     "args": {"CommandLine": "python3 -c \"open('~/.gemini/tmp_probe.txt').read()\""}
                 }
             }
-            res = self.execute_breaker(payload, env={"BREAKER_PROBE_MODE": "enforce", "BREAKER_DUP_MODE": "off"})
+            res = self.execute_breaker(payload, env={"BREAKER_PROBE_MODE": "enforce", "BREAKER_DUP_MODE": "off", "BREAKER_TRUELOOP_MODE": "off"})
             self.assertEqual(res.returncode, 0)
             self.assertEqual(res.stdout, "")
 
@@ -1647,7 +1662,7 @@ class TestAutonomousBreaker(unittest.TestCase):
             self.assertIn("send this to an implementation helper agent via invoke_subagent", data_7th.get("reason", "").lower())
             self.assertIn("6/6", data_7th.get("reason", ""))
 
-    def test_h1_default_log_mode_allows_and_logs(self):
+    def test_h1_default_enforce_mode_denies_and_log_override_allows(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             t_path = Path(tmpdir) / "transcript.jsonl"
             log_path = Path(tmpdir) / "breaker.jsonl"
@@ -1664,21 +1679,26 @@ class TestAutonomousBreaker(unittest.TestCase):
             self.write_jsonl(t_path, steps)
 
             payload_7th = {
-                "conversationId": "test-h1-log",
+                "conversationId": "test-h1-default",
                 "transcriptPath": str(t_path),
                 "stepIdx": step_idx + 1,
                 "toolCall": {"name": "replace_file_content", "args": {"TargetFile": "/repo/code_6.go", "TargetContent": "a", "ReplacementContent": "b"}}
             }
             res_7th = self.execute_breaker(payload_7th, env={"BREAKER_MAIN_EDIT_MAX": "6", "BREAKER_LOG_PATH": str(log_path)})
             self.assertEqual(res_7th.returncode, 0)
-            self.assertEqual(res_7th.stdout, "")
+            data_7th = json.loads(res_7th.stdout)
+            self.assertEqual(data_7th.get("decision"), "deny")
             self.assertTrue(log_path.exists())
             with open(log_path, "r", encoding="utf-8") as f:
                 logs = [json.loads(line) for line in f if line.strip()]
             h1_logs = [entry for entry in logs if entry.get("rule") == "H1"]
             self.assertEqual(len(h1_logs), 1)
-            self.assertEqual(h1_logs[0]["mode"], "log")
-            self.assertEqual(h1_logs[0]["conversation_id"], "test-h1-log")
+            self.assertEqual(h1_logs[0]["mode"], "enforce")
+            self.assertEqual(h1_logs[0]["conversation_id"], "test-h1-default")
+
+            res_log = self.execute_breaker(payload_7th, env={"BREAKER_MAIN_EDIT_MAX": "6", "BREAKER_H1_MODE": "log", "BREAKER_LOG_PATH": str(log_path)})
+            self.assertEqual(res_log.returncode, 0)
+            self.assertEqual(res_log.stdout, "")
 
     def test_h1_md_edits_never_count(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1904,7 +1924,7 @@ class TestAutonomousBreaker(unittest.TestCase):
             self.assertEqual(res.returncode, 0)
             self.assertEqual(res.stdout, "")
 
-    def test_h2_default_log_mode_allows_and_logs(self):
+    def test_h2_default_enforce_mode_denies_and_log_override_allows(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             t_path = Path(tmpdir) / "transcript.jsonl"
             log_path = Path(tmpdir) / "breaker.jsonl"
@@ -1919,20 +1939,25 @@ class TestAutonomousBreaker(unittest.TestCase):
             self.write_jsonl(t_path, steps)
 
             payload = {
-                "conversationId": "test-h2-log",
+                "conversationId": "test-h2-default",
                 "transcriptPath": str(t_path),
                 "stepIdx": 132,
                 "toolCall": {"name": "run_command", "args": {"CommandLine": "pytest test_final.py"}}
             }
             res = self.execute_breaker(payload, env={"BREAKER_SUBAGENT_STEP_MAX": "130", "BREAKER_LOG_PATH": str(log_path)})
             self.assertEqual(res.returncode, 0)
-            self.assertEqual(res.stdout, "")
+            data = json.loads(res.stdout)
+            self.assertEqual(data.get("decision"), "deny")
             self.assertTrue(log_path.exists())
             with open(log_path, "r", encoding="utf-8") as f:
                 logs = [json.loads(line) for line in f if line.strip()]
             h2_logs = [entry for entry in logs if entry.get("rule") == "H2"]
             self.assertEqual(len(h2_logs), 1)
-            self.assertEqual(h2_logs[0]["mode"], "log")
+            self.assertEqual(h2_logs[0]["mode"], "enforce")
+
+            res_log = self.execute_breaker(payload, env={"BREAKER_SUBAGENT_STEP_MAX": "130", "BREAKER_H2_MODE": "log", "BREAKER_LOG_PATH": str(log_path)})
+            self.assertEqual(res_log.returncode, 0)
+            self.assertEqual(res_log.stdout, "")
 
     def test_h2_disabled_when_max_zero(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1961,7 +1986,7 @@ class TestAutonomousBreaker(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             t_path = Path(tmpdir) / "transcript.jsonl"
             t_full_path = Path(tmpdir) / "transcript_full.jsonl"
-            padding = "a" * 415000
+            padding = "a" * 815000
             steps = [
                 {"step_index": 0, "source": "USER_EXPLICIT", "type": "USER_INPUT", "content": "do task"},
                 {"step_index": 1, "source": "MODEL", "type": "PLANNER_RESPONSE", "content": padding, "tool_calls": [{"name": "run_command", "args": {"CommandLine": "ls"}}]},
@@ -1983,7 +2008,7 @@ class TestAutonomousBreaker(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             t_path = Path(tmpdir) / "transcript.jsonl"
             t_full_path = Path(tmpdir) / "transcript_full.jsonl"
-            padding = "a" * 420000
+            padding = "a" * 820000
             steps = [
                 {"step_index": 0, "source": "USER_EXPLICIT", "type": "USER_INPUT", "content": "unauth question"},
                 {"step_index": 1, "source": "MODEL", "type": "PLANNER_RESPONSE", "content": padding, "tool_calls": [{"name": "run_command", "args": {"CommandLine": "echo 1"}}]},
@@ -2009,7 +2034,7 @@ class TestAutonomousBreaker(unittest.TestCase):
                 state_data = json.load(f)
             self.assertIsNotNone(state_data.get("warned_at_estimate"))
 
-            steps[1]["content"] = "a" * 440000
+            steps[1]["content"] = "a" * 840000
             self.write_jsonl(t_path, steps)
             self.write_jsonl(t_full_path, steps)
 
@@ -2027,7 +2052,7 @@ class TestAutonomousBreaker(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             t_path = Path(tmpdir) / "transcript.jsonl"
             t_full_path = Path(tmpdir) / "transcript_full.jsonl"
-            padding = "a" * 525000
+            padding = "a" * 945000
             steps = [
                 {"step_index": 0, "source": "USER_EXPLICIT", "type": "USER_INPUT", "content": "do work"},
                 {"step_index": 1, "source": "MODEL", "type": "PLANNER_RESPONSE", "content": padding, "tool_calls": [{"name": "run_command", "args": {"CommandLine": "ls"}}]},
@@ -2064,7 +2089,7 @@ class TestAutonomousBreaker(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             t_path = Path(tmpdir) / "transcript.jsonl"
             t_full_path = Path(tmpdir) / "transcript_full.jsonl"
-            padding = "a" * 525000
+            padding = "a" * 945000
             steps = [
                 {"step_index": 0, "source": "USER_EXPLICIT", "type": "USER_INPUT", "content": "do work"},
                 {"step_index": 1, "source": "MODEL", "type": "PLANNER_RESPONSE", "content": padding, "tool_calls": [{"name": "run_command", "args": {"CommandLine": "ls"}}]},
@@ -2116,7 +2141,7 @@ class TestAutonomousBreaker(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             t_path = Path(tmpdir) / "transcript.jsonl"
             t_full_path = Path(tmpdir) / "transcript_full.jsonl"
-            padding = "a" * 525000
+            padding = "a" * 945000
             steps = [
                 {"step_index": 0, "source": "USER_EXPLICIT", "type": "USER_INPUT", "content": "do work"},
                 {"step_index": 1, "source": "MODEL", "type": "PLANNER_RESPONSE", "content": padding, "tool_calls": [{"name": "run_command", "args": {"CommandLine": "ls"}}]},
@@ -2201,7 +2226,7 @@ class TestAutonomousBreaker(unittest.TestCase):
             t_full_path = Path(tmpdir) / "transcript_full.jsonl"
             steps = [
                 {"step_index": 0, "source": "USER_EXPLICIT", "type": "USER_INPUT", "content": "long task"},
-                {"step_index": 1, "source": "MODEL", "type": "PLANNER_RESPONSE", "content": "a" * 525000, "tool_calls": []},
+                {"step_index": 1, "source": "MODEL", "type": "PLANNER_RESPONSE", "content": "a" * 945000, "tool_calls": []},
                 {"step_index": 2, "source": "SYSTEM", "type": "CHECKPOINT", "content": "{{ CHECKPOINT 0 }}"},
                 {"step_index": 3, "source": "USER_EXPLICIT", "type": "USER_INPUT", "content": "continue"},
                 {"step_index": 4, "source": "MODEL", "type": "PLANNER_RESPONSE", "content": "small content", "tool_calls": []},
@@ -2227,7 +2252,7 @@ class TestAutonomousBreaker(unittest.TestCase):
             t_full_path = Path(tmpdir) / "transcript_full.jsonl"
             steps = [
                 {"step_index": 0, "source": "USER_EXPLICIT", "type": "USER_INPUT", "content": "long task"},
-                {"step_index": 1, "source": "MODEL", "type": "PLANNER_RESPONSE", "content": "a" * 525000, "tool_calls": []},
+                {"step_index": 1, "source": "MODEL", "type": "PLANNER_RESPONSE", "content": "a" * 945000, "tool_calls": []},
                 {"step_index": 2, "source": "MODEL", "type": "GENERIC", "content": "# Resuming from a compaction in output"},
                 {"step_index": 3, "source": "USER_EXPLICIT", "type": "USER_INPUT", "content": "continue"},
                 {"step_index": 4, "source": "MODEL", "type": "PLANNER_RESPONSE", "content": "small content", "tool_calls": []},
@@ -2253,14 +2278,14 @@ class TestAutonomousBreaker(unittest.TestCase):
             t_full_path = Path(tmpdir) / "transcript_full.jsonl"
             steps = [
                 {"step_index": 0, "source": "USER_EXPLICIT", "type": "USER_INPUT", "content": "long task"},
-                {"step_index": 1, "source": "MODEL", "type": "PLANNER_RESPONSE", "content": "a" * 525000, "tool_calls": []},
+                {"step_index": 1, "source": "MODEL", "type": "PLANNER_RESPONSE", "content": "a" * 945000, "tool_calls": []},
             ]
             self.write_jsonl(t_path, steps)
             self.write_jsonl(t_full_path, steps)
 
             other_state = Path(tmpdir) / "baton-other-conv.json"
             with open(other_state, "w") as f:
-                json.dump({"warned_at_estimate": 105000, "handoff_at_estimate": 131000, "segment": 0}, f)
+                json.dump({"warned_at_estimate": 205000, "handoff_at_estimate": 236000, "segment": 0}, f)
 
             payload = {
                 "conversationId": "current-conv",
@@ -2278,7 +2303,7 @@ class TestAutonomousBreaker(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             t_path = Path(tmpdir) / "transcript.jsonl"
             t_full_path = Path(tmpdir) / "transcript_full.jsonl"
-            padding = "a" * 420000
+            padding = "a" * 820000
             steps = [
                 {"step_index": 0, "source": "USER_EXPLICIT", "type": "USER_INPUT", "content": "/goal do big task"},
                 {"step_index": 1, "source": "MODEL", "type": "PLANNER_RESPONSE", "content": padding, "tool_calls": [{"name": "run_command", "args": {"CommandLine": "echo 1"}}]},
@@ -2395,7 +2420,7 @@ class TestAutonomousBreaker(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             t_path = Path(tmpdir) / "transcript.jsonl"
             t_full_path = Path(tmpdir) / "transcript_full.jsonl"
-            padding = "a" * 420000
+            padding = "a" * 820000
             steps = [
                 {"step_index": 0, "source": "USER_EXPLICIT", "type": "USER_INPUT", "content": "unauth question"},
                 {"step_index": 1, "source": "MODEL", "type": "PLANNER_RESPONSE", "content": padding, "tool_calls": [{"name": "run_command", "args": {"CommandLine": "echo 1"}}]},
@@ -2790,7 +2815,7 @@ class TestAutonomousBreaker(unittest.TestCase):
                     "args": {"CommandLine": cmd_url}
                 }
             }
-            res = self.execute_breaker(payload, env={"BREAKER_PROBE_MODE": "enforce", "BREAKER_DUP_MODE": "off"})
+            res = self.execute_breaker(payload, env={"BREAKER_PROBE_MODE": "enforce", "BREAKER_DUP_MODE": "off", "BREAKER_TRUELOOP_MODE": "off"})
             self.assertEqual(res.returncode, 0)
             self.assertEqual(res.stdout, "")
 
