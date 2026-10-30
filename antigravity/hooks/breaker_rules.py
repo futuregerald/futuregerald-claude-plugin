@@ -6,14 +6,15 @@ AUTHORIZED_PATTERNS = [
     re.compile(r"/goal", re.IGNORECASE),
     re.compile(r"autonomous", re.IGNORECASE),
     re.compile(r"lead orchestrator", re.IGNORECASE),
-    re.compile(r"continue from pending steps", re.IGNORECASE),
-    re.compile(r"ingest .*active_context", re.IGNORECASE),
+    re.compile(r"continue\b.*pending steps", re.IGNORECASE),
+    re.compile(r"(ingest|continue from)\b.*active_context", re.IGNORECASE),
     re.compile(r"implement .*(phase|stream)", re.IGNORECASE),
     re.compile(r"keep going", re.IGNORECASE),
     re.compile(r"\b(start|begin|execute|run|continue)\s+phase\s+\d+", re.IGNORECASE),
     re.compile(r"brief-phase", re.IGNORECASE),
     re.compile(r"handoff-phase", re.IGNORECASE),
     re.compile(r"complete instructions for phase\s+\w+", re.IGNORECASE),
+    re.compile(r"subagent[- ]driven development", re.IGNORECASE),
 ]
 
 COMPLAINT_PATTERN = re.compile(r"why .*(long|slow)|taking so long|\bstop\b", re.IGNORECASE)
@@ -95,7 +96,7 @@ def is_code_file(path: str) -> bool:
     for ext in (".md", ".txt", ".json", ".yaml", ".yml"):
         if low.endswith(ext):
             return False
-    for sub in ("/brain/", "/tmp/", "docs/plans/"):
+    for sub in ("/brain/", "/tmp/", "docs/plans/", "/docs/"):
         if sub in path:
             return False
     return True
@@ -141,8 +142,6 @@ def rule_mode(rule: str) -> str:
     env_val = os.environ.get(f"BREAKER_{r}_MODE", "").strip().lower()
     if env_val in ("log", "enforce", "off"):
         return env_val
-    if r in ("PROBE", "TRUELOOP", "CHECKPOINT", "H1", "H2"):
-        return "log"
     return "enforce"
 
 def probe_target_path(cmd: str) -> str | None:

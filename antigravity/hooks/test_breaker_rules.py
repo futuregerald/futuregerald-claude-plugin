@@ -16,15 +16,15 @@ from breaker_rules import (
 
 class TestBreakerRulesNew(unittest.TestCase):
     def test_rule_mode_defaults(self):
-        self.assertEqual(rule_mode("PROBE"), "log")
-        self.assertEqual(rule_mode("TRUELOOP"), "log")
-        self.assertEqual(rule_mode("CHECKPOINT"), "log")
+        self.assertEqual(rule_mode("PROBE"), "enforce")
+        self.assertEqual(rule_mode("TRUELOOP"), "enforce")
+        self.assertEqual(rule_mode("CHECKPOINT"), "enforce")
         self.assertEqual(rule_mode("DUP"), "enforce")
         self.assertEqual(rule_mode("EXPLORE"), "enforce")
         self.assertEqual(rule_mode("STRIKES"), "enforce")
         self.assertEqual(rule_mode("BATON"), "enforce")
-        self.assertEqual(rule_mode("H1"), "log")
-        self.assertEqual(rule_mode("H2"), "log")
+        self.assertEqual(rule_mode("H1"), "enforce")
+        self.assertEqual(rule_mode("H2"), "enforce")
 
     def test_rule_mode_env_override(self):
         try:
@@ -197,6 +197,14 @@ class TestBreakerRulesNew(unittest.TestCase):
         self.assertFalse(is_authorized("what's the next phase"))
         self.assertTrue(is_authorized("see brief-phase-1.md"))
         self.assertTrue(is_authorized("check handoff-phase-2.txt"))
+        self.assertTrue(is_authorized("Continue from ACTIVE_CONTEXT.md and execute all Pending Steps to completion."))
+        self.assertTrue(is_authorized("Yes. Plan and use the workflow with subagent driven development"))
+
+    def test_is_code_file_excludes_docs_dir(self):
+        from breaker_rules import is_code_file
+        self.assertFalse(is_code_file("/repo/docs/technical-walkthrough.html"))
+        self.assertFalse(is_code_file("/repo/docs/plans/plan.md"))
+        self.assertTrue(is_code_file("/repo/extension/src/engine.ts"))
 
     def test_r2_read_coverage_helpers(self):
         from breaker_rules import read_coverage, is_re_read

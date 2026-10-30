@@ -21,12 +21,12 @@ Personal, team, tracker and repository specifics never live in these rules, skil
 | DUP | identical tool call repeated within a short window | enforce |
 | EXPLORE | a helper agent exceeds 100 exploratory calls | enforce |
 | STRIKES | 4 consecutive test failures | enforce |
-| BATON | context estimate (transcript bytes since the last compaction ÷ 4) reaches 105k (one warn) or 130k (block until a handoff is written) | enforce |
-| PROBE | 3rd inline `python3 -c` probe of the same file | log |
-| TRUELOOP | 3rd re-read of mostly already-read lines, or the same command, within 20 planner steps | log |
-| CHECKPOINT | an unauthorized main-session turn reaches a multiple of 45 calls | log |
-| H1 | an authorized main session makes a 7th code edit without dispatching a helper | log |
-| H2 | a helper agent reaches 130 planner turns | log |
+| BATON | context estimate (transcript bytes since the last compaction ÷ 4) reaches 205k (one warn) or 235k (block until a handoff is written; sized for 256k compaction on Argon & Flash 3.8) | enforce |
+| PROBE | 3rd inline `python3 -c` probe of the same file | enforce |
+| TRUELOOP | 3rd re-read of mostly already-read lines, or the same command, within 20 planner steps | enforce |
+| CHECKPOINT | an unauthorized main-session turn reaches a multiple of 45 calls | enforce |
+| H1 | an authorized main session makes a 7th code edit without dispatching a helper | enforce |
+| H2 | a helper agent reaches 130 planner turns | enforce |
 
 `log` rules write would-deny lines to `~/.gemini/metrics/breaker.jsonl` without blocking. Override any rule with `BREAKER_<RULE>_MODE=log|enforce|off`. The hook fails open: any error allows the call.
 

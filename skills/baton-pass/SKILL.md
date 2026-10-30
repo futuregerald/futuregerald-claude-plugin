@@ -1,6 +1,6 @@
 ---
 name: baton-pass
-description: Pass the baton with a deterministic ACTIVE_CONTEXT.md snapshot so fresh context picks up the work. MANDATORY in Antigravity and Gemini when the breaker hook warns that the context estimate has reached ~105k tokens (it blocks at ~130k), before auto-compaction hits, or when asked to 'pass the baton', 'baton pass', 'save active context', 'snapshot context', or 'continue from active context'. Antigravity and Gemini only (never used in Claude Code). Not a replacement for regular handoffs.
+description: Pass the baton with a deterministic ACTIVE_CONTEXT.md snapshot so fresh context picks up the work. MANDATORY in Antigravity and Gemini when the breaker hook warns that the context estimate has reached ~205k tokens (it blocks at ~235k, sized for 256k compaction on Argon and Flash 3.8), before auto-compaction hits, or when asked to 'pass the baton', 'baton pass', 'save active context', 'snapshot context', or 'continue from active context'. Antigravity and Gemini only (never used in Claude Code). Not a replacement for regular handoffs.
 author: Gerald Onyango
 tags: [workflow, context, tokens, handoff, architecture]
 ---
@@ -27,8 +27,8 @@ The Baton Pass is a deterministic state snapshot that transfers execution contex
 
 ```
 Antigravity / Gemini:
-  Breaker block (context estimate ~130k)?                      -> Execute Baton Pass immediately
-  Breaker warn (context estimate ~105k)?                       -> Execute Baton Pass at the next natural break
+  Breaker block (context estimate ~235k)?                      -> Execute Baton Pass immediately
+  Breaker warn (context estimate ~205k)?                       -> Execute Baton Pass at the next natural break
   User said 'pass the baton' or 'snapshot context'?            -> Execute Baton Pass immediately
   No warn yet?                                                 -> Continue in-session
 
@@ -36,9 +36,9 @@ Claude Code:
   Any trigger                                                  -> Not used; continue in-session
 ```
 
-In Antigravity and Gemini, never let a session run into auto-compaction: it compacts early, drops edge-case constraints mid-generation, and burns context re-reading files. Measured over 70 real Antigravity compactions, the context at compaction (transcript bytes since the previous compaction ÷ 4) had a p10 of ~145k tokens, so the warn at ~105k leaves room to finish the current step and hand off. The estimate is per segment, so a turn count says little: replayed over 150 transcripts, the warn would have fired as early as step 54 and at a median of step 163.
+In Antigravity and Gemini, never let a session run into auto-compaction: it compacts early, drops edge-case constraints mid-generation, and burns context re-reading files. On 256k-compaction models (Argon and Flash 3.8), the breaker warns at ~205k tokens and blocks at ~235k (transcript bytes since the previous compaction ÷ 4), leaving room to finish the current step and hand off before 256k auto-compaction. The estimate is per segment, so a turn count says little.
 
-When the breaker's baton rule is enforced (it starts in log mode), the block level allows only the snapshot write, Prism calls and reading the snapshot. It denies `invoke_subagent`, because a helper's report comes back into the parent and grows its context. Writing the snapshot unlocks this conversation until the estimate grows another ~50k.
+When the breaker's baton rule is enforced (the default; override with `BREAKER_BATON_MODE=log`), the block level allows only the snapshot write, Prism calls and reading the snapshot. It denies `invoke_subagent`, because a helper's report comes back into the parent and grows its context. Writing the snapshot unlocks this conversation until the estimate grows another ~50k.
 
 Claude Code does not use this skill. Its context window is much larger (up to 1M), compaction comes late, and the model cannot see its own token count, so a snapshot-and-restart interrupts work while most of the window is still usable.
 
@@ -104,9 +104,9 @@ A worker sub-agent gets its brief from Sections 1, 3 and 4 and returns a handoff
 When starting Session B with `Ingest <path> and continue from Pending Steps`:
 
 1. **Read Snapshot:** Load the file directly via filesystem read.
-2. **Absorb Contracts:** Ingest Section 1 schemas into memory. Before trusting them, run two cheap checks: `git diff --stat <snapshot Commit>` and `git status --short`. Tracked files in this repo that neither lists are as documented, so do not re-read or grep them. Re-read the ones that changed, untracked files, and anything outside this repo, which git cannot vouch for.
+2. **Absorb Contracts:** Ingest Section 1 schemas into memory. Before trusting them, run two cheap checks: `git diff --stat <snapshot Commit>` and `git status --short`. Tracked files in this repo that neither lists are as documented, so do not re-read or grep them. NEVER read ≥3 codebase files inline in the parent session. If changed files or untracked files need inspection, delegate that read to the subagent.
 3. **Internalize Constraints:** Treat Section 4 rules as inviolable negative constraints.
-4. **Execute Step 1:** Immediately begin working on Step 1 of Section 3. Run the designated gate command to verify the baseline before making modifications.
+4. **Execute Step 1 (Subagent-First):** Do not execute multi-step exploration or implementation in the parent session. Immediately write `/tmp/subagent-context-<project>-<stream>.md` populated directly from the handoff's Section 1 (Contracts) and Section 2 (Decisions/Results) data, and dispatch a `flash` subagent to execute Step 1 of Section 3. The orchestrator runs the designated fast gate command in its own shell to verify the baseline/results.
 
 ## Do / Don't Pairs
 
