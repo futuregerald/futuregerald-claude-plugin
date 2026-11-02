@@ -8,7 +8,7 @@ mkdir -p "$dest/hooks" "$dest/rules" "$dest/skills/antigravity-orchestration/ref
 
 cp "$src/GEMINI.md" "$dest/GEMINI.md"
 cp "$src/config/hooks.json" "$dest/hooks.json"
-cp "$src/config/rules/skills-and-delegation.md" "$dest/rules/skills-and-delegation.md"
+[ -f "$src/config/rules/skills-and-delegation.md" ] && cp "$src/config/rules/skills-and-delegation.md" "$dest/rules/skills-and-delegation.md"
 cp "$src/config/skills/antigravity-orchestration/SKILL.md" "$dest/skills/antigravity-orchestration/SKILL.md"
 cp "$src/config/skills/antigravity-orchestration/references/config.example.md" "$dest/skills/antigravity-orchestration/references/config.example.md"
 

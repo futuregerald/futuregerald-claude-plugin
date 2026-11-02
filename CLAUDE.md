@@ -25,28 +25,30 @@
 
 ## Development Lifecycle (MASTER WORKFLOW)
 
-**MANDATORY: Create a todo list using TaskCreate for every non-trivial task.**
+**MANDATORY: Create a todo list using TaskCreate for every non-trivial task. Invoke the full workflow with `/lifecycle` (or `/start`, `/begin`), or Phase 0 with `/shape`.**
 
 | Phase | Action | Skill/Tool | Gate |
 |-------|--------|------------|------|
+| 0. SHAPE | For new or user-facing work (feature, product, page, design, PRD): interview user on what good means and write a confirmed brief (`craftsmans-wisdom` / `/shape`), optionally grill the details (`future-grilling`), then a PRD (`write-a-prd`) or `brainstorming`. For internal technical work: ask once per session whether to skip Phase 0 or run `future-grilling` on open decisions. The brief feeds the plan | `/shape`, `/craftsmans-wisdom`, `/future-grilling`, `/write-a-prd`, `/brainstorming` | Brief confirmed (or explicitly skipped for internal technical work) |
 | 1. RECEIVE | Understand task, create todo list | `TaskCreate` | Todo list exists |
-| 2. IMPACT ANALYSIS | Trace the call chain — up and down — of every symbol the change touches | See **System Thinking** below | Callers, callees, contract, coverage recorded |
-| 3. PLAN | Write implementation plan (always required, including one-line fixes) | `writing-plans` | Plan file exists and contains the Impact Analysis |
-| 4. IMPLEMENT | Write code following TDD | `test-driven-development` | Tests exist and pass |
-| 5. TEST | `go test ./...` | — | Zero failures |
-| 6. SIMPLIFY | `Agent(subagent_type="code-simplifier")` | `code-simplifier` agent | Staff review complete |
-| 7. CODE REVIEW | `comprehensive-code-review` — parallel correctness + safety sub-agents, once per stream; fix rounds are verified with `fix-check` | Fresh sub-agents | Reviewer approves, or `fix-check` says ready |
-| 8. SQL REVIEW | If DB touched: `Agent(subagent_type="sql-reviewer")` | `sql-optimization-patterns` skill | Reviewer approves |
-| 9. BLAST-RADIUS VERIFY | Walk the IMPACT ANALYSIS caller list; confirm each still holds. **Runs last, after every code-mutating phase** | — | Every caller verified with evidence |
-| 10. COMMIT | `git commit` | — | Commit created |
-| 11. PUSH | Push feature branch; `gh pr create` with `Closes #N` if `gh` available | — | Branch pushed (PR created if `gh`) |
-| 12. VERIFY CI | If `gh`: `gh run list`, autonomous PR review, auto-merge when green | — | CI green (if applicable) |
+| 2. TRACE | Trace the call chain — up and down — of every symbol the change touches | See **System Thinking** below | Callers, callees, contract, coverage recorded |
+| 3. PLAN | Write implementation plan (always required for all work, including one-line fixes) | `/writing-plans` | Plan file exists and contains the Affected Callers / Impact Analysis |
+| 3½. PLAN REVIEW | Adversarial review in a fresh read-only sub-agent (skipped only for trivial changes with an obvious, self-contained blast radius) | `/plan-review` | All CRITICAL/IMPORTANT findings fixed (or skipped for trivial change) |
+| 4. IMPLEMENT | Write code following TDD in an implementer sub-agent reading `/tmp/subagent-context-<project>-<stream>.md` | `/test-driven-development`, `/subagent-driven-development` | Tests exist and pass |
+| 5. TEST | `go test ./...` (or scoped fast test command) | — | Zero failures |
+| 6. LINT | Linter and typecheck | — | Zero offenses |
+| 7. SIMPLIFY | `Agent(subagent_type="code-simplifier")` | `/code-simplifier` | Staff review complete |
+| 8. CODE REVIEW | `comprehensive-code-review` — parallel correctness + safety sub-agents, once per stream; fix rounds are verified with `fix-check` | `/comprehensive-code-review`, `/fix-check` | Reviewer approves, or `fix-check` says ready |
+| 9. SQL REVIEW | If DB touched: `Agent(subagent_type="sql-reviewer")` | `/sql-optimization-patterns` | Reviewer approves |
+| 10. BLAST-RADIUS VERIFY | Walk the Affected Callers / Impact Analysis caller list plus any symbol the final diff touched that the plan missed. **Runs last, after every code-mutating phase** | — | Every caller verified with evidence |
+| 11. COMMIT | `git commit` | — | Commit created |
+| 12. HANDOFF | Push feature branch; `gh pr create` using `pull-request-description` (`editor-pass` before user-facing work ships); verify CI. At the end of handoff, ask whether to run `/copy-edit` (non-blocking — never delays commit, push, PR, or handoff) | `/pull-request-description`, `/editor-pass`, `/copy-edit` (non-blocking offer) | Branch pushed, PR created, CI green |
 
 **Exceptions that skip planning:** pure doc updates, `git revert`.
 
 ### Mandatory Phase Rules
 
-**All phases are MANDATORY. No exceptions. No skipping "simple" changes.**
+**All phases are MANDATORY. Every code change gets a written plan (Phase 3); only Phase 3½ (`plan-review`) may be skipped for a trivial change with an obvious, self-contained blast radius.**
 
 - **SIMPLIFY, CODE REVIEW, and SQL REVIEW** MUST use fresh sub-agents via the Agent tool — no shared context
 - NEVER review your own code — you wrote it, you cannot objectively review it
