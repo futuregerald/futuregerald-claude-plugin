@@ -1,10 +1,9 @@
 ---
 name: plan-review
-description: MANDATORY after writing any implementation plan and before writing any code - invoke it yourself, do not wait to be asked. Also use when the user asks to review, sanity-check, grill, or poke holes in a plan. For a multi-phase plan, re-run on the REMAINING tasks at each phase boundary, since tasks planned against a codebase that no longer exists drift and their gates still pass. Dispatches one fresh staff-engineer reviewer against the plan file. Runs once per pass - findings are fixed, and the plan is never sent back for a second review.
+description: Run automatically after writing any non-trivial implementation plan and before writing any code (skip only for trivial changes with an obvious, self-contained blast radius). Also use when the user asks to review, sanity-check, grill, or poke holes in a plan. For a multi-phase plan, re-run on the REMAINING tasks at each phase boundary, since tasks planned against a codebase that no longer exists drift and their gates still pass. Dispatches one fresh staff-engineer reviewer against the plan file. Runs once per pass - findings are fixed, and the plan is never sent back for a second review.
 tags: [plan, review, adversarial, staff-engineer]
 model: inherit
 effort: high
-author: Gerald Onyango <gerald.onyango@gmail.com>
 ---
 
 # Plan Review
@@ -24,11 +23,11 @@ which cost more than the defects it caught were worth.
 
 ## When to use
 
-- The user asks to review, sanity-check, grill, or poke holes in a plan
-- A plan is written and it is worth a second pair of eyes before implementing
+- After writing any non-trivial implementation plan (`writing-plans`) and before writing any code — invoke it yourself without waiting to be asked
+- When the user asks to review, sanity-check, grill, or poke holes in a plan
+- At each phase boundary of a multi-phase plan, on the remaining tasks
 
-Judgment call, not an automatic step on every plan. A one-line fix with an obvious blast
-radius does not need it; a change touching a contract other code depends on does.
+**When to skip:** only for a trivial change with an obvious, self-contained blast radius (e.g., a one-line fix or config tweak that does not alter any contract other callers depend on). Every change still gets a written plan (`writing-plans`); only the `plan-review` sub-agent dispatch is skipped for trivial changes.
 
 ## Preconditions
 

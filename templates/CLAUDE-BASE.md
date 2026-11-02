@@ -28,29 +28,31 @@
 
 ## Development Lifecycle (MASTER WORKFLOW)
 
-**Every code change follows this workflow. A one-line fix follows the same lifecycle as a major feature.**
+**Every code change follows this workflow (`/lifecycle`, `/start`, or `/begin`). Every code change gets a written plan (Phase 3); only Phase 3½ (`plan-review`) may be skipped for a trivial change with an obvious, self-contained blast radius.**
 
 | Phase | Action | Gate |
 |-------|--------|------|
+| 0. SHAPE | For new or user-facing work (feature, product, page, design, PRD): interview the user on what good means and write a confirmed brief (`craftsmans-wisdom` / `/shape`), optionally grill the details (`future-grilling`), then a PRD (`write-a-prd`) or `brainstorming`. For internal technical work: ask once per session whether to skip Phase 0 or run `future-grilling` on open decisions. The brief feeds the plan | Brief confirmed (or explicitly skipped for internal technical work) |
+| 0½. UI DESIGN | For net-new pages, new apps, major/non-trivial changes to existing UI pages, or anytime requested: run `/ui-design` (`huashu-design`) to generate 3 distinct high-fidelity interactive prototypes of the same thing on a single HTML comparison page (`design-demos/index.html`) and open it in the browser so the user can pick a direction before planning | 3-prototype HTML page opened and direction selected (or skipped for non-UI / minor UI work) |
 | 1. RECEIVE | Understand the task; create a todo list (`TaskCreate`) for anything non-trivial | Task understood |
 | 2. TRACE | Trace the call chain, up and down, of every symbol the change touches. See **Trace Before You Touch** | Chain traced; affected and untested callers identified |
-| 3. PLAN | Write the plan with `writing-plans`. Never commit it | Plan exists and has an Affected Callers section |
-| 3½. PLAN REVIEW | `plan-review` in a **fresh** sub-agent, every plan, once. Fix every CRITICAL and IMPORTANT before implementing | Review run; findings fixed |
+| 3. PLAN | Write the plan for all work with `writing-plans`. Never commit it | Plan exists and has an Affected Callers section |
+| 3½. PLAN REVIEW | `plan-review` in a **fresh** sub-agent, once (skipped only for trivial changes with an obvious, self-contained blast radius). Fix every CRITICAL and IMPORTANT before implementing | Review run; findings fixed (or skipped for trivial change) |
 | 4. IMPLEMENT | TDD (`test-driven-development`): RED → GREEN → REFACTOR. Run the reuse check first (**Reuse Before You Build**) | Fast tests exist and pass; nothing duplicates an existing symbol |
 | 5. TEST | `{{TEST_COMMAND}}`, fast unit tests for the affected code only. Never run E2E suites or multi-build `pretest` steps between changes | Zero failures |
 | 6. LINT | The project's typecheck and linter (see Quick Reference and the language section) | Zero offenses |
 | 7. SIMPLIFY | `code-simplifier` agent; implement only approved simplifications, then re-run tests | Simplified |
-| 8. CODE REVIEW | `comprehensive-code-review` in fresh, read-only sub-agents (code quality, patterns, SQL, security, simplification). One review per stream | Review passes |
-| 9. FIX FINDINGS | Fix every CRITICAL and IMPORTANT. Verify the fixes with `fix-check`, never a second comprehensive review | `fix-check` verdict: ready |
+| 8. CODE REVIEW | `comprehensive-code-review` in fresh, read-only sub-agents (code quality, patterns, SQL, security, simplification). One review per stream; fix rounds verified with `fix-check` | Review passes |
+| 9. SQL REVIEW | If database queries or mutations changed: `sql-reviewer` agent (`sql-optimization-patterns`) | SQL reviewed |
 | 10. BLAST-RADIUS VERIFY | Walk the Affected Callers list, plus the callers of every symbol the final diff touches that the plan did not list. **Runs last, after every code-mutating phase** | Every caller verified with evidence |
 | 11. COMMIT | `git commit`, conventional format | Commit created |
-| 12. PUSH + PR | Push the branch and open the PR (`pull-request-description`) in the same pass. **Never merge**: merging is the user's decision | PR URL reported |
+| 12. HANDOFF | For user-facing work, run `editor-pass` against the brief before shipping. Push the branch and open the PR (`pull-request-description`) in the same pass. **Never merge**: merging is the user's decision. At the end of handoff, ask whether the user wants to run `/copy-edit` (non-blocking — never delays commit, push, PR, or handoff) | PR URL reported & user acknowledged |
 
 **Exceptions that skip planning:** pure doc updates, `git revert`.
 
 ### Phase Rules
 
-- Never skip phases for "simple" changes. **No source file is edited before TRACE and PLAN have run**, including "while I'm in here" fixes.
+- Never skip phases for "simple" changes (except Phase 3½ `plan-review` on trivial changes with an obvious, self-contained blast radius). **No source file is edited before TRACE and PLAN have run**, including "while I'm in here" fixes.
 - **Reviews run in fresh sub-agents with no shared context.** Never review your own code, and never review a plan in the context that wrote it: shared context makes a reviewer rubber-stamp what it watched being built.
 - **A plan review reads; it never builds the plan.** It checks premises, callers and design against the code, and spikes only a load-bearing premise it cannot settle by reading. Measured: a review that built a plan end to end cost ~161k tokens and found two issues the first gate would have shown within a minute. It runs once; never send a plan back for a second round.
 - **After a fix round, run `fix-check`, not another review.** It walks each original finding against the fix diff and reports FIXED / PARTIAL / NOT FIXED with `file:line` and the covering test. A fresh full review after every fix round costs a full review each time and keeps surfacing new, smaller findings, so the loop never closes. Send back only the rows that are not FIXED, and run `fix-check` again on the next fix.
@@ -184,21 +186,26 @@ Never write: what the code does · how the language or library works · your rea
 
 ## Mandatory Skills
 
-| Trigger | Skill |
+| Trigger | Skill / Slash Command |
 |---------|-------|
+| Full 12-phase development lifecycle (`0. SHAPE` → `12. HANDOFF`) | `/lifecycle` (aliases: `/start`, `/begin`) |
 | Settling a routing question: is a cheaper model actually cheaper, is it safe to batch, what does a dispatch cost | `future-model-router`, **consulted, not per-turn**; the every-turn habits are in the delegation block above |
-| Before planning new or user-facing work (feature, product, page) | `craftsmans-wisdom`, then `future-grilling` if the user wants the details stress-tested |
-| New feature or significant work, before planning | `write-a-prd` |
-| Any code change (PLAN) | `writing-plans` |
-| Every plan, before implementing | `plan-review`, in a fresh sub-agent |
-| Three or more questions for the user | `grilling-page`: one page with each question's context, options and a recommendation. One or two questions: ask in chat |
-| Bug investigation | `systematic-debugging` |
-| New feature | `test-driven-development` (RED → GREEN → REFACTOR) |
-| Running a multi-stream plan through sub-agents | `subagent-driven-development` |
-| Database queries or mutations changed | `sql-optimization-patterns` + `sql-reviewer` agent |
-| Code review (phase 8), reviewing a PR | `comprehensive-code-review` |
-| After a review's fix round | `fix-check` |
-| Creating or updating a pull request | `pull-request-description`, **mandatory for new PRs and description updates** |
+| Before planning new or user-facing work (feature, product, page) | `/shape`, `/craftsmans-wisdom`, then `/future-grilling` if the user wants the details stress-tested (for internal technical work, ask once per session whether to skip) |
+| Net-new pages, new apps, major/non-trivial changes to existing UI pages, or when requested (Phase 0½) | `/ui-design` (`huashu-design`): generates 3 distinct high-fidelity prototypes of the same thing on one HTML comparison page (`design-demos/index.html`) and opens it in the browser before planning |
+| New feature or significant work, before planning | `/write-a-prd` |
+| Any code change (PLAN) | `/writing-plans` (required for all work) |
+| Every non-trivial plan, before implementing | `/plan-review`, in a fresh sub-agent (skipped only for trivial changes with an obvious, self-contained blast radius) |
+| Three or more questions for the user | `/grilling-page`: one page with each question's context, options and a recommendation. One or two questions: ask in chat |
+| Bug investigation | `/systematic-debugging` |
+| New feature | `/test-driven-development` (RED → GREEN → REFACTOR) |
+| Running a multi-stream plan through sub-agents | `/subagent-driven-development` |
+| Simplifying recently changed code (phase 7) | `/code-simplifier` |
+| Database queries or mutations changed | `/sql-optimization-patterns` + `sql-reviewer` agent |
+| Code review (phase 8), reviewing a PR | `/comprehensive-code-review` |
+| After a review's fix round | `/fix-check` |
+| Post-build quality check on user-facing work against the brief (phase 12) | `/editor-pass` |
+| Optional copy edit & marketing psychology report | `/copy-edit` (combines `copywriting` + `marketing-psychology`; offered non-blocking at the end of handoff) |
+| Creating or updating a pull request | `/pull-request-description`, **mandatory for new PRs and description updates** |
 
 Before acting on a task, check whether an installed skill applies and use it.
 
