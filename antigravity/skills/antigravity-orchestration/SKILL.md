@@ -17,6 +17,7 @@ On-demand detail moved out of `~/.gemini/GEMINI.md` and `~/.gemini/config/rules/
 | Three or more questions for the user | `/grilling-page` (1–2 questions stay in chat) |
 | New feature or significant work, before planning | `/write-a-prd` |
 | Creative or exploratory design before planning | `/brainstorming` (takes the `craftsmans-wisdom` brief) |
+| Phase 0½ (UI Design): net-new pages, new apps, non-trivial UI changes to existing pages, or on demand | `/ui-design`, `/huashu-design` (generates 3 distinct prototypes of the same thing on one interactive HTML page `design-demos/index.html` and waits for user selection) |
 | Every code change, before writing code (Phase 3) | `/writing-plans` (required for all work; must contain Affected Callers) |
 | Every plan, after writing it (Phase 3½ — skip only for trivial changes with an obvious blast radius) | `/plan-review` in a fresh `pro` subagent, once per pass (short, read-only, zero spikes / zero `run_command`) |
 | Bug investigation | `/systematic-debugging` |

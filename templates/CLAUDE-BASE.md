@@ -33,6 +33,7 @@
 | Phase | Action | Gate |
 |-------|--------|------|
 | 0. SHAPE | For new or user-facing work (feature, product, page, design, PRD): interview the user on what good means and write a confirmed brief (`craftsmans-wisdom` / `/shape`), optionally grill the details (`future-grilling`), then a PRD (`write-a-prd`) or `brainstorming`. For internal technical work: ask once per session whether to skip Phase 0 or run `future-grilling` on open decisions. The brief feeds the plan | Brief confirmed (or explicitly skipped for internal technical work) |
+| 0½. UI DESIGN | For net-new pages, new apps, major/non-trivial changes to existing UI pages, or anytime requested: run `/ui-design` (`huashu-design`) to generate 3 distinct high-fidelity interactive prototypes of the same thing on a single HTML comparison page (`design-demos/index.html`) and open it in the browser so the user can pick a direction before planning | 3-prototype HTML page opened and direction selected (or skipped for non-UI / minor UI work) |
 | 1. RECEIVE | Understand the task; create a todo list (`TaskCreate`) for anything non-trivial | Task understood |
 | 2. TRACE | Trace the call chain, up and down, of every symbol the change touches. See **Trace Before You Touch** | Chain traced; affected and untested callers identified |
 | 3. PLAN | Write the plan for all work with `writing-plans`. Never commit it | Plan exists and has an Affected Callers section |
@@ -190,6 +191,7 @@ Never write: what the code does · how the language or library works · your rea
 | Full 12-phase development lifecycle (`0. SHAPE` → `12. HANDOFF`) | `/lifecycle` (aliases: `/start`, `/begin`) |
 | Settling a routing question: is a cheaper model actually cheaper, is it safe to batch, what does a dispatch cost | `future-model-router`, **consulted, not per-turn**; the every-turn habits are in the delegation block above |
 | Before planning new or user-facing work (feature, product, page) | `/shape`, `/craftsmans-wisdom`, then `/future-grilling` if the user wants the details stress-tested (for internal technical work, ask once per session whether to skip) |
+| Net-new pages, new apps, major/non-trivial changes to existing UI pages, or when requested (Phase 0½) | `/ui-design` (`huashu-design`): generates 3 distinct high-fidelity prototypes of the same thing on one HTML comparison page (`design-demos/index.html`) and opens it in the browser before planning |
 | New feature or significant work, before planning | `/write-a-prd` |
 | Any code change (PLAN) | `/writing-plans` (required for all work) |
 | Every non-trivial plan, before implementing | `/plan-review`, in a fresh sub-agent (skipped only for trivial changes with an obvious, self-contained blast radius) |

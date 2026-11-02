@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>UI Design Exploration — 3 Prototypes</title>
+  <style>
+    :root {
+      --bg: #111110;
+      --surface: #1A1918;
+      --surface-hover: #242321;
+      --border: #2E2D2A;
+      --text: #F3F1EC;
+      --muted: #9E9B93;
+      --accent: #E5A93C;
+      --radius: 10px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(17, 17, 16, 0.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .title-group h1 {
+      font-size: 16px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+    .title-group p {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+    .mode-tabs {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--surface);
+      padding: 4px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+    .mode-tab {
+      background: transparent;
+      color: var(--muted);
+      border: none;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+    }
+    .mode-tab:hover { color: var(--text); }
+    .mode-tab.active {
+      background: var(--text);
+      color: var(--bg);
+      font-weight: 600;
+    }
+    .kbd {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 10px;
+      padding: 1px 5px;
+      border-radius: 4px;
+      border: 1px solid currentColor;
+      opacity: 0.65;
+    }
+    .grid-view {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 20px;
+      padding: 24px;
+      flex: 1;
+    }
+    @media (max-width: 1200px) {
+      .grid-view { grid-template-columns: 1fr; }
+    }
+    .proto-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      transition: border-color 0.15s ease, transform 0.15s ease;
+    }
+    .proto-card:hover {
+      border-color: #4A4843;
+    }
+    .proto-meta {
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .proto-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .proto-badge {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 11px;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .proto-title {
+      font-size: 15px;
+      font-weight: 600;
+    }
+    .proto-thesis {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+    .proto-actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 4px;
+    }
+    .swatches {
+      display: flex;
+      gap: 5px;
+    }
+    .swatch {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      border: 1px solid rgba(255,255,255,0.2);
+    }
+    .btn-expand {
+      background: var(--surface-hover);
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 5px 10px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .btn-expand:hover {
+      background: var(--text);
+      color: var(--bg);
+    }
+    .viewport-shell {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 16 / 10;
+      background: #000;
+      overflow: hidden;
+    }
+    .viewport-shell iframe {
+      width: 1440px;
+      height: 900px;
+      border: none;
+      transform-origin: top left;
+      background: #fff;
+    }
+    .single-view {
+      display: none;
+      flex: 1;
+      flex-direction: column;
+    }
+    .single-view.active {
+      display: flex;
+    }
+    .single-bar {
+      padding: 10px 24px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 13px;
+    }
+    .single-frame {
+      flex: 1;
+      width: 100%;
+      min-height: calc(100vh - 105px);
+      border: none;
+      background: #fff;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="title-group">
+      <h1 id="project-title">UI Design Exploration — 3 Prototypes</h1>
+      <p id="project-subtitle">Compare all 3 directions side by side (G) or interact at full scale (1, 2, 3)</p>
+    </div>
+    <div class="mode-tabs">
+      <button class="mode-tab active" data-mode="grid" onclick="setMode('grid')">
+        <span>3-Up Grid</span> <span class="kbd">G</span>
+      </button>
+      <button class="mode-tab" data-mode="0" onclick="setMode(0)">
+        <span id="tab-label-0">01 · Roulette</span> <span class="kbd">1</span>
+      </button>
+      <button class="mode-tab" data-mode="1" onclick="setMode(1)">
+        <span id="tab-label-1">02 · Benchmark</span> <span class="kbd">2</span>
+      </button>
+      <button class="mode-tab" data-mode="2" onclick="setMode(2)">
+        <span id="tab-label-2">03 · Studio</span> <span class="kbd">3</span>
+      </button>
+    </div>
+  </header>
+
+  <main id="grid-container" class="grid-view"></main>
+
+  <section id="single-container" class="single-view">
+    <div class="single-bar">
+      <div>
+        <strong id="single-title"></strong>
+        <span id="single-thesis" style="color: var(--muted); margin-left: 10px;"></span>
+      </div>
+      <button class="btn-expand" onclick="copyChoice()">Copy Selection for Chat</button>
+    </div>
+    <iframe id="single-iframe" class="single-frame"></iframe>
+  </section>
+
+  <script>
+    // Replace PROTOTYPES with the 3 generated prototypes (either src path or full srcdoc HTML)
+    const PROTOTYPES = window.PROTOTYPES_DATA || [
+      {
+        badge: "Direction 01 · Style Roulette",
+        title: "Prototype 1",
+        thesis: "Breaks the default minimal SaaS template with a distinct structural grid and typography.",
+        swatches: ["#F6F4F0", "#141413", "#D94E34"],
+        src: "./direction-1-roulette.html",
+        srcdoc: ""
+      },
+      {
+        badge: "Direction 02 · Benchmark Reference",
+        title: "Prototype 2",
+        thesis: "Adapts best-in-class reference layout density and interaction mechanics to real content.",
+        swatches: ["#0D0E11", "#F5F7FA", "#3B82F6"],
+        src: "./direction-2-benchmark.html",
+        srcdoc: ""
+      },
+      {
+        badge: "Direction 03 · Dream Studio Bespoke",
+        title: "Prototype 3",
+        thesis: "Bespoke editorial & spatial hierarchy tailored to the user's primary workflow.",
+        swatches: ["#FAF8F5", "#1C1917", "#15803D"],
+        src: "./direction-3-studio.html",
+        srcdoc: ""
+      }
+    ];
+
+    let currentMode = 'grid';
+
+    function renderGrid() {
+      const grid = document.getElementById('grid-container');
+      grid.innerHTML = '';
+      PROTOTYPES.forEach((p, idx) => {
+        const tabLabel = document.getElementById(`tab-label-${idx}`);
+        if (tabLabel) tabLabel.textContent = `0${idx + 1} · ${p.title}`;
+
+        const card = document.createElement('article');
+        card.className = 'proto-card';
+        const swatchHtml = (p.swatches || []).map(c => `<span class="swatch" style="background:${c}"></span>`).join('');
+        card.innerHTML = `
+          <div class="proto-meta">
+            <div class="proto-header">
+              <span class="proto-badge">${p.badge}</span>
+              <button class="btn-expand" onclick="setMode(${idx})">Interact Fullscreen (${idx + 1}) ↗</button>
+            </div>
+            <div class="proto-title">${p.title}</div>
+            <p class="proto-thesis">${p.thesis}</p>
+            <div class="proto-actions">
+              <div class="swatches">${swatchHtml}</div>
+            </div>
+          </div>
+          <div class="viewport-shell" data-shell="${idx}">
+            <iframe id="grid-iframe-${idx}"></iframe>
+          </div>
+        `;
+        grid.appendChild(card);
+        const iframe = card.querySelector('iframe');
+        if (p.srcdoc) {
+          iframe.srcdoc = p.srcdoc;
+        } else if (p.src) {
+          iframe.src = p.src;
+        }
+      });
+      requestAnimationFrame(scaleGridFrames);
+    }
+
+    function scaleGridFrames() {
+      document.querySelectorAll('.viewport-shell').forEach(shell => {
+        const w = shell.clientWidth;
+        const scale = w / 1440;
+        const iframe = shell.querySelector('iframe');
+        if (iframe) {
+          iframe.style.transform = `scale(${scale})`;
+        }
+      });
+    }
+
+    function setMode(mode) {
+      currentMode = mode;
+      document.querySelectorAll('.mode-tab').forEach(btn => {
+        btn.classList.toggle('active', String(btn.dataset.mode) === String(mode));
+      });
+      const grid = document.getElementById('grid-container');
+      const single = document.getElementById('single-container');
+      if (mode === 'grid') {
+        grid.style.display = 'grid';
+        single.classList.remove('active');
+        requestAnimationFrame(scaleGridFrames);
+      } else {
+        grid.style.display = 'none';
+        single.classList.add('active');
+        const p = PROTOTYPES[mode];
+        document.getElementById('single-title').textContent = `0${mode + 1} · ${p.title} (${p.badge})`;
+        document.getElementById('single-thesis').textContent = p.thesis;
+        const sFrame = document.getElementById('single-iframe');
+        if (p.srcdoc) {
+          sFrame.srcdoc = p.srcdoc;
+        } else {
+          sFrame.removeAttribute('srcdoc');
+          sFrame.src = p.src;
+        }
+      }
+    }
+
+    function copyChoice() {
+      if (currentMode === 'grid') return;
+      const p = PROTOTYPES[currentMode];
+      const text = `Selected UI Direction ${currentMode + 1}: ${p.title} (${p.badge})`;
+      navigator.clipboard.writeText(text);
+      alert(`Copied to clipboard:\n"${text}"`);
+    }
+
+    window.addEventListener('resize', () => {
+      if (currentMode === 'grid') scaleGridFrames();
+    });
+    window.addEventListener('keydown', e => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      if (e.key === 'g' || e.key === 'G' || e.key === 'Escape') setMode('grid');
+      if (e.key === '1') setMode(0);
+      if (e.key === '2') setMode(1);
+      if (e.key === '3') setMode(2);
+    });
+
+    renderGrid();
+  </script>
+</body>
+</html>

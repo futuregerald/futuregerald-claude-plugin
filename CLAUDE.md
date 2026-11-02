@@ -25,11 +25,12 @@
 
 ## Development Lifecycle (MASTER WORKFLOW)
 
-**MANDATORY: Create a todo list using TaskCreate for every non-trivial task. Invoke the full workflow with `/lifecycle` (or `/start`, `/begin`), or Phase 0 with `/shape`.**
+**MANDATORY: Create a todo list using TaskCreate for every non-trivial task. Invoke the full workflow with `/lifecycle` (or `/start`, `/begin`), Phase 0 with `/shape`, or Phase 0½ with `/ui-design`.**
 
 | Phase | Action | Skill/Tool | Gate |
 |-------|--------|------------|------|
 | 0. SHAPE | For new or user-facing work (feature, product, page, design, PRD): interview user on what good means and write a confirmed brief (`craftsmans-wisdom` / `/shape`), optionally grill the details (`future-grilling`), then a PRD (`write-a-prd`) or `brainstorming`. For internal technical work: ask once per session whether to skip Phase 0 or run `future-grilling` on open decisions. The brief feeds the plan | `/shape`, `/craftsmans-wisdom`, `/future-grilling`, `/write-a-prd`, `/brainstorming` | Brief confirmed (or explicitly skipped for internal technical work) |
+| 0½. UI DESIGN | For net-new pages, new apps, major/non-trivial changes to existing UI pages, or anytime requested: generate 3 distinct high-fidelity interactive prototypes of the same thing on a single HTML comparison page (`design-demos/index.html`) and open it in the browser so the user can pick a direction before planning | `/ui-design`, `/huashu-design` | 3-prototype HTML page opened and direction selected (or skipped for non-UI / minor UI work) |
 | 1. RECEIVE | Understand task, create todo list | `TaskCreate` | Todo list exists |
 | 2. TRACE | Trace the call chain — up and down — of every symbol the change touches | See **System Thinking** below | Callers, callees, contract, coverage recorded |
 | 3. PLAN | Write implementation plan (always required for all work, including one-line fixes) | `/writing-plans` | Plan file exists and contains the Affected Callers / Impact Analysis |
