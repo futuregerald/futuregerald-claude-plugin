@@ -475,7 +475,9 @@ Follow the format in [references/report-format.md](references/report-format.md).
 2. Run `pulsed config show --json` and read `links`. It decides which URLs the payload can leave
    out (see [references/payload.md](references/payload.md), section 5).
 3. Write `.updates/payload.json` following [references/payload.md](references/payload.md). Start
-   from the example for the scope in `assets/payloads/`.
+   from the example for the scope in `assets/payloads/`. Write `report_title` last, from the finished
+   headline and risks (payload.md, section 4): it is the only thing `pulsed report list` shows to tell
+   this report from the others.
 4. Run `pulsed report submit .updates/payload.json`; it prints the report id. On exit 2 the payload
    is invalid: fix every error path it lists and resubmit, never stripping content to pass. On exit 3
    or any other failure, stop and show the error.
