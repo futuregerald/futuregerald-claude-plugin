@@ -48,7 +48,7 @@ Every string field that is not Prose is plain text: `Epic.title`, `Epic.parent_t
 
 This is the one content edit allowed under section 8.
 
-`report_title` is plain text, at most 120 characters, and required: `pulsed report submit` rejects a payload without it. It is how a reader picks this report out of `pulsed report list`, so it names the scope, the subject and the window end, then the one or two findings that set this report apart. For example: `Harbor Services team pulse to Oct 12: gateway on track, audit export blocked on vendor schema`. Two reports on the same subject and window get different titles. Never reuse `title`, which is the same on every report of a scope.
+`report_title` is plain text, at most 120 characters, and required: `pulsed report submit` rejects a payload without it. It is how a reader picks this report out of `pulsed report list`, so it names the scope, the subject and the window end, then the one or two findings that set this report apart. For example: `Harbor Services team pulse to Oct 12: gateway on track, audit export blocked on vendor schema`. Before writing it, run `pulsed report list --subject "<subject>" --limit 5`: if an earlier report shows the same title, say what is different about this one. Never reuse `title`, which is the same on every report of a scope.
 
 ## 5. Links
 
