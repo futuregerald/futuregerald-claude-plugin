@@ -1,11 +1,28 @@
 ---
-name: wayfinder
-description: Plan a huge chunk of work — more than one agent session can hold — as a shared map of decision tickets on your issue tracker, and resolve them one at a time until the way to the destination is clear.
+name: future-wayfinder
+description: Phase 0 branch for work too big and unclear for one grilling session — takes the confirmed craftsmans-wisdom brief as the destination, charts the open decisions as a map of blocking decision tickets, resolves one per session, and hands off to write-a-prd and the writing-plans roadmap once nothing is left to decide. Use when the user invokes /future-wayfinder, names a wayfinder map, or when Phase 0 grilling finds decisions that need research, prototypes or more than one session.
+author: Gerald Onyango
+tags: [planning, workflow, interview]
+license: MIT, see LICENSE.txt
 ---
 
 A loose idea has arrived — too big for one agent session, and wrapped in fog: the way from here to the **destination** isn't visible yet. Wayfinding is about finding that way, not charging at the destination. This skill charts the way as a **shared map** on the repo's issue tracker, then works its **decision tickets** — questions whose resolution is a decision, not slices of a build to execute — one at a time until the route is clear.
 
 The destination varies per effort, and naming it is the first act of charting — it shapes every ticket. It might be a spec to hand off and iterate on, a decision to lock before planning starts, or a change made in place like a data-structure migration. The map is domain-agnostic — engineering work, course content, whatever fits the shape.
+
+## Where it fits
+
+This is an optional branch of **Phase 0 (Shape)** of the Development Lifecycle, never a replacement for it.
+
+```
+craftsmans-wisdom brief (confirmed)
+   ├─ decisions fit one session → future-grilling → write-a-prd / writing-plans
+   └─ they don't               → future-wayfinder → write-a-prd + docs/roadmap.md (writing-plans)
+```
+
+- **Before:** a confirmed `craftsmans-wisdom` brief. The brief is the destination. With no confirmed brief, run `craftsmans-wisdom` first.
+- **Use it when** the open decisions need research, prototypes or outside work before they can be settled, or simply won't fit one session. Most work fits one `future-grilling` session; then don't use this.
+- **After:** when the frontier is empty, hand off. Product decisions go into `write-a-prd`; the phasing goes into the roadmap that `writing-plans` keeps at `docs/roadmap.md`. Both link the map. Phase 1 onwards then runs as usual, one plan at a time.
 
 ## Plan, don't do
 
@@ -21,9 +38,11 @@ The map is a single issue on this repo's issue tracker, labelled `wayfinder:map`
 
 The map is an **index**, not a store. It lists the decisions made and points at the tickets that hold their detail; a decision lives in exactly one place — its ticket — so the map never restates it, only gists it and links.
 
+**The map is this effort's decisions file.** Decisions settled while working a ticket, including through `future-grilling` or `grilling-page`, are recorded in that ticket's answer and gisted on the map — not also in `docs/decisions/<slug>.md`. Commit the map and ticket files right after each resolution.
+
 **Where the map, its child tickets, blocking, and frontier queries physically live is tracker-specific — resolved as follows.**
 
-**Default: local markdown in the project's `docs/` directory.** Unless the user explicitly says otherwise, the map and its tickets are files under `docs/<effort-slug>/`:
+**Default: local markdown in the project's `docs/` directory.** Unless the user explicitly says otherwise, the map and its tickets are files under `docs/<effort-slug>/`, where the slug is the brief's slug:
 
 - **Map**: `docs/<effort-slug>/map.md` — the Notes / Decisions-so-far / Fog body.
 - **Child ticket**: `docs/<effort-slug>/issues/NN-<slug>.md`, numbered from `01`, with the question in the body. A `Type:` line records the ticket type (`research`/`prototype`/`grilling`/`task`); a `Status:` line records `claimed`/`resolved`.
@@ -44,7 +63,7 @@ The whole map at low resolution, loaded once per session. Open tickets are **not
 
 ## Notes
 
-<domain; skills every session should consult; standing preferences for this effort>
+<link to the craftsmans-wisdom brief; domain; skills every session should consult; standing preferences for this effort>
 
 ## Decisions so far
 
@@ -85,7 +104,7 @@ Every ticket is either **HITL** — human in the loop, worked *with* a human who
 
 - **Research** (AFK): Reading documentation, third-party APIs, or local resources like knowledge bases to surface a fact a decision waits on. Resolved by a `/research` **subagent**. Use when knowledge outside the current working directory is required.
 - **Prototype** (HITL): Raise the fidelity of the discussion by making a cheap, rough, concrete artifact to react to — an outline, a rough take, a stub, or UI/logic code via the /prototype skill. Links the prototype as an asset. Use when "how should it look" or "how should it behave" is the key question.
-- **Grilling** (HITL): Conversation via the /future-grilling and /domain-modeling skills, one question at a time. The default case.
+- **Grilling** (HITL): Conversation via `/future-grilling` and `/domain-modeling`, checking each answer against the brief. With 3 or more independent questions ready, put them on one `/grilling-page` instead. The default case.
 - **Task** (HITL or AFK): Manual work that must happen before a *decision* can be made — nothing to decide, prototype, or research, but the discussion is blocked until it's done. Signing up for a service so its API can be judged, provisioning access, moving data so its shape can be seen. This is the one type that *does* rather than decides — and it earns its place by unblocking a decision, not by delivering the destination. The agent drives it alone where it can (AFK); otherwise it hands the human a precise checklist (HITL). Resolved when the work is done; the answer records what was done and any resulting facts (credentials location, new URLs, row counts) later tickets depend on.
 
 ## Fog of war
@@ -117,8 +136,8 @@ Two modes. Either way, **never resolve more than one ticket per session** — wi
 
 User invokes with a loose idea.
 
-1. **Name the destination.** Run a `/future-grilling` and `/domain-modeling` session to pin down what this map is finding its way to — the spec, decision, or change. The destination fixes the scope, so it's settled first.
-2. **Map the frontier.** Grill again, **breadth-first** this time: fan out across the whole space rather than deep on any one thread, surfacing the open decisions and the first steps takeable now. **If this surfaces no fog** — the way to the destination is already clear, the whole journey small enough for one session — you don't need a map. Stop and ask the user how they'd like to proceed.
+1. **Take the destination from the brief.** Read the confirmed `craftsmans-wisdom` brief and state the destination from it in one or two lines; don't re-interview what the brief settles. No confirmed brief: run `craftsmans-wisdom` first. Ask only what the brief leaves open about the destination itself, via `/future-grilling`.
+2. **Map the frontier.** Grill **breadth-first** with `/future-grilling`: fan out across the whole space rather than deep on any one thread, surfacing the open decisions and the first steps takeable now. **If this surfaces no fog** — the way to the destination is already clear, the whole journey small enough for one session — you don't need a map. Say so and continue on the normal Phase 0 path (`future-grilling`, then `write-a-prd` or `writing-plans`).
 3. **Create the map** (label `wayfinder:map`): Destination and Notes filled in, Decisions-so-far empty, the fog sketched into **Not yet specified**.
 4. **Create the tickets you can specify now** as child issues of the map — then wire blocking edges in a **second pass** (issues need ids before they can reference each other). Wiring sorts them into the frontier and the blocked; everything you can't yet specify stays in the fog — the **Not yet specified** section.
 5. **Fire the research subagents.** For each `research` ticket you just created, spin up a `/research` subagent to resolve it in parallel, capturing its findings on a throwaway `research/<name>` branch with a context pointer from the ticket.
@@ -130,8 +149,14 @@ User invokes with a map (URL or number). A ticket is **optional** — without on
 
 1. Load the **map** — the low-res view, not every ticket body.
 2. Choose the ticket. If the user named one, use it. Otherwise take the first frontier ticket in order. **Claim it**: assign it to yourself before any work.
-3. Resolve it — **zoom as needed**: fetch the full body of any related or closed ticket on demand; invoke the skills the `## Notes` block names. If in doubt, use `/grilling` and `/domain-modeling`.
+3. Resolve it — **zoom as needed**: fetch the full body of any related or closed ticket on demand; invoke the skills the `## Notes` block names. If in doubt, use `/future-grilling` and `/domain-modeling`.
 4. Record the resolution: post the answer as a **resolution comment**, **close** the issue, and **append a context pointer** to the map's Decisions-so-far.
 5. Add newly-surfaced tickets (create-then-wire); graduate any fog the answer has made specifiable, clearing each graduated patch from **Not yet specified** so it lives only as its new ticket. If the answer reveals a ticket — this one or another — sits beyond the destination, **rule it out of scope** rather than resolving it on the route. If the decision invalidates other parts of the map, update or delete those tickets.
 
+6. **Frontier empty and no fog left:** the way is clear. Hand off as **Where it fits** says — `write-a-prd` and the `writing-plans` roadmap, both linking the map — and stop.
+
 The user may run unblocked tickets in parallel, so expect other sessions to be editing the tracker concurrently.
+
+---
+
+Forked by Gerald Onyango from `wayfinder` in Matt Pocock's skills (MIT, see LICENSE.txt) — https://github.com/mattpocock/skills

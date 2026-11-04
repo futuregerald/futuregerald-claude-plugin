@@ -219,7 +219,7 @@ If symlinked to `~/.claude/skills` (installed as personal skills), invoke them b
 | `writing-tickets` | Write epics, stories, initiatives, and spike tickets |
 | `to-spec` | Synthesize the conversation into a spec, published to your tracker |
 | `to-tickets` | Break a plan/spec into tracer-bullet tickets with blocking edges |
-| `wayfinder` | Plan work too big for one session as a map of decision tickets |
+| `future-wayfinder` | Fork of Matt Pocock's wayfinder: Phase 0 branch for work too big for one session — charts it from a craftsmans-wisdom brief as a map of decision tickets, then hands off to write-a-prd and the roadmap |
 | `research` | Investigate a question against primary sources; capture as Markdown |
 | `future-grilling` | Fork of Matt Pocock's grilling that reads a craftsmans-wisdom brief and checks each answer against it |
 | `grilling-page` | Puts any series of 3+ questions (grilling, handoff or plan open questions, reviews) on one HTML page with context, what each blocks, its source, and each option's cost; the answers come back in one paste and are recorded |

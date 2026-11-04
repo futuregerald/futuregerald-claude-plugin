@@ -182,7 +182,8 @@ recommendation, and `Note:` when the user wrote one.
    Any other answers go where the work they shape is tracked: its plan, or its ticket,
    after asking before any ticket edit. Grilling decisions are appended to the project's
    decisions file, `docs/decisions/<slug>.md`, where the slug is the brief's slug or the
-   kebab-case name of the work, unless the project keeps decisions elsewhere. If the file
+   kebab-case name of the work, unless the project keeps decisions elsewhere (a
+   `future-wayfinder` map keeps them in its ticket files). If the file
    doesn't exist yet, create it and record the decisions already settled in chat this
    session first, so the record is complete and numbered in order.
    Each entry gets a heading that states the decision with its number and question id,

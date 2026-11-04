@@ -29,6 +29,7 @@ Run **Phase 0 (Shape)** of the Development Lifecycle before writing an implement
 3. **Decision-tree grilling (`future-grilling`):**
    - Once the brief is confirmed, offer to grill the details using [`../future-grilling/SKILL.md`](../future-grilling/SKILL.md).
    - On a yes: walk every branch of the decision tree in dependency order (data model before UI, contract before callers), asking one question at a time **with a recommended answer and why** (or using [`../grilling-page/SKILL.md`](../grilling-page/SKILL.md) if ≥3 remaining decisions are independent). Check every answer against the brief's **For** and **Good means**.
+   - If the decisions won't fit one session (they need research, prototypes or several sittings), run [`../future-wayfinder/SKILL.md`](../future-wayfinder/SKILL.md) with the brief instead; it hands off to step 4 when its map is clear.
 
 4. **Hand off to planning:**
    - Pass the confirmed brief and settled decision list into `write-a-prd`, `brainstorming`, or Phase 3 (`writing-plans`), instructing it not to re-ask what the brief and grilling already settled.
