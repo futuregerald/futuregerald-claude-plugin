@@ -1,6 +1,7 @@
 ---
 name: shape
 description: Run Phase 0 (Shape) of the Development Lifecycle before planning — interviews the user with craftsmans-wisdom to produce a confirmed point-of-view brief, offers future-grilling to walk the decision tree in dependency order, and hands the brief to write-a-prd, brainstorming, or writing-plans. Use when the user invokes /shape or before planning new or user-facing work.
+disable-model-invocation: true
 tags: [planning, design, quality, interview, workflow]
 ---
 

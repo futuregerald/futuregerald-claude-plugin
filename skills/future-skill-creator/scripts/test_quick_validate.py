@@ -28,7 +28,8 @@ def make_skill(tmp_path, frontmatter, directory="demo-skill"):
         ),
         (
             "name: demo-skill\ndescription: Does a thing.\nmodel: opus\neffort: high\nlanguages: [go]\n"
-            "argument-hint: <path>\ntrigger: /demo\nversion: 1.0.0\nuser-invocable: true",
+            "argument-hint: <path>\ntrigger: /demo\nversion: 1.0.0\nuser-invocable: true\n"
+            "disable-model-invocation: true",
             True,
             "",
         ),
