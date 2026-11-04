@@ -279,7 +279,6 @@ If symlinked to `~/.claude/skills` (installed as personal skills), invoke them b
 
 | Skill | Description |
 |-------|-------------|
-| `javascript-testing-patterns` | Jest, Vitest, and Japa testing patterns |
 | `sql-optimization-patterns` | Query optimization, indexing, EXPLAIN, N+1 elimination |
 | `qa-verification` | Verify a ticket's acceptance criteria by running the code, not just reading it |
 
