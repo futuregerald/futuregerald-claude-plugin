@@ -1,6 +1,6 @@
 ---
 name: craftsmans-wisdom
-description: Challenge the user, one question at a time, to think a piece of work through as a craftsman would — what good means here, the generic default to avoid, what is written down for agents, whether done is actually good, and who maintains it — then write a confirmed point-of-view brief that steers the build and that editor-pass reviews against, and offer to hand off to future-grilling for the details. Use before planning new or user-facing work (a feature, product, page, design or PRD) when the user is present — not in sub-agents or before to-spec — and when the user says "craftsman's wisdom", "craftsmans wisdom", "am I thinking this through", or "what does good mean here".
+description: Challenge the user, one question at a time, to think a piece of work through as a craftsman would — what good means here, the generic default to avoid, what is written down for agents, whether done is actually good, and who maintains it — then write a confirmed point-of-view brief that steers the build and that editor-pass reviews against, and offer to hand off to future-grilling for the details. Use before planning new or user-facing work (a feature, product, page, design or PRD) when the user is present — not in sub-agents — and when the user says "craftsman's wisdom", "craftsmans wisdom", "am I thinking this through", or "what does good mean here".
 author: Gerald Onyango
 tags: [planning, design, quality, interview]
 ---
@@ -34,12 +34,11 @@ user should not have to invoke it. Check these first, in order:
 1. **A brief was confirmed earlier in this session** for this work: skip this skill.
 2. **No user in the loop** (a sub-agent, an unattended run): skip, and say so in the
    output. Never answer the questions on the user's behalf.
-3. **`to-spec`** is about to run: skip; it promises no interview.
-4. **A confirmed brief from an earlier session covers this work:** read it back, ask
+3. **A confirmed brief from an earlier session covers this work:** read it back, ask
    whether it still holds, update it if not, then go straight to planning.
-5. **Internal technical work** (a refactor, a dependency bump, a small fix): ask whether
+4. **Internal technical work** (a refactor, a dependency bump, a small fix): ask whether
    to skip it, once per session. On "skip", go straight to planning.
-6. **`brainstorming` also applies:** run this first, then pass the brief into
+5. **`brainstorming` also applies:** run this first, then pass the brief into
    brainstorming so it doesn't re-ask what the brief settles.
 
 ## Before the first question

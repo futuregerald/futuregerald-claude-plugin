@@ -214,16 +214,12 @@ If symlinked to `~/.claude/skills` (installed as personal skills), invoke them b
 | `visualize-plan` | Turn a plan into a visual HTML page (flows, ER diagram, worked example, decisions) alongside the markdown |
 | `subagent-driven-development` | Execute independent plan tasks via fresh sub-agents |
 | `dispatching-parallel-agents` | Run 2+ independent tasks concurrently |
-| `implement` | Implement a piece of work from a spec or set of tickets |
 | `write-a-prd` | Create a PRD via interview + codebase exploration, with the product experience and a link to the roadmap; file as an issue |
 | `writing-tickets` | Write epics, stories, initiatives, and spike tickets |
-| `to-spec` | Synthesize the conversation into a spec, published to your tracker |
-| `to-tickets` | Break a plan/spec into tracer-bullet tickets with blocking edges |
 | `future-wayfinder` | Fork of Matt Pocock's wayfinder: Phase 0 branch for work too big for one session — charts it from a craftsmans-wisdom brief as a map of decision tickets, then hands off to write-a-prd and the roadmap |
 | `research` | Investigate a question against primary sources; capture as Markdown |
 | `future-grilling` | Fork of Matt Pocock's grilling that reads a craftsmans-wisdom brief and checks each answer against it |
 | `grilling-page` | Puts any series of 3+ questions (grilling, handoff or plan open questions, reviews) on one HTML page with context, what each blocks, its source, and each option's cost; the answers come back in one paste and are recorded |
-| `grill-with-docs` | Grilling that also produces ADRs and a glossary as it goes |
 | `craftsmans-wisdom` | Runs before any plan: one-question-at-a-time challenge on what good means, what's written down for agents, and whether done is good; writes a point-of-view brief, then offers future-grilling on the details |
 
 **Debugging & Code Quality:**
@@ -244,10 +240,6 @@ If symlinked to `~/.claude/skills` (installed as personal skills), invoke them b
 
 | Skill | Description |
 |-------|-------------|
-| `codebase-design` | Shared vocabulary for designing deep, testable modules |
-| `domain-modeling` | Build and sharpen a project's domain model and ubiquitous language |
-| `architecture-decision-records` | Write and maintain ADRs |
-| `improve-codebase-architecture` | Find module-deepening opportunities; visual report, then grill |
 | `go-api-structure` | Go service layout, interface-driven dependencies, the HTTP edge, structured logging, and bounded concurrency |
 
 **Delivery & Dev Workflow:**
@@ -285,7 +277,6 @@ If symlinked to `~/.claude/skills` (installed as personal skills), invoke them b
 
 | Skill | Description |
 |-------|-------------|
-| `javascript-testing-patterns` | Jest, Vitest, and Japa testing patterns |
 | `sql-optimization-patterns` | Query optimization, indexing, EXPLAIN, N+1 elimination |
 | `qa-verification` | Verify a ticket's acceptance criteria by running the code, not just reading it |
 
