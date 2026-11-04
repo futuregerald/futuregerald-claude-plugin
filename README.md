@@ -220,7 +220,6 @@ If symlinked to `~/.claude/skills` (installed as personal skills), invoke them b
 | `research` | Investigate a question against primary sources; capture as Markdown |
 | `future-grilling` | Fork of Matt Pocock's grilling that reads a craftsmans-wisdom brief and checks each answer against it |
 | `grilling-page` | Puts any series of 3+ questions (grilling, handoff or plan open questions, reviews) on one HTML page with context, what each blocks, its source, and each option's cost; the answers come back in one paste and are recorded |
-| `grill-with-docs` | Grilling that also produces ADRs and a glossary as it goes |
 | `craftsmans-wisdom` | Runs before any plan: one-question-at-a-time challenge on what good means, what's written down for agents, and whether done is good; writes a point-of-view brief, then offers future-grilling on the details |
 
 **Debugging & Code Quality:**
@@ -242,8 +241,6 @@ If symlinked to `~/.claude/skills` (installed as personal skills), invoke them b
 | Skill | Description |
 |-------|-------------|
 | `codebase-design` | Shared vocabulary for designing deep, testable modules |
-| `domain-modeling` | Build and sharpen a project's domain model and ubiquitous language |
-| `architecture-decision-records` | Write and maintain ADRs |
 | `improve-codebase-architecture` | Find module-deepening opportunities; visual report, then grill |
 | `go-api-structure` | Go service layout, interface-driven dependencies, the HTTP edge, structured logging, and bounded concurrency |
 
