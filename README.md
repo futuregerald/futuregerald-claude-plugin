@@ -241,7 +241,6 @@ If symlinked to `~/.claude/skills` (installed as personal skills), invoke them b
 | Skill | Description |
 |-------|-------------|
 | `codebase-design` | Shared vocabulary for designing deep, testable modules |
-| `improve-codebase-architecture` | Find module-deepening opportunities; visual report, then grill |
 | `go-api-structure` | Go service layout, interface-driven dependencies, the HTTP edge, structured logging, and bounded concurrency |
 
 **Delivery & Dev Workflow:**
