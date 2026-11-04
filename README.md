@@ -269,6 +269,7 @@ If symlinked to `~/.claude/skills` (installed as personal skills), invoke them b
 |-------|-------------|
 | `impeccable` | Frontend design, UX review, and UI polish |
 | `no-slop-ui` | Eleven visual tells that make a UI read as AI slop, and what to do instead |
+| `animation-principles` | Disney's 12 animation principles for CSS, JavaScript (WAAPI, GSAP, Motion) and Rive, with reduced-motion and performance checks |
 | `huashu-design` | HTML-native prototypes, slide decks, animations and infographics; 20 design philosophies, 5-dimension expert critique, MP4/GIF/PDF/editable-PPTX export |
 | `prototype` | Build a throwaway prototype to answer a design question |
 
