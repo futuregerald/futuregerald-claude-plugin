@@ -43,6 +43,7 @@ def validate_skill(skill_path):
         'name', 'description', 'license', 'allowed-tools', 'metadata',
         'author', 'tags', 'model', 'effort', 'languages',
         'argument-hint', 'trigger', 'version', 'user-invocable',
+        'disable-model-invocation',
     }
 
     # Check for unexpected properties (excluding nested keys under metadata)
