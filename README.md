@@ -214,11 +214,8 @@ If symlinked to `~/.claude/skills` (installed as personal skills), invoke them b
 | `visualize-plan` | Turn a plan into a visual HTML page (flows, ER diagram, worked example, decisions) alongside the markdown |
 | `subagent-driven-development` | Execute independent plan tasks via fresh sub-agents |
 | `dispatching-parallel-agents` | Run 2+ independent tasks concurrently |
-| `implement` | Implement a piece of work from a spec or set of tickets |
 | `write-a-prd` | Create a PRD via interview + codebase exploration, with the product experience and a link to the roadmap; file as an issue |
 | `writing-tickets` | Write epics, stories, initiatives, and spike tickets |
-| `to-spec` | Synthesize the conversation into a spec, published to your tracker |
-| `to-tickets` | Break a plan/spec into tracer-bullet tickets with blocking edges |
 | `future-wayfinder` | Fork of Matt Pocock's wayfinder: Phase 0 branch for work too big for one session — charts it from a craftsmans-wisdom brief as a map of decision tickets, then hands off to write-a-prd and the roadmap |
 | `research` | Investigate a question against primary sources; capture as Markdown |
 | `future-grilling` | Fork of Matt Pocock's grilling that reads a craftsmans-wisdom brief and checks each answer against it |
