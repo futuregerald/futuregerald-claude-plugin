@@ -1,6 +1,7 @@
 ---
 name: start
 description: Alias for /lifecycle — runs the full 12-phase Development Lifecycle (0. Shape -> 12. Handoff) with every phase gate enforced. Use when the user invokes /start to begin work on a task, feature, or fix.
+disable-model-invocation: true
 tags: [workflow, lifecycle, planning, implementation, review]
 ---
 
