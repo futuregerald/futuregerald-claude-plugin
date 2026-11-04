@@ -4,6 +4,8 @@ Generate **several radically different UI variations** on a single route, switch
 
 If the question is about logic/state rather than what something looks like — wrong branch. Use [LOGIC.md](LOGIC.md).
 
+If the question is which direction a new page, new app or major UI change should take — wrong skill. Use `ui-design` (Phase 0½), which builds three high-fidelity directions on one comparison page.
+
 ## When this is the right shape
 
 - "What should this page look like?"
