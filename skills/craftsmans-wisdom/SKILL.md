@@ -138,6 +138,8 @@ brief already exists, update it in place.
   details?"
   - **Yes:** run `future-grilling` with the brief's path. It reads the brief, spends its
     questions on how, and checks each answer against the brief.
+  - **Too big for one session** (decisions that need research, prototypes or several
+    sittings): offer `future-wayfinder` with the brief's path instead.
   - **No:** go to whatever builds next (below).
   - Either way, hand the brief — and any decisions grilling settled — to whatever builds
     next: `writing-plans`, `write-a-prd`, `impeccable` (fold it into PRODUCT.md),
