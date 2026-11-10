@@ -13,7 +13,6 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import autonomous_breaker
 from breaker_rules import (
     is_authorized,
-    is_complaint,
     compaction_step_indices,
 )
 
@@ -39,7 +38,7 @@ def run_replay(
     file_info.sort(key=lambda x: x[0], reverse=True)
     selected_paths = [p for _, p in file_info[:last_n]]
 
-    rule_names = ["DUP", "EXPLORE", "STRIKES", "PROBE", "TRUELOOP", "CHECKPOINT", "H1", "H2", "BATON"]
+    rule_names = ["DUP", "EXPLORE", "STRIKES", "PROBE", "TRUELOOP", "H1", "H2", "BATON"]
     rule_stats = {r: {"total_triggers": 0, "sessions_affected": set(), "main_triggers": 0, "helper_triggers": 0} for r in rule_names}
 
     session_results = []
@@ -52,9 +51,6 @@ def run_replay(
     all_compactions = []
     total_baton_blocks = 0
     total_baton_warns = 0
-
-    all_normal_unauth_turns = 0
-    hit_normal_unauth_turns = 0
 
     authorized_main_sessions = []
 
@@ -115,7 +111,6 @@ def run_replay(
                 "BREAKER_STRIKES_MODE": "enforce",
                 "BREAKER_PROBE_MODE": "enforce",
                 "BREAKER_TRUELOOP_MODE": "enforce",
-                "BREAKER_CHECKPOINT_MODE": "enforce",
                 "BREAKER_H1_MODE": "enforce",
                 "BREAKER_H2_MODE": "enforce",
                 "BREAKER_BATON_MODE": "enforce",
@@ -126,7 +121,6 @@ def run_replay(
 
             session_calls = []
             session_warn_steps = []
-            session_checkpoint_hits = 0
 
             for k, step in enumerate(steps):
                 if step.get("type") == "USER_INPUT":
@@ -213,8 +207,6 @@ def run_replay(
                             h1_sessions.add(conv_id)
                         elif r_name == "H2":
                             h2_helper_sessions.add(conv_id)
-                        elif r_name == "CHECKPOINT":
-                            session_checkpoint_hits += 1
                         elif r_name == "BATON":
                             if "Warn" in tr.get("reason", ""):
                                 total_baton_warns += 1
@@ -224,31 +216,14 @@ def run_replay(
 
             if not is_subagent:
                 u_indices = [idx for idx, s in enumerate(steps) if s.get("type") == "USER_INPUT"]
-                has_any_auth = False
-                for t_idx, u_idx in enumerate(u_indices):
-                    nxt_idx = u_indices[t_idx + 1] if t_idx + 1 < len(u_indices) else len(steps)
-                    u_text = steps[u_idx].get("content") or ""
-                    auth = is_authorized(u_text, conv_id, state_dir=state_dir)
-                    if auth:
-                        has_any_auth = True
-                    complaint = False
-                    if t_idx + 1 < len(u_indices):
-                        nxt_text = steps[u_indices[t_idx + 1]].get("content") or ""
-                        complaint = is_complaint(nxt_text)
-                    if not auth and not complaint:
-                        all_normal_unauth_turns += 1
-                        turn_calls_hit = any(
-                            any(r["rule"] == "CHECKPOINT" for r in c["triggered"])
-                            for c in session_calls if u_idx < c["step"] < nxt_idx
-                        )
-                        if turn_calls_hit:
-                            hit_normal_unauth_turns += 1
-
+                has_any_auth = any(
+                    is_authorized(steps[u_idx].get("content") or "", conv_id, state_dir=state_dir)
+                    for u_idx in u_indices
+                )
                 if has_any_auth:
                     authorized_main_sessions.append({
                         "conversation_id": conv_id,
                         "step_count": len(steps),
-                        "checkpoint_hits": session_checkpoint_hits,
                     })
 
                 comp_indices = compaction_step_indices(steps)
@@ -286,7 +261,6 @@ def run_replay(
 
     authorized_main_sessions.sort(key=lambda s: s["step_count"], reverse=True)
     top_4_auth = authorized_main_sessions[:4]
-    top_4_checkpoint_triggers = sum(s["checkpoint_hits"] for s in top_4_auth)
 
     rules_out = {}
     for r, st in rule_stats.items():
@@ -297,7 +271,6 @@ def run_replay(
             "helper_triggers": st["helper_triggers"],
         }
 
-    checkpoint_normal_share = round(hit_normal_unauth_turns / all_normal_unauth_turns, 4) if all_normal_unauth_turns > 0 else 0.0
     h2_share = round(len(h2_helper_sessions) / total_helpers, 4) if total_helpers > 0 else 0.0
 
     compaction_count = len(all_compactions)
@@ -315,13 +288,6 @@ def run_replay(
             "duration_seconds": duration,
         },
         "rules": rules_out,
-        "checkpoint": {
-            "normal_unauthorized_turns_total": all_normal_unauth_turns,
-            "normal_unauthorized_turns_hit": hit_normal_unauth_turns,
-            "share_normal_unauthorized_turns_hit": checkpoint_normal_share,
-            "longest_4_authorized_sessions_checkpoint_triggers": top_4_checkpoint_triggers,
-            "longest_4_authorized_sessions": top_4_auth,
-        },
         "trueloop_probe_triggers": {
             "TRUELOOP": all_trueloop_triggers,
             "PROBE": all_probe_triggers,
@@ -351,6 +317,7 @@ def run_replay(
             "EXPLORE": rules_out["EXPLORE"]["total_triggers"],
             "STRIKES": rules_out["STRIKES"]["total_triggers"],
         },
+        "longest_4_authorized_sessions": top_4_auth,
         "sessions": session_results,
     }
 
@@ -366,7 +333,6 @@ def run_replay(
 def print_summary(res: dict) -> None:
     meta = res["metadata"]
     rules = res["rules"]
-    cp = res["checkpoint"]
     h1 = res["h1"]
     h2 = res["h2"]
     baton = res["baton"]
@@ -374,14 +340,13 @@ def print_summary(res: dict) -> None:
     print(f"Evaluated {meta['transcripts_evaluated']} transcripts in {meta['duration_seconds']}s")
     print(f"{'Rule':<12} {'Total':<8} {'Sessions':<10} {'Main':<8} {'Helper':<8}")
     print("-" * 48)
-    for r_name in ["DUP", "EXPLORE", "STRIKES", "PROBE", "TRUELOOP", "CHECKPOINT", "H1", "H2", "BATON"]:
+    for r_name in ["DUP", "EXPLORE", "STRIKES", "PROBE", "TRUELOOP", "H1", "H2", "BATON"]:
         st = rules.get(r_name, {})
         print(f"{r_name:<12} {st.get('total_triggers', 0):<8} {st.get('sessions_affected', 0):<10} {st.get('main_triggers', 0):<8} {st.get('helper_triggers', 0):<8}")
     print("-" * 48)
-    print(f"CHECKPOINT: {cp['normal_unauthorized_turns_hit']}/{cp['normal_unauthorized_turns_total']} normal unauth turns ({cp['share_normal_unauthorized_turns_hit']*100:.1f}%), {cp['longest_4_authorized_sessions_checkpoint_triggers']} in top-4 auth")
     print(f"H1 SESSIONS: {len(h1['sessions_affected'])} {h1['sessions_affected']}")
     print(f"H2 HELPERS:  {h2['helpers_hit']}/{h2['total_helpers']} ({h2['share_helpers_hit']*100:.1f}%)")
-    explore_cap = int(os.environ.get("BREAKER_SUBAGENT_EXPLORE_MAX", 100))
+    explore_cap = int(os.environ.get("BREAKER_SUBAGENT_EXPLORE_MAX", 0))
     print(f"EXPLORE:     {rules.get('EXPLORE', {}).get('total_triggers', 0)} triggers across {rules.get('EXPLORE', {}).get('sessions_affected', 0)} helper sessions (cap={explore_cap})")
     print(f"BATON WARN:  {baton['warn_fired_count']}/{baton['total_compactions']} compactions ({baton['warn_fired_share']*100:.1f}%), {baton['warn_ge_15_steps_ahead_count']} >=15 steps ahead ({baton['warn_ge_15_steps_ahead_share']*100:.1f}%)")
     print(f"BATON BLOCK: {baton['total_blocks']} total blocks")

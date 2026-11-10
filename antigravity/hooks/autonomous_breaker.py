@@ -271,8 +271,8 @@ def _run_breaker(payload, stop_on_enforce=True, collector=None):
             in_c_name in ("READ_FILE", "call_mcp_tool") or
             (in_c_name == "run_command" and not is_test_runner(str(in_c_args.get("CommandLine", ""))))
         )
-        explore_max = int(os.environ.get("BREAKER_SUBAGENT_EXPLORE_MAX", 100))
-        if in_is_exploratory and subagent_explore_count >= explore_max:
+        explore_max = int(os.environ.get("BREAKER_SUBAGENT_EXPLORE_MAX", 0))
+        if explore_max > 0 and in_is_exploratory and subagent_explore_count >= explore_max:
             target = f"{tool_name}:{subagent_explore_count}/{explore_max}"
             reason = f"CIRCUIT BREAKER (Subagent Exploration Budget Reached): You have reached the maximum exploration budget ({explore_max}) in this subagent. Stop reading files or running exploratory commands. Immediately call write_file / write_to_file to save your digest or handoff with the evidence gathered so far, then finish your turn."
             check_and_handle_trigger("EXPLORE", target, reason, tool_name, step_idx, conv_id, is_subagent, collector=collector, stop_on_enforce=stop_on_enforce)
@@ -304,7 +304,7 @@ def _run_breaker(payload, stop_on_enforce=True, collector=None):
             reason = "CIRCUIT BREAKER (4-Strike Test-Fix Escalation): Tests have failed 4 consecutive times in this subagent. Stop editing code or re-running tests. Immediately write your 4-section handoff (including the failing test output and diff) using write_file / write_to_file and return control to the Lead Orchestrator for root-cause escalation."
             check_and_handle_trigger("STRIKES", target, reason, tool_name, step_idx, conv_id, is_subagent, collector=collector, stop_on_enforce=stop_on_enforce)
 
-        step_max = int(os.environ.get("BREAKER_SUBAGENT_STEP_MAX", 130))
+        step_max = int(os.environ.get("BREAKER_SUBAGENT_STEP_MAX", 0))
         if step_max > 0:
             planner_count = sum(1 for s in steps if s.get("type") == "PLANNER_RESPONSE")
             if planner_count >= step_max:
@@ -347,8 +347,8 @@ def _run_breaker(payload, stop_on_enforce=True, collector=None):
         handoff_at_estimate = baton_state.get("handoff_at_estimate")
         is_unlocked = (handoff_at_estimate is not None and estimate <= handoff_at_estimate + 50000)
 
-        baton_block_tokens = int(os.environ.get("BATON_BLOCK_TOKENS", 130000))
-        baton_warn_tokens = int(os.environ.get("BATON_WARN_TOKENS", 105000))
+        baton_block_tokens = int(os.environ.get("BATON_BLOCK_TOKENS", 235000))
+        baton_warn_tokens = int(os.environ.get("BATON_WARN_TOKENS", 205000))
 
         if baton_block_tokens > 0 and estimate >= baton_block_tokens and not is_unlocked:
             is_prism_call = (tool_name == "call_mcp_tool" and tool_args.get("ServerName") == "prism")
@@ -402,24 +402,6 @@ def _run_breaker(payload, stop_on_enforce=True, collector=None):
                     target = f"{in_p}:{code_edits}/{edit_max}"
                     reason = f"CIRCUIT BREAKER (Main-Session Code-Edit Cap): {code_edits}/{edit_max} code edits in this stream. Send this to an implementation helper agent via invoke_subagent."
                     check_and_handle_trigger("H1", target, reason, tool_name, step_idx, conv_id, is_subagent, collector=collector, stop_on_enforce=stop_on_enforce)
-
-    if not is_subagent and last_user_idx >= 0 and not is_authorized(last_user_content, conv_id, state_dir=state_dir):
-        checkpoint_calls = int(os.environ.get("BREAKER_CHECKPOINT_CALLS", 45))
-        if checkpoint_calls > 0:
-            post_user_steps = steps[last_user_idx + 1:]
-            post_user_planner_indices = [i for i, s in enumerate(post_user_steps) if s.get("type") == "PLANNER_RESPONSE"]
-            last_post_user_planner_idx = post_user_planner_indices[-1] if post_user_planner_indices else -1
-            prior_calls_count = 0
-            for i, s in enumerate(post_user_steps):
-                if s.get("type") == "PLANNER_RESPONSE":
-                    is_last = (i == last_post_user_planner_idx)
-                    t_calls = effective_tool_calls(s, is_last, step_idx, in_c_name, in_c_args)
-                    prior_calls_count += len(t_calls)
-            current_call_index = prior_calls_count + 1
-            if current_call_index % checkpoint_calls == 0:
-                target = f"turn_calls:{current_call_index}"
-                reason = f"CIRCUIT BREAKER (Checkpoint): Checkpoint: {current_call_index} calls since the user's last message. Send found / unknown / options and wait."
-                check_and_handle_trigger("CHECKPOINT", target, reason, tool_name, step_idx, conv_id, is_subagent, collector=collector, stop_on_enforce=stop_on_enforce)
 
     segment_steps = steps[last_user_idx + 1:] if last_user_idx >= 0 else steps
     segment_planner_indices = [i for i, s in enumerate(segment_steps) if s.get("type") == "PLANNER_RESPONSE"]

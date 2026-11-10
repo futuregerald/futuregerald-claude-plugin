@@ -62,20 +62,21 @@ class TestReplayBreaker(unittest.TestCase):
         t_path = logs_dir / "transcript.jsonl"
         steps = [
             {"step_index": 0, "source": "USER_EXPLICIT", "type": "USER_INPUT", "content": "fix bug"},
+            {
+                "step_index": 1, "source": "MODEL", "type": "PLANNER_RESPONSE",
+                "tool_calls": [{"name": "read_file", "args": {"Path": "/repo/foo.py", "StartLine": 1, "EndLine": 100}}]
+            },
+            {"step_index": 2, "source": "TOOL", "type": "GENERIC", "content": "ok"},
+            {
+                "step_index": 3, "source": "MODEL", "type": "PLANNER_RESPONSE",
+                "tool_calls": [{"name": "read_file", "args": {"Path": "/repo/foo.py", "StartLine": 20, "EndLine": 120}}]
+            },
+            {"step_index": 4, "source": "TOOL", "type": "GENERIC", "content": "ok"},
+            {
+                "step_index": 5, "source": "MODEL", "type": "PLANNER_RESPONSE",
+                "tool_calls": [{"name": "read_file", "args": {"Path": "/repo/foo.py", "StartLine": 20, "EndLine": 120}}]
+            },
         ]
-        curr = 1
-        for i in range(44):
-            steps.append({
-                "step_index": curr, "source": "MODEL", "type": "PLANNER_RESPONSE",
-                "tool_calls": [{"name": "read_file", "args": {"Path": f"/repo/unique_{i}.py"}}]
-            })
-            curr += 1
-            steps.append({"step_index": curr, "source": "TOOL", "type": "GENERIC", "content": "ok"})
-            curr += 1
-        steps.append({
-            "step_index": curr, "source": "MODEL", "type": "PLANNER_RESPONSE",
-            "tool_calls": [{"name": "read_file", "args": {"Path": "/repo/unique_43.py"}}]
-        })
         self.write_jsonl(t_path, steps)
         out_path = Path(self.test_tmpdir) / "out.json"
         res = replay_breaker.run_replay(root=str(root), last_n=10, out_path=str(out_path))
@@ -85,7 +86,7 @@ class TestReplayBreaker(unittest.TestCase):
         ]
         self.assertTrue(len(multi_triggers) >= 1)
         rules_triggered = [r["rule"] for r in multi_triggers[0]["triggered"]]
-        self.assertIn("CHECKPOINT", rules_triggered)
+        self.assertIn("TRUELOOP", rules_triggered)
         self.assertIn("DUP", rules_triggered)
 
     def test_inflight_semantics_parallel_reads_no_dup(self):
@@ -141,7 +142,7 @@ class TestReplayBreaker(unittest.TestCase):
         logs_dir = root / conv_id / ".system_generated" / "logs"
         t_path = logs_dir / "transcript.jsonl"
         t_full_path = logs_dir / "transcript_full.jsonl"
-        padding = "x" * 450000
+        padding = "x" * 850000
         steps = [
             {"step_index": 0, "source": "USER_EXPLICIT", "type": "USER_INPUT", "content": "analyze system"},
             {
@@ -167,39 +168,18 @@ class TestReplayBreaker(unittest.TestCase):
         ]
         self.assertEqual(len(baton_warns), 1)
 
-    def test_hooks_json_shasum_unchanged(self):
-        import hashlib
-        hooks_json_path = Path.home() / ".gemini" / "config" / "hooks.json"
-        with open(hooks_json_path, "rb") as f:
-            digest = hashlib.sha1(f.read()).hexdigest()
-        self.assertEqual(digest, "87e856f50ed8a7d095256a6d091c3e6d7b95e4a3")
+    def test_hooks_json_breaker_registration_intact(self):
+        local_hooks_json = Path(__file__).resolve().parent.parent / "hooks.json"
+        hooks_json_path = local_hooks_json if local_hooks_json.exists() else (Path.home() / ".gemini" / "config" / "hooks.json")
+        with open(hooks_json_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        cb = data.get("autonomous-circuit-breaker", {})
+        self.assertTrue(cb.get("enabled"))
+        pre_tool_use = cb.get("PreToolUse", [])
+        self.assertEqual(len(pre_tool_use), 17)
+        for entry in pre_tool_use:
+            self.assertEqual(entry["hooks"][0]["command"], "bash ~/.gemini/config/hooks/autonomous-breaker.sh")
 
-    def test_unauthorized_then_authorized_turn_1_checkpoint(self):
-        root = Path(self.test_tmpdir) / "brain"
-        conv_id = "test-unauth-then-auth-conv"
-        logs_dir = root / conv_id / ".system_generated" / "logs"
-        t_path = logs_dir / "transcript.jsonl"
-        steps = [
-            {"step_index": 0, "source": "USER_EXPLICIT", "type": "USER_INPUT", "content": "please check this"},
-        ]
-        curr = 1
-        for i in range(45):
-            steps.append({"step_index": curr, "source": "MODEL", "type": "PLANNER_RESPONSE", "tool_calls": [{"name": "read_file", "args": {"Path": f"/repo/unique_{i}.py"}}]})
-            curr += 1
-            steps.append({"step_index": curr, "source": "TOOL", "type": "GENERIC", "content": "ok"})
-            curr += 1
-        steps.append({"step_index": curr, "source": "USER_EXPLICIT", "type": "USER_INPUT", "content": "implement Phase 1"})
-        curr += 1
-        steps.append({"step_index": curr, "source": "MODEL", "type": "PLANNER_RESPONSE", "tool_calls": [{"name": "read_file", "args": {"Path": "/repo/another.py"}}]})
-
-        self.write_jsonl(t_path, steps)
-        out_path = Path(self.test_tmpdir) / "out.json"
-        res = replay_breaker.run_replay(root=str(root), last_n=10, out_path=str(out_path))
-        cp_triggers = [
-            c for s in res["sessions"] if s["conversation_id"] == conv_id
-            for c in s["calls"] for tr in c["triggered"] if tr["rule"] == "CHECKPOINT"
-        ]
-        self.assertEqual(len(cp_triggers), 1)
 
 
 

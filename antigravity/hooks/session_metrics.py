@@ -284,7 +284,6 @@ def process_transcripts(
                 normal_unauth_calls.append(t["n_calls"])
 
     normal_calls_stats = compute_percentiles(normal_unauth_calls)
-    proposed_breaker_checkpoint_calls = int(round(normal_calls_stats["p90"])) if normal_calls_stats["p90"] > 0 else 45
 
     helper_planner_steps = [h["n_planner_steps"] for h in helper_agents]
     helper_steps_stats = compute_percentiles(helper_planner_steps)
@@ -350,7 +349,6 @@ def process_transcripts(
     summary = {
         "normal_unauthorized_n_calls": {
             **normal_calls_stats,
-            "proposed_breaker_checkpoint_calls": proposed_breaker_checkpoint_calls,
         },
         "helper_n_planner_steps": {
             **helper_steps_stats,
@@ -391,10 +389,6 @@ def process_transcripts(
                 print(f"[REPLAY] {cid}: crossed block ({proposed_baton_block}) at step {s['earliest_block_step']} -> BATON BLOCK")
             for t in s.get("turns", []):
                 t_idx = t["turn_idx"]
-                if not t["authorized"] and proposed_breaker_checkpoint_calls > 0:
-                    hits = t["n_calls"] // proposed_breaker_checkpoint_calls
-                    if hits > 0:
-                        print(f"[REPLAY] {cid} Turn {t_idx}: CHECKPOINT would fire {hits} time(s) ({t['n_calls']} calls)")
                 if t["true_loop_hits"] > 0:
                     print(f"[REPLAY] {cid} Turn {t_idx}: TRUE-LOOP would fire {t['true_loop_hits']} time(s)")
                 if t["authorized"] and t["code_edits_by_main"] > proposed_k:
