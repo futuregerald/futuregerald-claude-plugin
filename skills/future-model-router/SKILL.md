@@ -1,6 +1,7 @@
 ---
 name: future-model-router
-description: Measurements behind delegation and model routing — whether to run work in a sub-agent, and at what reasoning budget. Load it to settle a routing question: is a cheaper model actually cheaper, does a lower effort level change the output, is it safe to batch these questions onto one agent, what does a dispatch really cost, when does filtering become a correctness control. Provider-neutral; model names live in the model map. Not a per-turn rule — the habits that fire every turn are the short delegation block in CLAUDE.md.
+description: >-
+  Measurements behind delegation and model routing — whether to run work in a sub-agent, and at what reasoning budget. Load it to settle a routing question: is a cheaper model actually cheaper, does a lower effort level change the output, is it safe to batch these questions onto one agent, what does a dispatch really cost, when does filtering become a correctness control. Provider-neutral; model names live in the model map. Not a per-turn rule — the habits that fire every turn are the short delegation block in CLAUDE.md.
 tags: [delegation, model-routing, cost-optimization, search]
 ---
 
