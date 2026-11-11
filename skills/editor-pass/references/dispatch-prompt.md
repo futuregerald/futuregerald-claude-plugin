@@ -7,7 +7,6 @@ Read this when dispatching the editor. Use a read-only agent, such as `reviewer`
 - **Fill every placeholder,** and leave the rest of the prompt as written. Don't add your own suspicions about the work. An editor pointed at your worries inherits your blind spots.
 
 ```
-# Claude Code:
 Agent tool:
   subagent_type: reviewer
   model: opus
@@ -28,23 +27,6 @@ Agent tool:
     Return only the crit sheet, in the exact format from crit-sheet.md.
 ```
 
-```
-# Antigravity (uses restricted read-only editor-pass-reviewer + Model: "inherit" to stay on Carbon / Argon):
-invoke_subagent:
-  TypeName: "editor-pass-reviewer"
-  Role: "Senior Editor (editor-pass)"
-  Model: "inherit"
-  Prompt: |
-    Method: read <ABSOLUTE PATH TO editor-pass/SKILL.md>, sections "The pass"
-    and "The crit sheet", and <ABSOLUTE PATH TO editor-pass/references/crit-sheet.md>.
-
-    The work (<OUTPUT TYPE: UI / report / PRD / tickets / skill / code>):
-    <file paths; for UI, the per-step screenshot paths in task order>
-
-    Point of view: <path to the brief, PRODUCT.md, ticket or PR description>
-    — or "none: write the three-line brief above the Overall note".
-
-    Return only the crit sheet, in the exact format from crit-sheet.md.
-```
+*(Non-Claude harnesses route this read-only **Adversarial Reviewer** role via their own root configuration.)*
 
 After it returns, validate the sheet as described in SKILL.md ("Validate, then present").

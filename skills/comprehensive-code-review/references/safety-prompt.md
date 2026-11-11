@@ -5,6 +5,7 @@ Use this prompt template for Sub-Agent 2 (Safety). Copy it verbatim, replacing `
 ```
 Agent tool:
   subagent_type: "security-reviewer"
+  model: "opus"
   description: "Safety review"
   prompt: |
     You are a Staff Security Engineer performing an ADVERSARIAL audit. Find
@@ -30,19 +31,16 @@ Agent tool:
     Most context you need is provided below (or in the orchestrator's shared
     flat file `/tmp/subagent-context-<project>-<stream>.md` if specified).
     - **Trust the written context file:** If a `/tmp/subagent-context-*.md` path
-      is provided, read it in full on your first turn (issue parallel
-      `read_file` calls for `1..800` and `801..1600` if needed). Trust the diff,
-      embedded file contents, and passing test/lint gate output recorded in it
-      as authoritative — do NOT run `git diff`, `git status`, `gh pr diff`, or
+      is provided, read it in full on your first turn (issue parallel `Read`
+      calls for `1..800` and `801..1600` if needed). Trust the diff, embedded
+      file contents, and passing test/lint gate output recorded in it as
+      authoritative — do NOT run `git diff`, `git status`, `gh pr diff`, or
       re-read files whose full contents or diff are already in the context file.
       Authorization and trust-boundary questions are the exception: trace those
-      through the real code, batching your `read_file` and `grep` calls in
-      parallel turns.
-    - When reading any repo or library file, read **600–800 lines per call**
-      (never page in 30–80 line micro-slices across multiple turns).
-    - Whenever you run `grep -rn`, ALWAYS pass
-      `--exclude-dir={node_modules,dist,build,.git,pb,pb_public,vendor,.next,coverage}`
-      so you never hang scanning minified assets or dependencies.
+      through the real code, batching your `Read` calls (`±40 lines` around
+      caller sites, or `600–800 lines` when reading whole schema/sibling files;
+      never 30–80 line micro-slices across serial turns) and `Grep` tool calls
+      (where granted; never shell `grep -rn`) in parallel turns.
     - **STRICTLY READ-ONLY / ZERO SPIKES / NO TEST OR BUILD EXECUTION:** The
       orchestrator has already executed the fast unit test and linter/typecheck
       gate in its own shell. **NEVER run `npm test`, `vitest`, `playwright`,

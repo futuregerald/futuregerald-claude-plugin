@@ -7,14 +7,18 @@ Use this template when dispatching a code quality reviewer subagent.
 **Only dispatch after spec compliance review passes.**
 
 ```
-Task tool (superpowers:code-reviewer):
-  Use template at code-reviewer.md
+Agent tool:
+  subagent_type: "code-quality-reviewer"
+  model: "opus"
+  description: "Review code quality for Task N"
+  prompt: |
+    Review the implementation for Task N (`[task summary]`) against `/tmp/subagent-context-<project>-<stream>.md`.
 
-  WHAT_WAS_IMPLEMENTED: [from implementer's report]
-  PLAN_OR_REQUIREMENTS: Task N from [plan-file]
-  BASE_SHA: [commit before task]
-  HEAD_SHA: [current commit]
-  DESCRIPTION: [task summary]
+    - What was implemented: [from implementer's report]
+    - Plan / requirements: Task N from `[plan-file]`
+    - Commit range: `[BASE_SHA]..[HEAD_SHA]`
+
+    Verify correctness, architecture, edge cases, test depth, and maintainability strictly read-only (zero spikes, zero builds or test runs).
 ```
 
 **Code reviewer returns:** Strengths, Issues (Critical/Important/Minor), Assessment
