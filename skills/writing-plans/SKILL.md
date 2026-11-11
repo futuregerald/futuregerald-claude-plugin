@@ -10,7 +10,7 @@ effort: medium
 
 ## Overview
 
-**Thinking budget & Planner vs. Reviewer split:** Use **Medium thinking** (`Carbon Medium` / `Argon Medium` / `Opus Medium`) by default (~90% of plans) to stay grounded in reading real code, lockfiles, and schemas rather than speculating, and pair it with a single read-only **High thinking** (`Carbon High` / `Argon High` / `Opus High`) pass in Phase 3½ (`plan-review`). Bump the **Planner itself** to **HIGH thinking** (`Carbon High` / `Opus High`) only on the ~10% of work that designs a net-new cross-boundary subsystem (e.g., Chrome MV3 Service Worker ↔ Offscreen ↔ Content Script bridges, E2EE key-wrapping protocols), complex distributed state machines, concurrency root-cause fixes, or zero-downtime database migrations.
+**Thinking budget & Planner vs. Reviewer split:** Use **Medium thinking** by default (~90% of plans) to stay grounded in reading real code, lockfiles, and schemas rather than speculating, and pair it with a single read-only **High thinking** pass in Phase 3½ (`plan-review`). Bump the **Planner itself** to **HIGH thinking** only on the ~10% of work that designs a net-new cross-boundary subsystem (e.g., multi-context IPC bridges, E2EE key-wrapping protocols), complex distributed state machines, concurrency root-cause fixes, or zero-downtime database migrations.
 
 **Pre-Plan Repo Gate & Contract Verification (Mandatory — prevents planner-to-implementer handoff drop-off):**
 Because downstream implementer sub-agents treat `PLAN.md` as authoritative and do not re-audit repo policy scripts, before finalizing `PLAN.md` you MUST:

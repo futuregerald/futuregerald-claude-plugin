@@ -3,14 +3,16 @@
 Use this template when dispatching an implementer subagent.
 
 ```
-Task tool (general-purpose):
+Agent tool:
+  subagent_type: "implementer"
+  model: "sonnet"
   description: "Implement Task N: [task name]"
   prompt: |
     You are implementing Task N: [task name]
 
     ## Shared Context File (Read First — Zero Duplicate Work)
 
-    Read `/tmp/subagent-context-<project>-<stream>.md` on your first tool call (`view_file` / `Read` up to 800 lines).
+    Read `/tmp/subagent-context-<project>-<stream>.md` on your first tool call (`Read` up to 800 lines).
     It contains all pre-traced file snippets with exact line ranges, interfaces/contracts, call sites, and requirements gathered by the orchestrator.
     - **Do NOT** re-search or re-read unchanged files already covered in that context file.
     - When reading any additional file, read **600–800 lines per call** (never page in 30–50 line micro-slices).

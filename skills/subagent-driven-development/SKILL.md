@@ -6,29 +6,29 @@ tags: [development]
 
 # Subagent-Driven Development
 
-Execute plan by dispatching fresh subagents per cohesive stream. Per-stream/task verification runs the implementer's fast unit tests plus the orchestrator's fast unit/lint gate; read-only `pro` reviewers (`spec-reviewer` then `code-quality-reviewer`, or `comprehensive-code-review`) run once per stream/phase boundary or at PR time against `/tmp/subagent-context-<project>-<stream>.md` (never per commit).
+Execute plan by dispatching fresh subagents per cohesive stream. Per-stream/task verification runs the implementer's fast unit tests plus the orchestrator's fast unit/lint gate; read-only Adversarial Reviewers (`spec-reviewer` then `code-quality-reviewer`, or `comprehensive-code-review`) run once per stream/phase boundary or at PR time against `/tmp/subagent-context-<project>-<stream>.md` (never per commit).
 
 **Core principle:** Fresh subagent per stream + fast unit verification + read-only review at stream/phase boundaries = high quality, fast iteration without token exhaustion
 
 ## Execution Roles & Harness-Native Dispatch
 
-Shared skills name **abstract roles** (`Lead / Planner`, `Implementer`, `Adversarial Reviewer`, `Retriever`). The active harness's root configuration (`~/.gemini/GEMINI.md` in Antigravity, `~/.claude/CLAUDE.md` / repo `CLAUDE.md` in Claude Code) owns the concrete model mapping:
+Shared skills name **abstract roles** (`Lead / Planner`, `Implementer`, `Adversarial Reviewer`, `Retriever`). The active harness's root configuration (`CLAUDE.md` in Claude Code, or the harness's global root instructions elsewhere) owns the concrete model and sub-agent tool mapping:
 
-| Abstract Role | Claude Code (Anthropic) | Antigravity (Google) | Purpose & Constraints |
-|---|---|---|---|
-| **Lead / Planner** | Opus 5.5 (`model: "opus"`), Effort: `medium` (`high` for net-new multi-layer architecture/migrations) | **Carbon Medium** inline default (switch UI to **Carbon High** for net-new multi-layer architecture/migrations; **Argon Medium** fallback) | Coordinates, runs initial triage (`git grep -n`, ≤3 inline calls) to identify the entry-point `file:line` first, checks repo lint/wording scripts (`package.json`, `Makefile`, `scripts/check-*.mjs`) and exact shared contract definitions before freezing `PLAN.md`, writes verified `file:line` facts and open questions to `/tmp/subagent-context-<project>-<stream>.md` (never putting unverified hypotheses under `## Known Facts`; use `## Hypotheses to Falsify`), verifies fast gates in own shell, deletes temp file after review approval, commits. Implements inline on quick (<5-turn, ≤2-file) single-stream tasks to avoid subagent handoff loss; delegates multi-turn/multi-file streams. Never halts prematurely between streams. |
-| **Implementer Subagent** | Sonnet 5.5 (`model: "sonnet"`, subagent: `implementer`), Effort: `medium` (escalate to `opus` on security/concurrency/error-taxonomy streams) | **Carbon / Argon Medium** (`TypeName: "implementer"`, `Model: "inherit"`; use `Model: "flash"` **only** for <50 LOC single-file mechanical boilerplate; on ≥3 parallel streams via controlled `swarm`, pin authors to `gemini-4-argon-medium` with `workspace: "share"`) | Fresh context per cohesive stream. Reads `/tmp/subagent-context-<project>-<stream>.md` first, performs any remaining trace before coding, reads additional files in 600–800 line chunks (never 30–50 line slices), follows TDD using **fast unit tests only** (never E2E or `pretest` builds), zero comments, returns 4-section handoff. If a CLI/test runner fails twice, reads `vitest.config.*`/`tsconfig.json`/`Makefile` immediately instead of guessing flags. Never use Haiku. |
-| **Adversarial Reviewer** *(Plan, Spec, Security, Code Quality, SQL)* | Opus 5.5 (`subagent_type: "adversarial-plan-reviewer"` / `"code-quality-reviewer"` / `"security-reviewer"`), Effort: `high` | **Carbon / Argon High** (`TypeName: "plan-reviewer"` / `"code-quality-reviewer"` / `"security-reviewer"` / `"sql-reviewer"`, `Model: "inherit"`; **never** pass `Model: "pro"` on Carbon/Argon sessions because `"pro"` routes to Gemini 3.1 Pro; on controlled `swarm`, pin verifiers to `gemini-4-carbon-high`) | **Strictly read-only.** Runs at plan gate (Phase 3½) and stream/phase boundary or PR time (never per commit). Reads `/tmp/subagent-context-<project>-<stream>.md` (which includes the `git diff` and orchestrator's passing fast-test output). Never executes tests, builds, or E2E suites. |
+| Abstract Role | Default Mapping (`CLAUDE.md`) | Purpose & Constraints |
+|---|---|---|
+| **Lead / Planner** | Opus 5.5 (`model: "opus"`), Effort: `medium` (`high` for net-new multi-layer architecture/migrations) | Coordinates, runs initial triage (`git grep -n`, ≤3 inline calls) to identify the entry-point `file:line` first, checks repo lint/wording scripts (`package.json`, `Makefile`, `scripts/check-*.mjs`) and exact shared contract definitions before freezing `PLAN.md`, writes verified `file:line` facts and open questions to `/tmp/subagent-context-<project>-<stream>.md` (never putting unverified hypotheses under `## Known Facts`; use `## Hypotheses to Falsify`), verifies fast gates in own shell, deletes temp file after review approval, commits. Implements inline on quick (<5-turn, ≤2-file) single-stream tasks to avoid subagent handoff loss; delegates multi-turn/multi-file streams. Never halts prematurely between streams. |
+| **Implementer Subagent** | Sonnet 5.5 (`model: "sonnet"`, `subagent_type: "implementer"`), Effort: `medium` (escalate to `opus` on security/concurrency/error-taxonomy streams) | Fresh context per cohesive stream. Reads `/tmp/subagent-context-<project>-<stream>.md` first, performs any remaining trace before coding, reads additional files in 600–800 line chunks (never 30–50 line slices), follows TDD using **fast unit tests only** (never E2E or `pretest` builds), zero comments, returns 4-section handoff. If a CLI/test runner fails twice, reads `vitest.config.*`/`tsconfig.json`/`Makefile` immediately instead of guessing flags. Never use Haiku. |
+| **Adversarial Reviewer** *(Plan, Spec, Security, Code Quality, SQL)* | Opus 5.5 (`model: "opus"`, `subagent_type: "adversarial-plan-reviewer"` / `"spec-reviewer"` / `"code-quality-reviewer"` / `"security-reviewer"` / `"sql-reviewer"`), Effort: `high` | **Strictly read-only.** Runs at plan gate (Phase 3½) and stream/phase boundary or PR time (never per commit). Reads `/tmp/subagent-context-<project>-<stream>.md` (which includes the `git diff` and orchestrator's passing fast-test output). Never executes tests, builds, or E2E suites. |
 
 ### Ephemeral Shared Context File (`/tmp/subagent-context-<project>-<stream>.md`) & Fast-Test Rules
 
 To eliminate duplicate file reads, redundant searches, and $O(N^2)$ token re-billing across subagents:
 1. **Save Orchestrator Context to a Temp Flat File:** After running initial triage (`git grep -n`, ≤3 inline calls) to identify the entry-point `file:line`, the orchestrator writes verified `file:line` facts, contract signatures, task goals, and open questions to `/tmp/subagent-context-<project>-<stream>.md` (never putting unverified hypotheses under `## Known Facts`; use `## Hypotheses to Falsify`). If remaining call-site or source tracing across ≥3 files is needed, the implementer subagent performs that trace first and updates `/tmp/subagent-context-<project>-<stream>.md`.
-2. **Subagents Read the Temp File First:** Instruct every subagent in the stream to read `/tmp/subagent-context-<project>-<stream>.md` on its first tool call (`view_file` / `Read` up to 800 lines) and **never** re-search or re-read unchanged files already covered in that file. When reading any other file, subagents must read **600–800 lines per call** (never 30–50 line micro-slices).
+2. **Subagents Read the Temp File First:** Instruct every subagent in the stream to read `/tmp/subagent-context-<project>-<stream>.md` on its first tool call (`Read` up to 800 lines) and **never** re-search or re-read unchanged files already covered in that file. When reading any other file, subagents must read **600–800 lines per call** (never 30–50 line micro-slices).
 3. **Fast Local Tests Only (No Local E2E, No `pretest` Builds):**
    - Implementers and orchestrators run **only fast unit tests and typecheck/lint** (`npx vitest run <spec>`, `npm run typecheck`, `go test ./pkg/...`, `bundle exec rspec <spec>`). Never run `pretest` multi-bundle builds on unit test runs.
    - **Never run E2E suites (`playwright test`, `npm run e2e`) or full-repo sweeps locally between fixes, changes, or streams.** While E2E and full-repo sweeps are never run as per-turn iteration gates, before opening or merging a PR the agent must check `.github/workflows/` PR triggers (`pull_request`); if a suite (`e2e`, `govulncheck`, `models`) is gated off on PRs (`if: github.event_name != 'pull_request'`), run the targeted check locally or update/trigger the workflow before merging to `main`.
-4. **Append Diff & Gate Output for Read-Only Reviewers:** Per-stream/task verification runs the implementer's fast unit tests plus the orchestrator's fast unit/lint gate in its own shell. Read-only Adversarial Reviewers (`spec-reviewer`, `code-quality-reviewer`, or `comprehensive-code-review`, dispatched per the harness routing table in `GEMINI.md` / `CLAUDE.md`) run once per stream/phase boundary or at PR time against `/tmp/subagent-context-<project>-<stream>.md` (never per commit). The orchestrator appends the `git diff` and passing gate output to `/tmp/subagent-context-<project>-<stream>.md` and dispatches the read-only reviewers to inspect that file. Reviewers **never** run tests, builds, or E2E suites.
+4. **Append Diff & Gate Output for Read-Only Reviewers:** Per-stream/task verification runs the implementer's fast unit tests plus the orchestrator's fast unit/lint gate in its own shell. Read-only Adversarial Reviewers (`spec-reviewer`, `code-quality-reviewer`, or `comprehensive-code-review`, dispatched per the active harness's root configuration) run once per stream/phase boundary or at PR time against `/tmp/subagent-context-<project>-<stream>.md` (never per commit). The orchestrator appends the `git diff` and passing gate output to `/tmp/subagent-context-<project>-<stream>.md` and dispatches the read-only reviewers to inspect that file. Reviewers **never** run tests, builds, or E2E suites.
 5. **Targeted Single-Reviewer Re-Verification & Cleanup:** If one reviewer returns `APPROVED` and the other requests localized changes, verify the fix with `fix-check` (findings list + fix diff + gate output), never a fresh reviewer. Once the stream is `APPROVED`, **delete the temp file** (`rm -f /tmp/subagent-context-<project>-<stream>.md`).
 6. **Defensive Coding Invariants for Implementers (Mandatory):**
    - **Error classification precedence:** Check specific structural error classes (`DOMException.name`, `SyntaxError`, `TypeError`, explicit numeric `.status`/`.statusCode`) *before* generic message substring regexes so numbers inside quota/syntax messages (e.g. `5000KB`, `position 500`) never match HTTP `500` patterns.
@@ -38,24 +38,16 @@ To eliminate duplicate file reads, redundant searches, and $O(N^2)$ token re-bil
 
 ### Dispatch Syntax
 
-**Claude Code:**
 ```typescript
 Agent({
   subagent_type: "implementer",
   model: "sonnet",
+  description: "Implement task stream",
   prompt: "Read /tmp/subagent-context-<project>-<stream>.md first..."
 })
 ```
 
-**Antigravity (uses `TypeName: "implementer"` and `Model: "inherit"` so the subagent stays on Carbon / Argon Medium):**
-```typescript
-invoke_subagent({
-  TypeName: "implementer",
-  Role: "Task Implementer",
-  Model: "inherit",
-  Prompt: "Read /tmp/subagent-context-<project>-<stream>.md first..."
-})
-```
+*(Non-Claude harnesses route the **Implementer** and **Adversarial Reviewer** roles via their own root configuration.)*
 
 **PRECONDITION — the plan must contain an Impact Analysis.** The per-task spec and quality reviews below review *code against the plan*, so a wrong plan propagates into every task dispatched from it. Read the plan before dispatching the first implementer, and raise anything that looks wrong with your human partner rather than building on it.
 
@@ -250,7 +242,7 @@ Done!
 
 - Skip reviews (spec compliance OR code quality)
 - Proceed with unfixed issues
-- Dispatch multiple implementation subagents against overlapping files in parallel (independent streams touching disjoint files MAY and SHOULD be dispatched in parallel per GEMINI.md Phase 4)
+- Dispatch multiple implementation subagents against overlapping files in parallel (independent streams touching disjoint files MAY and SHOULD be dispatched in parallel in Phase 4)
 - Make subagent read plan file (provide full text instead)
 - Skip scene-setting context (subagent needs to understand where task fits)
 - Ignore subagent questions (answer before letting them proceed)

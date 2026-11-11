@@ -36,29 +36,16 @@ first (`writing-plans`) — there is nothing to review otherwise.
 
 ## Dispatch
 
-One sub-agent call, routed per the active harness's root configuration (`~/.gemini/GEMINI.md` in Antigravity, `~/.claude/CLAUDE.md` / repo `CLAUDE.md` in Claude Code):
+One read-only **Adversarial Reviewer** sub-agent call (routed via the active harness's root configuration):
 
-**Claude Code:**
 ```
 Agent tool:
   subagent_type: adversarial-plan-reviewer
   model: opus
+  description: "Adversarial plan review"
   prompt: |
     Review the implementation plan at: <absolute path to plan file>
 
-    Goal this plan serves: <ticket key + URL, or the task description verbatim>
-    Repo root: <absolute path>
-    Base SHA: <git rev-parse HEAD>
-```
-
-**Antigravity (use `TypeName: "plan-reviewer"` for the restricted ~31k read-only grant, and `Model: "inherit"` on Carbon/Argon sessions so it stays on Carbon/Argon rather than downgrading to Gemini 3.1 Pro `"pro"`):**
-```
-invoke_subagent:
-  TypeName: "plan-reviewer"
-  Role: "Adversarial Plan Reviewer"
-  Model: "inherit"
-  Prompt: |
-    Review the implementation plan at: <absolute path to plan file>
     Goal this plan serves: <ticket key + URL, or the task description verbatim>
     Repo root: <absolute path>
     Base SHA: <git rev-parse HEAD>

@@ -38,7 +38,7 @@ The orchestrator precomputes ALL context (including the `git diff` and the orche
 **CRITICAL — Reviewers Trust the Context File & Are Strictly Read-Only (No Spikes, Test, Build, or E2E Execution):**
 - The orchestrator has *already* gathered the authoritative `git diff`, changed files, and passing fast unit test and linter/typecheck gate output in `/tmp/subagent-context-<project>-<stream>.md`.
 - Review sub-agents (`code-quality-reviewer` and `security-reviewer`) **MUST trust the written `/tmp/subagent-context-<project>-<stream>.md` file** — never re-running `git diff`/`git status`, never re-reading files already embedded in the context file, and **MUST NEVER run spikes, test suites (`npm test`, `vitest`, `go test`, `rspec`), builds (`npm run build`), linters, or E2E suites (`playwright test`, `npm run e2e`)**.
-- When verifying callers, siblings, or library contracts not included in the context file, reviewers must batch their `read_file` / `Read` calls in parallel turns (`±40 lines` around caller sites, or `600–800 lines` when reading whole schema/sibling files; using the `Grep` tool in Claude Code where granted, never shell `grep -rn` in `read_file`-restricted reviewers) rather than spinning wheels in 30+ serial one-call turns.
+- When verifying callers, siblings, or library contracts not included in the context file, reviewers must batch their file-read calls (`Read`) in parallel turns (`±40 lines` around caller sites, or `600–800 lines` when reading whole schema/sibling files; using the `Grep` tool where granted, never shell `grep -rn`) rather than spinning wheels in 30+ serial one-call turns.
 - At the end of the review run (once the stream is `APPROVED`), the orchestrator **deletes `/tmp/subagent-context-<project>-<stream>.md`** (`rm -f /tmp/subagent-context-<project>-<stream>.md`).
 
 ```bash
@@ -171,22 +171,7 @@ The brief gives sub-agents real examples of what the team flags, suggests, block
 
 ## Phase 2: Dispatch Sub-Agents (PARALLEL)
 
-**Both sub-agents MUST be dispatched in parallel — one message, two sub-agent invocations** (`Agent` tool with `model: "opus"` in Claude Code; `invoke_subagent` with `Model: "inherit"` and restricted read-only `TypeName: "code-quality-reviewer"` + `TypeName: "security-reviewer"` in Antigravity so both inherit **Gemini 4 Carbon** / **Argon** at the ~31k read-only schema floor rather than downgrading to Gemini 3.1 Pro `"pro"`). If a sub-agent fails: re-dispatch once, then record "Review Incomplete."
-
-**Antigravity parallel dispatch (one turn, two `invoke_subagent` calls):**
-```
-invoke_subagent:
-  TypeName: "code-quality-reviewer"
-  Role: "Correctness & Code Quality Reviewer"
-  Model: "inherit"
-  Prompt: <Sub-Agent 1 prompt reading /tmp/subagent-context-<project>-<stream>.md>
-
-invoke_subagent:
-  TypeName: "security-reviewer"
-  Role: "Application Security Reviewer"
-  Model: "inherit"
-  Prompt: <Sub-Agent 2 prompt reading /tmp/subagent-context-<project>-<stream>.md>
-```
+**Both read-only Adversarial Reviewer sub-agents MUST be dispatched in parallel — one message, two `Agent` tool invocations (`model: "opus"`, or routed via the active harness's root configuration).** If a sub-agent fails: re-dispatch once, then record "Review Incomplete."
 
 ### Sub-Agent 1: Correctness Review
 

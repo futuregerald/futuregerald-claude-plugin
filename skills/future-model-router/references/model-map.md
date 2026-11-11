@@ -2,7 +2,7 @@
 
 The rules in `SKILL.md` name **roles**, never models. This file is the only place a model name appears, so a new lineup is a one-file edit that never touches the reasoning.
 
-**Verify before relying on a row.** Lineups change every few months. Last checked: 2026-11-10.
+**Verify before relying on a row.** Lineups change every few months. Last checked: 2026-11-11.
 
 **A lineup discrepancy you will hit immediately.** Antigravity IDE (`swarm{action: "models", all: true}`) exposes `gemini-4-carbon-{low,medium,high}`, `gemini-4-argon-{low,medium,high}`, `gemini-3.8-flash-{low,medium,high}`, `claude-opus-5-5-{low,medium,high}`, `claude-sonnet-5-5-{low,medium,high}`, and `gpt-oss-120b-medium`, whereas `invoke_subagent` only exposes the 4-slot enum `Model: "inherit" | "pro" | "flash" | "flash_lite"`. Meanwhile, the Gemini CLI on the machine where the CLI numbers below were taken (v0.58.0) exposes `gemini-3.5-flash`, `gemini-3.5-flash-lite` and `gemini-3.1-flash-lite`; `gemini-3.5-pro` and `gemini-3-pro` both return `ModelNotFoundError`, and `-m gemini-3.1-flash` silently resolves to `gemini-3.5-flash`. So the chat/IDE lineup, the `invoke_subagent` enum, and the CLI lineup are **not the same set**. Check what your entry point actually accepts before copying a model name out of this file.
 
@@ -28,8 +28,8 @@ The orchestrator role is also whatever model is driving the session. Isolating w
 | Role | Anthropic | Google (Antigravity) |
 |---|---|---|
 | retriever | Haiku 4.5 | **Flash-Lite** (`Model: "flash_lite"`) **only for processing pre-fed input** (max 3 turns, never code discovery) **[verified]**; otherwise `gemini-3.8-flash-low` (`Model: "flash"` or 3.7/3.6 `low` where exposed) **[reported]** |
-| explorer | Sonnet 5.5 (`low` / `medium`) | **Gemini 3.8 Flash** (`Model: "flash"`, `low` or `medium`, max 15 turns) for bounded search; **Gemini 4 Argon (`medium`)** (`Model: "inherit"` or `gemini-4-argon-medium` in `swarm`) for TDD stream implementation **[verified]** |
-| orchestrator | Opus 5.5 (`medium` default; `high` for complex architecture & adversarial review) | **Gemini 4 Carbon** (`medium` default for planning/orchestration; `high` for net-new multi-layer architecture/migrations and adversarial review; **Gemini 4 Argon** as execution/quota fallback) **[verified roster; Carbon vs. Argon turn/cost curve unmeasured]** |
+| explorer | Sonnet 5.5 (`low` / `medium`) | **Gemini 3.8 Flash** (`Model: "flash"`, `low` or `medium`, max 15 turns) for bounded search; **Gemini 4 Argon (`medium`)** (`Model: "inherit"` on default Argon UI or `gemini-4-argon-medium` in `swarm`, `1×` cost) for TDD stream implementation **[verified]** |
+| orchestrator | Opus 5.5 (`medium` default; `high` for complex architecture & adversarial review) | **Gemini 4 Argon (`medium`)** default (`1×` cost across ~80–85% of session tokens) + **Gemini 4 Carbon** (`2×` Argon cost **[reported]**; used via one-shot `gemini-4-carbon-high` `swarm` workers for non-trivial plan & pre-PR adversarial reviews at `~1.26×` blended stream cost, or manual UI `Carbon medium/high` switch for the ~10% hardest architectural/security/concurrency/migration tasks) **[verified roster; 2× price ratio reported]** |
 
 **The two platforms lean on different levers, and that is deliberate.** On Anthropic the model changes per role. On Google the thinking level on one model covers explorer and orchestrator by itself — **and the model lever is available too, for subagents**, where Flash-Lite is selectable. So the retriever role there can drop a model tier rather than only a thinking level. Both platforms expose both levers; they differ in which one is the default reach.
 
@@ -227,8 +227,8 @@ keeping: two routes to the same discriminator.
 
 | Model | Best for | Why |
 |---|---|---|
-| **Gemini 4 Carbon** (`low` / `medium` / `high`) | Planning (`medium`; `high` for ~10% complex architecture/migrations) and adversarial plan/code/security/SQL/editorial review (`high` or `Model: "inherit"` with high-deliberation prompt) **[verified roster; cost/turn curve vs. Argon unmeasured]** | Newest frontier reasoning tier in Antigravity; shares quota reset window with Argon and 3.8 Flash |
-| **Gemini 4 Argon** (`low` / `medium` / `high`) | Phase 4 TDD implementation (`medium`), parallel `swarm` stream authors (`gemini-4-argon-medium`), and primary session fallback **[verified]** | Measured `27/28 (96.4%)` vs. Flash 3.8 `23/28 (82.1%)` with 5.0× fewer turns and 5.93× fewer input tokens |
+| **Gemini 4 Carbon** (`low` / `medium` / `high`) | One-shot `gemini-4-carbon-high` `swarm` workers for non-trivial plan & pre-PR code/security/SQL/editorial reviews (`~1.26×` blended stream cost), plus manual UI `medium` / `high` switch on the ~10% hardest architectural/security/concurrency/migration tasks **[verified roster; 2× Argon cost reported; turn curve vs. Argon unmeasured]** | Newest frontier reasoning tier in Antigravity (`2×` Argon cost); reserved for high-leverage adversarial reviews and complex design where preventing a rework round or hypothesis loop pays back its price |
+| **Gemini 4 Argon** (`low` / `medium` / `high`) | Default primary session (`medium`, `1×` cost across ~80–85% of tokens), Phase 4 TDD implementation (`Model: "inherit"`), and parallel `swarm` stream authors (`gemini-4-argon-medium`) **[verified]** | Measured `27/28 (96.4%)` vs. Flash 3.8 `23/28 (82.1%)` with 5.0× fewer turns (`15` vs `75`) and 5.93× fewer input tokens — already near the ~10–12 turn TDD physical floor |
 | **Gemini 3.8 Flash** (`low` / `medium` / `high`) | Bounded code search (`<=15` turns), `<50 LOC` mechanical boilerplate, and `swarm_monitor` stall cron (`gemini-3.8-flash-low`) | Cheap per-token rate for bounded mechanical tasks; flails on ambiguous CLI errors and nuanced regex/timeout invariants **[verified]** |
 | **3.7 / 3.6** (name a thinking level, where exposed) | Mechanical transforms, script generation, strict format extraction **[reported]** | Direct and literal, holds output contracts, quicker to first token |
 | **Claude 5.5 Opus / Sonnet & GPT-OSS 120B** | A second opinion, architecture review, separate quota pool | Separate rolling quota reset window when Google pool is congested or vice versa **[verified]** |
@@ -296,6 +296,8 @@ The model is selectable **per agent**, which is what makes the role mapping abov
 `/agents` opens the Agent Manager panel to browse custom agents and watch active or finished background subagents.
 
 The vendor describes subagents as having "workspace isolation". **[vendor, unverified]** — whether that isolates the *filesystem* or only the *context* is not established here, and only the former weakens the tree-mutation hazard. Do not downgrade the guardrails in `SKILL.md` on the strength of that phrase until you have confirmed which it means.
+
+**`invoke_subagent` vs. `swarm` tool and workspace enforcement [verified]:** Custom reviewer definitions invoked via `invoke_subagent` enforce `tools: [read_file]` at the harness level (`run_command`, `edit_file`, and `write_file` are absent from the child's tool grant). By contrast, native `swarm` workers (`swarm{action: "add"}`) always receive the full worker toolset (`run_command`, `edit_file`, `write_file`, `swarm`), and `workspace: "inherit"` shares the coordinator's live working tree directly (whereas `workspace: "share"` creates a separate branch working copy). Consequently, read-only and git-mutation bans on `swarm` review workers (`workspace: "inherit"`) are **prompt-level mitigation only, not harness enforcement** — stage or checkpoint uncommitted work first and forbid `run_command`, `edit_file`, `write_file`, `swarm`, and git/tree mutations (`checkout`, `restore`, `reset`, `clean`, `stash`, `rm`) explicitly in the worker's `brief`.
 
 ### Harnesses without subagents
 
