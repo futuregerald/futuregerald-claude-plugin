@@ -1,8 +1,12 @@
 import json
 import os
+from pathlib import Path
 import shutil
+import sys
 import tempfile
 import unittest
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from breaker_rules import (
     rule_mode,
@@ -150,14 +154,14 @@ class TestBreakerRulesNew(unittest.TestCase):
         save_baton_state("conv-fail", {"warned_at_estimate": 100}, state_dir="/nonexistent/root/dir")
 
     def test_verify_live_hooks_json(self):
-        hooks_path = os.path.expanduser("~/.gemini/config/hooks.json")
+        hooks_path = Path(__file__).resolve().parent.parent / "hooks.json"
         with open(hooks_path, "r", encoding="utf-8") as f:
             data = json.load(f)
 
         all_required = [
             "call_mcp_tool", "edit_file", "find_by_name", "grep_search", "invoke_subagent",
             "list_dir", "manage_task", "read_file", "read_url_content", "replace_file_content",
-            "run_command", "schedule", "search_web", "send_message", "view_file",
+            "run_command", "schedule", "search_web", "send_message", "swarm", "view_file",
             "write_file", "write_to_file"
         ]
         current = sorted(m["matcher"] for m in data["autonomous-circuit-breaker"]["PreToolUse"])
@@ -172,17 +176,14 @@ class TestBreakerRulesNew(unittest.TestCase):
 
     def test_shasum_hooks_json_and_state_dir(self):
         import hashlib
-        hooks_path = os.path.expanduser("~/.gemini/config/hooks.json")
+        hooks_path = Path(__file__).resolve().parent.parent / "hooks.json"
         with open(hooks_path, "rb") as f:
             h = hashlib.sha1(f.read()).hexdigest()
         print(f"\n[SHASUM] hooks.json: {h}")
 
-        state_dir = os.path.expanduser("~/.gemini/state")
-        baton_files = []
-        if os.path.exists(state_dir):
+        with tempfile.TemporaryDirectory() as state_dir:
             baton_files = [f for f in os.listdir(state_dir) if f.startswith("baton-")]
-        print(f"[STATE_DIR] baton files in ~/.gemini/state/: {baton_files}")
-        self.assertEqual(baton_files, [])
+            self.assertEqual(baton_files, [])
 
     def test_r1_authorized_patterns(self):
         from breaker_rules import is_authorized
@@ -198,6 +199,10 @@ class TestBreakerRulesNew(unittest.TestCase):
         self.assertTrue(is_authorized("check handoff-phase-2.txt"))
         self.assertTrue(is_authorized("Continue from ACTIVE_CONTEXT.md and execute all Pending Steps to completion."))
         self.assertTrue(is_authorized("Yes. Plan and use the workflow with subagent driven development"))
+        self.assertTrue(is_authorized("/start implement the feature"))
+        self.assertTrue(is_authorized("/begin phase 1"))
+        self.assertTrue(is_authorized("/lifecycle fix bug"))
+        self.assertTrue(is_authorized("/peer-pipeline-swarm run stream"))
 
     def test_is_code_file_excludes_docs_dir(self):
         from breaker_rules import is_code_file

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 import os
 import re
@@ -15,6 +17,10 @@ AUTHORIZED_PATTERNS = [
     re.compile(r"handoff-phase", re.IGNORECASE),
     re.compile(r"complete instructions for phase\s+\w+", re.IGNORECASE),
     re.compile(r"subagent[- ]driven development", re.IGNORECASE),
+    re.compile(r"/start\b", re.IGNORECASE),
+    re.compile(r"/begin\b", re.IGNORECASE),
+    re.compile(r"/lifecycle\b", re.IGNORECASE),
+    re.compile(r"/peer-pipeline-swarm\b", re.IGNORECASE),
 ]
 
 COMPLAINT_PATTERN = re.compile(r"why .*(long|slow)|taking so long|\bstop\b", re.IGNORECASE)

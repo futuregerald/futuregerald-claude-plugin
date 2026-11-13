@@ -1,6 +1,6 @@
 # Antigravity configuration
 
-Versioned copy of the Antigravity (Gemini) global rules, orchestration skill and circuit-breaker hook. These files are not embedded by `skill-installer` and Claude Code never reads them.
+Versioned copy of the Antigravity and Gemini global rules, harness-native skill overrides, lifecycle subagents, and circuit-breaker hook. Embedded by `skill-installer` for `--target antigravity` and `--target gemini` (`skill-installer -t antigravity --global`, `skill-installer -t gemini --global`); Claude Code never reads these files.
 
 Personal, team, tracker and repository specifics never live in these rules, skills or hooks; they live in separate git-ignored files that these files reference (`~/.gemini/config/rules/*.local.md` and `skills/antigravity-orchestration/references/config.md`). Because nothing is stored inline, the tracked files here match the live files under `~/.gemini/` byte-for-byte.
 
@@ -8,10 +8,12 @@ Personal, team, tracker and repository specifics never live in these rules, skil
 |---|---|---|
 | `GEMINI.md` | `~/.gemini/GEMINI.md` | Always-on global rules: execution discipline, check-in vs authorized runs, lifecycle tiers, Carbon/Argon role routing |
 | `rules/org.example.md` | `~/.gemini/config/rules/<org>.local.md` (git-ignored) | Template for organization, tracker and repo rules |
-| `skills/antigravity-orchestration/SKILL.md` | `~/.gemini/config/skills/antigravity-orchestration/SKILL.md` | On-demand reference: memory signatures, search hierarchy, Carbon/Argon & controlled `swarm` routing, breaker rules, baton-pass mechanics |
+| `skills/antigravity-orchestration/SKILL.md` | `~/.gemini/config/skills/antigravity-orchestration/SKILL.md` | On-demand reference: memory signatures, search hierarchy, Carbon/Argon & Peer-Pipeline Swarm routing, breaker rules, baton-pass mechanics |
+| `skills/{peer-pipeline-swarm,start,begin}/` | `~/.gemini/config/skills/{peer-pipeline-swarm,start,begin}/` | Antigravity-only `/start` and `/begin` 12-phase lifecycle and Phases 4–9 Peer-Pipeline Swarm (`impl` + `code-rev` + `sec-rev` + `monitor`) |
+| `skills/{lifecycle,subagent-driven-development,writing-plans,plan-review,comprehensive-code-review,fix-check,editor-pass,baton-pass,future-model-router}/` | `~/.gemini/config/skills/<skill>/` | Antigravity & Gemini-native overrides for the core workflow skills |
 | `skills/antigravity-orchestration/references/config.example.md` | `~/.gemini/config/skills/antigravity-orchestration/references/config.md` (git-ignored) | Template for local tool paths and org names (e.g. `review-lens`) |
 | `plugins/antigravity-subagents/` | `~/.gemini/config/plugins/antigravity-subagents/` | Dedicated lifecycle subagents (`plan-reviewer`, `code-quality-reviewer`, `security-reviewer`, `sql-reviewer`, `editor-pass-reviewer`, `implementer`) with explicit `tools:` grants |
-| `hooks.json` | `~/.gemini/config/hooks.json` | PreToolUse registration of the circuit breaker on 17 tools |
+| `hooks.json` | `~/.gemini/config/hooks.json` | PreToolUse registration of the circuit breaker on 18 tools (including `swarm`) |
 | `hooks/` | `~/.gemini/config/hooks/` | Circuit breaker (`autonomous-breaker.sh` → `autonomous_breaker.py`), shared rules (`breaker_rules.py`), offline tools (`session_metrics.py`, `replay_breaker.py`) and tests |
 
 ## Circuit breaker rules

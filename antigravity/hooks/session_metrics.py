@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from datetime import datetime
 import glob
@@ -207,7 +209,7 @@ def analyze_session(compact_path: str, full_path: str | None = None, state_dir: 
                         if current_code_edit_run > max_code_edit_run:
                             max_code_edit_run = current_code_edit_run
 
-                elif name == "invoke_subagent":
+                elif name == "invoke_subagent" or (name == "swarm" and args.get("action") == "add"):
                     current_code_edit_run = 0
 
         turns.append({

@@ -2,9 +2,12 @@
 import json
 import os
 import shutil
+import sys
 import tempfile
 import unittest
 from pathlib import Path
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import autonomous_breaker
 import replay_breaker
@@ -176,7 +179,9 @@ class TestReplayBreaker(unittest.TestCase):
         cb = data.get("autonomous-circuit-breaker", {})
         self.assertTrue(cb.get("enabled"))
         pre_tool_use = cb.get("PreToolUse", [])
-        self.assertEqual(len(pre_tool_use), 17)
+        self.assertEqual(len(pre_tool_use), 18)
+        matchers = {entry["matcher"] for entry in pre_tool_use}
+        self.assertIn("swarm", matchers)
         for entry in pre_tool_use:
             self.assertEqual(entry["hooks"][0]["command"], "bash ~/.gemini/config/hooks/autonomous-breaker.sh")
 

@@ -3,9 +3,12 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 BREAKER_SCRIPT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "autonomous-breaker.sh")
 
@@ -13,14 +16,6 @@ class TestAutonomousBreaker(unittest.TestCase):
 
     def setUp(self):
         self.test_tmpdir = tempfile.mkdtemp()
-        real_state_dir = os.path.expanduser("~/.gemini/state")
-        if os.path.exists(real_state_dir):
-            for fname in os.listdir(real_state_dir):
-                if fname.startswith("baton-"):
-                    try:
-                        os.remove(os.path.join(real_state_dir, fname))
-                    except Exception:
-                        pass
 
     def tearDown(self):
         shutil.rmtree(self.test_tmpdir, ignore_errors=True)
@@ -2584,6 +2579,185 @@ class TestAutonomousBreaker(unittest.TestCase):
             res = self.execute_breaker(payload, env={"BREAKER_TRUELOOP_MODE": "enforce", "BREAKER_DUP_MODE": "off"})
             self.assertEqual(res.returncode, 0)
             self.assertEqual(res.stdout, "")
+
+    def test_h1_swarm_add_resets_count_while_swarm_status_does_not(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            t_path = Path(tmpdir) / "transcript.jsonl"
+            steps = [
+                {"step_index": 0, "source": "USER_EXPLICIT", "type": "USER_INPUT", "content": "/start implement stream"},
+            ]
+            step_idx = 1
+            for i in range(6):
+                steps.append({
+                    "step_index": step_idx, "source": "MODEL", "type": "PLANNER_RESPONSE",
+                    "tool_calls": [{"name": "edit_file", "args": {"Path": f"/repo/f_{i}.go", "Target": "1", "Replacement": "2"}}]
+                })
+                step_idx += 2
+            steps.append({
+                "step_index": step_idx, "source": "MODEL", "type": "PLANNER_RESPONSE",
+                "tool_calls": [{"name": "swarm", "args": {"action": "status"}}]
+            })
+            step_idx += 2
+            self.write_jsonl(t_path, steps)
+
+            payload_blocked = {
+                "conversationId": "test-h1-swarm-status",
+                "transcriptPath": str(t_path),
+                "stepIdx": step_idx + 1,
+                "toolCall": {"name": "edit_file", "args": {"Path": "/repo/f_6.go", "Target": "1", "Replacement": "2"}}
+            }
+            res_blocked = self.execute_breaker(payload_blocked, env={"BREAKER_H1_MODE": "enforce", "BREAKER_MAIN_EDIT_MAX": "6"})
+            self.assertEqual(res_blocked.returncode, 0)
+            data_blocked = json.loads(res_blocked.stdout)
+            self.assertEqual(data_blocked.get("decision"), "deny")
+            self.assertIn("send this to an implementation helper agent via invoke_subagent or swarm", data_blocked.get("reason", "").lower())
+
+            steps.append({
+                "step_index": step_idx, "source": "MODEL", "type": "PLANNER_RESPONSE",
+                "tool_calls": [{"name": "swarm", "args": {"action": "add", "name": "impl", "brief": "do tdd"}}]
+            })
+            step_idx += 2
+            self.write_jsonl(t_path, steps)
+
+            payload_allowed = {
+                "conversationId": "test-h1-swarm-add",
+                "transcriptPath": str(t_path),
+                "stepIdx": step_idx + 1,
+                "toolCall": {"name": "edit_file", "args": {"Path": "/repo/f_6.go", "Target": "1", "Replacement": "2"}}
+            }
+            res_allowed = self.execute_breaker(payload_allowed, env={"BREAKER_H1_MODE": "enforce", "BREAKER_MAIN_EDIT_MAX": "6"})
+            self.assertEqual(res_allowed.returncode, 0)
+            self.assertEqual(res_allowed.stdout, "")
+
+    def test_h1_swarm_worker_exempt_from_main_edit_cap(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            t_path = Path(tmpdir) / "transcript.jsonl"
+            steps = [
+                {"step_index": 0, "source": "USER_EXPLICIT", "type": "USER_INPUT", "content": "@impl Execute Tasks 1, 2, 3 via TDD"},
+                {"step_index": 1, "source": "MODEL", "type": "PLANNER_RESPONSE", "tool_calls": [{"name": "read_board", "args": {}}]},
+            ]
+            step_idx = 2
+            for i in range(8):
+                steps.append({
+                    "step_index": step_idx, "source": "MODEL", "type": "PLANNER_RESPONSE",
+                    "tool_calls": [{"name": "edit_file", "args": {"Path": f"/repo/w_{i}.go", "Target": "1", "Replacement": "2"}}]
+                })
+                step_idx += 2
+            self.write_jsonl(t_path, steps)
+
+            payload = {
+                "conversationId": "test-h1-swarm-worker",
+                "transcriptPath": str(t_path),
+                "stepIdx": step_idx + 1,
+                "toolCall": {"name": "edit_file", "args": {"Path": "/repo/w_9.go", "Target": "1", "Replacement": "2"}}
+            }
+            res = self.execute_breaker(payload, env={"BREAKER_H1_MODE": "enforce", "BREAKER_MAIN_EDIT_MAX": "6"})
+            self.assertEqual(res.returncode, 0)
+            self.assertEqual(res.stdout, "")
+
+    def test_baton_swarm_add_triggers_warn_at_205k_and_swarm_kill_exempt_at_235k(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            t_path = Path(tmpdir) / "transcript.jsonl"
+            t_full_path = Path(tmpdir) / "transcript_full.jsonl"
+            padding_warn = "a" * 830000
+            steps = [
+                {"step_index": 0, "source": "USER_EXPLICIT", "type": "USER_INPUT", "content": "/start run stream"},
+                {"step_index": 1, "source": "MODEL", "type": "PLANNER_RESPONSE", "content": padding_warn, "tool_calls": [{"name": "run_command", "args": {"CommandLine": "ls"}}]},
+            ]
+            self.write_jsonl(t_path, steps)
+            self.write_jsonl(t_full_path, steps)
+
+            payload_swarm_add = {
+                "conversationId": "test-baton-swarm-warn",
+                "transcriptPath": str(t_path),
+                "stepIdx": 3,
+                "toolCall": {"name": "swarm", "args": {"action": "add", "name": "impl", "brief": "work"}}
+            }
+            res_warn = self.execute_breaker(payload_swarm_add, env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir})
+            self.assertEqual(res_warn.returncode, 0)
+            data_warn = json.loads(res_warn.stdout)
+            self.assertEqual(data_warn.get("decision"), "deny")
+            self.assertIn("CIRCUIT BREAKER (Baton Warn)", data_warn.get("reason", ""))
+
+            steps[1]["content"] = "a" * 950000
+            self.write_jsonl(t_path, steps)
+            self.write_jsonl(t_full_path, steps)
+
+            payload_swarm_kill = {
+                "conversationId": "test-baton-swarm-block",
+                "transcriptPath": str(t_path),
+                "stepIdx": 4,
+                "toolCall": {"name": "swarm", "args": {"action": "kill", "name": "impl"}}
+            }
+            res_kill = self.execute_breaker(payload_swarm_kill, env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir})
+            self.assertEqual(res_kill.returncode, 0)
+            self.assertEqual(res_kill.stdout, "")
+
+            payload_swarm_add_blocked = {
+                "conversationId": "test-baton-swarm-block",
+                "transcriptPath": str(t_path),
+                "stepIdx": 5,
+                "toolCall": {"name": "swarm", "args": {"action": "add", "name": "impl2", "brief": "work"}}
+            }
+            res_add_block = self.execute_breaker(payload_swarm_add_blocked, env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir})
+            self.assertEqual(res_add_block.returncode, 0)
+            data_block = json.loads(res_add_block.stdout)
+            self.assertEqual(data_block.get("decision"), "deny")
+            self.assertIn("CIRCUIT BREAKER (Baton Block)", data_block.get("reason", ""))
+
+    def test_h1_not_bypassed_by_ide_file_mention_or_coordinator_swarm_add(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            t_path = Path(tmpdir) / "transcript.jsonl"
+            t_full_path = Path(tmpdir) / "transcript_full.jsonl"
+            steps = [
+                {"step_index": 0, "source": "USER_EXPLICIT", "type": "USER_INPUT", "content": "@PLAN.md /start implement phase 1"},
+            ]
+            step_idx = 1
+            for i in range(6):
+                steps.append({
+                    "step_index": step_idx,
+                    "source": "MODEL",
+                    "type": "PLANNER_RESPONSE",
+                    "tool_calls": [{"name": "edit_file", "args": {"Path": f"/repo/f_{i}.go", "Target": "a", "Replacement": "b"}}]
+                })
+                step_idx += 1
+            self.write_jsonl(t_path, steps)
+            self.write_jsonl(t_full_path, steps)
+
+            payload = {
+                "conversationId": "test-h1-ide-mention",
+                "transcriptPath": str(t_path),
+                "stepIdx": step_idx + 1,
+                "toolCall": {"name": "edit_file", "args": {"Path": "/repo/f_7.go", "Target": "a", "Replacement": "b"}}
+            }
+            res = self.execute_breaker(payload, env={"BREAKER_H1_MODE": "enforce", "BREAKER_MAIN_EDIT_MAX": "6"})
+            self.assertEqual(res.returncode, 0)
+            data = json.loads(res.stdout)
+            self.assertEqual(data.get("decision"), "deny")
+            self.assertIn("CIRCUIT BREAKER (Main-Session Code-Edit Cap)", data.get("reason", ""))
+
+            steps_coord = [
+                {"step_index": 0, "source": "USER_EXPLICIT", "type": "USER_INPUT", "content": "@impl /start implement phase 1"},
+                {"step_index": 1, "source": "MODEL", "type": "PLANNER_RESPONSE", "tool_calls": [{"name": "swarm", "args": {"action": "add", "name": "impl", "brief": "do work"}}]},
+                {"step_index": 2, "source": "MODEL", "type": "PLANNER_RESPONSE", "tool_calls": [{"name": "read_board", "args": {"since": 0}}]},
+            ]
+            step_idx = 3
+            for i in range(6):
+                steps_coord.append({
+                    "step_index": step_idx,
+                    "source": "MODEL",
+                    "type": "PLANNER_RESPONSE",
+                    "tool_calls": [{"name": "edit_file", "args": {"Path": f"/repo/c_{i}.go", "Target": "a", "Replacement": "b"}}]
+                })
+                step_idx += 1
+            self.write_jsonl(t_path, steps_coord)
+            self.write_jsonl(t_full_path, steps_coord)
+            payload["stepIdx"] = step_idx + 1
+            res2 = self.execute_breaker(payload, env={"BREAKER_H1_MODE": "enforce", "BREAKER_MAIN_EDIT_MAX": "6"})
+            self.assertEqual(res2.returncode, 0)
+            data2 = json.loads(res2.stdout)
+            self.assertEqual(data2.get("decision"), "deny")
+            self.assertIn("CIRCUIT BREAKER (Main-Session Code-Edit Cap)", data2.get("reason", ""))
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,8 +1,11 @@
 import json
 import os
 import shutil
+import sys
 import tempfile
 import unittest
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from breaker_rules import (
     is_authorized,
@@ -294,6 +297,24 @@ class TestSessionMetrics(unittest.TestCase):
 
         res = analyze_session(os.path.join(logs_dir, "transcript.jsonl"))
         self.assertEqual(res["turns"][0]["code_edits_by_main"], 2)
+
+        steps_swarm = [
+            {"step_index": 0, "type": "USER_INPUT", "content": "/start build feature", "created_at": "2026-10-21T12:00:00Z"},
+            {"step_index": 1, "type": "PLANNER_RESPONSE", "tool_calls": [
+                {"name": "edit_file", "args": {"TargetFile": "/repo/src/a.py"}},
+                {"name": "edit_file", "args": {"TargetFile": "/repo/src/b.py"}},
+                {"name": "swarm", "args": {"action": "status"}},
+                {"name": "edit_file", "args": {"TargetFile": "/repo/src/c.py"}},
+                {"name": "swarm", "args": {"action": "add", "name": "impl"}},
+                {"name": "edit_file", "args": {"TargetFile": "/repo/src/d.py"}},
+            ], "created_at": "2026-10-21T12:00:10Z"},
+        ]
+        with open(os.path.join(logs_dir, "transcript.jsonl"), "w") as f:
+            for s in steps_swarm:
+                f.write(json.dumps(s) + "\n")
+
+        res_swarm = analyze_session(os.path.join(logs_dir, "transcript.jsonl"))
+        self.assertEqual(res_swarm["turns"][0]["code_edits_by_main"], 3)
 
 if __name__ == "__main__":
     unittest.main()

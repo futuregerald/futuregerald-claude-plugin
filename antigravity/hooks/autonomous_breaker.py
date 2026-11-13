@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+from __future__ import annotations
+
 import json
 import os
 import re
@@ -314,7 +316,7 @@ def _run_breaker(payload, stop_on_enforce=True, collector=None):
                     p_low = p.lower()
                     if "handoff" in p_low or (p_low.endswith(".md") and ("/tmp/" in p_low or "/brain/" in p_low)):
                         is_handoff_write = True
-                if tool_name != "send_message" and not is_handoff_write:
+                if tool_name not in ("send_message", "post_message", "swarm_wait") and not is_handoff_write:
                     target = f"planner_turns:{planner_count}/{step_max}"
                     reason = f"CIRCUIT BREAKER (Subagent Step Cap): {planner_count}/{step_max} planner turns used: write your 4-section handoff and return via send_message"
                     check_and_handle_trigger("H2", target, reason, tool_name, step_idx, conv_id, is_subagent, collector=collector, stop_on_enforce=stop_on_enforce)
@@ -325,6 +327,21 @@ def _run_breaker(payload, stop_on_enforce=True, collector=None):
         if s.get("type") == "USER_INPUT":
             last_user_idx = i
             last_user_content = s.get("content") or ""
+
+    has_coordinator_swarm_add = False
+    has_worker_board_calls = False
+    for s in steps:
+        if s.get("type") == "PLANNER_RESPONSE":
+            for c in s.get("tool_calls") or []:
+                c_name, c_args = canonicalize_call(c.get("name", ""), c.get("args") or {})
+                if c_name == "swarm" and c_args.get("action") == "add":
+                    has_coordinator_swarm_add = True
+                elif c_name in ("read_board", "post_message", "swarm_wait"):
+                    has_worker_board_calls = True
+    is_swarm_worker = (not has_coordinator_swarm_add) and (
+        has_worker_board_calls
+        or bool(re.match(r"^@[a-z0-9-]+(?:\s|$)", last_user_content.lstrip()))
+    )
 
     if not is_subagent:
         comp_indices = compaction_step_indices(steps)
@@ -353,7 +370,8 @@ def _run_breaker(payload, stop_on_enforce=True, collector=None):
         if baton_block_tokens > 0 and estimate >= baton_block_tokens and not is_unlocked:
             is_prism_call = (tool_name == "call_mcp_tool" and tool_args.get("ServerName") == "prism")
             is_active_context_read = (tool_name in ("read_file", "view_file") and is_active_context_path)
-            if not (is_prism_call or is_active_context_read):
+            is_swarm_cleanup = (in_c_name == "swarm" and in_c_args.get("action") in ("kill", "status"))
+            if not (is_prism_call or is_active_context_read or is_swarm_cleanup):
                 target = f"estimate:{estimate}/{baton_block_tokens}"
                 reason = f"CIRCUIT BREAKER (Baton Block): Context estimate {estimate} >= {baton_block_tokens}. Only ACTIVE_CONTEXT.md handoff and Prism saves are allowed. Hand off now."
                 check_and_handle_trigger("BATON", target, reason, tool_name, step_idx, conv_id, is_subagent, collector=collector, stop_on_enforce=stop_on_enforce)
@@ -367,7 +385,8 @@ def _run_breaker(payload, stop_on_enforce=True, collector=None):
             elif steps and steps[-1].get("type") == "SYSTEM_MESSAGE":
                 prev_is_sys = True
 
-            trigger_warn = (not is_auth) or (tool_name == "invoke_subagent" or prev_is_sys or estimate >= baton_warn_tokens + 10000)
+            is_delegation_spawn = (tool_name == "invoke_subagent" or (in_c_name == "swarm" and in_c_args.get("action") == "add"))
+            trigger_warn = (not is_auth) or (is_delegation_spawn or prev_is_sys or estimate >= baton_warn_tokens + 10000)
             if trigger_warn:
                 target = f"estimate:{estimate}/{baton_warn_tokens}"
                 reason = f"CIRCUIT BREAKER (Baton Warn): Context estimate {estimate} >= {baton_warn_tokens}. Hand off at the next natural break using baton-pass."
@@ -377,7 +396,7 @@ def _run_breaker(payload, stop_on_enforce=True, collector=None):
                     save_baton_state(conv_id, baton_state, state_dir=state_dir)
                 check_and_handle_trigger("BATON", target, reason, tool_name, step_idx, conv_id, is_subagent, collector=collector, stop_on_enforce=stop_on_enforce)
 
-    if not is_subagent and last_user_idx >= 0 and is_authorized(last_user_content, conv_id, state_dir=state_dir):
+    if not is_subagent and not is_swarm_worker and last_user_idx >= 0 and is_authorized(last_user_content, conv_id, state_dir=state_dir):
         edit_max = int(os.environ.get("BREAKER_MAIN_EDIT_MAX", 6))
         if edit_max > 0:
             in_p = str(tool_args.get("Path") or tool_args.get("TargetFile") or tool_args.get("AbsolutePath") or "")
@@ -392,7 +411,7 @@ def _run_breaker(payload, stop_on_enforce=True, collector=None):
                         t_calls = effective_tool_calls(s, is_last, step_idx, in_c_name, in_c_args)
                         for c in t_calls:
                             c_name, c_args = canonicalize_call(c.get("name", ""), c.get("args") or {})
-                            if c.get("name") == "invoke_subagent" or c_name == "invoke_subagent":
+                            if c.get("name") == "invoke_subagent" or c_name == "invoke_subagent" or (c_name == "swarm" and c_args.get("action") == "add"):
                                 code_edits = 0
                             elif c_name in ("EDIT_FILE", "WRITE_FILE"):
                                 p = str(c_args.get("Path") or "")
@@ -400,7 +419,7 @@ def _run_breaker(payload, stop_on_enforce=True, collector=None):
                                     code_edits += 1
                 if code_edits >= edit_max:
                     target = f"{in_p}:{code_edits}/{edit_max}"
-                    reason = f"CIRCUIT BREAKER (Main-Session Code-Edit Cap): {code_edits}/{edit_max} code edits in this stream. Send this to an implementation helper agent via invoke_subagent."
+                    reason = f"CIRCUIT BREAKER (Main-Session Code-Edit Cap): {code_edits}/{edit_max} code edits in this stream. Send this to an implementation helper agent via invoke_subagent or swarm."
                     check_and_handle_trigger("H1", target, reason, tool_name, step_idx, conv_id, is_subagent, collector=collector, stop_on_enforce=stop_on_enforce)
 
     segment_steps = steps[last_user_idx + 1:] if last_user_idx >= 0 else steps

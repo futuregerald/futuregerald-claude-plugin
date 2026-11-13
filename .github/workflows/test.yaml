@@ -30,7 +30,7 @@ jobs:
         run: pip install pytest pyyaml
 
       - name: Run skill script tests
-        run: pytest -q skills/*/scripts
+        run: PYTHONDONTWRITEBYTECODE=1 pytest -p no:cacheprovider -q skills/*/scripts antigravity/hooks
 
       - name: Build
         run: go build -o skill-installer .
