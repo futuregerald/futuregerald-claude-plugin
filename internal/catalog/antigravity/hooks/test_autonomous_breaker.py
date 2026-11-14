@@ -2872,5 +2872,563 @@ class TestAutonomousBreaker(unittest.TestCase):
             self.assertEqual(data_block.get("decision"), "deny")
             self.assertIn("CIRCUIT BREAKER (Baton Block)", data_block.get("reason", ""))
 
+    def test_baton_swarm_worker_exempt_at_210k_no_preunlock_at_220k_capped_at_240k_and_unlocks_plus_25k(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            t_path = Path(tmpdir) / "transcript.jsonl"
+            t_full_path = Path(tmpdir) / "transcript_full.jsonl"
+            steps = [
+                {"step_index": 0, "source": "USER_EXPLICIT", "type": "USER_INPUT", "content": "@impl Execute TDD tasks"},
+                {
+                    "step_index": 1,
+                    "source": "MODEL",
+                    "type": "PLANNER_RESPONSE",
+                    "input_tokens": 15000,
+                    "cache_read_tokens": 195000,
+                    "output_tokens": 500,
+                    "content": "reading board",
+                    "tool_calls": [{"name": "read_board", "args": {}}],
+                },
+                {"step_index": 2, "source": "SYSTEM", "type": "SYSTEM_MESSAGE", "content": "board update"},
+            ]
+            self.write_jsonl(t_path, steps)
+            self.write_jsonl(t_full_path, steps)
+
+            res_210k = self.execute_breaker(
+                {
+                    "conversationId": "test-worker-baton",
+                    "transcriptPath": str(t_path),
+                    "stepIdx": 3,
+                    "toolCall": {"name": "edit_file", "args": {"Path": "/repo/svc.go", "Target": "a", "Replacement": "b"}},
+                },
+                env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
+            )
+            self.assertEqual(res_210k.returncode, 0)
+            self.assertEqual(res_210k.stdout, "")
+
+            steps[1]["cache_read_tokens"] = 204500
+            self.write_jsonl(t_path, steps)
+            self.write_jsonl(t_full_path, steps)
+
+            res_220k_ctx = self.execute_breaker(
+                {
+                    "conversationId": "test-worker-baton",
+                    "transcriptPath": str(t_path),
+                    "stepIdx": 4,
+                    "toolCall": {"name": "write_file", "args": {"Path": "/tmp/subagent-context-proj.md", "Content": "progress"}},
+                },
+                env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
+            )
+            self.assertEqual(res_220k_ctx.returncode, 0)
+            self.assertEqual(res_220k_ctx.stdout, "")
+            self.assertFalse((Path(tmpdir) / "baton-test-worker-baton.json").exists())
+
+            steps[1]["cache_read_tokens"] = 224500
+            self.write_jsonl(t_path, steps)
+            self.write_jsonl(t_full_path, steps)
+
+            for blocked_call in (
+                {"name": "edit_file", "args": {"Path": "/repo/svc.go", "Target": "a", "Replacement": "b"}},
+                {"name": "run_command", "args": {"CommandLine": "git status"}},
+                {"name": "swarm", "args": {"action": "add", "name": "rogue", "model": "gemini-4-argon-medium", "brief": "x"}},
+                {"name": "write_file", "args": {"Path": "/tmp/../../repo/notes.md", "Content": "escape"}},
+                {"name": "read_file", "args": {"Path": "/tmp/../../repo/notes.md"}},
+                {"name": "write_file", "args": {"Path": r"C:\Users\dev\AppData\Local\Temp\..\..\..\..\..\repo\notes.md", "Content": "escape"}},
+            ):
+                res_cap = self.execute_breaker(
+                    {
+                        "conversationId": "test-worker-baton",
+                        "transcriptPath": str(t_path),
+                        "stepIdx": 5,
+                        "toolCall": blocked_call,
+                    },
+                    env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
+                )
+                self.assertEqual(res_cap.returncode, 0)
+                cap_data = json.loads(res_cap.stdout)
+                self.assertEqual(cap_data.get("decision"), "deny")
+                self.assertIn("CIRCUIT BREAKER (Swarm Worker Context Cap)", cap_data.get("reason", ""))
+                self.assertNotIn("Warn", cap_data.get("reason", ""))
+
+            for allowed_call in (
+                {"name": "post_message", "args": {"content": "@coordinator [blocked] context-cap"}},
+                {"name": "read_board", "args": {"since": 1}},
+                {"name": "swarm_wait", "args": {"since": 1}},
+                {"name": "swarm", "args": {"action": "status"}},
+                {"name": "manage_task", "args": {"Action": "kill", "TaskId": "t1"}},
+                {"name": "read_file", "args": {"Path": "/tmp/subagent-context-proj.md"}},
+            ):
+                res_ok = self.execute_breaker(
+                    {
+                        "conversationId": "test-worker-baton",
+                        "transcriptPath": str(t_path),
+                        "stepIdx": 6,
+                        "toolCall": allowed_call,
+                    },
+                    env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir, "BREAKER_DUP_MODE": "off"},
+                )
+                self.assertEqual(res_ok.returncode, 0)
+                self.assertEqual(res_ok.stdout, "")
+
+            res_unlock = self.execute_breaker(
+                {
+                    "conversationId": "test-worker-baton",
+                    "transcriptPath": str(t_path),
+                    "stepIdx": 7,
+                    "toolCall": {"name": "write_file", "args": {"Path": "/tmp/subagent-context-proj.md", "Content": "SHARE_ROOT=/tmp/share"}},
+                },
+                env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
+            )
+            self.assertEqual(res_unlock.returncode, 0)
+            self.assertEqual(res_unlock.stdout, "")
+
+            steps[1]["cache_read_tokens"] = 240000
+            self.write_jsonl(t_path, steps)
+            self.write_jsonl(t_full_path, steps)
+
+            res_commit = self.execute_breaker(
+                {
+                    "conversationId": "test-worker-baton",
+                    "transcriptPath": str(t_path),
+                    "stepIdx": 8,
+                    "toolCall": {"name": "run_command", "args": {"CommandLine": "git add -A && git commit -m 'wip'"}},
+                },
+                env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
+            )
+            self.assertEqual(res_commit.returncode, 0)
+            self.assertEqual(res_commit.stdout, "")
+
+            steps[1]["cache_read_tokens"] = 252000
+            self.write_jsonl(t_path, steps)
+            self.write_jsonl(t_full_path, steps)
+
+            res_reblock = self.execute_breaker(
+                {
+                    "conversationId": "test-worker-baton",
+                    "transcriptPath": str(t_path),
+                    "stepIdx": 9,
+                    "toolCall": {"name": "run_command", "args": {"CommandLine": "git status"}},
+                },
+                env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
+            )
+            self.assertEqual(res_reblock.returncode, 0)
+            reblock_data = json.loads(res_reblock.stdout)
+            self.assertEqual(reblock_data.get("decision"), "deny")
+            self.assertIn("CIRCUIT BREAKER (Swarm Worker Context Cap)", reblock_data.get("reason", ""))
+            self.assertIn("exceeds the +25k WIP unlock window", reblock_data.get("reason", ""))
+            self.assertNotIn("Warn", reblock_data.get("reason", ""))
+
+            res_second_tmp_write = self.execute_breaker(
+                {
+                    "conversationId": "test-worker-baton",
+                    "transcriptPath": str(t_path),
+                    "stepIdx": 10,
+                    "toolCall": {"name": "write_file", "args": {"Path": "/tmp/subagent-context-proj.md", "Content": "attempt ratchet"}},
+                },
+                env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
+            )
+            self.assertEqual(res_second_tmp_write.returncode, 0)
+            self.assertEqual(res_second_tmp_write.stdout, "")
+
+            res_still_blocked = self.execute_breaker(
+                {
+                    "conversationId": "test-worker-baton",
+                    "transcriptPath": str(t_path),
+                    "stepIdx": 11,
+                    "toolCall": {"name": "run_command", "args": {"CommandLine": "git status"}},
+                },
+                env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
+            )
+            self.assertEqual(res_still_blocked.returncode, 0)
+            still_blocked_data = json.loads(res_still_blocked.stdout)
+            self.assertEqual(still_blocked_data.get("decision"), "deny")
+            self.assertIn("exceeds the +25k WIP unlock window", still_blocked_data.get("reason", ""))
+
+            res_win_unlock = self.execute_breaker(
+                {
+                    "conversationId": "test-worker-baton-win",
+                    "transcriptPath": str(t_path),
+                    "stepIdx": 10,
+                    "toolCall": {"name": "write_file", "args": {"Path": r"C:\Users\dev\AppData\Local\Temp\subagent-context.md", "Content": "SHARE_ROOT=C:/share"}},
+                },
+                env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
+            )
+            self.assertEqual(res_win_unlock.returncode, 0)
+            self.assertEqual(res_win_unlock.stdout, "")
+
+            res_win_commit = self.execute_breaker(
+                {
+                    "conversationId": "test-worker-baton-win",
+                    "transcriptPath": str(t_path),
+                    "stepIdx": 11,
+                    "toolCall": {"name": "run_command", "args": {"CommandLine": "git commit -am wip"}},
+                },
+                env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
+            )
+            self.assertEqual(res_win_commit.returncode, 0)
+            self.assertEqual(res_win_commit.stdout, "")
+
+            sub_t_path = Path(tmpdir) / "sub_transcript.jsonl"
+            self.write_jsonl(sub_t_path, [
+                {"step_index": 0, "source": "SYSTEM", "type": "SYSTEM_MESSAGE", "content": "subagent"},
+                {"step_index": 1, "source": "MODEL", "type": "PLANNER_RESPONSE", "tool_calls": [{"name": "read_file", "args": {"Path": "/repo/a.go"}}]},
+            ])
+            res_h2_board = self.execute_breaker(
+                {
+                    "conversationId": "test-sub-h2-board",
+                    "transcriptPath": str(sub_t_path),
+                    "stepIdx": 3,
+                    "toolCall": {"name": "read_board", "args": {}},
+                },
+                env={"BREAKER_H2_MODE": "enforce", "BREAKER_SUBAGENT_STEP_MAX": "1", "BREAKER_STATE_DIR": tmpdir},
+            )
+            self.assertEqual(res_h2_board.returncode, 0)
+            self.assertEqual(res_h2_board.stdout, "")
+
+    def test_baton_coordinator_with_swarm_dual_mode_warn_block_and_unlock(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            t_path = Path(tmpdir) / "transcript.jsonl"
+            t_full_path = Path(tmpdir) / "transcript_full.jsonl"
+            steps = [
+                {"step_index": 0, "source": "USER_EXPLICIT", "type": "USER_INPUT", "content": "/start run stream"},
+                {
+                    "step_index": 1,
+                    "source": "MODEL",
+                    "type": "PLANNER_RESPONSE",
+                    "input_tokens": 15000,
+                    "cache_read_tokens": 195000,
+                    "output_tokens": 500,
+                    "content": "spawning",
+                    "tool_calls": [{"name": "read_file", "args": {"Path": "/tmp/plan.md"}}],
+                },
+            ]
+            self.write_jsonl(t_path, steps)
+            self.write_jsonl(t_full_path, steps)
+
+            res_warn = self.execute_breaker(
+                {
+                    "conversationId": "test-coord-swarm",
+                    "transcriptPath": str(t_path),
+                    "stepIdx": 3,
+                    "toolCall": {"name": "swarm", "args": {"action": "add", "name": "impl", "model": "gemini-4-argon-medium", "workspace": "share", "brief": "go"}},
+                },
+                env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
+            )
+            self.assertEqual(res_warn.returncode, 0)
+            warn_data = json.loads(res_warn.stdout)
+            self.assertEqual(warn_data.get("decision"), "deny")
+            self.assertIn("CIRCUIT BREAKER (Baton Warn)", warn_data.get("reason", ""))
+            self.assertIn("swarm", warn_data.get("reason", "").lower())
+
+            steps.append({
+                "step_index": 2,
+                "source": "MODEL",
+                "type": "PLANNER_RESPONSE",
+                "input_tokens": 15000,
+                "cache_read_tokens": 225000,
+                "output_tokens": 500,
+                "content": "added worker",
+                "tool_calls": [{"name": "swarm", "args": {"action": "add", "name": "impl", "model": "gemini-4-argon-medium", "workspace": "share", "brief": "go"}}],
+            })
+            self.write_jsonl(t_path, steps)
+            self.write_jsonl(t_full_path, steps)
+
+            for exempt_call in (
+                {"name": "read_board", "args": {"since": 0}},
+                {"name": "post_message", "args": {"content": "[done] winding down"}},
+                {"name": "swarm", "args": {"action": "status"}},
+                {"name": "swarm", "args": {"action": "kill", "name": "impl"}},
+                {"name": "read_file", "args": {"Path": "/tmp/subagent-context-proj.md"}},
+            ):
+                res_exempt = self.execute_breaker(
+                    {
+                        "conversationId": "test-coord-swarm",
+                        "transcriptPath": str(t_path),
+                        "stepIdx": 4,
+                        "toolCall": exempt_call,
+                    },
+                    env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir, "BREAKER_DUP_MODE": "off"},
+                )
+                self.assertEqual(res_exempt.returncode, 0)
+                self.assertEqual(res_exempt.stdout, "")
+
+            for denied_call in (
+                {"name": "swarm_wait", "args": {"since": 0}},
+                {"name": "read_file", "args": {"Path": "/repo/app.go"}},
+            ):
+                res_denied = self.execute_breaker(
+                    {
+                        "conversationId": "test-coord-swarm",
+                        "transcriptPath": str(t_path),
+                        "stepIdx": 5,
+                        "toolCall": denied_call,
+                    },
+                    env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
+                )
+                self.assertEqual(res_denied.returncode, 0)
+                denied_data = json.loads(res_denied.stdout)
+                self.assertEqual(denied_data.get("decision"), "deny")
+                self.assertIn("CIRCUIT BREAKER (Baton Block)", denied_data.get("reason", ""))
+                self.assertIn("git fetch", denied_data.get("reason", ""))
+                self.assertNotIn("Warn", denied_data.get("reason", ""))
+
+            res_handoff = self.execute_breaker(
+                {
+                    "conversationId": "test-coord-swarm",
+                    "transcriptPath": str(t_path),
+                    "stepIdx": 6,
+                    "toolCall": {"name": "write_file", "args": {"Path": "~/.gemini/handoffs/proj/2026-11-14-ACTIVE_CONTEXT.md", "Content": "Active Context"}},
+                },
+                env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
+            )
+            self.assertEqual(res_handoff.returncode, 0)
+            self.assertEqual(res_handoff.stdout, "")
+
+            res_fetch = self.execute_breaker(
+                {
+                    "conversationId": "test-coord-swarm",
+                    "transcriptPath": str(t_path),
+                    "stepIdx": 7,
+                    "toolCall": {"name": "run_command", "args": {"CommandLine": "git fetch '/tmp/share' 'abc1234' && git rev-parse --verify 'abc1234^{commit}'"}},
+                },
+                env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
+            )
+            self.assertEqual(res_fetch.returncode, 0)
+            self.assertEqual(res_fetch.stdout, "")
+
+    def test_baton_coordinator_without_swarm_warn_block_and_tmp_context_read(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            t_path = Path(tmpdir) / "transcript.jsonl"
+            t_full_path = Path(tmpdir) / "transcript_full.jsonl"
+            steps = [
+                {"step_index": 0, "source": "USER_EXPLICIT", "type": "USER_INPUT", "content": "/goal implement stream"},
+                {
+                    "step_index": 1,
+                    "source": "MODEL",
+                    "type": "PLANNER_RESPONSE",
+                    "input_tokens": 15000,
+                    "cache_read_tokens": 195000,
+                    "output_tokens": 500,
+                    "content": "delegating",
+                    "tool_calls": [{"name": "read_file", "args": {"Path": "/tmp/plan.md"}}],
+                },
+            ]
+            self.write_jsonl(t_path, steps)
+            self.write_jsonl(t_full_path, steps)
+
+            res_warn = self.execute_breaker(
+                {
+                    "conversationId": "test-coord-nonswarm",
+                    "transcriptPath": str(t_path),
+                    "stepIdx": 3,
+                    "toolCall": {"name": "invoke_subagent", "args": {"TypeName": "implementer", "Role": "impl", "Model": "inherit", "Prompt": "go"}},
+                },
+                env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
+            )
+            self.assertEqual(res_warn.returncode, 0)
+            warn_data = json.loads(res_warn.stdout)
+            self.assertEqual(warn_data.get("decision"), "deny")
+            self.assertIn("CIRCUIT BREAKER (Baton Warn)", warn_data.get("reason", ""))
+            self.assertNotIn("with active swarm", warn_data.get("reason", ""))
+
+            steps[1]["cache_read_tokens"] = 225000
+            self.write_jsonl(t_path, steps)
+            self.write_jsonl(t_full_path, steps)
+
+            res_tmp_read = self.execute_breaker(
+                {
+                    "conversationId": "test-coord-nonswarm",
+                    "transcriptPath": str(t_path),
+                    "stepIdx": 4,
+                    "toolCall": {"name": "read_file", "args": {"Path": "/tmp/subagent-context-proj.md"}},
+                },
+                env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
+            )
+            self.assertEqual(res_tmp_read.returncode, 0)
+            self.assertEqual(res_tmp_read.stdout, "")
+
+            for denied_call in (
+                {"name": "invoke_subagent", "args": {"TypeName": "implementer", "Role": "impl", "Model": "inherit", "Prompt": "go"}},
+                {"name": "read_file", "args": {"Path": "/repo/app.go"}},
+            ):
+                res_denied = self.execute_breaker(
+                    {
+                        "conversationId": "test-coord-nonswarm",
+                        "transcriptPath": str(t_path),
+                        "stepIdx": 5,
+                        "toolCall": denied_call,
+                    },
+                    env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
+                )
+                self.assertEqual(res_denied.returncode, 0)
+                denied_data = json.loads(res_denied.stdout)
+                self.assertEqual(denied_data.get("decision"), "deny")
+                self.assertIn("CIRCUIT BREAKER (Baton Block)", denied_data.get("reason", ""))
+                self.assertIn("Only ACTIVE_CONTEXT.md handoff and Prism saves are allowed", denied_data.get("reason", ""))
+                self.assertNotIn("Warn", denied_data.get("reason", ""))
+
+    def test_phase8_review_fixes_ratchet_conflicting_paths_drive_rel_and_private_tmp(self):
+        from unittest import mock
+        import autonomous_breaker
+        with mock.patch("tempfile.gettempdir", return_value="/private/var/folders/ab/cd/T"):
+            self.assertTrue(autonomous_breaker._is_temp_or_brain_md_path("/var/folders/ab/cd/T/subagent-context.md"))
+            self.assertTrue(autonomous_breaker._is_temp_or_brain_md_path("/private/var/folders/ab/cd/T/subagent-context.md"))
+            self.assertFalse(autonomous_breaker._is_temp_or_brain_md_path("/var/folders/ab/cd/other.md"))
+
+        self.assertEqual(autonomous_breaker._normalize_tool_path(r"C:..\repo\ACTIVE_CONTEXT.md"), "")
+        self.assertEqual(autonomous_breaker._normalize_tool_path("C:ACTIVE_CONTEXT.md"), "")
+        self.assertFalse(autonomous_breaker._is_active_context_md_path(r"C:..\repo\ACTIVE_CONTEXT.md"))
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            t_path = Path(tmpdir) / "transcript.jsonl"
+            t_full_path = Path(tmpdir) / "transcript_full.jsonl"
+            coord_steps = [
+                {"step_index": 0, "source": "USER_EXPLICIT", "type": "USER_INPUT", "content": "/goal ship feature"},
+                {
+                    "step_index": 1,
+                    "source": "MODEL",
+                    "type": "PLANNER_RESPONSE",
+                    "input_tokens": 10000,
+                    "cache_read_tokens": 110000,
+                    "output_tokens": 200,
+                    "content": "early snapshot",
+                    "tool_calls": [{"name": "run_command", "args": {"CommandLine": "pwd"}}],
+                },
+            ]
+            self.write_jsonl(t_path, coord_steps)
+            self.write_jsonl(t_full_path, coord_steps)
+
+            res_early = self.execute_breaker(
+                {
+                    "conversationId": "test-coord-ratchet",
+                    "transcriptPath": str(t_path),
+                    "stepIdx": 2,
+                    "toolCall": {"name": "write_file", "args": {"Path": "~/.gemini/handoffs/proj/early-ACTIVE_CONTEXT.md", "Content": "early"}},
+                },
+                env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
+            )
+            self.assertEqual(res_early.returncode, 0)
+            self.assertEqual(res_early.stdout, "")
+
+            coord_steps[1]["cache_read_tokens"] = 230000
+            self.write_jsonl(t_path, coord_steps)
+            self.write_jsonl(t_full_path, coord_steps)
+
+            for spoof_call in (
+                {"name": "write_to_file", "args": {"TargetFile": "/repo/auth.go", "Path": "~/.gemini/handoffs/proj/ACTIVE_CONTEXT.md", "CodeContent": "pwn"}},
+                {"name": "view_file", "args": {"AbsolutePath": "/repo/secret.go", "Path": "/tmp/subagent-context.md"}},
+                {"name": "write_file", "args": {"Path": r"C:..\repo\ACTIVE_CONTEXT.md", "Content": "spoof"}},
+            ):
+                res_spoof = self.execute_breaker(
+                    {
+                        "conversationId": "test-coord-ratchet",
+                        "transcriptPath": str(t_path),
+                        "stepIdx": 3,
+                        "toolCall": spoof_call,
+                    },
+                    env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
+                )
+                self.assertEqual(res_spoof.returncode, 0)
+                spoof_data = json.loads(res_spoof.stdout)
+                self.assertEqual(spoof_data.get("decision"), "deny")
+
+            res_baton_write = self.execute_breaker(
+                {
+                    "conversationId": "test-coord-ratchet",
+                    "transcriptPath": str(t_path),
+                    "stepIdx": 4,
+                    "toolCall": {"name": "write_file", "args": {"Path": "~/.gemini/handoffs/proj/final-ACTIVE_CONTEXT.md", "Content": "final"}},
+                },
+                env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
+            )
+            self.assertEqual(res_baton_write.returncode, 0)
+            self.assertEqual(res_baton_write.stdout, "")
+
+            coord_steps[1]["cache_read_tokens"] = 285000
+            self.write_jsonl(t_path, coord_steps)
+            self.write_jsonl(t_full_path, coord_steps)
+
+            res_second_baton_write = self.execute_breaker(
+                {
+                    "conversationId": "test-coord-ratchet",
+                    "transcriptPath": str(t_path),
+                    "stepIdx": 5,
+                    "toolCall": {"name": "write_file", "args": {"Path": "~/.gemini/handoffs/proj/final-ACTIVE_CONTEXT.md", "Content": "updated"}},
+                },
+                env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
+            )
+            self.assertEqual(res_second_baton_write.returncode, 0)
+            self.assertEqual(res_second_baton_write.stdout, "")
+
+            res_no_ratchet = self.execute_breaker(
+                {
+                    "conversationId": "test-coord-ratchet",
+                    "transcriptPath": str(t_path),
+                    "stepIdx": 6,
+                    "toolCall": {"name": "run_command", "args": {"CommandLine": "git status"}},
+                },
+                env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
+            )
+            self.assertEqual(res_no_ratchet.returncode, 0)
+            no_ratchet_data = json.loads(res_no_ratchet.stdout)
+            self.assertEqual(no_ratchet_data.get("decision"), "deny")
+            self.assertIn("CIRCUIT BREAKER (Baton Block)", no_ratchet_data.get("reason", ""))
+
+            worker_t_path = Path(tmpdir) / "worker_transcript.jsonl"
+            worker_full_path = Path(tmpdir) / "worker_transcript_full.jsonl"
+            worker_steps = [
+                {"step_index": 0, "source": "USER_EXPLICIT", "type": "USER_INPUT", "content": "@sec-rev Audit diff"},
+                {
+                    "step_index": 1,
+                    "source": "MODEL",
+                    "type": "PLANNER_RESPONSE",
+                    "input_tokens": 15000,
+                    "cache_read_tokens": 225000,
+                    "output_tokens": 500,
+                    "content": "auditing",
+                    "tool_calls": [{"name": "read_board", "args": {}}],
+                },
+            ]
+            self.write_jsonl(worker_t_path, worker_steps)
+            self.write_jsonl(worker_full_path, worker_steps)
+
+            for worker_spoof in (
+                {"name": "write_to_file", "args": {"TargetFile": "/repo/auth.go", "Path": "/tmp/subagent-context.md", "CodeContent": "pwn"}},
+                {"name": "view_file", "args": {"AbsolutePath": "/repo/secret.go", "Path": "/tmp/subagent-context.md"}},
+            ):
+                res_w_spoof = self.execute_breaker(
+                    {
+                        "conversationId": "test-worker-spoof",
+                        "transcriptPath": str(worker_t_path),
+                        "stepIdx": 3,
+                        "toolCall": worker_spoof,
+                    },
+                    env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
+                )
+                self.assertEqual(res_w_spoof.returncode, 0)
+                w_spoof_data = json.loads(res_w_spoof.stdout)
+                self.assertEqual(w_spoof_data.get("decision"), "deny")
+                self.assertIn("Read-only reviewers/monitors: immediately call post_message", w_spoof_data.get("reason", ""))
+                self.assertIn("call write_file or edit_file (not run_command)", w_spoof_data.get("reason", ""))
+                self.assertNotIn("Warn", w_spoof_data.get("reason", ""))
+
+            sub_t_path = Path(tmpdir) / "sub_h2_spoof.jsonl"
+            self.write_jsonl(sub_t_path, [
+                {"step_index": 0, "source": "SYSTEM", "type": "SYSTEM_MESSAGE", "content": "subagent"},
+                {"step_index": 1, "source": "MODEL", "type": "PLANNER_RESPONSE", "tool_calls": [{"name": "read_file", "args": {"Path": "/repo/a.go"}}]},
+            ])
+            res_h2_spoof = self.execute_breaker(
+                {
+                    "conversationId": "test-sub-h2-spoof",
+                    "transcriptPath": str(sub_t_path),
+                    "stepIdx": 3,
+                    "toolCall": {"name": "write_to_file", "args": {"TargetFile": "/repo/auth.go", "Path": "/tmp/handoff.md", "CodeContent": "pwn"}},
+                },
+                env={"BREAKER_H2_MODE": "enforce", "BREAKER_SUBAGENT_STEP_MAX": "1", "BREAKER_STATE_DIR": tmpdir},
+            )
+            self.assertEqual(res_h2_spoof.returncode, 0)
+            h2_spoof_data = json.loads(res_h2_spoof.stdout)
+            self.assertEqual(h2_spoof_data.get("decision"), "deny")
+            self.assertIn("Subagent Step Cap", h2_spoof_data.get("reason", ""))
+
 if __name__ == "__main__":
     unittest.main()

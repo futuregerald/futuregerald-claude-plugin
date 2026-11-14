@@ -1,29 +1,32 @@
 # Active Context Template
 
 ```markdown
-# ACTIVE_CONTEXT
+# ACTIVE_CONTEXT — <Project / Stream> (<YYYY-MM-DD HH:MM>)
 
-Project: <project-key>
-Branch: <branch-name>
-Commit: <git-rev-parse-HEAD>  (reset after every folded sub-agent handoff; the next reader runs `git diff --stat` against it)
-Turn / Token Depth: <turn-number> / <estimated-tokens>
+- **Repo / Worktree:** `<abs-path>` (e.g. `/Users/dev/project`)
+- **Branch & HEAD SHA:** `<branch-name>` (`<git-rev-parse-HEAD>`)
+- **Execution Mode:** `swarm | subagent | inline`
+- **Anchored WIP Ref / Swarm Wind-Down:** `<none | merged-to-branch | baton/<stream> (<sha>) — all swarm workers killed>`
+- **Plan Path:** `<abs-path-to-PLAN.md>`
+- **Active Phase:** `Phase N (<Name>)`
+- **Turn / Token Depth:** `<turn-number> / <estimated-tokens>`
 
-## 1. Active File Schemas & Contracts
+## 1. Active Files & Contracts
 
-### File: <path/to/file_a.ext>
-- Exported Types / Interfaces:
+### File: `<path/to/file_a.ext:start-end>`
+- Exported Types / Signatures:
   `<symbol>(<arg>: <Type>) -> <ReturnType>`
-- Data Shapes:
+- Data Shapes / Invariants:
   `<field_name>: <Type>`
 
-### File: <path/to/file_b.ext>
+### File: `<path/to/file_b.ext:start-end>`
 - Contract / Wire Protocol:
   `<format-details>`
 
-## 2. Solved Issues, Architectural Decisions & Test Results
+## 2. Decisions, Evidence & Test Results
 
-### Architectural Decisions
-- Decision: <settled decision>
+### Architectural & Review Decisions
+- Decision: <settled decision from user, plan review, or peer review>
   Rationale: <why this approach was chosen>
 
 ### Solved Issues
@@ -33,25 +36,24 @@ Turn / Token Depth: <turn-number> / <estimated-tokens>
 
 ### Test & Verification Evidence
 - Gate Command: `<test-command>`
-  Exit Code: 0
-  Output: `<minimal-summary-of-passing-output>`
+  Exit Code: `0`
+  Output: `<concise summary of passing output>`
 
-## 3. Ordered Pending Steps
+## 3. Pending Steps (Ordered)
 
-1. Step 1: <concrete action>
-   Target Files: `<path/to/target>`
-   Expected Contract: `<input -> output>`
-   Verification Gate: `<exact command to verify>`
+1. [ ] <concrete action>
+   - Target Files: `<path/to/target>`
+   - Expected Contract: `<input -> output>`
+   - Verification Gate: `<exact command to verify>`
 
-2. Step 2: <concrete action>
-   Target Files: `<path/to/target>`
-   Expected Contract: `<input -> output>`
-   Verification Gate: `<exact command to verify>`
+2. [ ] <concrete action>
+   - Target Files: `<path/to/target>`
+   - Expected Contract: `<input -> output>`
+   - Verification Gate: `<exact command to verify>`
 
-## 4. Strict Negative Constraints & Traps to Avoid
+## 4. Negative Constraints (Do Not Repeat)
 
-- Invariant: <system rule that must never be broken>
-- Anti-Pattern: <pattern that was attempted and rejected>
-- Reason for Rejection: <why it failed>
-- Edge Case Trap: <subtle bug discovered during execution>
+- Invariant: <system or repo rule that must never be broken>
+- Anti-Pattern: <pattern that was attempted and rejected, with reason>
+- Edge Case Trap: <subtle bug or harness constraint discovered during execution>
 ```

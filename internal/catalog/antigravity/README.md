@@ -13,7 +13,7 @@ Personal, team, tracker and repository specifics never live in these rules, skil
 | `skills/{lifecycle,subagent-driven-development,writing-plans,plan-review,comprehensive-code-review,fix-check,editor-pass,baton-pass,future-model-router}/` | `~/.gemini/config/skills/<skill>/` | Antigravity-native overrides for the core workflow skills |
 | `skills/antigravity-orchestration/references/config.example.md` | `~/.gemini/config/skills/antigravity-orchestration/references/config.md` (git-ignored) | Template for local tool paths and org names (e.g. `review-lens`) |
 | `plugins/antigravity-subagents/` | `~/.gemini/config/plugins/antigravity-subagents/` | Dedicated lifecycle subagents (`plan-reviewer`, `code-quality-reviewer`, `security-reviewer`, `sql-reviewer`, `editor-pass-reviewer`, `implementer`) with explicit `tools:` grants |
-| `hooks.json` | `~/.gemini/config/hooks.json` | PreToolUse registration of the circuit breaker on 18 tools (including `swarm`) |
+| `hooks.json` | `~/.gemini/config/hooks.json` | PreToolUse registration of the circuit breaker on 21 tools (including `swarm`, `read_board`, `post_message`, and `swarm_wait`) |
 | `hooks/` | `~/.gemini/config/hooks/` | Circuit breaker (`autonomous-breaker.sh` → `autonomous_breaker.py`), shared rules (`breaker_rules.py`), offline tools (`session_metrics.py`, `replay_breaker.py`) and tests |
 
 ## Circuit breaker rules
@@ -23,7 +23,7 @@ Personal, team, tracker and repository specifics never live in these rules, skil
 | DUP | identical tool call repeated within a short window | enforce |
 | EXPLORE | a helper agent exceeds `BREAKER_SUBAGENT_EXPLORE_MAX` exploratory calls (opt-in; default `0` / disabled) | enforce (when cap > 0) |
 | STRIKES | 4 consecutive test failures | enforce |
-| BATON | context estimate (transcript bytes since the last compaction ÷ 4) reaches 205k (one warn) or 235k (block until a handoff is written) | enforce |
+| BATON | context estimate (`input_tokens + cache_read_tokens + output_tokens` + trailing bytes ÷ 4 since the last compaction) reaches 205k (Coordinator warn) or 235k (Coordinator block with +50k `ACTIVE_CONTEXT.md` unlock; swarm-worker cap with +25k `/tmp/*.md` WIP unlock) | enforce |
 | PROBE | 3rd inline `python3 -c` probe of the same file | enforce |
 | TRUELOOP | 3rd re-read of mostly already-read lines, or the same command, within 20 planner steps | enforce |
 | H1 | an authorized main session makes a 7th code edit without dispatching a helper | enforce |

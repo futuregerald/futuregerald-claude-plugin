@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import posixpath
 import re
 import shutil
 import sys
@@ -13,6 +14,7 @@ from pathlib import Path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from breaker_rules import (
     is_authorized,
+    classify_swarm_steps,
     read_ranges_overlap,
     read_coverage,
     is_re_read,
@@ -31,6 +33,99 @@ from breaker_rules import (
 )
 
 STRIP_KEYS = {"toolAction", "toolSummary", "WaitMsBeforeAsync", "Description", "Instruction", "IsDaemon"}
+
+def _normalize_tool_path(raw_path: str) -> str:
+    if not isinstance(raw_path, str):
+        return ""
+    s = raw_path.strip().replace("\\", "/")
+    if not s:
+        return ""
+    m_drive = re.match(r"^([a-zA-Z]:)(/.*)?$", s)
+    if m_drive:
+        drive = m_drive.group(1)
+        rest = (m_drive.group(2) or "").lstrip("/")
+        if not rest:
+            return ""
+        norm_rest = posixpath.normpath(rest)
+        if norm_rest in ("", ".", "..") or norm_rest.startswith("../"):
+            return ""
+        norm = f"{drive}/{norm_rest}"
+        if re.match(r"^[a-zA-Z]:/\.\.(?:/|$)", norm):
+            return ""
+        return norm
+    if re.match(r"^[a-zA-Z]:", s):
+        return ""
+    if s.startswith("/"):
+        rest = s.lstrip("/")
+        if not rest:
+            return ""
+        norm_rest = posixpath.normpath(rest)
+        if norm_rest in ("", ".", "..") or norm_rest.startswith("../"):
+            return ""
+        return f"/{norm_rest}"
+    norm = posixpath.normpath(s)
+    if norm in ("", ".", "..") or norm.startswith("../"):
+        return ""
+    return norm
+
+def _is_active_context_md_path(raw_path: str) -> bool:
+    norm = _normalize_tool_path(raw_path)
+    if not norm:
+        return False
+    low = norm.lower()
+    return low == "active_context.md" or low.endswith("/active_context.md") or low.endswith("-active_context.md")
+
+def _is_temp_or_brain_md_path(raw_path: str) -> bool:
+    norm = _normalize_tool_path(raw_path)
+    if not norm:
+        return False
+    low = norm.lower()
+    if not low.endswith(".md"):
+        return False
+    p = re.sub(r"^[a-z]:/", "/", low)
+    if p.startswith("~/"):
+        p = "/" + p
+    if not p.startswith("/"):
+        return False
+    sys_tmp_norm = _normalize_tool_path(tempfile.gettempdir())
+    sys_tmp_p = re.sub(r"^[a-z]:/", "/", sys_tmp_norm.lower()).rstrip("/") if sys_tmp_norm else ""
+    sys_tmp_base = sys_tmp_p[len("/private"):] if sys_tmp_p.startswith("/private/") else sys_tmp_p
+    if p.startswith(("/tmp/", "/private/tmp/", "/temp/")):
+        return True
+    if bool(sys_tmp_base) and sys_tmp_base != "/" and (
+        p.startswith(sys_tmp_base + "/") or p.startswith("/private" + sys_tmp_base + "/")
+    ):
+        return True
+    if "/appdata/local/temp/" in p:
+        return True
+    if "/.gemini/antigravity/brain/" in p or "/.gemini/handoffs/" in p:
+        return True
+    return False
+
+def _is_h2_handoff_path(raw_path: str) -> bool:
+    if _is_temp_or_brain_md_path(raw_path):
+        return True
+    norm = _normalize_tool_path(raw_path)
+    if not norm:
+        return False
+    low = norm.lower()
+    if "handoff" in low:
+        return True
+    if low.endswith(".md") and "/brain/" in low:
+        return True
+    return False
+
+def _extract_tool_paths(tool_args: dict) -> list[str]:
+    if not isinstance(tool_args, dict):
+        return []
+    decoded = decode_json_strings(tool_args)
+    if not isinstance(decoded, dict):
+        return []
+    return [str(decoded[k]) for k in ("Path", "TargetFile", "AbsolutePath") if k in decoded and decoded[k] is not None]
+
+def _all_tool_paths_match(tool_args: dict, predicate) -> bool:
+    paths = _extract_tool_paths(tool_args)
+    return bool(paths) and all(predicate(p) for p in paths)
 
 def deny(name, s_idx, r):
     sys.stdout.write(json.dumps({"decision": "deny", "reason": r}))
@@ -321,15 +416,11 @@ def _run_breaker(payload, stop_on_enforce=True, collector=None):
         if step_max > 0:
             planner_count = sum(1 for s in steps if s.get("type") == "PLANNER_RESPONSE")
             if planner_count >= step_max:
-                is_handoff_write = False
-                if tool_name in ("write_file", "write_to_file", "edit_file", "replace_file_content"):
-                    p = str(tool_args.get("Path") or tool_args.get("TargetFile") or tool_args.get("AbsolutePath") or "").replace("\\", "/")
-                    p_low = p.lower()
-                    sys_tmp = tempfile.gettempdir().replace("\\", "/").lower().rstrip("/")
-                    in_tmp = "/tmp/" in p_low or "/temp/" in p_low or "/appdata/local/temp/" in p_low or (bool(sys_tmp) and p_low.startswith(sys_tmp + "/"))
-                    if "handoff" in p_low or (p_low.endswith(".md") and (in_tmp or "/brain/" in p_low)):
-                        is_handoff_write = True
-                if tool_name not in ("send_message", "post_message", "swarm_wait") and not is_handoff_write:
+                is_handoff_write = (
+                    tool_name in ("write_file", "write_to_file", "edit_file", "replace_file_content")
+                    and _all_tool_paths_match(tool_args, _is_h2_handoff_path)
+                )
+                if tool_name not in ("send_message", "post_message", "read_board", "swarm_wait") and not is_handoff_write:
                     target = f"planner_turns:{planner_count}/{step_max}"
                     reason = f"CIRCUIT BREAKER (Subagent Step Cap): {planner_count}/{step_max} planner turns used: write your 4-section handoff and return via send_message"
                     check_and_handle_trigger("H2", target, reason, tool_name, step_idx, conv_id, is_subagent, collector=collector, stop_on_enforce=stop_on_enforce)
@@ -341,19 +432,11 @@ def _run_breaker(payload, stop_on_enforce=True, collector=None):
             last_user_idx = i
             last_user_content = s.get("content") or ""
 
-    has_coordinator_swarm_add = False
-    has_worker_board_calls = False
-    for s in steps:
-        if s.get("type") == "PLANNER_RESPONSE":
-            for c in s.get("tool_calls") or []:
-                c_name, c_args = canonicalize_call(c.get("name", ""), c.get("args") or {})
-                if c_name == "swarm" and c_args.get("action") == "add":
-                    has_coordinator_swarm_add = True
-                elif c_name in ("read_board", "post_message", "swarm_wait"):
-                    has_worker_board_calls = True
-    is_swarm_worker = (not has_coordinator_swarm_add) and (
-        has_worker_board_calls
-        or bool(re.match(r"^@[a-z0-9-]+(?:\s|$)", last_user_content.lstrip()))
+    has_coordinator_swarm_add, is_swarm_worker = classify_swarm_steps(
+        steps,
+        inflight_name=in_c_name,
+        inflight_args=in_c_args,
+        tool_calls_extractor=lambda idx, s: effective_tool_calls(s, idx == last_global_planner_idx, step_idx, in_c_name, in_c_args),
     )
 
     if not is_subagent:
@@ -361,53 +444,113 @@ def _run_breaker(payload, stop_on_enforce=True, collector=None):
         current_segment = len(comp_indices)
         estimate = context_estimate_tokens(full_lines_bytes, comp_indices, steps=steps)
         baton_state = load_baton_state(conv_id, current_segment, state_dir=state_dir)
-
-        in_p = str(tool_args.get("Path") or tool_args.get("TargetFile") or tool_args.get("AbsolutePath") or "").replace("\\", "/")
-        is_active_context_path = in_p.endswith("-ACTIVE_CONTEXT.md") or in_p.endswith("/ACTIVE_CONTEXT.md") or in_p == "ACTIVE_CONTEXT.md"
-
-        if is_active_context_path and tool_name in ("write_file", "write_to_file", "edit_file", "replace_file_content"):
-            baton_state["handoff_at_estimate"] = estimate
-            save_baton_state(conv_id, baton_state, state_dir=state_dir)
-            if stop_on_enforce:
-                if passthrough_out:
-                    sys.stdout.write(passthrough_out)
-                sys.exit(0)
-            return collector or []
-
-        handoff_at_estimate = baton_state.get("handoff_at_estimate")
-        is_unlocked = (handoff_at_estimate is not None and estimate <= handoff_at_estimate + 50000)
-
         baton_block_tokens = int(os.environ.get("BATON_BLOCK_TOKENS", 235000))
         baton_warn_tokens = int(os.environ.get("BATON_WARN_TOKENS", 205000))
 
-        if baton_block_tokens > 0 and estimate >= baton_block_tokens and not is_unlocked:
+        if not is_swarm_worker:
+            is_active_context_path = _all_tool_paths_match(tool_args, _is_active_context_md_path)
+
+            if is_active_context_path and tool_name in ("write_file", "write_to_file", "edit_file", "replace_file_content"):
+                refresh_floor = baton_warn_tokens if baton_warn_tokens > 0 else baton_block_tokens
+                prior_handoff = baton_state.get("handoff_at_estimate")
+                if prior_handoff is None or prior_handoff < refresh_floor:
+                    baton_state["handoff_at_estimate"] = estimate
+                    save_baton_state(conv_id, baton_state, state_dir=state_dir)
+                if stop_on_enforce:
+                    if passthrough_out:
+                        sys.stdout.write(passthrough_out)
+                    sys.exit(0)
+                return collector or []
+
+            handoff_at_estimate = baton_state.get("handoff_at_estimate")
+            is_unlocked = (handoff_at_estimate is not None and estimate <= handoff_at_estimate + 50000)
+
             is_prism_call = (tool_name == "call_mcp_tool" and tool_args.get("ServerName") == "prism")
             is_active_context_read = (tool_name in ("read_file", "view_file") and is_active_context_path)
-            is_swarm_cleanup = (in_c_name == "swarm" and in_c_args.get("action") in ("kill", "status"))
-            if not (is_prism_call or is_active_context_read or is_swarm_cleanup):
+            is_context_md_read = (tool_name in ("read_file", "view_file") and _all_tool_paths_match(tool_args, _is_temp_or_brain_md_path))
+            is_swarm_cleanup = (
+                (in_c_name == "swarm" and in_c_args.get("action") in ("kill", "status"))
+                or in_c_name in ("read_board", "post_message")
+            )
+            is_baton_exempt_call = (is_prism_call or is_active_context_read or is_context_md_read or is_swarm_cleanup)
+
+            if baton_block_tokens > 0 and estimate >= baton_block_tokens and not is_unlocked and not is_baton_exempt_call:
                 target = f"estimate:{estimate}/{baton_block_tokens}"
-                reason = f"CIRCUIT BREAKER (Baton Block): Context estimate {estimate} >= {baton_block_tokens}. Only ACTIVE_CONTEXT.md handoff and Prism saves are allowed. Hand off now."
+                if has_coordinator_swarm_add:
+                    reason = (
+                        f"CIRCUIT BREAKER (Baton Block): Context estimate {estimate} >= {baton_block_tokens}. "
+                        "Write ACTIVE_CONTEXT.md first (unlocks +50k tokens to git fetch/verify any share-workspace SHA before swarm kill), "
+                        "save Prism handoff, and kill all swarm workers."
+                    )
+                else:
+                    reason = (
+                        f"CIRCUIT BREAKER (Baton Block): Context estimate {estimate} >= {baton_block_tokens}. "
+                        "Only ACTIVE_CONTEXT.md handoff and Prism saves are allowed (plus /tmp/*.md context reads). Hand off now."
+                    )
                 check_and_handle_trigger("BATON", target, reason, tool_name, step_idx, conv_id, is_subagent, collector=collector, stop_on_enforce=stop_on_enforce)
 
-        warned_at_estimate = baton_state.get("warned_at_estimate")
-        if baton_warn_tokens > 0 and baton_warn_tokens <= estimate < baton_block_tokens and not is_unlocked and warned_at_estimate is None:
-            is_auth = is_authorized(last_user_content, conv_id, state_dir=state_dir)
-            prev_is_sys = False
-            if last_global_planner_idx > 0 and steps[last_global_planner_idx - 1].get("type") == "SYSTEM_MESSAGE":
-                prev_is_sys = True
-            elif steps and steps[-1].get("type") == "SYSTEM_MESSAGE":
-                prev_is_sys = True
+            warned_at_estimate = baton_state.get("warned_at_estimate")
+            if baton_warn_tokens > 0 and baton_warn_tokens <= estimate < baton_block_tokens and not is_unlocked and warned_at_estimate is None and not is_baton_exempt_call:
+                is_auth = is_authorized(last_user_content, conv_id, state_dir=state_dir)
+                prev_is_sys = False
+                if last_global_planner_idx > 0 and steps[last_global_planner_idx - 1].get("type") == "SYSTEM_MESSAGE":
+                    prev_is_sys = True
+                elif steps and steps[-1].get("type") == "SYSTEM_MESSAGE":
+                    prev_is_sys = True
 
-            is_delegation_spawn = (tool_name == "invoke_subagent" or (in_c_name == "swarm" and in_c_args.get("action") == "add"))
-            trigger_warn = (not is_auth) or (is_delegation_spawn or prev_is_sys or estimate >= baton_warn_tokens + 10000)
-            if trigger_warn:
-                target = f"estimate:{estimate}/{baton_warn_tokens}"
-                reason = f"CIRCUIT BREAKER (Baton Warn): Context estimate {estimate} >= {baton_warn_tokens}. Hand off at the next natural break using baton-pass."
-                mode = rule_mode("BATON")
-                if mode in ("enforce", "log"):
-                    baton_state["warned_at_estimate"] = estimate
+                is_delegation_spawn = (tool_name == "invoke_subagent" or (in_c_name == "swarm" and in_c_args.get("action") == "add"))
+                trigger_warn = (not is_auth) or (is_delegation_spawn or prev_is_sys or estimate >= baton_warn_tokens + 10000)
+                if trigger_warn:
+                    target = f"estimate:{estimate}/{baton_warn_tokens}"
+                    if has_coordinator_swarm_add:
+                        reason = (
+                            f"CIRCUIT BREAKER (Baton Warn): Context estimate {estimate} >= {baton_warn_tokens} with active swarm. "
+                            "At the next natural break, write ACTIVE_CONTEXT.md, git fetch/verify any share-workspace SHA before swarm kill, "
+                            "kill all swarm workers, and hand off via baton-pass."
+                        )
+                    else:
+                        reason = f"CIRCUIT BREAKER (Baton Warn): Context estimate {estimate} >= {baton_warn_tokens}. Hand off at the next natural break using baton-pass."
+                    mode = rule_mode("BATON")
+                    if mode in ("enforce", "log"):
+                        baton_state["warned_at_estimate"] = estimate
+                        save_baton_state(conv_id, baton_state, state_dir=state_dir)
+                    check_and_handle_trigger("BATON", target, reason, tool_name, step_idx, conv_id, is_subagent, collector=collector, stop_on_enforce=stop_on_enforce)
+        elif baton_block_tokens > 0 and estimate >= baton_block_tokens:
+            if tool_name in ("write_file", "write_to_file", "edit_file", "replace_file_content") and _all_tool_paths_match(tool_args, _is_temp_or_brain_md_path):
+                if baton_state.get("handoff_at_estimate") is None:
+                    baton_state["handoff_at_estimate"] = estimate
                     save_baton_state(conv_id, baton_state, state_dir=state_dir)
-                check_and_handle_trigger("BATON", target, reason, tool_name, step_idx, conv_id, is_subagent, collector=collector, stop_on_enforce=stop_on_enforce)
+                if stop_on_enforce:
+                    if passthrough_out:
+                        sys.stdout.write(passthrough_out)
+                    sys.exit(0)
+                return collector or []
+
+            handoff_at_estimate = baton_state.get("handoff_at_estimate")
+            is_worker_unlocked = (handoff_at_estimate is not None and estimate <= handoff_at_estimate + 25000)
+            if not is_worker_unlocked:
+                is_worker_exempt = (
+                    in_c_name in ("post_message", "read_board", "swarm_wait", "send_message")
+                    or (in_c_name == "swarm" and in_c_args.get("action") == "status")
+                    or (tool_name == "manage_task" and tool_args.get("Action") in ("kill", "list", "status"))
+                    or (tool_name in ("read_file", "view_file") and _all_tool_paths_match(tool_args, _is_temp_or_brain_md_path))
+                )
+                if not is_worker_exempt:
+                    target = f"worker_estimate:{estimate}/{baton_block_tokens}"
+                    if handoff_at_estimate is None:
+                        reason = (
+                            f"CIRCUIT BREAKER (Swarm Worker Context Cap): Context estimate {estimate} >= {baton_block_tokens} in swarm worker. "
+                            "Read-only reviewers/monitors: immediately call post_message (@coordinator [blocked] context-cap). "
+                            "Share-workspace implementers: call write_file or edit_file (not run_command) on /tmp/subagent-context-*.md first "
+                            "to unlock +25k tokens, commit WIP, then call post_message (@coordinator [blocked] context-cap SHARE_ROOT=<path> SHA=<sha>)."
+                        )
+                    else:
+                        reason = (
+                            f"CIRCUIT BREAKER (Swarm Worker Context Cap): Context estimate {estimate} exceeds the +25k WIP unlock window "
+                            f"(handoff at {handoff_at_estimate}). Immediately call post_message (@coordinator [blocked] context-cap) "
+                            "without further edits or commands."
+                        )
+                    check_and_handle_trigger("BATON", target, reason, tool_name, step_idx, conv_id, is_subagent, collector=collector, stop_on_enforce=stop_on_enforce)
 
     if not is_subagent and not is_swarm_worker and last_user_idx >= 0 and is_authorized(last_user_content, conv_id, state_dir=state_dir):
         edit_max = int(os.environ.get("BREAKER_MAIN_EDIT_MAX", 6))
