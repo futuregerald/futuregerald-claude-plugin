@@ -209,7 +209,6 @@ var commandToSkill = map[string]string{
 	"fix-check.md":     "fix-check",
 	"copy-edit.md":     "copy-edit",
 	"write-a-prd.md":   "write-a-prd",
-	"to-tickets.md":    "to-tickets",
 	"ui-design.md":     "ui-design",
 	"team-pulse.md":    "team-pulse",
 	"plugin-update.md": "plugin-updater",
@@ -241,7 +240,7 @@ func (c *Catalog) CommandsForSkills(harness string, installedSkills []string) []
 			}
 			return nil
 		}
-		if len(skillSet) == 0 || skillSet["start"] || skillSet["writing-plans"] {
+		if installedSkills == nil || skillSet["start"] || skillSet["writing-plans"] {
 			matched = append(matched, rel)
 		}
 		return nil

@@ -86,5 +86,6 @@ Keep installed skills, slash commands, subagents, and harness configuration up t
 4. **Apply updates safely:**
    - Never overwrite `*.local.md` or `references/config.md`.
    - For each updated skill in the user's installed set, fetch its `SKILL.md` (and any changed `references/` or `scripts/` files, excluding `test_*.py`) from `internal/catalog/shared/skills/<skill>/` (or `internal/catalog/<harness>/skills/<skill>/` when a harness override exists on `antigravity`).
+   - Prune any previously installed plugin skill or slash command (from `state.json` or a legacy v3.x install directory) that is no longer listed in `internal/catalog/tracks.yaml` or whose upstream GitHub compare status is `"removed"` / returns `404`: back it up first if requested, delete the local file (preserving `*.local.md` and `references/config.md`), and remove the retired file and skill name from `state.json`.
    - Adapt harness paths if installing onto `antigravity`, `zed`, or `opencode` (replace `.claude/skills` and `CLAUDE.md` references with the active harness's native paths and strip `model:` / `effort:` frontmatter keys on non-Claude harnesses).
    - Update `commit_sha` and `updated_at` in `state.json` and report the completed update.

@@ -69,6 +69,12 @@ tracks:
     lightweight_config: true
     skills:
       - plugin-updater
+  - id: custom
+    name: "Build Your Own"
+    install_agents: false
+    install_hooks: false
+    lightweight_config: true
+    skills: []
 skills:
   - name: plugin-updater
     category: workflow
@@ -76,9 +82,16 @@ skills:
     short: "Update plugin"
     long: "Long description"
     starter_prompt: "/plugin-update"
+  - name: brainstorming
+    category: product
+    slash_command: "/brainstorming"
+    short: "Brainstorm"
+    long: "Long brainstorm description"
+    starter_prompt: "/brainstorming"
 `
 	addFile(prefix+"internal/catalog/tracks.yaml", tracksYAML)
 	addFile(prefix+"internal/catalog/shared/skills/plugin-updater/SKILL.md", "---\nname: plugin-updater\ndescription: Updated skill body\n---\n# Updated Plugin Skill\n")
+	addFile(prefix+"internal/catalog/shared/skills/brainstorming/SKILL.md", "---\nname: brainstorming\ndescription: Brainstorming skill\n---\n# Brainstorming\n")
 	addFile(prefix+"internal/catalog/claude/templates/CLAUDE-BASE.md", "# Claude Base\n")
 	addFile(prefix+"internal/catalog/claude/CLAUDE-LIGHT.md", "# Claude Light\n")
 	addFile(prefix+"internal/catalog/claude/commands/plugin-update.md", "# /plugin-update\n")
@@ -239,5 +252,146 @@ func TestSelfUpgradeBinary_WindowsRenameAndChecksum(t *testing.T) {
 	gotOld, err := os.ReadFile(exePath + ".old")
 	if err != nil || string(gotOld) != "OLD_EXE" {
 		t.Errorf("expected Windows .exe.old backup preserved during active run: %v, %q", err, string(gotOld))
+	}
+}
+
+func TestApply_CustomTrackDropsRetiredSkillsFromReceipt(t *testing.T) {
+	tarball := buildRepoTarball(t, nil, nil)
+	runner := fakeRunner{
+		handlers: map[string][]byte{
+			"gh api repos/futuregerald/futuregerald-claude-plugin/commits/main": []byte(`{"sha":"c0ffee12","commit":{"message":"chore: prune skills","committer":{"date":"2026-11-14T00:00:00Z"}}}`),
+			"gh api repos/futuregerald/futuregerald-claude-plugin/tarball/main": tarball,
+		},
+	}
+
+	tmp := t.TempDir()
+	env := platform.Env{GOOS: "darwin", GOARCH: "arm64", HomeDir: tmp}
+	projDir := filepath.Join(tmp, "custom-proj")
+	paths, err := env.ResolvePaths("claude", "project", projDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	retiredSkillFile := filepath.Join(paths.SkillsDir, "to-tickets", "SKILL.md")
+	retiredCmdFile := filepath.Join(paths.CommandsDir, "to-tickets.md")
+	if err := os.MkdirAll(filepath.Dir(retiredSkillFile), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(retiredCmdFile), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(retiredSkillFile, []byte("# old to-tickets"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(retiredCmdFile, []byte("# /to-tickets"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	receipt := state.Receipt{
+		ID:             state.ReceiptKey("claude", "project", paths.RootDir),
+		Harness:        "claude",
+		Scope:          "project",
+		RootDir:        paths.RootDir,
+		Track:          "custom",
+		Skills:         []string{"to-tickets", "brainstorming"},
+		InstalledFiles: []string{retiredSkillFile, retiredCmdFile},
+		CommitSHA:      "a1b2c3d4",
+	}
+	store := state.NewStore(env.StateFilePath())
+	if err := store.Upsert(receipt); err != nil {
+		t.Fatal(err)
+	}
+
+	res, _, err := Apply(context.Background(), runner, env, receipt, ApplyOptions{
+		Backup:         true,
+		Force:          true,
+		CurrentVersion: "4.0.0",
+	})
+	if err != nil {
+		t.Fatalf("Apply error: %v", err)
+	}
+	if len(res.Receipt.Skills) != 1 || res.Receipt.Skills[0] != "brainstorming" {
+		t.Errorf("expected Receipt.Skills=[brainstorming], got %v", res.Receipt.Skills)
+	}
+	if _, err := os.Stat(retiredSkillFile); !os.IsNotExist(err) {
+		t.Errorf("expected retired skill file pruned on custom update, err=%v", err)
+	}
+	if _, err := os.Stat(retiredCmdFile); !os.IsNotExist(err) {
+		t.Errorf("expected retired command file pruned on custom update, err=%v", err)
+	}
+
+	projAllRetired := filepath.Join(tmp, "all-retired-proj")
+	pathsAllRetired, err := env.ResolvePaths("claude", "project", projAllRetired)
+	if err != nil {
+		t.Fatal(err)
+	}
+	allRetiredReceipt := state.Receipt{
+		ID:        state.ReceiptKey("claude", "project", pathsAllRetired.RootDir),
+		Harness:   "claude",
+		Scope:     "project",
+		RootDir:   pathsAllRetired.RootDir,
+		Track:     "custom",
+		Skills:    []string{"to-tickets"},
+		CommitSHA: "a1b2c3d4",
+	}
+	if err := store.Upsert(allRetiredReceipt); err != nil {
+		t.Fatal(err)
+	}
+	resFallback, _, err := Apply(context.Background(), runner, env, allRetiredReceipt, ApplyOptions{
+		Backup:         false,
+		Force:          true,
+		CurrentVersion: "4.0.0",
+	})
+	if err != nil {
+		t.Fatalf("Apply(all retired) error: %v", err)
+	}
+	if len(resFallback.Receipt.Skills) != 1 || resFallback.Receipt.Skills[0] != "plugin-updater" {
+		t.Errorf("expected fallback Receipt.Skills=[plugin-updater], got %v", resFallback.Receipt.Skills)
+	}
+	if _, err := os.Stat(filepath.Join(pathsAllRetired.SkillsDir, "brainstorming", "SKILL.md")); !os.IsNotExist(err) {
+		t.Errorf("expected brainstorming NOT installed when all custom skills retired, err=%v", err)
+	}
+
+	projLegacyNilSkills := filepath.Join(tmp, "legacy-nil-skills-proj")
+	pathsLegacyNil, err := env.ResolvePaths("claude", "project", projLegacyNilSkills)
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacyOnlyRetired := filepath.Join(pathsLegacyNil.SkillsDir, "to-tickets", "SKILL.md")
+	if err := os.MkdirAll(filepath.Dir(legacyOnlyRetired), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(legacyOnlyRetired, []byte("# legacy only to-tickets"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	legacyNilReceipt := state.Receipt{
+		ID:             state.ReceiptKey("claude", "project", pathsLegacyNil.RootDir),
+		Harness:        "claude",
+		Scope:          "project",
+		RootDir:        pathsLegacyNil.RootDir,
+		Track:          "custom",
+		Skills:         nil,
+		InstalledFiles: []string{legacyOnlyRetired},
+		CommitSHA:      "a1b2c3d4",
+	}
+	if err := store.Upsert(legacyNilReceipt); err != nil {
+		t.Fatal(err)
+	}
+	resLegacyNil, _, err := Apply(context.Background(), runner, env, legacyNilReceipt, ApplyOptions{
+		Backup:         false,
+		Force:          true,
+		CurrentVersion: "4.0.0",
+	})
+	if err != nil {
+		t.Fatalf("Apply(legacy nil skills) error: %v", err)
+	}
+	if len(resLegacyNil.Receipt.Skills) != 1 || resLegacyNil.Receipt.Skills[0] != "plugin-updater" {
+		t.Errorf("expected legacy nil-skills fallback Receipt.Skills=[plugin-updater], got %v", resLegacyNil.Receipt.Skills)
+	}
+	if _, err := os.Stat(legacyOnlyRetired); !os.IsNotExist(err) {
+		t.Errorf("expected legacy retired skill pruned, err=%v", err)
+	}
+	if _, err := os.Stat(filepath.Join(pathsLegacyNil.SkillsDir, "brainstorming", "SKILL.md")); !os.IsNotExist(err) {
+		t.Errorf("expected brainstorming NOT installed on legacy nil-skills custom update, err=%v", err)
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/fstest"
 
 	"github.com/futuregerald/futuregerald-claude-plugin/internal/backup"
 	"github.com/futuregerald/futuregerald-claude-plugin/internal/catalog"
@@ -121,5 +122,94 @@ func TestStoreSaveFindAndUninstallPreservesUserAssetsAndHooks(t *testing.T) {
 	}
 	if _, ok := DiscoverLegacyReceipt(env, cat, "claude", "project", symProj); ok {
 		t.Errorf("DiscoverLegacyReceipt must not follow symlinked .claude/skills directory")
+	}
+}
+
+func TestDiscoverLegacyReceiptSweepsRetiredV3SkillsAndCommands(t *testing.T) {
+	tmp := t.TempDir()
+	env := platform.Env{
+		GOOS:    "darwin",
+		GOARCH:  "arm64",
+		HomeDir: tmp,
+	}
+
+	v4FS := fstest.MapFS{
+		"tracks.yaml": &fstest.MapFile{
+			Data: []byte("version: \"4.0.0\"\ntracks:\n  - id: opinionated\n    name: Opinionated\n    skills: [start]\nskills:\n  - name: start\n    category: workflow\n    slash_command: /start\n    short: Start\n    long: Start workflow\n    starter_prompt: /start\n"),
+		},
+		"claude/commands/start.md": &fstest.MapFile{
+			Data: []byte("# /start\n"),
+		},
+	}
+	cat, err := catalog.Load(v4FS)
+	if err != nil {
+		t.Fatalf("catalog.Load(v4FS) error: %v", err)
+	}
+
+	projDir := filepath.Join(tmp, "legacy-proj")
+	paths, err := env.ResolvePaths("claude", "project", projDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	activeSkillFile := filepath.Join(paths.SkillsDir, "start", "SKILL.md")
+	retiredToTicketsFile := filepath.Join(paths.SkillsDir, "to-tickets", "SKILL.md")
+	retiredImplementFile := filepath.Join(paths.SkillsDir, "implement", "SKILL.md")
+	retiredLocalNote := filepath.Join(paths.SkillsDir, "implement", "references", "team.local.md")
+	retiredCmdFile := filepath.Join(paths.CommandsDir, "to-tickets.md")
+	userCustomCmdFile := filepath.Join(paths.CommandsDir, "my-custom.md")
+
+	for _, f := range []string{activeSkillFile, retiredToTicketsFile, retiredImplementFile, retiredLocalNote, retiredCmdFile, userCustomCmdFile} {
+		if err := os.MkdirAll(filepath.Dir(f), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(f, []byte("legacy content"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	legacy, ok := DiscoverLegacyReceipt(env, cat, "claude", "project", projDir)
+	if !ok || legacy == nil {
+		t.Fatalf("expected DiscoverLegacyReceipt to detect legacy install")
+	}
+
+	for _, s := range legacy.Skills {
+		if s == "to-tickets" || s == "implement" {
+			t.Errorf("retired skill %q must not appear in Receipt.Skills: %v", s, legacy.Skills)
+		}
+	}
+	if len(legacy.Skills) != 1 || legacy.Skills[0] != "start" {
+		t.Errorf("expected Receipt.Skills=[start], got %v", legacy.Skills)
+	}
+
+	installedSet := make(map[string]bool, len(legacy.InstalledFiles))
+	for _, f := range legacy.InstalledFiles {
+		installedSet[filepath.Clean(f)] = true
+	}
+	for _, wantTracked := range []string{activeSkillFile, retiredToTicketsFile, retiredImplementFile, retiredCmdFile} {
+		if !installedSet[filepath.Clean(wantTracked)] {
+			t.Errorf("expected %s in InstalledFiles, got %v", wantTracked, legacy.InstalledFiles)
+		}
+	}
+	if installedSet[filepath.Clean(retiredLocalNote)] {
+		t.Errorf("expected *.local.md inside retired skill directory excluded from InstalledFiles")
+	}
+	if installedSet[filepath.Clean(userCustomCmdFile)] {
+		t.Errorf("expected user custom command excluded from InstalledFiles")
+	}
+
+	if _, err := Uninstall(env, cat, *legacy, backup.NewManager(env.BackupsDir()), false); err != nil {
+		t.Fatalf("Uninstall error: %v", err)
+	}
+	for _, wantGone := range []string{activeSkillFile, retiredToTicketsFile, retiredImplementFile, retiredCmdFile} {
+		if _, err := os.Stat(wantGone); !os.IsNotExist(err) {
+			t.Errorf("expected %s removed on Uninstall, err=%v", wantGone, err)
+		}
+	}
+	if _, err := os.Stat(retiredLocalNote); err != nil {
+		t.Errorf("expected %s preserved on Uninstall: %v", retiredLocalNote, err)
+	}
+	if _, err := os.Stat(userCustomCmdFile); err != nil {
+		t.Errorf("expected %s preserved on Uninstall: %v", userCustomCmdFile, err)
 	}
 }

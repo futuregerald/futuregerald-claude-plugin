@@ -821,7 +821,7 @@ func (m Model) renderBotHeader(stepLabel, speech string) string {
 func (m Model) viewHome() string {
 	var b strings.Builder
 	b.WriteString(m.renderBotHeader("WELCOME",
-		"Hey there! I set up curated AI workflows, slash commands, and skills without burying you in 60+ random files.\nPick one thing below — we'll take it one step at a time."))
+		"Hey there! I set up curated AI workflows, slash commands, and skills without burying you in 50+ random files.\nPick one thing below — we'll take it one step at a time."))
 
 	items := []struct {
 		title string

@@ -3,7 +3,7 @@
 ## Installed Skills, Commands & Subagents
 
 - **Skills:** `~/.config/opencode/skills/<skill-name>/SKILL.md` (or `.opencode/skills/` per project)
-- **Slash Commands:** `~/.config/opencode/commands/<command>.md` (or `.opencode/commands/` per project) — type `/start`, `/begin`, `/shape`, `/ui-design`, `/write-a-prd`, `/plan-review`, `/fix-check`, `/copy-edit`, `/to-tickets`, `/team-pulse`, `/plugin-update`
+- **Slash Commands:** `~/.config/opencode/commands/<command>.md` (or `.opencode/commands/` per project) — type `/start`, `/begin`, `/shape`, `/ui-design`, `/write-a-prd`, `/plan-review`, `/fix-check`, `/copy-edit`, `/team-pulse`, `/plugin-update`
 - **Subagents:** `~/.config/opencode/agents/<agent>.md` (or `.opencode/agents/` per project)
 
 ## Core Discipline

@@ -12,7 +12,7 @@ On-demand detail moved out of `~/.gemini/GEMINI.md`. The always-on file keeps th
 | Trigger | Skill / Slash Command |
 |---|---|
 | Full 12-phase development lifecycle (`0. Shape` → `12. Handoff`) | `/lifecycle`, `/start`, `/begin` (powered by `/peer-pipeline-swarm` for Phases 4–9 in Antigravity) |
-| Phase 0 (Shape): before planning new or user-facing work (feature, product, page, design, PRD) | `/shape`, `/craftsmans-wisdom` (skip in subagents, before `to-spec`, or when a brief was already confirmed; for internal technical work, ask once per session whether to skip); offers `/future-grilling` after the brief |
+| Phase 0 (Shape): before planning new or user-facing work (feature, product, page, design, PRD) | `/shape`, `/craftsmans-wisdom` (skip in subagents or when a brief was already confirmed; for internal technical work, ask once per session whether to skip); offers `/future-grilling` after the brief |
 | Stress-testing a plan or design with the user | `/future-grilling` |
 | Three or more questions for the user | `/grilling-page` (1–2 questions stay in chat) |
 | New feature or significant work, before planning | `/write-a-prd` |

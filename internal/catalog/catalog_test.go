@@ -1,6 +1,7 @@
 package catalog
 
 import (
+	"io/fs"
 	"os"
 	"path"
 	"regexp"
@@ -37,8 +38,111 @@ func TestLoadFromDirFS(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load(os.DirFS(.)) failed: %v", err)
 	}
-	if len(cat.Skills) < 60 {
-		t.Errorf("expected at least 60 skills in catalog, got %d", len(cat.Skills))
+	if len(cat.Skills) != 54 {
+		t.Errorf("expected exactly 54 skills in catalog, got %d", len(cat.Skills))
+	}
+}
+
+func TestPrunedSkillsAndCommandsAbsent(t *testing.T) {
+	t.Parallel()
+	cat, err := Load(FS)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	retiredSkills := []string{
+		"to-spec",
+		"to-tickets",
+		"implement",
+		"domain-modeling",
+		"grill-with-docs",
+		"architecture-decision-records",
+		"javascript-testing-patterns",
+		"improve-codebase-architecture",
+		"codebase-design",
+	}
+
+	for _, name := range retiredSkills {
+		if _, ok := cat.SkillMeta(name); ok {
+			t.Errorf("retired skill %q still present in tracks.yaml skills metadata", name)
+		}
+		if _, err := FS.Open(path.Join("shared/skills", name)); err == nil {
+			t.Errorf("retired skill directory shared/skills/%s still exists", name)
+		}
+		if _, err := FS.Open(path.Join("antigravity/skills", name)); err == nil {
+			t.Errorf("retired skill directory antigravity/skills/%s still exists", name)
+		}
+		for _, tr := range cat.Tracks {
+			for _, s := range tr.Skills {
+				if s == name {
+					t.Errorf("track %q still references retired skill %q", tr.ID, name)
+				}
+			}
+			for _, s := range tr.AntigravitySkills {
+				if s == name {
+					t.Errorf("track %q antigravity_skills still references retired skill %q", tr.ID, name)
+				}
+			}
+		}
+	}
+
+	if _, mapped := commandToSkill["to-tickets.md"]; mapped {
+		t.Errorf("commandToSkill still maps retired command to-tickets.md")
+	}
+	for _, cmdPath := range []string{"claude/commands/to-tickets.md", "opencode/commands/to-tickets.md"} {
+		if _, err := FS.Open(cmdPath); err == nil {
+			t.Errorf("retired command file %s still exists", cmdPath)
+		}
+	}
+
+	staleRefRe := regexp.MustCompile(`\.\./(to-spec|to-tickets|implement|domain-modeling|grill-with-docs|architecture-decision-records|javascript-testing-patterns|improve-codebase-architecture|codebase-design)/|/(to-spec|to-tickets|domain-modeling|grill-with-docs|architecture-decision-records|javascript-testing-patterns|improve-codebase-architecture|codebase-design)\b|` + "`/implement`")
+	_ = fs.WalkDir(FS, ".", func(p string, d fs.DirEntry, wErr error) error {
+		if wErr != nil || d.IsDir() || !strings.HasSuffix(p, ".md") {
+			return nil
+		}
+		b, err := fs.ReadFile(FS, p)
+		if err != nil {
+			t.Fatalf("reading %s: %v", p, err)
+		}
+		if match := staleRefRe.FindString(string(b)); match != "" {
+			t.Errorf("catalog markdown %s still contains retired reference %q", p, match)
+		}
+		return nil
+	})
+}
+
+func TestCommandToSkillBidirectionalParity(t *testing.T) {
+	t.Parallel()
+	cat, err := Load(FS)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for cmdFile, skillName := range commandToSkill {
+		if _, ok := cat.SkillMeta(skillName); !ok {
+			t.Errorf("commandToSkill[%q] = %q, which is missing from catalog SkillMeta", cmdFile, skillName)
+		}
+		for _, harness := range []string{HarnessClaude, HarnessOpenCode} {
+			p := path.Join(harness, "commands", cmdFile)
+			if _, err := FS.Open(p); err != nil {
+				t.Errorf("commandToSkill key %q missing file %s: %v", cmdFile, p, err)
+			}
+		}
+	}
+
+	for _, harness := range []string{HarnessClaude, HarnessOpenCode} {
+		entries, err := FS.ReadDir(path.Join(harness, "commands"))
+		if err != nil {
+			t.Fatalf("ReadDir(%s/commands): %v", harness, err)
+		}
+		for _, entry := range entries {
+			if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".md") {
+				continue
+			}
+			if _, ok := commandToSkill[entry.Name()]; !ok {
+				t.Errorf("%s/commands/%s is not mapped in commandToSkill", harness, entry.Name())
+			}
+		}
 	}
 }
 
@@ -277,5 +381,14 @@ func TestCommandsForSkillsFiltering(t *testing.T) {
 	}
 	if hasStart {
 		t.Errorf("did not expect start.md in copy-polish commands, got %v", cmds)
+	}
+
+	emptyCmds := cat.CommandsForSkills(HarnessClaude, []string{})
+	if len(emptyCmds) != 1 || emptyCmds[0] != "plugin-update.md" {
+		t.Errorf("expected explicit empty slice []string{} to return only [plugin-update.md], got %v", emptyCmds)
+	}
+	nilCmds := cat.CommandsForSkills(HarnessClaude, nil)
+	if len(nilCmds) <= 1 {
+		t.Errorf("expected nil installedSkills to preserve wildcard subdir commands, got %v", nilCmds)
 	}
 }

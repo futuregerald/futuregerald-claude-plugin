@@ -13,7 +13,7 @@
 ## OpenCode Skills, Commands & Subagents
 
 - **Skills:** `.opencode/skills/<skill-name>/SKILL.md` (project) or `~/.config/opencode/skills/` (global)
-- **Slash Commands:** `.opencode/commands/*.md` — `/start`, `/begin`, `/lifecycle`, `/shape`, `/ui-design`, `/write-a-prd`, `/plan-review`, `/fix-check`, `/copy-edit`, `/to-tickets`, `/team-pulse`, `/plugin-update`
+- **Slash Commands:** `.opencode/commands/*.md` — `/start`, `/begin`, `/lifecycle`, `/shape`, `/ui-design`, `/write-a-prd`, `/plan-review`, `/fix-check`, `/copy-edit`, `/team-pulse`, `/plugin-update`
 - **Subagents:** `.opencode/agents/*.md` (`implementer`, `adversarial-plan-reviewer`, `code-quality-reviewer`, `security-reviewer`, `sql-reviewer`, `code-simplifier`, `debugger`, `investigator`, `runner`)
 
 ---

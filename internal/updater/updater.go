@@ -435,7 +435,16 @@ func Apply(ctx context.Context, runner Runner, env platform.Env, receipt state.R
 
 	var customSkills []string
 	if trackID == "custom" {
-		customSkills = receipt.Skills
+		for _, s := range receipt.Skills {
+			if _, ok := cat.SkillMeta(s); ok {
+				customSkills = append(customSkills, s)
+			}
+		}
+		if len(customSkills) == 0 && (len(receipt.Skills) > 0 || len(receipt.InstalledFiles) > 0) {
+			if _, ok := cat.SkillMeta("plugin-updater"); ok {
+				customSkills = []string{"plugin-updater"}
+			}
+		}
 	}
 
 	skipConfig := shouldSkipConfigOnUpdate(env, receipt, trackID)

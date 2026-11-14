@@ -72,7 +72,7 @@ For each skill, evaluate against these criteria and rate as PASS, WARN, or FAIL 
 ### 6. No Duplication
 
 - **WARN** if content duplicates what's in CLAUDE.md (team mappings, lifecycle phases, commit conventions)
-- **WARN** if content duplicates another skill (e.g., testing patterns in both a Ruby skill and javascript-testing-patterns)
+- **WARN** if content duplicates another skill (e.g., the same testing patterns in two language skills)
 - Cross-reference instead of duplicating
 
 ### 7. Degrees of Freedom

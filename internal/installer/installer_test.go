@@ -7,6 +7,7 @@ import (
 	"testing"
 	"testing/fstest"
 
+	"github.com/futuregerald/futuregerald-claude-plugin/internal/backup"
 	"github.com/futuregerald/futuregerald-claude-plugin/internal/catalog"
 	"github.com/futuregerald/futuregerald-claude-plugin/internal/platform"
 )
@@ -283,5 +284,142 @@ func TestExecutePlan_TracksBackupWindowsHooksAndTrackSwitch(t *testing.T) {
 	}
 	if data, err := os.ReadFile(res2.Paths.HooksJSON); err == nil && strings.Contains(string(data), "autonomous-circuit-breaker") {
 		t.Errorf("expected autonomous-circuit-breaker removed from hooks.json when switching to copy-polish track")
+	}
+}
+
+func TestExecutePlan_LegacyUpgradePrunesRetiredV3SkillsAndBacksUp(t *testing.T) {
+	v4FS := fstest.MapFS{
+		"tracks.yaml": &fstest.MapFile{
+			Data: []byte("version: \"4.0.0\"\ntracks:\n  - id: basics\n    name: Basics\n    skills: [plugin-updater]\n  - id: custom\n    name: Custom\n    skills: []\nskills:\n  - name: plugin-updater\n    category: workflow\n    slash_command: /plugin-update\n    short: Update\n    long: Update plugin\n    starter_prompt: /plugin-update\n  - name: brainstorming\n    category: product\n    slash_command: /brainstorming\n    short: Brainstorm\n    long: Brainstorm ideas\n    starter_prompt: /brainstorming\n"),
+		},
+		"shared/skills/plugin-updater/SKILL.md": &fstest.MapFile{
+			Data: []byte("---\nname: plugin-updater\ndescription: Update\n---\n# Updater\n"),
+		},
+		"shared/skills/brainstorming/SKILL.md": &fstest.MapFile{
+			Data: []byte("---\nname: brainstorming\ndescription: Brainstorm\n---\n# Brainstorming\n"),
+		},
+		"claude/templates/CLAUDE-BASE.md": &fstest.MapFile{
+			Data: []byte("# Project Config\n"),
+		},
+		"claude/commands/plugin-update.md": &fstest.MapFile{
+			Data: []byte("# /plugin-update\n"),
+		},
+		"claude/commands/config/show.md": &fstest.MapFile{
+			Data: []byte("# /config:show\n"),
+		},
+	}
+	cat, err := catalog.Load(v4FS)
+	if err != nil {
+		t.Fatalf("catalog.Load error: %v", err)
+	}
+
+	tmpHome := t.TempDir()
+	env := platform.Env{
+		GOOS:    "darwin",
+		GOARCH:  "arm64",
+		HomeDir: tmpHome,
+	}
+	projDir := filepath.Join(tmpHome, "legacy-v3-proj")
+	paths, err := env.ResolvePaths(HarnessClaude, "project", projDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	legacySkill := filepath.Join(paths.SkillsDir, "to-tickets", "SKILL.md")
+	legacyCmd := filepath.Join(paths.CommandsDir, "to-tickets.md")
+	if err := os.MkdirAll(filepath.Dir(legacySkill), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(legacyCmd), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(legacySkill, []byte("# Legacy to-tickets"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(legacyCmd, []byte("# /to-tickets"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	inst := New(v4FS, Options{Force: true})
+	res, err := inst.ExecutePlan(InstallPlan{
+		Env:        env,
+		Catalog:    cat,
+		Harness:    HarnessClaude,
+		Scope:      "project",
+		ProjectDir: projDir,
+		TrackID:    "basics",
+		Backup:     true,
+		Force:      true,
+		Version:    "4.0.0",
+	})
+	if err != nil {
+		t.Fatalf("ExecutePlan error: %v", err)
+	}
+	if res.BackupID == "" {
+		t.Fatalf("expected BackupID to be recorded")
+	}
+	if _, err := os.Stat(legacySkill); !os.IsNotExist(err) {
+		t.Errorf("expected retired v3 skill %s pruned during upgrade, err=%v", legacySkill, err)
+	}
+	if _, err := os.Stat(legacyCmd); !os.IsNotExist(err) {
+		t.Errorf("expected retired v3 command %s pruned during upgrade, err=%v", legacyCmd, err)
+	}
+
+	mgr := backup.NewManager(env.BackupsDir())
+	if _, err := mgr.RestoreSnapshot(res.BackupID, env.StateFilePath()); err != nil {
+		t.Fatalf("RestoreSnapshot error: %v", err)
+	}
+	if got, err := os.ReadFile(legacySkill); err != nil || string(got) != "# Legacy to-tickets" {
+		t.Errorf("expected safety backup to restore %s, got %q, err=%v", legacySkill, string(got), err)
+	}
+	if got, err := os.ReadFile(legacyCmd); err != nil || string(got) != "# /to-tickets" {
+		t.Errorf("expected safety backup to restore %s, got %q, err=%v", legacyCmd, string(got), err)
+	}
+
+	customProj := filepath.Join(tmpHome, "custom-proj")
+	customRes, err := inst.ExecutePlan(InstallPlan{
+		Env:          env,
+		Catalog:      cat,
+		Harness:      HarnessClaude,
+		Scope:        "project",
+		ProjectDir:   customProj,
+		TrackID:      "custom",
+		CustomSkills: []string{"to-tickets", "plugin-updater"},
+		Force:        true,
+		Version:      "4.0.0",
+	})
+	if err != nil {
+		t.Fatalf("ExecutePlan(custom) error: %v", err)
+	}
+	if len(customRes.Receipt.Skills) != 1 || customRes.Receipt.Skills[0] != "plugin-updater" {
+		t.Errorf("expected retired skill dropped from custom Receipt.Skills, got %v", customRes.Receipt.Skills)
+	}
+
+	allRetiredProj := filepath.Join(tmpHome, "all-retired-custom-proj")
+	allRetiredRes, err := inst.ExecutePlan(InstallPlan{
+		Env:          env,
+		Catalog:      cat,
+		Harness:      HarnessClaude,
+		Scope:        "project",
+		ProjectDir:   allRetiredProj,
+		TrackID:      "custom",
+		CustomSkills: []string{"to-tickets", "../plugin-updater", `..\plugin-updater`, ".", ".."},
+		Force:        true,
+		Version:      "4.0.0",
+	})
+	if err != nil {
+		t.Fatalf("ExecutePlan(all-retired custom) error: %v", err)
+	}
+	if len(allRetiredRes.Skills) != 0 || len(allRetiredRes.Receipt.Skills) != 0 {
+		t.Errorf("expected empty Skills when all custom skills are retired/invalid, got %v / %v", allRetiredRes.Skills, allRetiredRes.Receipt.Skills)
+	}
+	if _, err := os.Stat(filepath.Join(allRetiredRes.Paths.SkillsDir, "brainstorming", "SKILL.md")); !os.IsNotExist(err) {
+		t.Errorf("expected brainstorming NOT installed when selectedSkills is empty, err=%v", err)
+	}
+	if _, err := os.Stat(filepath.Join(allRetiredRes.Paths.SkillsDir, "plugin-updater", "SKILL.md")); !os.IsNotExist(err) {
+		t.Errorf("expected path-traversal CustomSkills rejected and plugin-updater NOT installed, err=%v", err)
+	}
+	if _, err := os.Stat(filepath.Join(allRetiredRes.Paths.CommandsDir, "config", "show.md")); !os.IsNotExist(err) {
+		t.Errorf("expected subdir command config/show.md NOT installed when selectedSkills is empty, err=%v", err)
 	}
 }

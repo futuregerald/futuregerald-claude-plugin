@@ -960,14 +960,26 @@ func (i *Installer) ExecutePlan(plan InstallPlan) (*InstallResult, error) {
 	}
 
 	var selectedSkills []string
+	hasTagOrLangFilter := false
 	if len(plan.CustomSkills) > 0 || trackID == "custom" {
+		selectedSkills = []string{}
+		hasTagOrLangFilter = len(plan.CustomSkills) == 0 && (len(plan.Tags) > 0 || len(plan.Languages) > 0)
 		seen := make(map[string]bool)
 		for _, s := range plan.CustomSkills {
 			s = strings.TrimSpace(s)
 			if s == "" {
 				continue
 			}
+			if strings.ContainsAny(s, "/\\") || s == "." || s == ".." {
+				continue
+			}
 			if isAntigravityOnlySkill(s) && plan.Harness != HarnessAntigravity {
+				continue
+			}
+			_, inCatalog := cat.SkillMeta(s)
+			_, inShared := fs.Stat(i.fsys, path.Join("shared/skills", s, "SKILL.md"))
+			_, inAgy := fs.Stat(i.fsys, path.Join("antigravity/skills", s, "SKILL.md"))
+			if !inCatalog && inShared != nil && (plan.Harness != HarnessAntigravity || inAgy != nil) {
 				continue
 			}
 			if !seen[s] {
@@ -981,6 +993,7 @@ func (i *Installer) ExecutePlan(plan InstallPlan) (*InstallResult, error) {
 			return nil, err
 		}
 	}
+	shouldInstallSkills := len(selectedSkills) > 0 || hasTagOrLangFilter
 
 	mode := plan.Mode
 	if mode == "" {
@@ -1016,7 +1029,7 @@ func (i *Installer) ExecutePlan(plan InstallPlan) (*InstallResult, error) {
 	if paths.HooksJSON != "" {
 		candidateTargets = append(candidateTargets, paths.HooksJSON)
 	}
-	if mode == "full" && paths.SkillsDir != "" {
+	if mode == "full" && paths.SkillsDir != "" && shouldInstallSkills {
 		if sim, sErr := dryInst.InstallSelectedSkillsForHarness(paths.SkillsDir, plan.Harness, scope == "global", selectedSkills, plan.Tags, plan.Languages); sErr == nil {
 			for _, line := range sim {
 				for _, pfx := range []string{"WOULD CREATE: ", "WOULD OVERWRITE: "} {
@@ -1088,7 +1101,7 @@ func (i *Installer) ExecutePlan(plan InstallPlan) (*InstallResult, error) {
 		}
 	}
 
-	if mode == "full" && paths.SkillsDir != "" {
+	if mode == "full" && paths.SkillsDir != "" && shouldInstallSkills {
 		res, sErr := execInst.InstallSelectedSkillsForHarness(paths.SkillsDir, plan.Harness, scope == "global", selectedSkills, plan.Tags, plan.Languages)
 		if sErr != nil {
 			return nil, sErr

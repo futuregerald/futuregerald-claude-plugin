@@ -31,7 +31,6 @@ tracks:
   - review-lens
   - test-driven-development
   - subagent-driven-development
-  - implement
   - using-git-worktrees
   - systematic-debugging
   - code-simplifier
@@ -73,10 +72,10 @@ tracks:
 - id: product
   name: Product & Strategy Flow
   badge: PMs, Founders & Leads
-  tagline: Turn rough ideas into point-of-view briefs, interactive UI prototypes, PRDs, tracer-bullet
+  tagline: Turn rough ideas into point-of-view briefs, interactive UI prototypes, PRDs, clear
     tickets, and team pulse reports.
   description: Designed for product managers, designers, founders, and engineering leads. Covers product
-    shaping, decision grilling, PRDs, spec/ticket writing, 3-direction HTML UI prototyping, visual plan
+    shaping, decision grilling, PRDs, ticket writing and grooming, 3-direction HTML UI prototyping, visual plan
     pages, copy reviews, research, meeting debriefs, and team pulse/forecasting—with zero code-gate noise.
   install_agents: false
   install_hooks: false
@@ -89,8 +88,6 @@ tracks:
   - future-wayfinder
   - grilling-page
   - write-a-prd
-  - to-spec
-  - to-tickets
   - writing-tickets
   - ticket-grooming
   - ui-design
@@ -142,7 +139,7 @@ tracks:
 explainers:
   repo_overview: skill-installer sets up curated packs of AI agent skills, slash commands, subagents,
     and workspace guidelines for Claude Code, Google Antigravity, Zed Editor, and OpenCode across macOS,
-    Linux, and Windows. Instead of dumping 60+ files into your config at once, you pick a track tailored
+    Linux, and Windows. Instead of dumping 50+ files into your config at once, you pick a track tailored
     to how you work—whether that is the full 12-phase engineering lifecycle, a lightweight 8-skill starter
     pack, a Product & Strategy pack for PMs, or a Copy & UI Polish pack.
   concepts:
@@ -244,21 +241,6 @@ skills:
   long: Combines user problem discovery, codebase exploration, and deep-module boundary design into a
     crisp Product Requirements Document ready to publish to GitHub Issues, Jira, or docs/.
   starter_prompt: /write-a-prd Write a PRD for self-serve team invitations and role management
-- name: to-spec
-  category: Product & Shaping
-  slash_command: /to-spec
-  short: Synthesize the current conversation directly into a published spec—no extra interview.
-  long: Distills decisions already made in your current chat into a clean specification document and publishes
-    it to your issue tracker or repository without repeating questions you already answered.
-  starter_prompt: /to-spec Turn our discussion above into a technical spec
-- name: to-tickets
-  category: Product & Shaping
-  slash_command: /to-tickets
-  short: Break an approved plan or PRD into vertical tracer-bullet tickets with blocking links.
-  long: Splits a specification or implementation plan into end-to-end tracer-bullet stories rather than
-    horizontal layer slices, declaring explicit blocking edges between tickets and publishing them locally
-    or to your tracker.
-  starter_prompt: /to-tickets Break this PRD into vertical tracer-bullet tickets
 - name: writing-tickets
   category: Product & Shaping
   slash_command: /writing-tickets
@@ -345,9 +327,9 @@ skills:
 - name: prototype
   category: Design, Copy & UI
   slash_command: /prototype
-  short: Build a fast, throwaway prototype to test whether a UI or state model feels right.
-  long: Creates an isolated, disposable prototype in a scratch directory to answer a specific interaction
-    or state-modeling question quickly before committing to production architecture.
+  short: Build a throwaway prototype to test a state model or try UI variations in the running app.
+  long: Creates a disposable prototype to sanity-check state/logic or try UI variations inside the running
+    app against real data (for choosing a direction for a new page or major UI change, use /ui-design instead).
   starter_prompt: /prototype Build a quick throwaway prototype of the keyboard-driven filter bar
 - name: visualize-plan
   category: Design, Copy & UI
@@ -379,43 +361,6 @@ skills:
   long: Dispatches a fresh, read-only reviewer to verify every premise, file path, caller contract, and
     security boundary in your plan against the actual code before a single line of implementation is written.
   starter_prompt: /plan-review Review the current implementation plan against the codebase
-- name: codebase-design
-  category: Planning & Architecture
-  slash_command: /codebase-design
-  short: Design deep modules with narrow interfaces that hide complexity and make testing easy.
-  long: Applies deep-module design principles to shrink surface area, pull complexity downward behind
-    simple interfaces, choose clean dependency seams, and make packages easy for humans and AI agents
-    to navigate.
-  starter_prompt: /codebase-design How should we design the interface boundary for our notification service?
-- name: improve-codebase-architecture
-  category: Planning & Architecture
-  slash_command: /improve-codebase-architecture
-  short: Scan a codebase for shallow-module coupling and present a visual HTML refactoring report.
-  long: Analyzes package boundaries, pass-through methods, and high-fan-out coupling across your repo,
-    generates an interactive HTML report of module-deepening opportunities, and grills through whichever
-    candidate you pick.
-  starter_prompt: /improve-codebase-architecture Scan internal/ for module-deepening opportunities
-- name: domain-modeling
-  category: Planning & Architecture
-  slash_command: /domain-modeling
-  short: Establish a crisp ubiquitous language and domain model across code and docs.
-  long: Pins down core domain entities, invariants, and terminology so code symbols, APIs, database tables,
-    and product docs use the exact same language without overloaded terms.
-  starter_prompt: /domain-modeling Help us sharpen the domain model for subscriptions vs entitlements
-- name: architecture-decision-records
-  category: Planning & Architecture
-  slash_command: /architecture-decision-records
-  short: Write and maintain concise Architecture Decision Records (ADRs) with context and trade-offs.
-  long: Documents significant technical decisions in docs/adr/ with clear problem context, considered
-    alternatives, chosen direction, and downstream consequences.
-  starter_prompt: /architecture-decision-records Write an ADR for choosing SQLite WAL mode in local dev
-- name: grill-with-docs
-  category: Planning & Architecture
-  slash_command: /grill-with-docs
-  short: Relentless design interview that simultaneously writes ADRs and domain glossary entries.
-  long: Combines deep decision-tree grilling with live documentation, capturing settled architectural
-    choices as ADRs and domain terms in your project glossary as you answer each question.
-  starter_prompt: /grill-with-docs Grill me on the event-sourcing design and record ADRs as we go
 - name: go-api-structure
   category: Planning & Architecture
   slash_command: /go-api-structure
@@ -439,13 +384,6 @@ skills:
     subagents, verifying fast unit/lint gates in the orchestrator shell, and running independent code-quality
     and security reviewers.
   starter_prompt: /subagent-driven-development Execute the approved plan streams with fresh subagents
-- name: implement
-  category: Engineering & TDD
-  slash_command: /implement
-  short: Execute an approved spec or set of tracer-bullet tickets with TDD and verification gates.
-  long: Works through a spec or ticket list in dependency order, running TDD, scoped tests, and linters
-    for each vertical slice until every acceptance criterion is verified.
-  starter_prompt: '/implement Implement ticket #14 following our approved spec'
 - name: systematic-debugging
   category: Engineering & TDD
   slash_command: /systematic-debugging
@@ -460,13 +398,6 @@ skills:
   long: Reviews recently touched files to eliminate redundant nesting, dead branches, and duplicated helpers
     while preserving exact external behavior and passing all existing tests.
   starter_prompt: /code-simplifier Simplify the changes on this branch while keeping all tests green
-- name: javascript-testing-patterns
-  category: Engineering & TDD
-  slash_command: /javascript-testing-patterns
-  short: Fast, deterministic testing patterns for Jest, Vitest, React, and Node/TypeScript.
-  long: Practical patterns for writing reliable JavaScript and TypeScript unit and integration tests in
-    Vitest and Jest—covering fakes over heavy mocks, async timer control, and clean test fixtures.
-  starter_prompt: /javascript-testing-patterns Refactor these brittle Jest mocks into clean Vitest tests
 - name: using-git-worktrees
   category: Engineering & TDD
   slash_command: /using-git-worktrees

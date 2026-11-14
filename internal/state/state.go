@@ -176,6 +176,22 @@ var knownBreakerFiles = []string{
 	"session_metrics.py",
 }
 
+var legacyRetiredSkills = map[string]bool{
+	"to-spec":                       true,
+	"to-tickets":                    true,
+	"implement":                     true,
+	"domain-modeling":               true,
+	"grill-with-docs":               true,
+	"architecture-decision-records": true,
+	"javascript-testing-patterns":   true,
+	"improve-codebase-architecture": true,
+	"codebase-design":               true,
+}
+
+var legacyRetiredCommands = []string{
+	"to-tickets.md",
+}
+
 func isSafeRealDir(dir string) bool {
 	if dir == "" {
 		return false
@@ -269,11 +285,15 @@ func DiscoverLegacyReceipt(env platform.Env, cat *catalog.Catalog, harness, scop
 	if isSafeRealDir(paths.SkillsDir) {
 		if entries, err := os.ReadDir(paths.SkillsDir); err == nil {
 			for _, entry := range entries {
-				if entry.Type()&os.ModeSymlink != 0 || !entry.IsDir() || !knownSkills[entry.Name()] {
+				isKnown := knownSkills[entry.Name()]
+				isRetired := legacyRetiredSkills[entry.Name()]
+				if entry.Type()&os.ModeSymlink != 0 || !entry.IsDir() || (!isKnown && !isRetired) {
 					continue
 				}
 				skillRoot := filepath.Join(paths.SkillsDir, entry.Name())
-				foundSkills = append(foundSkills, entry.Name())
+				if isKnown {
+					foundSkills = append(foundSkills, entry.Name())
+				}
 				_ = filepath.WalkDir(skillRoot, func(p string, d fs.DirEntry, wErr error) error {
 					if wErr != nil {
 						return nil
@@ -332,6 +352,14 @@ func DiscoverLegacyReceipt(env platform.Env, cat *catalog.Catalog, harness, scop
 			}
 			return nil
 		})
+		for _, retiredCmd := range legacyRetiredCommands {
+			candidate := filepath.Join(paths.CommandsDir, filepath.FromSlash(retiredCmd))
+			if backup.RejectSymlinkInChain(candidate) == nil {
+				if info, err := os.Lstat(candidate); err == nil && !info.IsDir() && info.Mode()&os.ModeSymlink == 0 {
+					installedFiles = append(installedFiles, filepath.Clean(candidate))
+				}
+			}
+		}
 	}
 
 	hooksMerged := false
@@ -354,6 +382,13 @@ func DiscoverLegacyReceipt(env platform.Env, cat *catalog.Catalog, harness, scop
 
 	sort.Strings(foundSkills)
 	sort.Strings(installedFiles)
+	dedupedFiles := make([]string, 0, len(installedFiles))
+	for _, f := range installedFiles {
+		if len(dedupedFiles) == 0 || dedupedFiles[len(dedupedFiles)-1] != f {
+			dedupedFiles = append(dedupedFiles, f)
+		}
+	}
+	installedFiles = dedupedFiles
 
 	track := "custom"
 	skillSet := make(map[string]bool, len(foundSkills))
