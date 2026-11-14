@@ -13,7 +13,7 @@ This plugin includes three complementary design skills. This guide explains when
 | **How it works** | Injects 7 domain-specific reference files (typography, color, spatial, motion, interaction, responsive, UX writing) + 20 slash commands | 20 design philosophies in 5 schools; every new design starts with three direction drafts to choose from — a hard gate with no exemptions, so naming a style or a brand does not skip it | Auto-detects framework from package.json, dispatches a UI Developer agent, then validates output via screenshot comparison against the design reference |
 | **Anti-slop** | Bans generic AI patterns via design vocabulary precision | Explicit rules banning purple gradients, emoji-as-icons, excessive border-radius, unmotivated serif fonts; uses OKLCH color space | Stagnation detection halts repeated identical changes; CRITICAL regression checks prevent visual regressions |
 | **Best for** | Improving the design quality of production code you're already building | Creating standalone design artifacts — prototypes, presentations, motion graphics | Implementing a specific design (Figma URL, screenshot, mockup) as production code with verified fidelity |
-| **Agent support** | 54 agents (Claude Code, Cursor, Codex, Gemini CLI, etc.) | Claude Code, Cursor, Codex | Claude Code (adaptive switching between UI Developer and UI Developer Codex) |
+| **Agent support** | Claude Code, Google Antigravity, Zed, OpenCode | Claude Code, Google Antigravity, Zed, OpenCode | Claude Code (adaptive switching between UI Developer and UI Developer Codex) |
 | **Requires design reference** | No | No | Yes (Figma URL, screenshot, or mockup) |
 
 ## Invocation

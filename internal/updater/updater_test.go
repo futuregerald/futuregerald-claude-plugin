@@ -1,0 +1,235 @@
+package updater
+
+import (
+	"archive/tar"
+	"archive/zip"
+	"bytes"
+	"compress/gzip"
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/futuregerald/futuregerald-claude-plugin/internal/platform"
+	"github.com/futuregerald/futuregerald-claude-plugin/internal/state"
+)
+
+type fakeRunner struct {
+	handlers map[string][]byte
+}
+
+func (f fakeRunner) Run(_ context.Context, name string, args ...string) ([]byte, error) {
+	key := name + " " + strings.Join(args, " ")
+	if out, ok := f.handlers[key]; ok {
+		return out, nil
+	}
+	return nil, fmt.Errorf("unexpected command: %s", key)
+}
+
+func buildRepoTarball(t *testing.T, extraEntries []tar.Header, extraBodies [][]byte) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	tw := tar.NewWriter(gz)
+
+	addFile := func(name string, body string) {
+		hdr := &tar.Header{
+			Name:     name,
+			Typeflag: tar.TypeReg,
+			Mode:     0644,
+			Size:     int64(len(body)),
+		}
+		if err := tw.WriteHeader(hdr); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := tw.Write([]byte(body)); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	paxHdr := &tar.Header{
+		Name:     "pax_global_header",
+		Typeflag: tar.TypeXGlobalHeader,
+	}
+	_ = tw.WriteHeader(paxHdr)
+
+	prefix := "futuregerald-futuregerald-claude-plugin-abc1234/"
+	tracksYAML := `version: "4.0.0"
+tracks:
+  - id: basics
+    name: "Just the Basics"
+    install_agents: false
+    install_hooks: false
+    lightweight_config: true
+    skills:
+      - plugin-updater
+skills:
+  - name: plugin-updater
+    category: workflow
+    slash_command: "/plugin-update"
+    short: "Update plugin"
+    long: "Long description"
+    starter_prompt: "/plugin-update"
+`
+	addFile(prefix+"internal/catalog/tracks.yaml", tracksYAML)
+	addFile(prefix+"internal/catalog/shared/skills/plugin-updater/SKILL.md", "---\nname: plugin-updater\ndescription: Updated skill body\n---\n# Updated Plugin Skill\n")
+	addFile(prefix+"internal/catalog/claude/templates/CLAUDE-BASE.md", "# Claude Base\n")
+	addFile(prefix+"internal/catalog/claude/CLAUDE-LIGHT.md", "# Claude Light\n")
+	addFile(prefix+"internal/catalog/claude/commands/plugin-update.md", "# /plugin-update\n")
+
+	for idx, hdr := range extraEntries {
+		h := hdr
+		if err := tw.WriteHeader(&h); err != nil {
+			t.Fatal(err)
+		}
+		if idx < len(extraBodies) && len(extraBodies[idx]) > 0 {
+			if _, err := tw.Write(extraBodies[idx]); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+
+	_ = tw.Close()
+	_ = gz.Close()
+	return buf.Bytes()
+}
+
+func TestCheckAndApplyWithTarballSecurity(t *testing.T) {
+	tarball := buildRepoTarball(t, nil, nil)
+	runner := fakeRunner{
+		handlers: map[string][]byte{
+			"gh api repos/futuregerald/futuregerald-claude-plugin/commits/main":             []byte(`{"sha":"newsha999","commit":{"message":"feat: update plugin-updater\n\ndetails","committer":{"date":"2026-11-14T00:00:00Z"}}}`),
+			"gh api repos/futuregerald/futuregerald-claude-plugin/compare/oldsha111...main": []byte(`{"commits":[{"sha":"newsha999","commit":{"message":"feat: update plugin-updater"}}],"files":[{"filename":"internal/catalog/shared/skills/plugin-updater/SKILL.md"}]}`),
+			"gh api repos/futuregerald/futuregerald-claude-plugin/releases/latest":          []byte(`{"tag_name":"v4.1.0"}`),
+			"gh api repos/futuregerald/futuregerald-claude-plugin/tarball/main":             tarball,
+		},
+	}
+
+	tmp := t.TempDir()
+	env := platform.Env{GOOS: "darwin", GOARCH: "arm64", HomeDir: tmp}
+	projDir := filepath.Join(tmp, "proj")
+	if err := os.MkdirAll(projDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	receipt := state.Receipt{
+		Harness:   "claude",
+		Scope:     "project",
+		RootDir:   projDir,
+		Track:     "basics",
+		CommitSHA: "oldsha111",
+	}
+
+	rep, err := Check(context.Background(), runner, receipt, "4.0.0")
+	if err != nil {
+		t.Fatalf("Check error: %v", err)
+	}
+	if !rep.UpdateAvailable || !rep.BinaryUpdate || rep.LatestSHA != "newsha999" {
+		t.Errorf("unexpected CheckReport: %+v", rep)
+	}
+	if len(rep.ChangedSkills) != 1 || rep.ChangedSkills[0] != "plugin-updater" {
+		t.Errorf("expected changed_skills=[plugin-updater], got %v", rep.ChangedSkills)
+	}
+
+	res, sha, err := Apply(context.Background(), runner, env, receipt, ApplyOptions{
+		Backup:         true,
+		Force:          true,
+		CurrentVersion: "4.0.0",
+	})
+	if err != nil {
+		t.Fatalf("Apply error: %v", err)
+	}
+	if sha != "newsha999" || res.Receipt.CommitSHA != "newsha999" {
+		t.Errorf("expected CommitSHA updated to newsha999, got %q", res.Receipt.CommitSHA)
+	}
+	skillBytes, err := os.ReadFile(filepath.Join(projDir, ".claude", "skills", "plugin-updater", "SKILL.md"))
+	if err != nil {
+		t.Fatalf("expected updated skill written: %v", err)
+	}
+	if !strings.Contains(string(skillBytes), "Updated Plugin Skill") {
+		t.Errorf("unexpected skill content: %s", string(skillBytes))
+	}
+
+	symlinkTar := buildRepoTarball(t, []tar.Header{
+		{
+			Name:     "futuregerald-futuregerald-claude-plugin-abc1234/evil-link",
+			Typeflag: tar.TypeSymlink,
+			Linkname: "/etc/passwd",
+		},
+	}, nil)
+	if err := ExtractRepoTarball(bytes.NewReader(symlinkTar), t.TempDir()); err == nil {
+		t.Errorf("expected symlink in tarball to be rejected")
+	}
+
+	traversalTar := buildRepoTarball(t, []tar.Header{
+		{
+			Name:     "futuregerald-futuregerald-claude-plugin-abc1234/../../escape.txt",
+			Typeflag: tar.TypeReg,
+			Size:     4,
+		},
+	}, [][]byte{[]byte("boom")})
+	if err := ExtractRepoTarball(bytes.NewReader(traversalTar), t.TempDir()); err == nil {
+		t.Errorf("expected .. traversal in tarball to be rejected")
+	}
+}
+
+func TestSelfUpgradeBinary_WindowsRenameAndChecksum(t *testing.T) {
+	var zipBuf bytes.Buffer
+	zw := zip.NewWriter(&zipBuf)
+	fw, err := zw.Create("skill-installer.exe")
+	if err != nil {
+		t.Fatal(err)
+	}
+	newBinContent := []byte("NEW_WINDOWS_BINARY_V4_1_0")
+	if _, err := fw.Write(newBinContent); err != nil {
+		t.Fatal(err)
+	}
+	_ = zw.Close()
+	zipBytes := zipBuf.Bytes()
+
+	sum := sha256.Sum256(zipBytes)
+	hashHex := hex.EncodeToString(sum[:])
+	archiveName := "skill-installer_4.1.0_windows_amd64.zip"
+	checksumsTxt := fmt.Sprintf("%s  %s\n", hashHex, archiveName)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/checksums.txt":
+			_, _ = w.Write([]byte(checksumsTxt))
+		case "/" + archiveName:
+			_, _ = w.Write(zipBytes)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	tmp := t.TempDir()
+	exePath := filepath.Join(tmp, "skill-installer.exe")
+	if err := os.WriteFile(exePath, []byte("OLD_EXE"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	winEnv := platform.Env{GOOS: "windows", GOARCH: "amd64", HomeDir: tmp}
+	ver, err := SelfUpgradeBinary(context.Background(), winEnv, exePath, "v4.1.0", srv.Client(), srv.URL)
+	if err != nil {
+		t.Fatalf("SelfUpgradeBinary error: %v", err)
+	}
+	if ver != "4.1.0" {
+		t.Errorf("ver = %q, want 4.1.0", ver)
+	}
+	gotNew, _ := os.ReadFile(exePath)
+	if string(gotNew) != string(newBinContent) {
+		t.Errorf("exePath was not updated: %q", string(gotNew))
+	}
+	gotOld, err := os.ReadFile(exePath + ".old")
+	if err != nil || string(gotOld) != "OLD_EXE" {
+		t.Errorf("expected Windows .exe.old backup preserved during active run: %v, %q", err, string(gotOld))
+	}
+}
