@@ -205,8 +205,11 @@ skill-installer uninstall --target=claude --global --yes
 
 ### Updating Installed Skills (`skill-installer update` or `/plugin-update`)
 
+Skill, `/slash` command, subagent, and workflow rule updates ship continuously on `main`—you **do not** need to wait for a new GitHub Release or re-download the binary to get new or updated skills:
+
 - **From your AI chat session:** Type `/plugin-update` in Claude Code, Antigravity, Zed, or OpenCode.
-- **From your terminal:** Run `skill-installer update` (or choose **Check for skill & workflow updates** on the home screen). It fetches the latest `main` archive from `futuregerald/futuregerald-claude-plugin`, snapshots your current install, and refreshes your installed track.
+- **From your terminal:** Run `skill-installer update` (or choose **Check for skill & workflow updates** on the home screen). It compares your installed commit SHA against the latest commit on `main`, lists the exact commits and skills that changed, saves a rollback snapshot, and refreshes your installed track directly from `main`.
+- **Upgrading the CLI binary itself (major releases only):** GitHub Releases are only cut when the `skill-installer` binary itself has major changes. When a new binary release is available, `skill-installer update` will let you know and you can run `skill-installer update --self` to upgrade the executable in place.
 
 ### Restoring a Backup (`skill-installer restore`)
 
