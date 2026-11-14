@@ -950,10 +950,6 @@ func (m Model) View() string {
 	return PageStyle.Render(body)
 }
 
-func (m Model) botBoxStyle() lipgloss.Style {
-	return BotBoxStyle.Width(CardWidth(m.width))
-}
-
 func (m Model) cardStyle(selected bool) lipgloss.Style {
 	if selected {
 		return SelectedCardStyle.Width(CardWidth(m.width))
@@ -961,19 +957,115 @@ func (m Model) cardStyle(selected bool) lipgloss.Style {
 	return UnselectedCardStyle.Width(CardWidth(m.width))
 }
 
-func (m Model) renderBotHeader(stepLabel, speech string) string {
-	line1 := fmt.Sprintf("%s  %s", BotAvatar(m.botFrame), TitleStyle.Render("SkillBot · skill-installer v4.0"))
-	if stepLabel != "" {
-		line1 += "   " + StepPillStyle.Render(stepLabel)
+func (m Model) backupCardStyle(selected bool, isRecommended bool) lipgloss.Style {
+	if !selected {
+		return UnselectedCardStyle.Width(CardWidth(m.width))
 	}
-	content := line1 + "\n\n" + SubtitleStyle.Render(speech)
-	return m.botBoxStyle().Render(content) + "\n\n"
+	if isRecommended {
+		return SelectedBackupCardStyle.Width(CardWidth(m.width))
+	}
+	return SelectedWarnCardStyle.Width(CardWidth(m.width))
+}
+
+func (m Model) activeNavMode() string {
+	switch m.screen {
+	case screenGuide:
+		return "guide"
+	case screenUpdate:
+		return "update"
+	case screenRestore:
+		return "restore"
+	case screenUninstall:
+		return "uninstall"
+	default:
+		return "install"
+	}
+}
+
+func (m Model) renderTopNav() string {
+	left := StepEyebrowStyle.Render("skill-installer v4.0 · SkillBot")
+	active := m.activeNavMode()
+	modes := []string{"install", "guide", "update", "restore", "uninstall"}
+	var rendered []string
+	for _, mode := range modes {
+		if mode == active {
+			rendered = append(rendered, StepPillStyle.Render(mode))
+		} else {
+			rendered = append(rendered, StepEyebrowStyle.Render(mode))
+		}
+	}
+	right := strings.Join(rendered, "   ")
+	totalW := CardWidth(m.width) + 2
+	gap := totalW - lipgloss.Width(left) - lipgloss.Width(right)
+	if gap < 3 {
+		gap = 3
+	}
+	div := DividerStyle.Render(strings.Repeat("─", totalW))
+	return left + strings.Repeat(" ", gap) + right + "\n" + div + "\n\n"
+}
+
+func (m Model) renderSubtext(text string) string {
+	innerW := CardWidth(m.width) - 6
+	return lipgloss.NewStyle().PaddingLeft(2).Width(innerW).Render(SubtitleStyle.Render(text))
+}
+
+func (m Model) renderBotHeader(stepLabel, speech string) string {
+	var out strings.Builder
+	out.WriteString(m.renderTopNav())
+
+	lines := strings.Split(strings.TrimSpace(speech), "\n")
+	headline := ""
+	var rest []string
+	if len(lines) > 0 {
+		headline = lines[0]
+		if len(lines) > 1 {
+			rest = lines[1:]
+		}
+	}
+
+	rightW := CardWidth(m.width) - 8
+	var right strings.Builder
+	if stepLabel != "" {
+		right.WriteString(StepEyebrowStyle.Render(stepLabel) + "\n")
+	}
+	if headline != "" {
+		right.WriteString(TitleStyle.Copy().Width(rightW).Render(headline))
+	}
+	if len(rest) > 0 {
+		right.WriteString("\n" + SubtitleStyle.Copy().Width(rightW).Render(strings.Join(rest, "\n")))
+	}
+
+	joined := lipgloss.JoinHorizontal(lipgloss.Top, BotAvatar(m.botFrame), "   ", right.String())
+	out.WriteString(joined + "\n\n")
+	return out.String()
+}
+
+func (m Model) renderWizardFooter(backLabel, actionLabel, keyHint string) string {
+	totalW := CardWidth(m.width) + 2
+	div := DividerStyle.Render(strings.Repeat("─", totalW)) + "\n"
+
+	left := StepEyebrowStyle.Render(backLabel)
+	appName := HarnessDisplayName(m.selectedHarness())
+	tr := m.selectedTrack()
+	mid := StepEyebrowStyle.Render(fmt.Sprintf("%s · %s", appName, tr.Name))
+	right := PrimaryButtonStyle.Render(actionLabel)
+
+	used := lipgloss.Width(left) + lipgloss.Width(mid) + lipgloss.Width(right)
+	rem := totalW - used
+	gap1 := 3
+	gap2 := 3
+	if rem > 6 {
+		gap1 = rem / 2
+		gap2 = rem - gap1
+	}
+	row := left + strings.Repeat(" ", gap1) + mid + strings.Repeat(" ", gap2) + right + "\n"
+	return "\n" + div + row + FooterStyle.Render(keyHint)
 }
 
 func (m Model) viewHome() string {
 	var b strings.Builder
 	b.WriteString(m.renderBotHeader("WELCOME",
-		"Set up curated AI workflows, /slash commands, and review agents in three quick steps.\nExisting config files are backed up or merged safely before anything changes."))
+		"What would you like to do today?\nSet up curated AI workflows in 3 quick steps — existing config files are backed up or merged safely."))
 
 	items := []struct {
 		title string
@@ -987,41 +1079,43 @@ func (m Model) viewHome() string {
 	}
 
 	for idx, it := range items {
-		cursor := "  "
 		selected := idx == m.homeIdx
 		if selected {
-			cursor = "> "
+			card := fmt.Sprintf("%s%s\n%s", StepPillStyle.Render("› "), TitleStyle.Render(it.title), m.renderSubtext(it.sub))
+			b.WriteString(m.cardStyle(true).Render(card) + "\n")
+		} else {
+			card := fmt.Sprintf("  %s", TitleStyle.Render(it.title))
+			b.WriteString(m.cardStyle(false).Render(card) + "\n")
 		}
-		card := fmt.Sprintf("%s%s\n  %s", cursor, TitleStyle.Render(it.title), SubtitleStyle.Render(it.sub))
-		b.WriteString(m.cardStyle(selected).Render(card) + "\n")
 	}
 
-	b.WriteString(FooterStyle.Render("Up/Down: move  ·  Enter: select  ·  ?: how this works  ·  q: quit"))
+	b.WriteString(m.renderWizardFooter("q: Quit", "Continue →", "Up/Down: move  ·  Enter: select  ·  ?: how this works  ·  q: quit"))
 	return b.String()
 }
 
 func (m Model) viewHarness() string {
 	var b strings.Builder
 	b.WriteString(m.renderBotHeader("STEP 1 OF 3 · TARGET APP & SCOPE",
-		"Which AI coding or product assistant are we configuring today?"))
+		"Which AI app are you setting up?"))
 
 	for idx, h := range harnessOrder {
-		cursor := "  "
 		selected := idx == m.harnessIdx
-		if selected {
-			cursor = "> "
-		}
-		card := fmt.Sprintf("%s%s\n  %s",
-			cursor,
-			TitleStyle.Render(HarnessDisplayName(h)),
-			SubtitleStyle.Render(harnessTaglines[h]),
-		)
 		if selected {
 			paths, _ := m.cfg.Env.ResolvePaths(h, m.scope, m.cfg.ProjectDir)
 			pathHint := fmt.Sprintf("Skills: %s   Config: %s", paths.SkillsDir, paths.ConfigFile)
-			card += "\n  " + StepPillStyle.Render(pathHint) + "\n  " + SubtitleStyle.Render("Safe: backs up or merges existing config before writing")
+			innerW := CardWidth(m.width) - 6
+			pathLine := lipgloss.NewStyle().PaddingLeft(2).Width(innerW).Render(StepPillStyle.Render(pathHint))
+			card := fmt.Sprintf("%s%s\n%s\n%s",
+				StepPillStyle.Render("› "),
+				TitleStyle.Render(HarnessDisplayName(h)),
+				m.renderSubtext(harnessTaglines[h]),
+				pathLine,
+			)
+			b.WriteString(m.cardStyle(true).Render(card) + "\n")
+		} else {
+			card := fmt.Sprintf("  %s", TitleStyle.Render(HarnessDisplayName(h)))
+			b.WriteString(m.cardStyle(false).Render(card) + "\n")
 		}
-		b.WriteString(m.cardStyle(selected).Render(card) + "\n")
 	}
 
 	scopeGlobal := "[ ] Global (all projects)"
@@ -1031,7 +1125,7 @@ func (m Model) viewHarness() string {
 	} else {
 		scopeProj = SlashStyle.Render(fmt.Sprintf("[x] Specific project folder (%s)", m.cfg.ProjectDir))
 	}
-	b.WriteString("\n  Scope (Tab: switch · e: set project folder):   " + scopeGlobal + "     " + scopeProj + "\n")
+	b.WriteString("\n" + StepEyebrowStyle.Render("Scope (Tab / e):") + "  " + scopeGlobal + "   " + scopeProj + "\n")
 
 	if m.editingProjectDir {
 		editBox := fmt.Sprintf("Target project folder: %s█\n  Press Enter to confirm folder (supports ~/...), Ctrl+U to clear, or Esc to cancel.",
@@ -1044,49 +1138,62 @@ func (m Model) viewHarness() string {
 		return b.String()
 	}
 
-	b.WriteString(FooterStyle.Render("Up/Down: choose app  ·  Tab: switch Global/Project  ·  e: set project folder  ·  Enter: next  ·  ?: guide  ·  Esc: back"))
+	b.WriteString(m.renderWizardFooter("← Back", "Continue →", "Up/Down: choose app  ·  Tab: switch Global/Project  ·  e: set project folder  ·  Enter: next"))
 	return b.String()
 }
 
 func (m Model) viewTrack() string {
 	var b strings.Builder
-	appName := HarnessDisplayName(m.selectedHarness())
 	b.WriteString(m.renderBotHeader("STEP 2 OF 3 · WORKFLOW TRACK",
-		fmt.Sprintf("You don't need every skill installed at once. Pick the track that matches how you use %s.\nPress Space or 'p' on any track to preview its skills, slash commands, and starter prompts.", appName)))
+		"How much structure do you want?"))
 
+	innerW := CardWidth(m.width) - 6
 	if m.cfg.Catalog != nil {
 		for idx, tr := range m.cfg.Catalog.Tracks {
-			cursor := "  "
 			selected := idx == m.trackIdx
-			if selected {
-				cursor = "> "
-			}
 			skills, _ := m.cfg.Catalog.TrackSkills(tr.ID, m.selectedHarness())
 			countLabel := fmt.Sprintf("%d curated skills", len(skills))
 			if tr.ID == "custom" {
-				countLabel = fmt.Sprintf("%d selected skills (press Space to customize)", m.selectedCustomCount())
+				countLabel = fmt.Sprintf("%d selected", m.selectedCustomCount())
 			}
-			header := fmt.Sprintf("%s%s   %s   %s",
-				cursor,
-				TitleStyle.Render(tr.Name),
-				BadgeStyle.Render("["+tr.Badge+"]"),
-				StepPillStyle.Render(countLabel),
-			)
-			card := fmt.Sprintf("%s\n  %s",
-				header,
-				SlashStyle.Render(tr.Tagline),
-			)
+
+			bestCue := ""
 			if tr.BestWhen != "" {
-				card += "\n  " + SubtitleStyle.Render("Best when: "+tr.BestWhen)
+				bestCue = TruncatePlain("Best when: "+tr.BestWhen, 42)
 			}
-			if selected && tr.Description != "" {
-				card += "\n  " + SubtitleStyle.Render(tr.Description)
+
+			if selected {
+				leftTitle := StepPillStyle.Render("› ") + TitleStyle.Render(tr.Name)
+				rightTag := StepEyebrowStyle.Render(bestCue)
+				gap := innerW - lipgloss.Width(leftTitle) - lipgloss.Width(rightTag)
+				if gap < 2 {
+					gap = 2
+				}
+				line1 := leftTitle + strings.Repeat(" ", gap) + rightTag
+				desc := tr.Description
+				if desc == "" {
+					desc = tr.Tagline
+				}
+				fullDesc := fmt.Sprintf("(%s) %s", countLabel, desc)
+				card := fmt.Sprintf("%s\n%s", line1, m.renderSubtext(fullDesc))
+				b.WriteString(m.cardStyle(true).Render(card) + "\n")
+			} else {
+				leftTitle := "  " + TitleStyle.Render(tr.Name)
+				rightTag := StepEyebrowStyle.Render(bestCue)
+				gap := innerW - lipgloss.Width(leftTitle) - lipgloss.Width(rightTag)
+				if gap < 2 {
+					gap = 2
+				}
+				line1 := leftTitle + strings.Repeat(" ", gap) + rightTag
+				b.WriteString(m.cardStyle(false).Render(line1) + "\n")
 			}
-			b.WriteString(m.cardStyle(selected).Render(card) + "\n")
 		}
 	}
 
-	b.WriteString(FooterStyle.Render("Up/Down: choose track  ·  Space/p: peek skills & descriptions  ·  Enter: continue  ·  Esc: back"))
+	curTrack := m.selectedTrack()
+	b.WriteString("\n" + PeekLinkStyle.Render(fmt.Sprintf("Peek inside %q (press p or Space for short & long descriptions)", curTrack.Name)) + "\n")
+
+	b.WriteString(m.renderWizardFooter("← Back", "Continue →", "Up/Down: choose  ·  Space/p: peek skills & descriptions  ·  Enter: continue  ·  Esc: back"))
 	return b.String()
 }
 
@@ -1096,16 +1203,16 @@ func (m Model) viewSkillTable() string {
 	skills := m.visibleSkills()
 
 	stepLabel := "STEP 2 OF 3 · SKILL PREVIEW"
-	speech := fmt.Sprintf("Here is what's inside %s for %s. Press 'd' or Enter on any skill to read its full description and starter prompt.",
+	speech := fmt.Sprintf("Included skills in %s (%s)\nPress 'd' or Enter on any row for its full explanation and starter prompt.",
 		tr.Name, HarnessDisplayName(m.selectedHarness()))
 	if tr.ID == "custom" {
 		stepLabel = "STEP 2 OF 3 · CUSTOM SKILL PICKER"
-		speech = "Toggle any skill with Space, press 'd' to expand its long description, and press Enter when your mix is ready."
+		speech = "Pick individual skills for your custom setup\nPress Space to toggle [x], 'd' to expand long description, and Enter when ready."
 	}
 	b.WriteString(m.renderBotHeader(stepLabel, speech))
 
 	start := 0
-	pageSize := 10
+	pageSize := 8
 	if m.skillCursor >= pageSize {
 		start = m.skillCursor - pageSize + 1
 	}
@@ -1114,20 +1221,21 @@ func (m Model) viewSkillTable() string {
 		end = len(skills)
 	}
 
-	b.WriteString(fmt.Sprintf("  %s %s %s %s %s\n",
-		PadRight("", 4),
-		PadRight("SKILL", 31),
-		PadRight("CATEGORY", 16),
-		PadRight("SLASH COMMAND", 31),
-		"SUMMARY",
-	))
-	b.WriteString("  " + strings.Repeat("-", 104) + "\n")
+	totalW := CardWidth(m.width) + 2
+	b.WriteString(StepEyebrowStyle.Render(fmt.Sprintf("%s %s %s %s %s",
+		PadRight("", 6),
+		PadRight("SKILL", 22),
+		PadRight("COMMAND", 19),
+		PadRight("GROUP", 13),
+		"WHAT IT DOES",
+	)) + "\n")
+	b.WriteString(DividerStyle.Render(strings.Repeat("─", totalW)) + "\n")
 
 	for idx := start; idx < end; idx++ {
 		sm := skills[idx]
 		cursor := "  "
 		if idx == m.skillCursor {
-			cursor = "> "
+			cursor = StepPillStyle.Render("› ")
 		}
 		check := "   "
 		if tr.ID == "custom" {
@@ -1144,24 +1252,25 @@ func (m Model) viewSkillTable() string {
 		row := fmt.Sprintf("%s%s %s %s %s %s\n",
 			cursor,
 			PadRight(check, 4),
-			PadRight(TitleStyle.Render(sm.Name), 31),
-			PadRight(CategoryBadge(sm.Category), 16),
-			PadRight(SlashStyle.Render(slash), 31),
-			sm.Short,
+			PadRight(TitleStyle.Render(TruncatePlain(sm.Name, 21)), 22),
+			PadRight(StepPillStyle.Render(TruncatePlain(slash, 18)), 19),
+			PadRight(CategoryBadge(sm.Category), 13),
+			SubtitleStyle.Render(TruncatePlain(sm.Short, 28)),
 		)
 		b.WriteString(row)
 
 		if m.skillExpanded[sm.Name] {
 			detail := fmt.Sprintf("Detail: %s\nTry typing: %q", sm.Long, sm.StarterPrompt)
-			b.WriteString("      " + PromptBoxStyle.Render(detail) + "\n\n")
+			drawer := PromptBoxStyle.Copy().MarginLeft(4).Width(CardWidth(m.width) - 6).Render(detail)
+			b.WriteString(drawer + "\n\n")
 		}
 	}
 
-	b.WriteString(fmt.Sprintf("\n  Showing %d-%d of %d skills\n", start+1, end, len(skills)))
+	b.WriteString(fmt.Sprintf("\n%s\n", StepEyebrowStyle.Render(fmt.Sprintf("Showing %d-%d of %d skills", start+1, end, len(skills)))))
 	if tr.ID == "custom" {
-		b.WriteString(FooterStyle.Render("Up/Down: move  ·  Space: toggle [x]  ·  d: expand long description  ·  Enter: confirm selection  ·  Esc: back"))
+		b.WriteString(m.renderWizardFooter("← Close table (Esc)", "Confirm Selection →", "Up/Down: move  ·  Space: toggle [x]  ·  d: expand description  ·  Enter: confirm  ·  Esc: back"))
 	} else {
-		b.WriteString(FooterStyle.Render("Up/Down: move  ·  Enter/d: expand long description  ·  c: continue to install  ·  Esc: back to tracks"))
+		b.WriteString(m.renderWizardFooter("← Close table (Esc)", "Continue →", "Up/Down: move  ·  Enter/d: expand long description  ·  c: continue to Step 3  ·  Esc: back"))
 	}
 	return b.String()
 }
@@ -1175,16 +1284,17 @@ func (m Model) viewBackup() string {
 	}
 	hasExistingCfg := m.existingConfigPresent()
 
-	speech := "Before writing files, should I save a timestamped safety snapshot so you can roll back anytime with `skill-installer restore`?"
+	speech := "Save a safety backup before changing files?"
 	if hasExistingCfg {
-		speech = fmt.Sprintf("I detected an existing %s at %s.\nChoose whether to add/update the workflow section inside your existing %s, replace it with the clean template, or keep it untouched.",
+		speech = fmt.Sprintf("I detected an existing %s at %s.\nHow should we update your %s and safety backup?",
 			cfgName, paths.ConfigFile, cfgName)
 	}
 	b.WriteString(m.renderBotHeader("STEP 3 OF 3 · CONFIG & SAFETY BACKUP", speech))
 
 	type backupOpt struct {
-		title string
-		sub   string
+		title       string
+		sub         string
+		recommended bool
 	}
 	var opts []backupOpt
 	if hasExistingCfg {
@@ -1192,44 +1302,57 @@ func (m Model) viewBackup() string {
 			{
 				fmt.Sprintf("Add / update workflow section in existing %s + save backup (Recommended)", cfgName),
 				fmt.Sprintf("Keeps your current rules in %s and appends/updates a managed workflow section after saving a backup in %s", cfgName, m.cfg.Env.BackupsDir()),
+				true,
 			},
 			{
 				fmt.Sprintf("Replace %s with clean track template + save backup", cfgName),
 				fmt.Sprintf("Snapshots your current %s into %s, then writes the clean track template", cfgName, m.cfg.Env.BackupsDir()),
+				true,
 			},
 			{
 				fmt.Sprintf("Keep my existing %s untouched (install skills & commands only)", cfgName),
 				fmt.Sprintf("Installs skills, subagents, and commands without modifying your current %s", cfgName),
+				true,
 			},
 			{
 				fmt.Sprintf("Replace %s without saving a backup", cfgName),
 				fmt.Sprintf("Replaces %s and existing plugin files directly without recording a snapshot", cfgName),
+				false,
 			},
 		}
 	} else {
 		opts = []backupOpt{
 			{
-				"Yes, save a safety snapshot (Recommended)",
-				fmt.Sprintf("Records a rollback receipt in %s so `skill-installer restore` can undo this run cleanly", m.cfg.Env.BackupsDir()),
+				"Yes, save a backup first (Recommended)",
+				fmt.Sprintf("Lets you restore previous files anytime on Windows, Linux, or macOS (%s)", m.cfg.Env.BackupsDir()),
+				true,
 			},
 			{
-				"No, install without saving a snapshot",
-				"Writes your chosen track directly without recording a backup snapshot",
+				"No, skip backup (--no-backup)",
+				"Writes your chosen track directly without saving a snapshot",
+				false,
 			},
 		}
 	}
 
 	for idx, o := range opts {
-		cursor := "  "
 		selected := idx == m.backupIdx
 		if selected {
-			cursor = "> "
+			titleRendered := TitleStyle.Render(o.title)
+			cursor := StepPillStyle.Render("› ")
+			if o.recommended {
+				titleRendered = SlashStyle.Render(o.title)
+				cursor = SlashStyle.Render("› ")
+			}
+			card := fmt.Sprintf("%s%s\n%s", cursor, titleRendered, m.renderSubtext(o.sub))
+			b.WriteString(m.backupCardStyle(true, o.recommended).Render(card) + "\n")
+		} else {
+			card := fmt.Sprintf("  %s", TitleStyle.Render(o.title))
+			b.WriteString(m.backupCardStyle(false, o.recommended).Render(card) + "\n")
 		}
-		card := fmt.Sprintf("%s%s\n  %s", cursor, TitleStyle.Render(o.title), SubtitleStyle.Render(o.sub))
-		b.WriteString(m.cardStyle(selected).Render(card) + "\n")
 	}
 
-	b.WriteString(FooterStyle.Render("Up/Down: choose  ·  Enter: install now  ·  Esc: back"))
+	b.WriteString(m.renderWizardFooter("← Back", "Install Now", "Up/Down: choose  ·  Enter: install now  ·  Esc: back"))
 	return b.String()
 }
 
@@ -1246,7 +1369,7 @@ func (m Model) viewDone() string {
 	tr := m.selectedTrack()
 
 	b.WriteString(m.renderBotHeader("SETUP COMPLETE",
-		fmt.Sprintf("%s is ready with the %s track.\nCopy one of the starter prompts below into your next session, or open the interactive tour.", appName, tr.Name)))
+		fmt.Sprintf("%s is ready with %s.\nCopy one of the starter prompts below into your next session, or open the interactive tour.", appName, tr.Name)))
 
 	if res != nil {
 		cfgSummary := res.Paths.ConfigFile
@@ -1266,7 +1389,7 @@ func (m Model) viewDone() string {
 				if slash == "" {
 					slash = sm.Name
 				}
-				summary += fmt.Sprintf("\n  * %s -- %q", SlashStyle.Render(slash), sm.StarterPrompt)
+				summary += fmt.Sprintf("\n  • %s — %q", StepPillStyle.Render(slash), sm.StarterPrompt)
 			}
 		}
 		b.WriteString(m.cardStyle(false).Render(summary) + "\n\n")
@@ -1282,15 +1405,15 @@ func (m Model) viewDone() string {
 	}
 
 	for idx, ch := range choices {
-		cursor := "  "
 		selected := idx == m.doneIdx
 		if selected {
-			cursor = "> "
+			b.WriteString(m.cardStyle(true).Render(fmt.Sprintf("%s%s\n%s", StepPillStyle.Render("› "), TitleStyle.Render(ch.title), m.renderSubtext(ch.sub))) + "\n")
+		} else {
+			b.WriteString(m.cardStyle(false).Render(fmt.Sprintf("  %s", TitleStyle.Render(ch.title))) + "\n")
 		}
-		b.WriteString(m.cardStyle(selected).Render(fmt.Sprintf("%s%s\n  %s", cursor, TitleStyle.Render(ch.title), SubtitleStyle.Render(ch.sub))) + "\n")
 	}
 
-	b.WriteString(FooterStyle.Render("Up/Down: choose  ·  Enter: select  ·  q: quit"))
+	b.WriteString(m.renderWizardFooter("q: Quit", "Open Selected →", "Up/Down: choose  ·  Enter: select  ·  q: quit"))
 	return b.String()
 }
 
@@ -1301,7 +1424,7 @@ func (m Model) viewGuide() string {
 	tr := m.selectedTrack()
 
 	b.WriteString(m.renderBotHeader("INTERACTIVE GUIDE & COMMAND EXPLORER",
-		fmt.Sprintf("Use 1-3 or Tab to try starter prompts, see how %s loads your setup, or browse every skill.", appName)))
+		fmt.Sprintf("Learn how %s loads your workflow, or browse every skill & starter prompt.", appName)))
 
 	tabs := []string{
 		"1. What You Can Type Now",
@@ -1311,9 +1434,9 @@ func (m Model) viewGuide() string {
 	var renderedTabs []string
 	for idx, t := range tabs {
 		if idx == m.guideTab {
-			renderedTabs = append(renderedTabs, SelectedCardStyle.Render(TitleStyle.Render(t)))
+			renderedTabs = append(renderedTabs, SelectedCardStyle.Copy().Padding(0, 1).Render(StepPillStyle.Render(t)))
 		} else {
-			renderedTabs = append(renderedTabs, UnselectedCardStyle.Render(SubtitleStyle.Render(t)))
+			renderedTabs = append(renderedTabs, UnselectedCardStyle.Copy().Padding(0, 1).Render(StepEyebrowStyle.Render(t)))
 		}
 	}
 	b.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, renderedTabs...) + "\n\n")
@@ -1322,12 +1445,12 @@ func (m Model) viewGuide() string {
 	case 0:
 		loadLines := HarnessLoadLines(h)
 		var howBuilder strings.Builder
-		howBuilder.WriteString(BadgeStyle.Render(fmt.Sprintf("Slash Commands vs. Skills in %s", appName)) + "\n")
-		howBuilder.WriteString("Type a /slash command to run a workflow explicitly, or describe your task in plain English so matching skills load automatically.\n")
+		howBuilder.WriteString(TitleStyle.Render(fmt.Sprintf("Slash Commands vs. Skills in %s", appName)) + "\n")
+		howBuilder.WriteString(SubtitleStyle.Render("Type a /slash command to run a workflow explicitly, or describe your task in plain English so matching skills load automatically.") + "\n")
 		for _, l := range loadLines {
-			howBuilder.WriteString("  * " + SubtitleStyle.Render(l) + "\n")
+			howBuilder.WriteString("  • " + SubtitleStyle.Render(l) + "\n")
 		}
-		b.WriteString(m.cardStyle(false).Render(strings.TrimRight(howBuilder.String(), "\n")) + "\n")
+		b.WriteString(m.cardStyle(false).Render(strings.TrimRight(howBuilder.String(), "\n")) + "\n\n")
 
 		b.WriteString(TitleStyle.Render("Try typing one of these in your next session:") + "\n\n")
 		for idx, sm := range m.installedOrSelectedSkills() {
@@ -1338,9 +1461,9 @@ func (m Model) viewGuide() string {
 			if slash == "" {
 				slash = sm.Name
 			}
-			b.WriteString(fmt.Sprintf("  * %s -- %s\n    %s\n\n",
-				SlashStyle.Render(slash),
-				sm.Short,
+			b.WriteString(fmt.Sprintf("  • %s — %s\n    %s\n\n",
+				StepPillStyle.Render(slash),
+				TitleStyle.Render(sm.Short),
 				SubtitleStyle.Render(fmt.Sprintf("Prompt: %q", sm.StarterPrompt)),
 			))
 		}
@@ -1349,10 +1472,10 @@ func (m Model) viewGuide() string {
 		if m.cfg.Catalog != nil {
 			overview = strings.TrimSpace(m.cfg.Catalog.Explainers.RepoOverview)
 		}
-		b.WriteString(m.cardStyle(false).Render(TitleStyle.Render("Why Curated Tracks?")+"\n"+overview) + "\n")
+		b.WriteString(m.cardStyle(true).Render(TitleStyle.Render("Why Curated Tracks?")+"\n"+SubtitleStyle.Render(overview)) + "\n")
 		if m.cfg.Catalog != nil {
 			for _, c := range m.cfg.Catalog.Explainers.Concepts {
-				card := fmt.Sprintf("%s\n%s", BadgeStyle.Render(c.Title), c.Summary)
+				card := fmt.Sprintf("%s\n%s", StepPillStyle.Render(c.Title), SubtitleStyle.Render(c.Summary))
 				b.WriteString(m.cardStyle(false).Render(card) + "\n")
 			}
 		}
@@ -1363,15 +1486,15 @@ func (m Model) viewGuide() string {
 			totalForHarness = len(m.cfg.Catalog.SkillsForHarness(h))
 		}
 		if m.showAllInGuide {
-			b.WriteString(fmt.Sprintf("  %s\n\n",
-				StepPillStyle.Render(fmt.Sprintf("Showing: All %d skills for %s — press 'a' to filter to %s", totalForHarness, appName, tr.Name))))
+			b.WriteString(fmt.Sprintf("%s\n\n",
+				StepPillStyle.Render(fmt.Sprintf("Showing: All %d skills (%s) — press 'a' to filter to %s", totalForHarness, appName, tr.Name))))
 		} else {
-			b.WriteString(fmt.Sprintf("  %s\n\n",
-				StepPillStyle.Render(fmt.Sprintf("Showing: %s (%d skills) — press 'a' to browse all %d skills for %s", tr.Name, len(skills), totalForHarness, appName))))
+			b.WriteString(fmt.Sprintf("%s\n\n",
+				StepPillStyle.Render(fmt.Sprintf("Showing: %s (%d skills) — press 'a' for all %d skills (%s)", tr.Name, len(skills), totalForHarness, appName))))
 		}
 
 		start := 0
-		pageSize := 8
+		pageSize := 6
 		if m.skillCursor >= pageSize {
 			start = m.skillCursor - pageSize + 1
 		}
@@ -1383,7 +1506,7 @@ func (m Model) viewGuide() string {
 			sm := skills[idx]
 			cursor := "  "
 			if idx == m.skillCursor {
-				cursor = "> "
+				cursor = StepPillStyle.Render("› ")
 			}
 			slash := sm.SlashCommand
 			if slash == "" {
@@ -1391,10 +1514,10 @@ func (m Model) viewGuide() string {
 			}
 			b.WriteString(fmt.Sprintf("%s%s %s %s %s\n",
 				cursor,
-				PadRight(TitleStyle.Render(sm.Name), 31),
-				PadRight(CategoryBadge(sm.Category), 16),
-				PadRight(SlashStyle.Render(slash), 31),
-				sm.Short,
+				PadRight(TitleStyle.Render(TruncatePlain(sm.Name, 21)), 22),
+				PadRight(StepPillStyle.Render(TruncatePlain(slash, 18)), 19),
+				PadRight(CategoryBadge(sm.Category), 13),
+				SubtitleStyle.Render(TruncatePlain(sm.Short, 31)),
 			))
 		}
 		if m.skillCursor >= 0 && m.skillCursor < len(skills) {
@@ -1403,18 +1526,20 @@ func (m Model) viewGuide() string {
 			if slash == "" {
 				slash = "(loaded automatically by your AI)"
 			}
-			card := fmt.Sprintf("%s  %s   Slash: %s\n\n%s\n\nStarter prompt to try:\n  %s",
+			innerW := CardWidth(m.width) - 6
+			longWrapped := SubtitleStyle.Copy().Width(innerW).Render(sel.Long)
+			card := fmt.Sprintf("%s  %s   Command: %s\n\n%s\n\nStarter prompt to try:\n  %s",
 				TitleStyle.Render(sel.Name),
 				CategoryBadge(sel.Category),
-				SlashStyle.Render(slash),
-				sel.Long,
+				StepPillStyle.Render(slash),
+				longWrapped,
 				SlashStyle.Render(sel.StarterPrompt),
 			)
 			b.WriteString("\n" + m.cardStyle(true).Render(card) + "\n")
 		}
 	}
 
-	b.WriteString(FooterStyle.Render("Tab / 1-3: switch section  ·  Up/Down: browse skills  ·  a: toggle track/all skills  ·  Esc: back  ·  q: quit"))
+	b.WriteString(m.renderWizardFooter("← Esc: Back", "Tab / 1-3: Switch Tab", "Tab / 1-3: switch section  ·  Up/Down: browse skills  ·  a: toggle track/all  ·  q: quit"))
 	return b.String()
 }
 
@@ -1430,7 +1555,7 @@ func (m Model) viewUpdate() string {
 			cursor := "  "
 			selected := idx == m.updateIdx
 			if selected {
-				cursor = "> "
+				cursor = StepPillStyle.Render("› ")
 			}
 			line := fmt.Sprintf("%s%s (%s) — track: %s · %s",
 				cursor, TitleStyle.Render(HarnessDisplayName(r.Harness)), r.Scope, r.Track, r.RootDir)
@@ -1460,7 +1585,7 @@ func (m Model) viewUpdate() string {
 	if len(m.receipts) > 1 {
 		footer = "Up/Down: select target  ·  " + footer
 	}
-	b.WriteString(FooterStyle.Render(footer))
+	b.WriteString(m.renderWizardFooter("← Back to Setup", "Apply Update →", footer))
 	return b.String()
 }
 
@@ -1484,14 +1609,14 @@ func (m Model) viewRestore() string {
 			cursor := "  "
 			selected := idx == m.restoreIdx
 			if selected {
-				cursor = "> "
+				cursor = StepPillStyle.Render("› ")
 			}
 			line := fmt.Sprintf("%s%s   (%s · %s · track: %s · %d tracked entries)",
 				cursor, TitleStyle.Render(s.ID), HarnessDisplayName(s.Harness), s.Scope, s.Track, len(s.Entries))
 			b.WriteString(m.cardStyle(selected).Render(line) + "\n")
 		}
 	}
-	b.WriteString(FooterStyle.Render("Up/Down: select snapshot  ·  Enter: restore  ·  Esc: back  ·  q: quit"))
+	b.WriteString(m.renderWizardFooter("← Back to Setup", "Restore Snapshot →", "Up/Down: select snapshot  ·  Enter: restore  ·  Esc: back  ·  q: quit"))
 	return b.String()
 }
 
@@ -1516,13 +1641,13 @@ func (m Model) viewUninstall() string {
 			cursor := "  "
 			selected := idx == m.uninstallIdx
 			if selected {
-				cursor = "> "
+				cursor = StepPillStyle.Render("› ")
 			}
 			line := fmt.Sprintf("%s%s (%s) — track: %s · %d files at %s",
 				cursor, TitleStyle.Render(HarnessDisplayName(r.Harness)), r.Scope, r.Track, len(r.InstalledFiles), r.RootDir)
 			b.WriteString(m.cardStyle(selected).Render(line) + "\n")
 		}
 	}
-	b.WriteString(FooterStyle.Render("Up/Down: select install  ·  Enter: uninstall  ·  Esc: back  ·  q: quit"))
+	b.WriteString(m.renderWizardFooter("← Back to Setup", "Uninstall →", "Up/Down: select install  ·  Enter: uninstall  ·  Esc: back  ·  q: quit"))
 	return b.String()
 }

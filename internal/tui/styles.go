@@ -9,30 +9,33 @@ import (
 var (
 	colorBrand        = lipgloss.AdaptiveColor{Light: "#0284C7", Dark: "#38BDF8"}
 	colorSuccess      = lipgloss.AdaptiveColor{Light: "#059669", Dark: "#34D399"}
-	colorAmber        = lipgloss.AdaptiveColor{Light: "#D97706", Dark: "#FBBF24"}
+	colorAmber        = lipgloss.AdaptiveColor{Light: "#D97706", Dark: "#F59E0B"}
 	colorPink         = lipgloss.AdaptiveColor{Light: "#DB2777", Dark: "#F472B6"}
 	colorViolet       = lipgloss.AdaptiveColor{Light: "#7C3AED", Dark: "#A78BFA"}
 	colorBlue         = lipgloss.AdaptiveColor{Light: "#2563EB", Dark: "#60A5FA"}
 	colorTeal         = lipgloss.AdaptiveColor{Light: "#0D9488", Dark: "#2DD4BF"}
 	colorIndigo       = lipgloss.AdaptiveColor{Light: "#4F46E5", Dark: "#818CF8"}
-	colorMuted        = lipgloss.AdaptiveColor{Light: "#64748B", Dark: "#94A3B8"}
-	colorSubtle       = lipgloss.AdaptiveColor{Light: "#94A3B8", Dark: "#64748B"}
-	colorText         = lipgloss.AdaptiveColor{Light: "#0F172A", Dark: "#F8FAFC"}
-	colorCardBorder   = lipgloss.AdaptiveColor{Light: "#CBD5E1", Dark: "#334155"}
+	colorMuted        = lipgloss.AdaptiveColor{Light: "#475569", Dark: "#9AA4B5"}
+	colorSubtle       = lipgloss.AdaptiveColor{Light: "#64748B", Dark: "#7D8799"}
+	colorText         = lipgloss.AdaptiveColor{Light: "#0F172A", Dark: "#EBEEF2"}
+	colorCardBorder   = lipgloss.AdaptiveColor{Light: "#CBD5E1", Dark: "#232834"}
 	colorActiveBorder = lipgloss.AdaptiveColor{Light: "#0284C7", Dark: "#38BDF8"}
+	colorButtonFg     = lipgloss.AdaptiveColor{Light: "#FFFFFF", Dark: "#0B0F17"}
 
 	PageStyle = lipgloss.NewStyle().
 			Padding(1, 3)
 
 	BotBoxStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(colorActiveBorder).
-			Padding(0, 2).
+			Padding(0, 1).
 			MarginBottom(1)
 
 	BotFaceStyle = lipgloss.NewStyle().
 			Foreground(colorBrand).
 			Bold(true)
+
+	StepEyebrowStyle = lipgloss.NewStyle().
+				Foreground(colorSubtle).
+				Bold(true)
 
 	TitleStyle = lipgloss.NewStyle().
 			Foreground(colorText).
@@ -45,17 +48,29 @@ var (
 			Foreground(colorBrand).
 			Bold(true)
 
+	PeekLinkStyle = lipgloss.NewStyle().
+			Foreground(colorBrand).
+			Underline(true)
+
 	SelectedCardStyle = lipgloss.NewStyle().
 				Border(lipgloss.RoundedBorder()).
 				BorderForeground(colorActiveBorder).
-				Padding(0, 2).
-				MarginBottom(1)
+				Padding(0, 2)
+
+	SelectedBackupCardStyle = lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(colorSuccess).
+				Padding(0, 2)
+
+	SelectedWarnCardStyle = lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(colorAmber).
+				Padding(0, 2)
 
 	UnselectedCardStyle = lipgloss.NewStyle().
 				Border(lipgloss.RoundedBorder()).
 				BorderForeground(colorCardBorder).
-				Padding(0, 2).
-				MarginBottom(1)
+				Padding(0, 2)
 
 	BadgeStyle = lipgloss.NewStyle().
 			Foreground(colorAmber).
@@ -67,9 +82,18 @@ var (
 
 	PromptBoxStyle = lipgloss.NewStyle().
 			Border(lipgloss.NormalBorder(), false, false, false, true).
-			BorderForeground(colorSuccess).
+			BorderForeground(colorBrand).
 			PaddingLeft(2).
-			Foreground(colorText)
+			Foreground(colorMuted)
+
+	PrimaryButtonStyle = lipgloss.NewStyle().
+				Background(colorBrand).
+				Foreground(colorButtonFg).
+				Bold(true).
+				Padding(0, 2)
+
+	DividerStyle = lipgloss.NewStyle().
+			Foreground(colorCardBorder)
 
 	FooterStyle = lipgloss.NewStyle().
 			Foreground(colorSubtle).
@@ -77,18 +101,18 @@ var (
 )
 
 var botFrames = []string{
-	"[ o_o ]",
-	"[ ^_^ ]",
-	"[ -_- ]",
+	" .---.\n| o_o |\n '---'",
+	" .---.\n| ^_^ |\n '---'",
+	" .---.\n| -_- |\n '---'",
 }
 
 func CardWidth(termWidth int) int {
 	if termWidth <= 0 {
-		return 84
+		return 90
 	}
-	w := termWidth - 8
-	if w > 86 {
-		w = 86
+	w := termWidth - 6
+	if w > 90 {
+		w = 90
 	}
 	if w < 52 {
 		w = 52
@@ -163,4 +187,12 @@ func PadRight(s string, width int) string {
 		return s
 	}
 	return s + strings.Repeat(" ", width-w)
+}
+
+func TruncatePlain(s string, maxLen int) string {
+	r := []rune(strings.TrimSpace(s))
+	if maxLen <= 1 || len(r) <= maxLen {
+		return string(r)
+	}
+	return string(r[:maxLen-1]) + "…"
 }
