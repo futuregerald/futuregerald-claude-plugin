@@ -1,0 +1,9 @@
+.git
+.worktrees
+skill-installer
+agents
+skills
+.pytest_cache
+__pycache__
+*.pyc
+.DS_Store
