@@ -175,11 +175,28 @@ var knownBreakerFiles = []string{
 	"session_metrics.py",
 }
 
+func isSafeRealDir(dir string) bool {
+	if dir == "" {
+		return false
+	}
+	if err := backup.RejectSymlinkInChain(dir); err != nil {
+		return false
+	}
+	info, err := os.Lstat(dir)
+	if err != nil {
+		return false
+	}
+	return info.IsDir() && info.Mode()&os.ModeSymlink == 0
+}
+
 func RemoveCircuitBreakerHook(hooksJSONPath, hooksDir string, hooksFileCreated bool) (bool, error) {
 	cleaned := false
-	if hooksDir != "" {
+	if isSafeRealDir(hooksDir) {
 		for _, bf := range knownBreakerFiles {
 			p := filepath.Join(hooksDir, bf)
+			if err := backup.RejectSymlinkInChain(p); err != nil {
+				continue
+			}
 			if _, err := os.Lstat(p); err == nil {
 				if err := os.Remove(p); err == nil {
 					cleaned = true
@@ -191,6 +208,12 @@ func RemoveCircuitBreakerHook(hooksJSONPath, hooksDir string, hooksFileCreated b
 
 	if hooksJSONPath == "" {
 		return cleaned, nil
+	}
+	if err := backup.RejectSymlinkInChain(hooksJSONPath); err != nil {
+		return cleaned, err
+	}
+	if info, err := os.Lstat(hooksJSONPath); err == nil && info.Mode()&os.ModeSymlink != 0 {
+		return cleaned, fmt.Errorf("refusing to modify symlinked hooks.json %s", hooksJSONPath)
 	}
 	data, err := os.ReadFile(hooksJSONPath)
 	if err != nil {
@@ -242,16 +265,25 @@ func DiscoverLegacyReceipt(env platform.Env, cat *catalog.Catalog, harness, scop
 	var foundSkills []string
 	var installedFiles []string
 
-	if paths.SkillsDir != "" {
+	if isSafeRealDir(paths.SkillsDir) {
 		if entries, err := os.ReadDir(paths.SkillsDir); err == nil {
 			for _, entry := range entries {
-				if !entry.IsDir() || !knownSkills[entry.Name()] {
+				if entry.Type()&os.ModeSymlink != 0 || !entry.IsDir() || !knownSkills[entry.Name()] {
 					continue
 				}
 				skillRoot := filepath.Join(paths.SkillsDir, entry.Name())
 				foundSkills = append(foundSkills, entry.Name())
 				_ = filepath.WalkDir(skillRoot, func(p string, d fs.DirEntry, wErr error) error {
-					if wErr != nil || d.IsDir() || isPreservedLocalFile(p) {
+					if wErr != nil {
+						return nil
+					}
+					if d.Type()&os.ModeSymlink != 0 {
+						if d.IsDir() {
+							return filepath.SkipDir
+						}
+						return nil
+					}
+					if d.IsDir() || isPreservedLocalFile(p) {
 						return nil
 					}
 					installedFiles = append(installedFiles, filepath.Clean(p))
@@ -261,7 +293,7 @@ func DiscoverLegacyReceipt(env platform.Env, cat *catalog.Catalog, harness, scop
 		}
 	}
 
-	if paths.AgentsDir != "" {
+	if isSafeRealDir(paths.AgentsDir) {
 		agentsSrc := path.Join(harness, "agents")
 		if harness == catalog.HarnessAntigravity {
 			agentsSrc = "antigravity/plugins/antigravity-subagents/agents"
@@ -272,19 +304,19 @@ func DiscoverLegacyReceipt(env platform.Env, cat *catalog.Catalog, harness, scop
 					continue
 				}
 				candidate := filepath.Join(paths.AgentsDir, entry.Name())
-				if info, err := os.Lstat(candidate); err == nil && !info.IsDir() {
+				if info, err := os.Lstat(candidate); err == nil && !info.IsDir() && info.Mode()&os.ModeSymlink == 0 {
 					installedFiles = append(installedFiles, filepath.Clean(candidate))
 				}
 			}
 		}
-		if paths.PluginJSON != "" {
-			if info, err := os.Lstat(paths.PluginJSON); err == nil && !info.IsDir() {
+		if paths.PluginJSON != "" && backup.RejectSymlinkInChain(paths.PluginJSON) == nil {
+			if info, err := os.Lstat(paths.PluginJSON); err == nil && !info.IsDir() && info.Mode()&os.ModeSymlink == 0 {
 				installedFiles = append(installedFiles, filepath.Clean(paths.PluginJSON))
 			}
 		}
 	}
 
-	if paths.CommandsDir != "" {
+	if isSafeRealDir(paths.CommandsDir) {
 		cmdSrc := path.Join(harness, "commands")
 		_ = fs.WalkDir(cat.FS(), cmdSrc, func(p string, d fs.DirEntry, wErr error) error {
 			if wErr != nil || d.IsDir() || !strings.HasSuffix(p, ".md") {
@@ -292,20 +324,24 @@ func DiscoverLegacyReceipt(env platform.Env, cat *catalog.Catalog, harness, scop
 			}
 			rel := strings.TrimPrefix(p, cmdSrc+"/")
 			candidate := filepath.Join(paths.CommandsDir, filepath.FromSlash(rel))
-			if info, err := os.Lstat(candidate); err == nil && !info.IsDir() {
-				installedFiles = append(installedFiles, filepath.Clean(candidate))
+			if backup.RejectSymlinkInChain(candidate) == nil {
+				if info, err := os.Lstat(candidate); err == nil && !info.IsDir() && info.Mode()&os.ModeSymlink == 0 {
+					installedFiles = append(installedFiles, filepath.Clean(candidate))
+				}
 			}
 			return nil
 		})
 	}
 
 	hooksMerged := false
-	if paths.HooksJSON != "" {
-		if data, err := os.ReadFile(paths.HooksJSON); err == nil {
-			var parsed map[string]any
-			if json.Unmarshal(data, &parsed) == nil {
-				if _, ok := parsed["autonomous-circuit-breaker"]; ok {
-					hooksMerged = true
+	if paths.HooksJSON != "" && backup.RejectSymlinkInChain(paths.HooksJSON) == nil {
+		if info, err := os.Lstat(paths.HooksJSON); err == nil && !info.IsDir() && info.Mode()&os.ModeSymlink == 0 {
+			if data, err := os.ReadFile(paths.HooksJSON); err == nil {
+				var parsed map[string]any
+				if json.Unmarshal(data, &parsed) == nil {
+					if _, ok := parsed["autonomous-circuit-breaker"]; ok {
+						hooksMerged = true
+					}
 				}
 			}
 		}
@@ -380,6 +416,9 @@ func Uninstall(env platform.Env, _ *catalog.Catalog, receipt Receipt, backupMgr 
 			if res.RestoredConfig != "" || !restoreConfig {
 				continue
 			}
+		}
+		if err := backup.RejectSymlinkInChain(cleanFile); err != nil {
+			continue
 		}
 		if _, err := os.Lstat(cleanFile); err == nil {
 			if err := os.Remove(cleanFile); err == nil {

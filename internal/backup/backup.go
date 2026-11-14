@@ -14,10 +14,12 @@ import (
 var snapshotSeq uint64
 
 type BlobEntry struct {
-	BlobID       string `json:"blob_id,omitempty"`
-	OriginalPath string `json:"original_path"`
-	Mode         uint32 `json:"mode,omitempty"`
-	Existed      bool   `json:"existed"`
+	BlobID        string `json:"blob_id,omitempty"`
+	OriginalPath  string `json:"original_path"`
+	Mode          uint32 `json:"mode,omitempty"`
+	Existed       bool   `json:"existed"`
+	IsSymlink     bool   `json:"is_symlink,omitempty"`
+	SymlinkTarget string `json:"symlink_target,omitempty"`
 }
 
 type Manifest struct {
@@ -63,7 +65,7 @@ func sanitizeSlug(s string) string {
 }
 
 func (m *Manager) CreateSnapshot(harness, scope, track string, targetPaths []string, stateJSONPath string) (*Manifest, error) {
-	if err := rejectSymlinkInChain(m.BackupsRoot); err != nil {
+	if err := RejectSymlinkInChain(m.BackupsRoot); err != nil {
 		return nil, err
 	}
 	if err := os.MkdirAll(m.BackupsRoot, 0700); err != nil {
@@ -103,10 +105,27 @@ func (m *Manager) CreateSnapshot(harness, scope, track string, targetPaths []str
 
 	for idx, origPath := range uniquePaths {
 		info, err := os.Lstat(origPath)
-		if err != nil || info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		if err != nil || info.IsDir() {
 			manifest.Entries = append(manifest.Entries, BlobEntry{
 				OriginalPath: origPath,
 				Existed:      false,
+			})
+			continue
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			linkTarget, lErr := os.Readlink(origPath)
+			if lErr != nil || linkTarget == "" {
+				manifest.Entries = append(manifest.Entries, BlobEntry{
+					OriginalPath: origPath,
+					Existed:      false,
+				})
+				continue
+			}
+			manifest.Entries = append(manifest.Entries, BlobEntry{
+				OriginalPath:  origPath,
+				Existed:       true,
+				IsSymlink:     true,
+				SymlinkTarget: linkTarget,
 			})
 			continue
 		}
@@ -183,6 +202,11 @@ func (m *Manager) ListSnapshots(harnessFilter string) ([]Manifest, error) {
 	}
 
 	sort.Slice(out, func(i, j int) bool {
+		ti, errI := time.Parse(time.RFC3339Nano, out[i].CreatedAt)
+		tj, errJ := time.Parse(time.RFC3339Nano, out[j].CreatedAt)
+		if errI == nil && errJ == nil && !ti.Equal(tj) {
+			return ti.After(tj)
+		}
 		if out[i].CreatedAt != out[j].CreatedAt {
 			return out[i].CreatedAt > out[j].CreatedAt
 		}
@@ -226,20 +250,29 @@ func isPreservedPath(p string) bool {
 	return strings.HasSuffix(slashed, ".local.md") || strings.HasSuffix(slashed, "/references/config.md")
 }
 
-func rejectSymlinkInChain(targetPath string) error {
+func isOSRootSymlink(p string) bool {
+	switch filepath.ToSlash(p) {
+	case "/var", "/tmp", "/etc", "/private/var", "/private/tmp", "/private/etc":
+		return true
+	default:
+		return false
+	}
+}
+
+func RejectSymlinkInChain(targetPath string) error {
 	clean := filepath.Clean(targetPath)
 	cur := filepath.Dir(clean)
-	for i := 0; i < 3; i++ {
-		if cur == "" || cur == "." || cur == string(os.PathSeparator) {
-			break
-		}
-		base := filepath.Base(cur)
-		if (cur == "/var" || cur == "/tmp" || cur == "/etc") || base == "var" && filepath.Dir(cur) == "/" {
-			break
+	prev := ""
+	for cur != "" && cur != "." && cur != string(os.PathSeparator) && cur != prev {
+		if isOSRootSymlink(cur) {
+			prev = cur
+			cur = filepath.Dir(cur)
+			continue
 		}
 		info, err := os.Lstat(cur)
 		if err != nil {
 			if os.IsNotExist(err) {
+				prev = cur
 				cur = filepath.Dir(cur)
 				continue
 			}
@@ -248,16 +281,21 @@ func rejectSymlinkInChain(targetPath string) error {
 		if info.Mode()&os.ModeSymlink != 0 {
 			return fmt.Errorf("refusing path traversal through symlinked parent %s", cur)
 		}
+		prev = cur
 		cur = filepath.Dir(cur)
 	}
 	return nil
+}
+
+func rejectSymlinkInChain(targetPath string) error {
+	return RejectSymlinkInChain(targetPath)
 }
 
 func (m *Manager) RestoreSnapshot(id string, stateJSONPath string) (*RestoreResult, error) {
 	if !isValidSnapshotID(id) {
 		return nil, fmt.Errorf("invalid snapshot id %q", id)
 	}
-	if err := rejectSymlinkInChain(m.BackupsRoot); err != nil {
+	if err := RejectSymlinkInChain(m.BackupsRoot); err != nil {
 		return nil, err
 	}
 
@@ -277,10 +315,28 @@ func (m *Manager) RestoreSnapshot(id string, stateJSONPath string) (*RestoreResu
 		if entry.OriginalPath == "" {
 			continue
 		}
-		if err := rejectSymlinkInChain(entry.OriginalPath); err != nil {
+		if err := RejectSymlinkInChain(entry.OriginalPath); err != nil {
 			return nil, err
 		}
 		if entry.Existed {
+			if entry.IsSymlink {
+				if entry.SymlinkTarget == "" {
+					return nil, fmt.Errorf("empty symlink target for %s in snapshot %s", entry.OriginalPath, id)
+				}
+				if _, lErr := os.Lstat(entry.OriginalPath); lErr == nil {
+					if err := os.Remove(entry.OriginalPath); err != nil {
+						return nil, err
+					}
+				}
+				if err := os.MkdirAll(filepath.Dir(entry.OriginalPath), 0755); err != nil {
+					return nil, err
+				}
+				if err := os.Symlink(entry.SymlinkTarget, entry.OriginalPath); err != nil {
+					return nil, err
+				}
+				res.RestoredFiles = append(res.RestoredFiles, entry.OriginalPath)
+				continue
+			}
 			if !isValidBlobID(entry.BlobID) {
 				return nil, fmt.Errorf("invalid blob id %q in snapshot %s", entry.BlobID, id)
 			}
@@ -317,20 +373,97 @@ func (m *Manager) RestoreSnapshot(id string, stateJSONPath string) (*RestoreResu
 		}
 	}
 
-	if mf.HasStateBackup && stateJSONPath != "" {
-		if err := rejectSymlinkInChain(stateJSONPath); err != nil {
+	if stateJSONPath != "" {
+		if err := RejectSymlinkInChain(stateJSONPath); err != nil {
 			return nil, err
 		}
-		if stateBytes, err := os.ReadFile(filepath.Join(snapDir, "state.json.bak")); err == nil {
-			if err := os.MkdirAll(filepath.Dir(stateJSONPath), 0700); err == nil {
-				if err := os.WriteFile(stateJSONPath, stateBytes, 0600); err == nil {
-					res.StateRestored = true
+		if restoreStateReceiptForSnapshot(stateJSONPath, filepath.Join(snapDir, "state.json.bak"), mf.Harness, mf.Scope, mf.HasStateBackup) {
+			res.StateRestored = true
+		}
+	}
+
+	return res, nil
+}
+
+func restoreStateReceiptForSnapshot(stateJSONPath, bakPath, harness, scope string, hasStateBackup bool) bool {
+	if info, err := os.Lstat(stateJSONPath); err == nil && info.Mode()&os.ModeSymlink != 0 {
+		_ = os.Remove(stateJSONPath)
+	}
+	var bakBytes []byte
+	if hasStateBackup {
+		b, err := os.ReadFile(bakPath)
+		if err != nil {
+			return false
+		}
+		bakBytes = b
+	}
+
+	curBytes, curErr := os.ReadFile(stateJSONPath)
+	var curMap map[string]any
+	var bakMap map[string]any
+	curHasReceipts := curErr == nil && json.Unmarshal(curBytes, &curMap) == nil && curMap["receipts"] != nil
+	bakHasReceipts := len(bakBytes) > 0 && json.Unmarshal(bakBytes, &bakMap) == nil && bakMap["receipts"] != nil
+
+	if !curHasReceipts && !bakHasReceipts {
+		if !hasStateBackup {
+			return false
+		}
+		if err := os.MkdirAll(filepath.Dir(stateJSONPath), 0700); err != nil {
+			return false
+		}
+		return os.WriteFile(stateJSONPath, bakBytes, 0600) == nil
+	}
+
+	var kept []any
+	if curHasReceipts {
+		if rawList, ok := curMap["receipts"].([]any); ok {
+			for _, item := range rawList {
+				rm, ok := item.(map[string]any)
+				if !ok {
+					continue
+				}
+				h, _ := rm["harness"].(string)
+				s, _ := rm["scope"].(string)
+				if strings.EqualFold(h, harness) && strings.EqualFold(s, scope) {
+					continue
+				}
+				kept = append(kept, rm)
+			}
+		}
+	}
+	if bakHasReceipts {
+		if rawList, ok := bakMap["receipts"].([]any); ok {
+			for _, item := range rawList {
+				rm, ok := item.(map[string]any)
+				if !ok {
+					continue
+				}
+				h, _ := rm["harness"].(string)
+				s, _ := rm["scope"].(string)
+				if strings.EqualFold(h, harness) && strings.EqualFold(s, scope) {
+					kept = append(kept, rm)
 				}
 			}
 		}
 	}
 
-	return res, nil
+	outDoc := map[string]any{
+		"version":  1,
+		"receipts": kept,
+	}
+	if curMap != nil && curMap["version"] != nil {
+		outDoc["version"] = curMap["version"]
+	} else if bakMap != nil && bakMap["version"] != nil {
+		outDoc["version"] = bakMap["version"]
+	}
+	encoded, err := json.MarshalIndent(outDoc, "", "  ")
+	if err != nil {
+		return false
+	}
+	if err := os.MkdirAll(filepath.Dir(stateJSONPath), 0700); err != nil {
+		return false
+	}
+	return os.WriteFile(stateJSONPath, append(encoded, '\n'), 0600) == nil
 }
 
 func (m *Manager) RestoreSingleFile(id string, targetPath string) (bool, error) {
@@ -354,11 +487,33 @@ func (m *Manager) RestoreSingleFile(id string, targetPath string) (bool, error) 
 		if !entry.Existed {
 			return false, nil
 		}
+		if err := RejectSymlinkInChain(cleanTarget); err != nil {
+			return false, err
+		}
+		if info, lErr := os.Lstat(cleanTarget); lErr == nil && info.Mode()&os.ModeSymlink != 0 {
+			if err := os.Remove(cleanTarget); err != nil {
+				return false, err
+			}
+		}
+		if entry.IsSymlink {
+			if entry.SymlinkTarget == "" {
+				return false, fmt.Errorf("empty symlink target for %s", cleanTarget)
+			}
+			if _, lErr := os.Lstat(cleanTarget); lErr == nil {
+				if err := os.Remove(cleanTarget); err != nil {
+					return false, err
+				}
+			}
+			if err := os.MkdirAll(filepath.Dir(cleanTarget), 0755); err != nil {
+				return false, err
+			}
+			if err := os.Symlink(entry.SymlinkTarget, cleanTarget); err != nil {
+				return false, err
+			}
+			return true, nil
+		}
 		if !isValidBlobID(entry.BlobID) {
 			return false, fmt.Errorf("invalid blob id %q", entry.BlobID)
-		}
-		if err := rejectSymlinkInChain(cleanTarget); err != nil {
-			return false, err
 		}
 		blobBytes, err := os.ReadFile(filepath.Join(snapDir, "files", entry.BlobID))
 		if err != nil {

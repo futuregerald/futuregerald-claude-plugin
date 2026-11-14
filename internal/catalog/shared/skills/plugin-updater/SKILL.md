@@ -61,7 +61,7 @@ Keep installed skills, slash commands, subagents, and harness configuration up t
      ```
    - If a newer CLI binary release was also confirmed:
      ```bash
-     skill-installer update --self-upgrade -y
+     skill-installer update --self -y
      ```
    - Report the updated skills, new commit SHA, and backup snapshot ID.
 

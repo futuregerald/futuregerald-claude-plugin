@@ -894,6 +894,8 @@ type InstallPlan struct {
 	SkipCommands          bool
 	Backup                bool
 	Force                 bool
+	ForceAgents           bool
+	ForceConfig           bool
 	DryRun                bool
 	Version               string
 	CommitSHA             string
@@ -992,12 +994,21 @@ func (i *Installer) ExecutePlan(plan InstallPlan) (*InstallResult, error) {
 	}
 
 	dryInst := New(i.fsys, Options{Force: true, DryRun: true})
+	execInst := New(i.fsys, Options{Force: i.options.Force || plan.Force, DryRun: i.options.DryRun || plan.DryRun})
 	var candidateTargets []string
+	plannedSet := make(map[string]bool)
+	addPlanned := func(p string) {
+		clean := filepath.Clean(strings.TrimSpace(p))
+		if clean != "" {
+			plannedSet[clean] = true
+			candidateTargets = append(candidateTargets, clean)
+		}
+	}
 	if hasPrior && priorReceipt != nil {
 		candidateTargets = append(candidateTargets, priorReceipt.InstalledFiles...)
 	}
-	if paths.ConfigFile != "" {
-		candidateTargets = append(candidateTargets, paths.ConfigFile)
+	if (mode == "config-only" || (mode == "full" && !plan.SkipConfig)) && paths.ConfigFile != "" {
+		addPlanned(paths.ConfigFile)
 	}
 	if paths.HooksJSON != "" {
 		candidateTargets = append(candidateTargets, paths.HooksJSON)
@@ -1007,7 +1018,7 @@ func (i *Installer) ExecutePlan(plan InstallPlan) (*InstallResult, error) {
 			for _, line := range sim {
 				for _, pfx := range []string{"WOULD CREATE: ", "WOULD OVERWRITE: "} {
 					if strings.HasPrefix(line, pfx) {
-						candidateTargets = append(candidateTargets, strings.TrimPrefix(line, pfx))
+						addPlanned(strings.TrimPrefix(line, pfx))
 					}
 				}
 			}
@@ -1018,7 +1029,7 @@ func (i *Installer) ExecutePlan(plan InstallPlan) (*InstallResult, error) {
 			for _, line := range sim {
 				for _, pfx := range []string{"WOULD CREATE: ", "WOULD OVERWRITE: "} {
 					if strings.HasPrefix(line, pfx) {
-						candidateTargets = append(candidateTargets, strings.TrimPrefix(line, pfx))
+						addPlanned(strings.TrimPrefix(line, pfx))
 					}
 				}
 			}
@@ -1030,7 +1041,7 @@ func (i *Installer) ExecutePlan(plan InstallPlan) (*InstallResult, error) {
 			for _, line := range sim {
 				for _, pfx := range []string{"WOULD CREATE: ", "WOULD OVERWRITE: "} {
 					if strings.HasPrefix(line, pfx) {
-						candidateTargets = append(candidateTargets, strings.TrimPrefix(line, pfx))
+						addPlanned(strings.TrimPrefix(line, pfx))
 					}
 				}
 			}
@@ -1045,7 +1056,7 @@ func (i *Installer) ExecutePlan(plan InstallPlan) (*InstallResult, error) {
 			for _, line := range sim {
 				for _, pfx := range []string{"WOULD CREATE: ", "WOULD OVERWRITE: "} {
 					if strings.HasPrefix(line, pfx) {
-						candidateTargets = append(candidateTargets, strings.TrimPrefix(line, pfx))
+						addPlanned(strings.TrimPrefix(line, pfx))
 					}
 				}
 			}
@@ -1053,7 +1064,7 @@ func (i *Installer) ExecutePlan(plan InstallPlan) (*InstallResult, error) {
 	}
 
 	var backupID string
-	if plan.Backup && !plan.DryRun {
+	if plan.Backup && !execInst.options.DryRun {
 		mgr := backup.NewManager(plan.Env.BackupsDir())
 		mf, bErr := mgr.CreateSnapshot(plan.Harness, scope, trackID, candidateTargets, plan.Env.StateFilePath())
 		if bErr != nil {
@@ -1074,7 +1085,7 @@ func (i *Installer) ExecutePlan(plan InstallPlan) (*InstallResult, error) {
 	}
 
 	if mode == "full" && paths.SkillsDir != "" {
-		res, sErr := i.InstallSelectedSkillsForHarness(paths.SkillsDir, plan.Harness, scope == "global", selectedSkills, plan.Tags, plan.Languages)
+		res, sErr := execInst.InstallSelectedSkillsForHarness(paths.SkillsDir, plan.Harness, scope == "global", selectedSkills, plan.Tags, plan.Languages)
 		if sErr != nil {
 			return nil, sErr
 		}
@@ -1082,7 +1093,11 @@ func (i *Installer) ExecutePlan(plan InstallPlan) (*InstallResult, error) {
 	}
 
 	if (mode == "agents-only" || (mode == "full" && track.InstallAgents && !plan.SkipAgents)) && paths.AgentsDir != "" {
-		res, aErr := i.InstallAgentsForHarness(paths.AgentsDir, plan.Harness, scope == "global", nil)
+		agentInst := execInst
+		if plan.ForceAgents && !execInst.options.Force {
+			agentInst = New(i.fsys, Options{Force: true, DryRun: execInst.options.DryRun})
+		}
+		res, aErr := agentInst.InstallAgentsForHarness(paths.AgentsDir, plan.Harness, scope == "global", nil)
 		if aErr != nil {
 			return nil, aErr
 		}
@@ -1091,7 +1106,7 @@ func (i *Installer) ExecutePlan(plan InstallPlan) (*InstallResult, error) {
 
 	if mode == "full" && !plan.SkipCommands && paths.CommandsDir != "" {
 		allowedCmds := cat.CommandsForSkills(plan.Harness, selectedSkills)
-		res, cErr := i.InstallCommandsForHarness(paths.CommandsDir, plan.Harness, allowedCmds)
+		res, cErr := execInst.InstallCommandsForHarness(paths.CommandsDir, plan.Harness, allowedCmds)
 		if cErr != nil {
 			return nil, cErr
 		}
@@ -1101,9 +1116,13 @@ func (i *Installer) ExecutePlan(plan InstallPlan) (*InstallResult, error) {
 	hooksMerged := false
 	hooksCreated := false
 	if (mode == "config-only" || (mode == "full" && !plan.SkipConfig)) && paths.ConfigFile != "" {
+		cfgInst := execInst
+		if plan.ForceConfig && !execInst.options.Force {
+			cfgInst = New(i.fsys, Options{Force: true, DryRun: execInst.options.DryRun})
+		}
 		if scope == "global" {
 			if plan.Harness == HarnessAntigravity {
-				res, hm, hc, gErr := i.InstallGlobalHarnessAssetsWithOptions(paths.GeminiHome, plan.Harness, GlobalAssetOptions{
+				res, hm, hc, gErr := cfgInst.InstallGlobalHarnessAssetsWithOptions(paths.GeminiHome, plan.Harness, GlobalAssetOptions{
 					LightweightConfig: track.LightweightConfig,
 					InstallHooks:      track.InstallHooks,
 					Env:               plan.Env,
@@ -1119,7 +1138,7 @@ func (i *Installer) ExecutePlan(plan InstallPlan) (*InstallResult, error) {
 				if tErr != nil {
 					return nil, tErr
 				}
-				res, wErr := i.writeFileWithRoot(paths.ConfigFile, paths.ConfigFile, tpl, 0644)
+				res, wErr := cfgInst.writeFileWithRoot(paths.ConfigFile, paths.ConfigFile, tpl, 0644)
 				if wErr != nil {
 					return nil, wErr
 				}
@@ -1133,7 +1152,7 @@ func (i *Installer) ExecutePlan(plan InstallPlan) (*InstallResult, error) {
 			if plan.ProjectConfigRenderer != nil {
 				tpl = plan.ProjectConfigRenderer(tpl, plan.Harness, projDir)
 			}
-			res, wErr := i.writeFileWithRoot(paths.ConfigFile, paths.ConfigFile, tpl, 0644)
+			res, wErr := cfgInst.writeFileWithRoot(paths.ConfigFile, paths.ConfigFile, tpl, 0644)
 			if wErr != nil {
 				return nil, wErr
 			}
@@ -1141,12 +1160,7 @@ func (i *Installer) ExecutePlan(plan InstallPlan) (*InstallResult, error) {
 		}
 	}
 
-	writtenSet := make(map[string]bool, len(writtenFiles))
-	for _, wf := range writtenFiles {
-		writtenSet[filepath.Clean(wf)] = true
-	}
-
-	if hasPrior && priorReceipt != nil && mode == "full" && !plan.DryRun {
+	if hasPrior && priorReceipt != nil && mode == "full" && !execInst.options.DryRun {
 		cleanHooksJSON := ""
 		if paths.HooksJSON != "" {
 			cleanHooksJSON = filepath.Clean(paths.HooksJSON)
@@ -1157,10 +1171,13 @@ func (i *Installer) ExecutePlan(plan InstallPlan) (*InstallResult, error) {
 		}
 		for _, oldFile := range priorReceipt.InstalledFiles {
 			cleanOld := filepath.Clean(oldFile)
-			if writtenSet[cleanOld] || isPreservedLocalFile(cleanOld) {
+			if plannedSet[cleanOld] || isPreservedLocalFile(cleanOld) {
 				continue
 			}
 			if cleanOld == cleanHooksJSON || cleanOld == cleanConfig {
+				continue
+			}
+			if err := backup.RejectSymlinkInChain(cleanOld); err != nil {
 				continue
 			}
 			if _, err := os.Lstat(cleanOld); err == nil {
@@ -1223,7 +1240,7 @@ func (i *Installer) ExecutePlan(plan InstallPlan) (*InstallResult, error) {
 		}
 	}
 
-	if !plan.DryRun {
+	if !execInst.options.DryRun {
 		_ = store.Upsert(receipt)
 	}
 
@@ -1392,12 +1409,18 @@ func (i *Installer) InstallFromURL(url, destDir string) ([]string, error) {
 }
 
 func extractTarGz(r io.Reader, destDir string) error {
+	const (
+		maxFileBytes  = 10 * 1024 * 1024
+		maxTotalBytes = 100 * 1024 * 1024
+	)
 	gzr, err := gzip.NewReader(r)
 	if err != nil {
 		return err
 	}
 	defer gzr.Close()
 
+	cleanDest := filepath.Clean(destDir)
+	var totalBytes int64
 	tr := tar.NewReader(gzr)
 	for {
 		header, err := tr.Next()
@@ -1407,31 +1430,64 @@ func extractTarGz(r io.Reader, destDir string) error {
 		if err != nil {
 			return err
 		}
+		if header.Typeflag == tar.TypeXGlobalHeader || header.Typeflag == tar.TypeXHeader || header.Name == "pax_global_header" {
+			continue
+		}
 
-		target := filepath.Join(destDir, header.Name)
-
-		if !strings.HasPrefix(filepath.Clean(target), filepath.Clean(destDir)+string(os.PathSeparator)) {
+		target := filepath.Join(cleanDest, header.Name)
+		cleanTarget := filepath.Clean(target)
+		if !strings.HasPrefix(cleanTarget, cleanDest+string(os.PathSeparator)) {
 			return fmt.Errorf("illegal path in archive: %s", header.Name)
 		}
 
 		switch header.Typeflag {
 		case tar.TypeDir:
-			if err := os.MkdirAll(target, 0755); err != nil {
+			if err := backup.RejectSymlinkInChain(cleanTarget); err != nil {
 				return err
 			}
-		case tar.TypeReg:
-			if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+			if err := os.MkdirAll(cleanTarget, 0755); err != nil {
 				return err
 			}
-			f, err := os.OpenFile(target, os.O_CREATE|os.O_RDWR, os.FileMode(header.Mode))
+		case tar.TypeReg, tar.TypeRegA:
+			if header.Size > maxFileBytes {
+				return fmt.Errorf("archive entry %s exceeds 10 MiB limit (%d bytes)", header.Name, header.Size)
+			}
+			if err := backup.RejectSymlinkInChain(cleanTarget); err != nil {
+				return err
+			}
+			if info, lErr := os.Lstat(cleanTarget); lErr == nil && info.Mode()&os.ModeSymlink != 0 {
+				if err := os.Remove(cleanTarget); err != nil {
+					return err
+				}
+			}
+			if err := os.MkdirAll(filepath.Dir(cleanTarget), 0755); err != nil {
+				return err
+			}
+			mode := os.FileMode(0644)
+			if header.Mode&0111 != 0 {
+				mode = 0755
+			}
+			f, err := os.OpenFile(cleanTarget, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode)
 			if err != nil {
 				return err
 			}
-			if _, err := io.Copy(f, io.LimitReader(tr, 10*1024*1024)); err != nil {
-				f.Close()
-				return err
+			n, copyErr := io.Copy(f, io.LimitReader(tr, maxFileBytes+1))
+			closeErr := f.Close()
+			if copyErr != nil {
+				return copyErr
 			}
-			f.Close()
+			if closeErr != nil {
+				return closeErr
+			}
+			if n > maxFileBytes {
+				return fmt.Errorf("archive entry %s exceeds 10 MiB limit", header.Name)
+			}
+			totalBytes += n
+			if totalBytes > maxTotalBytes {
+				return fmt.Errorf("archive total extracted size exceeds 100 MiB limit")
+			}
+		default:
+			return fmt.Errorf("unsupported tar entry type %d for %s", header.Typeflag, header.Name)
 		}
 	}
 	return nil

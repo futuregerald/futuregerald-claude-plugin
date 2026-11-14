@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -48,29 +49,33 @@ type Config struct {
 }
 
 type Model struct {
-	cfg            Config
-	screen         screenID
-	prevScreen     screenID
-	botFrame       int
-	homeIdx        int
-	harnessIdx     int
-	scope          string
-	trackIdx       int
-	backupIdx      int
-	doneIdx        int
-	guideTab       int
-	skillCursor    int
-	skillExpanded  map[string]bool
-	customSelected map[string]bool
-	showAllInGuide bool
-	installRes     *installer.InstallResult
-	statusMsg      string
-	errMsg         string
-	updateReport   *updater.CheckReport
-	snapshots      []backup.Manifest
-	restoreIdx     int
-	receipts       []state.Receipt
-	uninstallIdx   int
+	cfg              Config
+	screen           screenID
+	prevScreen       screenID
+	width            int
+	height           int
+	botFrame         int
+	homeIdx          int
+	harnessIdx       int
+	scope            string
+	trackIdx         int
+	backupIdx        int
+	doneIdx          int
+	guideTab         int
+	skillCursor      int
+	skillExpanded    map[string]bool
+	customSelected   map[string]bool
+	showAllInGuide   bool
+	installRes       *installer.InstallResult
+	statusMsg        string
+	errMsg           string
+	updateReport     *updater.CheckReport
+	snapshots        []backup.Manifest
+	restoreIdx       int
+	confirmRestore   bool
+	receipts         []state.Receipt
+	uninstallIdx     int
+	confirmUninstall bool
 }
 
 var harnessOrder = []string{
@@ -197,8 +202,31 @@ func (m Model) visibleSkills() []catalog.SkillMetadata {
 	return out
 }
 
+func (m Model) selectedCustomCount() int {
+	count := 0
+	for _, v := range m.customSelected {
+		if v {
+			count++
+		}
+	}
+	return count
+}
+
+func (m Model) existingConfigPresent() bool {
+	paths, err := m.cfg.Env.ResolvePaths(m.selectedHarness(), m.scope, m.cfg.ProjectDir)
+	if err != nil || paths.ConfigFile == "" {
+		return false
+	}
+	info, err := os.Stat(paths.ConfigFile)
+	return err == nil && !info.IsDir()
+}
+
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+		return m, nil
 	case tickMsg:
 		m.botFrame = (m.botFrame + 1) % len(botFrames)
 		return m, nil
@@ -345,7 +373,11 @@ func (m Model) updateSkillTable(key string) (tea.Model, tea.Cmd) {
 	case " ":
 		if tr.ID == "custom" && m.skillCursor >= 0 && m.skillCursor < len(skills) {
 			name := skills[m.skillCursor].Name
-			m.customSelected[name] = !m.customSelected[name]
+			if m.customSelected[name] {
+				delete(m.customSelected, name)
+			} else {
+				m.customSelected[name] = true
+			}
 		}
 	case "d", "enter":
 		if key == "enter" && tr.ID == "custom" {
@@ -363,13 +395,21 @@ func (m Model) updateSkillTable(key string) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) updateBackup(key string) (tea.Model, tea.Cmd) {
+	maxIdx := 1
+	if m.existingConfigPresent() {
+		maxIdx = 2
+	}
 	switch key {
 	case "esc", "backspace":
 		m.screen = screenTrack
 	case "up", "k", "left":
-		m.backupIdx = 0
+		if m.backupIdx > 0 {
+			m.backupIdx--
+		}
 	case "down", "j", "right":
-		m.backupIdx = 1
+		if m.backupIdx < maxIdx {
+			m.backupIdx++
+		}
 	case "enter":
 		m.runInstallation()
 		m.screen = screenDone
@@ -393,6 +433,7 @@ func (m *Model) runInstallation() {
 		}
 	}
 
+	skipConfig := m.backupIdx == 1 && m.existingConfigPresent()
 	inst := installer.New(m.cfg.Catalog.FS(), installer.Options{Force: true})
 	res, err := inst.ExecutePlan(installer.InstallPlan{
 		Env:                   m.cfg.Env,
@@ -403,6 +444,7 @@ func (m *Model) runInstallation() {
 		TrackID:               tr.ID,
 		CustomSkills:          customSkills,
 		Mode:                  "full",
+		SkipConfig:            skipConfig,
 		Backup:                m.backupIdx == 0,
 		Force:                 true,
 		Version:               m.cfg.Version,
@@ -484,19 +526,36 @@ func (m Model) updateGuide(key string) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m *Model) loadUpdateReport() {
+func (m *Model) selectTargetReceipt() state.Receipt {
 	store := state.NewStore(m.cfg.Env.StateFilePath())
+	paths, _ := m.cfg.Env.ResolvePaths(m.selectedHarness(), m.scope, m.cfg.ProjectDir)
+	if found, ok, err := store.Find(m.selectedHarness(), m.scope, paths.RootDir); err == nil && ok && found != nil {
+		return *found
+	}
 	receipts, _ := store.Load()
-	var targetReceipt state.Receipt
-	if len(receipts) > 0 {
-		targetReceipt = receipts[0]
-	} else {
-		targetReceipt = state.Receipt{
-			Harness: m.selectedHarness(),
-			Scope:   m.scope,
-			Track:   m.selectedTrack().ID,
+	for _, r := range receipts {
+		if strings.EqualFold(r.Harness, m.selectedHarness()) && strings.EqualFold(r.Scope, m.scope) {
+			return r
 		}
 	}
+	for _, r := range receipts {
+		if strings.EqualFold(r.Harness, m.selectedHarness()) {
+			return r
+		}
+	}
+	if len(receipts) == 1 {
+		return receipts[0]
+	}
+	return state.Receipt{
+		Harness: m.selectedHarness(),
+		Scope:   m.scope,
+		RootDir: paths.RootDir,
+		Track:   m.selectedTrack().ID,
+	}
+}
+
+func (m *Model) loadUpdateReport() {
+	targetReceipt := m.selectTargetReceipt()
 	rep, err := updater.Check(context.Background(), m.cfg.UpdateRunner, targetReceipt, m.cfg.Version)
 	if err != nil {
 		m.errMsg = err.Error()
@@ -511,20 +570,7 @@ func (m Model) updateUpdateScreen(key string) (tea.Model, tea.Cmd) {
 		m.screen = screenHome
 	case "enter":
 		if m.updateReport != nil && m.updateReport.UpdateAvailable {
-			store := state.NewStore(m.cfg.Env.StateFilePath())
-			receipts, _ := store.Load()
-			var r state.Receipt
-			if len(receipts) > 0 {
-				r = receipts[0]
-			} else {
-				paths, _ := m.cfg.Env.ResolvePaths(m.selectedHarness(), m.scope, m.cfg.ProjectDir)
-				r = state.Receipt{
-					Harness: m.selectedHarness(),
-					Scope:   m.scope,
-					RootDir: paths.RootDir,
-					Track:   m.selectedTrack().ID,
-				}
-			}
+			r := m.selectTargetReceipt()
 			_, sha, err := updater.Apply(context.Background(), m.cfg.UpdateRunner, m.cfg.Env, r, updater.ApplyOptions{
 				Backup:                true,
 				Force:                 true,
@@ -551,9 +597,30 @@ func (m *Model) loadSnapshots() {
 	}
 	m.snapshots = snaps
 	m.restoreIdx = 0
+	m.confirmRestore = false
 }
 
 func (m Model) updateRestoreScreen(key string) (tea.Model, tea.Cmd) {
+	if m.confirmRestore {
+		switch key {
+		case "esc", "backspace", "n", "N":
+			m.confirmRestore = false
+		case "enter", "y", "Y":
+			m.confirmRestore = false
+			if m.restoreIdx >= 0 && m.restoreIdx < len(m.snapshots) {
+				mgr := backup.NewManager(m.cfg.Env.BackupsDir())
+				snap := m.snapshots[m.restoreIdx]
+				res, err := mgr.RestoreSnapshot(snap.ID, m.cfg.Env.StateFilePath())
+				if err != nil {
+					m.errMsg = err.Error()
+				} else {
+					m.statusMsg = fmt.Sprintf("Restored snapshot %s (%d files restored, %d created files removed).",
+						snap.ID, len(res.RestoredFiles), len(res.RemovedFiles))
+				}
+			}
+		}
+		return m, nil
+	}
 	switch key {
 	case "esc", "backspace":
 		m.screen = screenHome
@@ -567,15 +634,7 @@ func (m Model) updateRestoreScreen(key string) (tea.Model, tea.Cmd) {
 		}
 	case "enter":
 		if m.restoreIdx >= 0 && m.restoreIdx < len(m.snapshots) {
-			mgr := backup.NewManager(m.cfg.Env.BackupsDir())
-			snap := m.snapshots[m.restoreIdx]
-			res, err := mgr.RestoreSnapshot(snap.ID, m.cfg.Env.StateFilePath())
-			if err != nil {
-				m.errMsg = err.Error()
-			} else {
-				m.statusMsg = fmt.Sprintf("Restored snapshot %s (%d files restored, %d created files removed).",
-					snap.ID, len(res.RestoredFiles), len(res.RemovedFiles))
-			}
+			m.confirmRestore = true
 		}
 	}
 	return m, nil
@@ -596,9 +655,32 @@ func (m *Model) loadReceipts() {
 	}
 	m.receipts = list
 	m.uninstallIdx = 0
+	m.confirmUninstall = false
 }
 
 func (m Model) updateUninstallScreen(key string) (tea.Model, tea.Cmd) {
+	if m.confirmUninstall {
+		switch key {
+		case "esc", "backspace", "n", "N":
+			m.confirmUninstall = false
+		case "enter", "y", "Y":
+			m.confirmUninstall = false
+			if m.uninstallIdx >= 0 && m.uninstallIdx < len(m.receipts) {
+				rec := m.receipts[m.uninstallIdx]
+				res, err := state.Uninstall(m.cfg.Env, m.cfg.Catalog, rec, backup.NewManager(m.cfg.Env.BackupsDir()), true)
+				if err != nil {
+					m.errMsg = err.Error()
+				} else {
+					store := state.NewStore(m.cfg.Env.StateFilePath())
+					_ = store.Remove(rec.Harness, rec.Scope, rec.RootDir)
+					m.statusMsg = fmt.Sprintf("Uninstalled %s (%s): removed %d tracked files.",
+						HarnessDisplayName(rec.Harness), rec.Scope, len(res.RemovedFiles))
+					m.loadReceipts()
+				}
+			}
+		}
+		return m, nil
+	}
 	switch key {
 	case "esc", "backspace":
 		m.screen = screenHome
@@ -612,17 +694,7 @@ func (m Model) updateUninstallScreen(key string) (tea.Model, tea.Cmd) {
 		}
 	case "enter":
 		if m.uninstallIdx >= 0 && m.uninstallIdx < len(m.receipts) {
-			rec := m.receipts[m.uninstallIdx]
-			res, err := state.Uninstall(m.cfg.Env, m.cfg.Catalog, rec, backup.NewManager(m.cfg.Env.BackupsDir()), true)
-			if err != nil {
-				m.errMsg = err.Error()
-			} else {
-				store := state.NewStore(m.cfg.Env.StateFilePath())
-				_ = store.Remove(rec.Harness, rec.Scope, rec.RootDir)
-				m.statusMsg = fmt.Sprintf("Uninstalled %s (%s): removed %d tracked files.",
-					HarnessDisplayName(rec.Harness), rec.Scope, len(res.RemovedFiles))
-				m.loadReceipts()
-			}
+			m.confirmUninstall = true
 		}
 	}
 	return m, nil
@@ -754,7 +826,7 @@ func (m Model) viewTrack() string {
 			skills, _ := m.cfg.Catalog.TrackSkills(tr.ID, m.selectedHarness())
 			countLabel := fmt.Sprintf("%d curated skills", len(skills))
 			if tr.ID == "custom" {
-				countLabel = fmt.Sprintf("%d selected skills (press Space to customize)", len(m.customSelected))
+				countLabel = fmt.Sprintf("%d selected skills (press Space to customize)", m.selectedCustomCount())
 			}
 			header := fmt.Sprintf("%s%s   %s   %s",
 				cursor,
@@ -797,7 +869,13 @@ func (m Model) viewSkillTable() string {
 		end = len(skills)
 	}
 
-	b.WriteString(fmt.Sprintf("  %-4s %-28s %-18s %-18s %s\n", "", "SKILL", "CATEGORY", "SLASH COMMAND", "SUMMARY"))
+	b.WriteString(fmt.Sprintf("  %s %s %s %s %s\n",
+		PadRight("", 4),
+		PadRight("SKILL", 28),
+		PadRight("CATEGORY", 18),
+		PadRight("SLASH COMMAND", 18),
+		"SUMMARY",
+	))
 	b.WriteString("  " + strings.Repeat("─", 96) + "\n")
 
 	for idx := start; idx < end; idx++ {
@@ -818,12 +896,12 @@ func (m Model) viewSkillTable() string {
 		if slash == "" {
 			slash = "(auto)"
 		}
-		row := fmt.Sprintf("%s%s %-28s %-26s %-18s %s\n",
+		row := fmt.Sprintf("%s%s %s %s %s %s\n",
 			cursor,
-			check,
-			TitleStyle.Render(sm.Name),
-			CategoryBadge(sm.Category),
-			SlashStyle.Render(slash),
+			PadRight(check, 4),
+			PadRight(TitleStyle.Render(sm.Name), 28),
+			PadRight(CategoryBadge(sm.Category), 18),
+			PadRight(SlashStyle.Render(slash), 18),
 			sm.Short,
 		)
 		b.WriteString(row)
@@ -857,9 +935,18 @@ func (m Model) viewBackup() string {
 			fmt.Sprintf("Saves a clean snapshot in %s before touching any existing files", m.cfg.Env.BackupsDir()),
 		},
 		{
-			"No, skip backup (--no-backup)",
-			"Write the selected track directly without creating a backup snapshot",
+			"No, skip backup and keep existing config file untouched (--no-backup)",
+			"Installs skills without a snapshot while preserving any existing CLAUDE.md / GEMINI.md / AGENTS.md",
 		},
+	}
+	if m.existingConfigPresent() {
+		opts = append(opts, struct {
+			title string
+			sub   string
+		}{
+			"No, skip backup and overwrite existing config file",
+			"Overwrites your existing config file without saving a snapshot first",
+		})
 	}
 
 	for idx, o := range opts {
@@ -999,11 +1086,11 @@ func (m Model) viewGuide() string {
 			if slash == "" {
 				slash = "(auto)"
 			}
-			b.WriteString(fmt.Sprintf("%s%-28s %-24s %-18s %s\n",
+			b.WriteString(fmt.Sprintf("%s%s %s %s %s\n",
 				cursor,
-				TitleStyle.Render(sm.Name),
-				CategoryBadge(sm.Category),
-				SlashStyle.Render(slash),
+				PadRight(TitleStyle.Render(sm.Name), 28),
+				PadRight(CategoryBadge(sm.Category), 18),
+				PadRight(SlashStyle.Render(slash), 18),
 				sm.Short,
 			))
 		}
@@ -1059,6 +1146,11 @@ func (m Model) viewRestore() string {
 	if m.statusMsg != "" {
 		b.WriteString(SelectedCardStyle.Render(SlashStyle.Render(m.statusMsg)) + "\n")
 	}
+	if m.confirmRestore && m.restoreIdx >= 0 && m.restoreIdx < len(m.snapshots) {
+		snap := m.snapshots[m.restoreIdx]
+		b.WriteString(SelectedCardStyle.Render(BadgeStyle.Render(
+			fmt.Sprintf("Confirm restore of snapshot %s? Press Enter/y to confirm, Esc/n to cancel.", snap.ID))) + "\n")
+	}
 	if len(m.snapshots) == 0 {
 		b.WriteString(UnselectedCardStyle.Render("No safety backup snapshots found yet.") + "\n")
 	} else {
@@ -1085,6 +1177,12 @@ func (m Model) viewUninstall() string {
 
 	if m.statusMsg != "" {
 		b.WriteString(SelectedCardStyle.Render(SlashStyle.Render(m.statusMsg)) + "\n")
+	}
+	if m.confirmUninstall && m.uninstallIdx >= 0 && m.uninstallIdx < len(m.receipts) {
+		rec := m.receipts[m.uninstallIdx]
+		b.WriteString(SelectedCardStyle.Render(BadgeStyle.Render(
+			fmt.Sprintf("Confirm uninstall of %s (%s)? Press Enter/y to confirm, Esc/n to cancel.",
+				HarnessDisplayName(rec.Harness), rec.Scope))) + "\n")
 	}
 	if len(m.receipts) == 0 {
 		b.WriteString(UnselectedCardStyle.Render("No tracked installations found.") + "\n")

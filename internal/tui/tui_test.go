@@ -7,6 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/futuregerald/futuregerald-claude-plugin/internal/catalog"
 	"github.com/futuregerald/futuregerald-claude-plugin/internal/platform"
+	"github.com/futuregerald/futuregerald-claude-plugin/internal/state"
 )
 
 func TestGuidedWizardInstallAndPostInstallTour(t *testing.T) {
@@ -126,5 +127,49 @@ func TestHeadlessTeaProgramAndPlainRenderers(t *testing.T) {
 	plainGuide := RenderPlainGuide(cat, "zed", "product")
 	if !strings.Contains(plainGuide, "Zed Editor") || !strings.Contains(plainGuide, "Product & Strategy Flow") {
 		t.Errorf("unexpected RenderPlainGuide output:\n%s", plainGuide)
+	}
+}
+
+func TestRestoreUninstallConfirmAndCustomDeselect(t *testing.T) {
+	cat, err := catalog.Load(catalog.FS)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmpHome := t.TempDir()
+	projDir := t.TempDir()
+	env := platform.Env{
+		GOOS:    "darwin",
+		GOARCH:  "arm64",
+		HomeDir: tmpHome,
+	}
+
+	m := NewModel(Config{
+		Env:        env,
+		Catalog:    cat,
+		ProjectDir: projDir,
+		Version:    "4.0.0",
+	})
+	m.customSelected = map[string]bool{}
+	m.customSelected["brainstorming"] = true
+	m.customSelected["writing-plans"] = true
+	if m.selectedCustomCount() != 2 {
+		t.Fatalf("expected 2 custom skills selected, got %d", m.selectedCustomCount())
+	}
+	m.customSelected["writing-plans"] = false
+	if m.selectedCustomCount() != 1 {
+		t.Fatalf("expected 1 custom skill selected after setting false, got %d", m.selectedCustomCount())
+	}
+
+	m.screen = screenUninstall
+	m.receipts = []state.Receipt{{Harness: "claude", Scope: "project", RootDir: projDir, Track: "basics"}}
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updated.(Model)
+	if !m.confirmUninstall {
+		t.Fatalf("expected first Enter on screenUninstall to prompt confirmUninstall")
+	}
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
+	m = updated.(Model)
+	if m.confirmUninstall {
+		t.Fatalf("expected 'n' to cancel confirmUninstall")
 	}
 }

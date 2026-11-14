@@ -259,14 +259,45 @@ func (e Env) ResolvePaths(harness, scope, projectDir string) (HarnessPaths, erro
 	return HarnessPaths{}, fmt.Errorf("unhandled harness %q", harness)
 }
 
+func hasUnsafeShellChars(s string) bool {
+	return strings.ContainsAny(s, "\"%$`&|;<>\r\n\x00")
+}
+
+func sanitizeShellPath(s string) string {
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if strings.IndexByte("\"%$`&|;<>\r\n\x00", c) >= 0 {
+			continue
+		}
+		b.WriteByte(c)
+	}
+	return b.String()
+}
+
+func isAbsForOS(p string) bool {
+	if strings.HasPrefix(p, "/") || strings.HasPrefix(p, `\`) {
+		return true
+	}
+	return len(p) >= 3 && ((p[0] >= 'A' && p[0] <= 'Z') || (p[0] >= 'a' && p[0] <= 'z')) && p[1] == ':' && (p[2] == '/' || p[2] == '\\')
+}
+
 func WindowsPythonHookCommand(geminiHome string, lookPath func(string) (string, error)) string {
 	if lookPath == nil {
 		lookPath = exec.LookPath
 	}
 	launcher := "python"
 	for _, candidate := range []string{"python", "py", "python3"} {
-		if _, err := lookPath(candidate); err == nil {
-			if candidate == "py" {
+		if resolved, err := lookPath(candidate); err == nil {
+			cleanResolved := sanitizeShellPath(strings.TrimSpace(resolved))
+			slashResolved := strings.ReplaceAll(filepath.ToSlash(cleanResolved), `\`, "/")
+			if isAbsForOS(slashResolved) {
+				if candidate == "py" {
+					launcher = fmt.Sprintf("%q -3", slashResolved)
+				} else {
+					launcher = fmt.Sprintf("%q", slashResolved)
+				}
+			} else if candidate == "py" {
 				launcher = "py -3"
 			} else {
 				launcher = candidate
@@ -274,7 +305,8 @@ func WindowsPythonHookCommand(geminiHome string, lookPath func(string) (string, 
 			break
 		}
 	}
-	slashHome := strings.ReplaceAll(filepath.ToSlash(geminiHome), `\`, "/")
+	cleanHome := sanitizeShellPath(geminiHome)
+	slashHome := strings.ReplaceAll(filepath.ToSlash(cleanHome), `\`, "/")
 	slashHome = strings.TrimRight(slashHome, "/")
 	scriptPath := slashHome + "/config/hooks/autonomous_breaker.py"
 	return fmt.Sprintf("%s %q", launcher, scriptPath)

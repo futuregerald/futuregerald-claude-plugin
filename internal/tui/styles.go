@@ -122,3 +122,11 @@ func HarnessDisplayName(harness string) string {
 		return harness
 	}
 }
+
+func PadRight(s string, width int) string {
+	w := lipgloss.Width(s)
+	if w >= width {
+		return s
+	}
+	return s + strings.Repeat(" ", width-w)
+}

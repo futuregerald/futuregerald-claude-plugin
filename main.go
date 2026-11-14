@@ -65,14 +65,18 @@ var (
 	skipAgents     bool
 	skipCommands   bool
 	globalInstall  bool
+	projectInstall bool
 	installMode    string
 	listLong       bool
+	listCategory   string
 	updateCheck    bool
 	updateApply    bool
 	updateSelf     bool
 	updateJSON     bool
 	restoreID      string
+	restoreFile    string
 	restoreConfig  bool
+	initOutput     string
 	updateRunner   updater.Runner
 )
 
@@ -188,9 +192,11 @@ Run without flags in a terminal to launch the guided graphical TUI, or pass flag
 	rootCmd.Flags().BoolVarP(&force, "force", "f", false, "Overwrite existing files")
 	rootCmd.Flags().BoolVarP(&dryRun, "dry-run", "n", false, "Show what would be done without making changes")
 	rootCmd.Flags().BoolVarP(&nonInteract, "yes", "y", false, "Non-interactive mode with defaults")
+	rootCmd.Flags().BoolVar(&nonInteract, "non-interactive", false, "Non-interactive mode with defaults")
 	rootCmd.Flags().StringVarP(&targetType, "target", "t", "", "Target harness: claude, antigravity, zed, opencode")
 	rootCmd.Flags().StringVar(&trackName, "track", "", "Curated track: opinionated, basics, product, copy-polish, custom")
 	rootCmd.Flags().StringSliceVar(&selectedSkills, "skill", nil, "Specific skill names to install (implies custom selection)")
+	rootCmd.Flags().StringSliceVar(&selectedSkills, "skills", nil, "Comma-separated skill names to install (implies custom selection)")
 	rootCmd.Flags().BoolVar(&backupFlag, "backup", true, "Save a safety backup snapshot before overwriting files (default true)")
 	rootCmd.Flags().BoolVar(&noBackupFlag, "no-backup", false, "Skip creating a safety backup snapshot")
 	rootCmd.MarkFlagsMutuallyExclusive("backup", "no-backup")
@@ -201,7 +207,9 @@ Run without flags in a terminal to launch the guided graphical TUI, or pass flag
 	rootCmd.Flags().StringVarP(&configFile, "config", "c", "", "Config file path")
 	rootCmd.Flags().BoolVar(&skipAgents, "skip-agents", false, "Skip installing subagents")
 	rootCmd.Flags().BoolVar(&skipCommands, "skip-commands", false, "Skip installing slash commands")
-	rootCmd.Flags().BoolVar(&globalInstall, "global", false, "Install to global user-level directory")
+	rootCmd.Flags().BoolVarP(&globalInstall, "global", "g", false, "Install to global user-level directory")
+	rootCmd.Flags().BoolVarP(&projectInstall, "project", "p", false, "Install to current repository project directory")
+	rootCmd.MarkFlagsMutuallyExclusive("global", "project")
 	rootCmd.Flags().StringVarP(&installMode, "mode", "m", "", "Installation mode: full, config-only, agents-only")
 
 	versionCmd := &cobra.Command{
@@ -219,6 +227,7 @@ Run without flags in a terminal to launch the guided graphical TUI, or pass flag
 	}
 	listCmd.Flags().StringSliceVar(&tags, "tag", nil, "Filter by tags")
 	listCmd.Flags().StringSliceVar(&languages, "lang", nil, "Filter by language")
+	listCmd.Flags().StringVar(&listCategory, "category", "", "Filter skills by category")
 	listCmd.Flags().StringVarP(&targetType, "target", "t", "", "Filter skills for target harness (claude, antigravity, zed, opencode)")
 	listCmd.Flags().StringVar(&trackName, "track", "", "Filter skills by curated track (opinionated, basics, product, copy-polish)")
 	listCmd.Flags().BoolVar(&listLong, "long", false, "Show full long descriptions and starter prompts")
@@ -231,6 +240,7 @@ Run without flags in a terminal to launch the guided graphical TUI, or pass flag
 	guideCmd.Flags().StringVarP(&targetType, "target", "t", "", "Target harness (claude, antigravity, zed, opencode)")
 	guideCmd.Flags().StringVar(&trackName, "track", "opinionated", "Track to preview in guide")
 	guideCmd.Flags().BoolVarP(&nonInteract, "yes", "y", false, "Print formatted guide to stdout without launching TUI")
+	guideCmd.Flags().BoolVar(&nonInteract, "non-interactive", false, "Print formatted guide to stdout without launching TUI")
 
 	updateCmd := &cobra.Command{
 		Use:   "update",
@@ -240,23 +250,33 @@ Run without flags in a terminal to launch the guided graphical TUI, or pass flag
 	updateCmd.Flags().BoolVar(&updateCheck, "check", false, "Only check whether updates are available without applying")
 	updateCmd.Flags().BoolVar(&updateApply, "apply", false, "Apply available updates from main")
 	updateCmd.Flags().BoolVar(&updateSelf, "self", false, "Upgrade the skill-installer binary from GitHub Releases")
+	updateCmd.Flags().BoolVar(&updateSelf, "self-upgrade", false, "Upgrade the skill-installer binary from GitHub Releases")
 	updateCmd.Flags().BoolVar(&updateJSON, "json", false, "Emit machine-readable JSON output for /plugin-update")
 	updateCmd.Flags().StringVarP(&targetType, "target", "t", "", "Target harness to update (claude, antigravity, zed, opencode)")
-	updateCmd.Flags().BoolVar(&globalInstall, "global", false, "Update global installation")
+	updateCmd.Flags().BoolVarP(&globalInstall, "global", "g", false, "Update global installation")
+	updateCmd.Flags().BoolVarP(&projectInstall, "project", "p", false, "Update project installation")
+	updateCmd.MarkFlagsMutuallyExclusive("global", "project")
 	updateCmd.Flags().BoolVar(&backupFlag, "backup", true, "Save a safety backup before applying update")
 	updateCmd.Flags().BoolVar(&noBackupFlag, "no-backup", false, "Skip safety backup when updating")
 	updateCmd.MarkFlagsMutuallyExclusive("backup", "no-backup")
 	updateCmd.Flags().BoolVarP(&nonInteract, "yes", "y", false, "Apply updates without interactive confirmation")
+	updateCmd.Flags().BoolVar(&nonInteract, "non-interactive", false, "Apply updates without interactive confirmation")
 
 	restoreCmd := &cobra.Command{
-		Use:   "restore",
+		Use:   "restore [snapshot-id]",
 		Short: "Restore files from a timestamped safety backup snapshot",
+		Args:  cobra.MaximumNArgs(1),
 		RunE:  runRestore,
 	}
 	restoreCmd.Flags().StringVar(&restoreID, "id", "", "Snapshot ID to restore (defaults to latest matching snapshot)")
+	restoreCmd.Flags().StringVar(&restoreFile, "file", "", "Restore only a single file from the snapshot")
+	restoreCmd.Flags().StringVar(&restoreFile, "path", "", "Restore only a single file from the snapshot")
 	restoreCmd.Flags().StringVarP(&targetType, "target", "t", "", "Filter snapshots by harness (claude, antigravity, zed, opencode)")
-	restoreCmd.Flags().BoolVar(&globalInstall, "global", false, "Filter by global scope")
+	restoreCmd.Flags().BoolVarP(&globalInstall, "global", "g", false, "Filter by global scope")
+	restoreCmd.Flags().BoolVarP(&projectInstall, "project", "p", false, "Filter by project scope")
+	restoreCmd.MarkFlagsMutuallyExclusive("global", "project")
 	restoreCmd.Flags().BoolVarP(&nonInteract, "yes", "y", false, "Restore without interactive prompt")
+	restoreCmd.Flags().BoolVar(&nonInteract, "non-interactive", false, "Restore without interactive prompt")
 
 	uninstallCmd := &cobra.Command{
 		Use:   "uninstall",
@@ -264,20 +284,24 @@ Run without flags in a terminal to launch the guided graphical TUI, or pass flag
 		RunE:  runUninstall,
 	}
 	uninstallCmd.Flags().StringVarP(&targetType, "target", "t", "", "Target harness to uninstall (claude, antigravity, zed, opencode)")
-	uninstallCmd.Flags().BoolVar(&globalInstall, "global", false, "Uninstall from global user-level directory")
+	uninstallCmd.Flags().BoolVarP(&globalInstall, "global", "g", false, "Uninstall from global user-level directory")
+	uninstallCmd.Flags().BoolVarP(&projectInstall, "project", "p", false, "Uninstall from current project directory")
+	uninstallCmd.MarkFlagsMutuallyExclusive("global", "project")
 	uninstallCmd.Flags().BoolVar(&restoreConfig, "restore-config", false, "Restore pre-install config file from backup if available")
 	uninstallCmd.Flags().BoolVarP(&nonInteract, "yes", "y", false, "Uninstall without interactive confirmation")
+	uninstallCmd.Flags().BoolVar(&nonInteract, "non-interactive", false, "Uninstall without interactive confirmation")
 
 	initCmd := &cobra.Command{
 		Use:   "init [name]",
-		Short: "Create a new skill from template",
-		Args:  cobra.ExactArgs(1),
+		Short: "Create a new skill from template or generate a .skill-installer.yaml config",
+		Args:  cobra.MaximumNArgs(1),
 		RunE:  runInit,
 	}
 	var initModel string
 	var initTags []string
 	var initLangs []string
 	var initDesc string
+	initCmd.Flags().StringVarP(&initOutput, "output", "o", "", "Output file path for .skill-installer.yaml config")
 	initCmd.Flags().StringVar(&initModel, "model", "sonnet", "Model to use (haiku, sonnet, opus)")
 	initCmd.Flags().StringSliceVar(&initTags, "tag", nil, "Tags for the skill")
 	initCmd.Flags().StringSliceVar(&initLangs, "lang", []string{"any"}, "Languages for the skill")
@@ -381,8 +405,13 @@ func runFullInstall(cmd *cobra.Command, reader *bufio.Reader, env platform.Env, 
 	if fromSource != "" {
 		fmt.Println("\nInstalling skills from external source...")
 		var results []string
-		if strings.HasPrefix(fromSource, "http://") || strings.HasPrefix(fromSource, "https://") {
-			if strings.Contains(fromSource, "github.com") || strings.Contains(fromSource, "gitlab.com") {
+		if strings.Contains(fromSource, "://") || strings.HasPrefix(fromSource, "http:") || strings.HasPrefix(fromSource, "https:") {
+			u, uErr := url.Parse(fromSource)
+			if uErr != nil || u.Scheme != "https" || u.Hostname() == "" {
+				return fmt.Errorf("external source URLs must use https:// with a valid hostname: %s", fromSource)
+			}
+			host := strings.ToLower(u.Hostname())
+			if host == "github.com" || host == "gitlab.com" {
 				results, err = inst.InstallFromGit(fromSource, paths.SkillsDir)
 			} else {
 				results, err = inst.InstallFromURL(fromSource, paths.SkillsDir)
@@ -427,125 +456,77 @@ func runFullInstall(cmd *cobra.Command, reader *bufio.Reader, env platform.Env, 
 		}
 	}
 
-	updateConfig := false
-	if scope == "project" && target.ConfigPath != "" && !skipClaude {
-		updateConfig, err = askUpdateConfig(reader, target)
-		if err != nil {
-			return err
+	skipCfg := skipClaude
+	forceCfg := false
+	if scope == "project" && target.ConfigPath != "" && !skipCfg {
+		updateConfig, uErr := askUpdateConfig(reader, target)
+		if uErr != nil {
+			return uErr
 		}
-	}
-
-	var candidateTargets []string
-	if paths.ConfigFile != "" {
-		candidateTargets = append(candidateTargets, paths.ConfigFile)
-	}
-	if paths.HooksJSON != "" {
-		candidateTargets = append(candidateTargets, paths.HooksJSON)
-	}
-	var backupID string
-	if doBackup && !dryRun {
-		mgr := backup.NewManager(env.BackupsDir())
-		mf, bErr := mgr.CreateSnapshot(target.Harness, scope, chosenTrack, candidateTargets, env.StateFilePath())
-		if bErr != nil {
-			return bErr
-		}
-		backupID = mf.ID
-	}
-
-	fmt.Println("\nInstalling skills...")
-	results, err := inst.InstallSelectedSkillsForHarness(paths.SkillsDir, target.Harness, scope == "global", allowSkills, tags, languages)
-	if err != nil {
-		return err
-	}
-	for _, r := range results {
-		fmt.Println(r)
-	}
-
-	var allActions []string
-	allActions = append(allActions, results...)
-
-	if !skipAgents && track.InstallAgents && paths.AgentsDir != "" {
-		overwrite, err := askOverwriteAgents(reader, paths.AgentsDir)
-		if err != nil {
-			return err
-		}
-		if overwrite {
-			agentInst := inst
-			if !inst.HasForce() {
-				agentInst = installer.New(content, installer.Options{Force: true, DryRun: dryRun})
-			}
-			fmt.Println("\nInstalling agents...")
-			agentResults, err := agentInst.InstallAgentsForHarness(paths.AgentsDir, target.Harness, scope == "global", nil)
-			if err != nil {
-				return err
-			}
-			for _, r := range agentResults {
-				fmt.Println(r)
-			}
-			allActions = append(allActions, agentResults...)
-		} else {
-			fmt.Println("\nSkipping agent installation.")
-		}
-	}
-
-	hooksMerged := false
-	hooksCreated := false
-	if scope == "global" && !skipClaude {
-		fmt.Println("\nInstalling global harness assets...")
-		if target.Harness == installer.HarnessAntigravity {
-			globalResults, hm, hc, err := inst.InstallGlobalHarnessAssetsWithOptions(paths.GeminiHome, target.Harness, installer.GlobalAssetOptions{
-				LightweightConfig: track.LightweightConfig,
-				InstallHooks:      track.InstallHooks,
-				Env:               env,
-			})
-			if err != nil {
-				return err
-			}
-			for _, r := range globalResults {
-				fmt.Println(r)
-			}
-			allActions = append(allActions, globalResults...)
-			hooksMerged = hm
-			hooksCreated = hc
-		} else if paths.ConfigFile != "" {
-			tpl, err := cat.GlobalConfigTemplate(target.Harness, track.LightweightConfig)
-			if err != nil {
-				return err
-			}
-			if !dryRun {
-				if err := os.MkdirAll(filepath.Dir(paths.ConfigFile), 0755); err == nil {
-					if _, uErr := installer.UnlinkIfSymlink(paths.ConfigFile, false); uErr == nil {
-						if force || !fileExists(paths.ConfigFile) {
-							_ = os.WriteFile(paths.ConfigFile, tpl, 0644)
-							line := fmt.Sprintf("CREATED: %s", paths.ConfigFile)
-							fmt.Println(line)
-							allActions = append(allActions, line)
-						}
-					}
+		if !updateConfig {
+			skipCfg = true
+		} else if !force && !nonInteract {
+			exists, isSymlink := pathExistsOrSymlink(paths.ConfigFile)
+			if exists || isSymlink {
+				fmt.Printf("%s already exists. Overwrite? [y/N]: ", target.ConfigPath)
+				input, rErr := reader.ReadString('\n')
+				if rErr != nil {
+					return rErr
+				}
+				trimmed := strings.TrimSpace(strings.ToLower(input))
+				if trimmed == "y" || trimmed == "yes" {
+					forceCfg = true
+				} else {
+					fmt.Printf("SKIP: %s\n", paths.ConfigFile)
+					skipCfg = true
 				}
 			}
 		}
 	}
 
-	if !skipCommands && paths.CommandsDir != "" {
-		fmt.Println("\nInstalling commands...")
-		allowedCmds := cat.CommandsForSkills(target.Harness, allowSkills)
-		cmdResults, err := inst.InstallCommandsForHarness(paths.CommandsDir, target.Harness, allowedCmds)
-		if err != nil {
-			return err
+	skipAg := skipAgents
+	forceAg := false
+	if !skipAg && track.InstallAgents && paths.AgentsDir != "" {
+		overwrite, oErr := askOverwriteAgents(reader, paths.AgentsDir)
+		if oErr != nil {
+			return oErr
 		}
-		for _, r := range cmdResults {
-			fmt.Println(r)
+		if overwrite {
+			forceAg = true
+		} else {
+			fmt.Println("\nSkipping agent installation.")
+			skipAg = true
 		}
-		allActions = append(allActions, cmdResults...)
 	}
 
-	if updateConfig {
-		if err := generateConfigFile(inst, target, reader); err != nil {
-			fmt.Printf("Warning: Could not generate %s: %v\n", target.ConfigPath, err)
-		} else {
-			allActions = append(allActions, "CREATED: "+filepath.Join(cwd, target.ConfigPath))
-		}
+	fmt.Println("\nInstalling skills...")
+	res, err := inst.ExecutePlan(installer.InstallPlan{
+		Env:                   env,
+		Catalog:               cat,
+		Harness:               target.Harness,
+		Scope:                 scope,
+		ProjectDir:            cwd,
+		TrackID:               chosenTrack,
+		CustomSkills:          allowSkills,
+		Tags:                  tags,
+		Languages:             languages,
+		Mode:                  modeFullInstall,
+		SkipConfig:            skipCfg,
+		SkipAgents:            skipAg,
+		SkipCommands:          skipCommands,
+		Backup:                doBackup,
+		Force:                 force,
+		ForceAgents:           forceAg,
+		ForceConfig:           forceCfg,
+		DryRun:                dryRun,
+		Version:               version,
+		ProjectConfigRenderer: renderProjectConfigBytes,
+	})
+	if err != nil {
+		return err
+	}
+	for _, r := range res.Actions {
+		fmt.Println(r)
 	}
 
 	if scope == "project" && !dryRun && target.Harness == installer.HarnessClaude {
@@ -558,40 +539,12 @@ func runFullInstall(cmd *cobra.Command, reader *bufio.Reader, env platform.Env, 
 		}
 	}
 
-	if !dryRun {
-		var installedFiles []string
-		for _, act := range allActions {
-			for _, pfx := range []string{"CREATED: ", "UPDATED: "} {
-				if strings.HasPrefix(act, pfx) {
-					p := strings.TrimSpace(strings.TrimPrefix(act, pfx))
-					if paths.HooksJSON != "" && filepath.Clean(p) == filepath.Clean(paths.HooksJSON) {
-						continue
-					}
-					installedFiles = append(installedFiles, filepath.Clean(p))
-				}
-			}
-		}
-		store := state.NewStore(env.StateFilePath())
-		_ = store.Upsert(state.Receipt{
-			Harness:          target.Harness,
-			Scope:            scope,
-			RootDir:          paths.RootDir,
-			Track:            chosenTrack,
-			Skills:           allowSkills,
-			InstalledFiles:   installedFiles,
-			HooksMerged:      hooksMerged,
-			HooksFileCreated: hooksCreated,
-			Version:          version,
-			LastBackupID:     backupID,
-		})
-	}
-
 	if dryRun {
 		fmt.Println("\n(dry run - no files were modified)")
 	} else {
 		fmt.Printf("\nDone! %s (%s track) configured for %s.\n", target.Name, track.Name, scope)
-		if backupID != "" {
-			fmt.Printf("Safety backup saved: %s (restore anytime with `skill-installer restore`)\n", backupID)
+		if res.BackupID != "" {
+			fmt.Printf("Safety backup saved: %s (restore anytime with `skill-installer restore`)\n", res.BackupID)
 		}
 		fmt.Printf("New to these commands? Run `skill-installer guide -t %s --track %s` for a 60-second tour!\n", target.Harness, chosenTrack)
 	}
@@ -674,6 +627,9 @@ func loadConfig() (*config.Config, error) {
 	if configFile != "" {
 		return config.LoadFile(configFile)
 	}
+	if globalInstall {
+		return &config.Config{}, nil
+	}
 	return config.Load(".")
 }
 
@@ -703,7 +659,7 @@ func applyConfig(cfg *config.Config) {
 	if !skipClaude && cfg.SkipClaudeMD {
 		skipClaude = true
 	}
-	if fromSource == "" && cfg.From != "" {
+	if fromSource == "" && cfg.From != "" && configFile != "" {
 		fromSource = cfg.From
 	}
 	if installMode == "" && cfg.Mode != "" {
@@ -1158,6 +1114,12 @@ func runList(cmd *cobra.Command, args []string) error {
 		if trackAllow != nil && !trackAllow[s.Name] {
 			continue
 		}
+		if listCategory != "" {
+			sm, ok := cat.SkillMeta(s.Name)
+			if !ok || !strings.EqualFold(sm.Category, listCategory) {
+				continue
+			}
+		}
 		if !installer.MatchesFilter(s, tags, languages) {
 			continue
 		}
@@ -1248,7 +1210,32 @@ func resolveReceiptForOperation(env platform.Env, cat *catalog.Catalog) (*state.
 	}
 
 	receipts, _ := store.Load()
-	if len(receipts) > 0 {
+	var filtered []state.Receipt
+	for _, r := range receipts {
+		if globalInstall && r.Scope != "global" {
+			continue
+		}
+		if projectInstall && r.Scope != "project" {
+			continue
+		}
+		if !globalInstall && r.Scope == "project" {
+			if p, err := env.ResolvePaths(r.Harness, "project", cwd); err == nil && filepath.Clean(r.RootDir) != filepath.Clean(p.RootDir) {
+				continue
+			}
+		}
+		filtered = append(filtered, r)
+	}
+	if len(filtered) == 1 {
+		return &filtered[0], nil
+	}
+	if len(filtered) > 1 {
+		var names []string
+		for _, r := range filtered {
+			names = append(names, fmt.Sprintf("%s (%s)", r.Harness, r.Scope))
+		}
+		return nil, fmt.Errorf("multiple installations match (%s); specify --target (-t) and --global (-g) or --project (-p)", strings.Join(names, ", "))
+	}
+	if !globalInstall && !projectInstall && len(receipts) == 1 {
 		return &receipts[0], nil
 	}
 	for _, h := range targetOrder {
@@ -1365,15 +1352,52 @@ func runRestore(cmd *cobra.Command, args []string) error {
 	mgr := backup.NewManager(env.BackupsDir())
 
 	chosenID := restoreID
+	if chosenID == "" && len(args) > 0 {
+		chosenID = args[0]
+	}
 	if chosenID == "" {
 		snaps, err := mgr.ListSnapshots(targetType)
 		if err != nil {
 			return err
 		}
-		if len(snaps) == 0 {
+		var filtered []backup.Manifest
+		for _, s := range snaps {
+			if globalInstall && s.Scope != "global" {
+				continue
+			}
+			if projectInstall && s.Scope != "project" {
+				continue
+			}
+			filtered = append(filtered, s)
+		}
+		if len(filtered) == 0 {
 			return fmt.Errorf("no safety backup snapshots found in %s", env.BackupsDir())
 		}
-		chosenID = snaps[0].ID
+		chosenID = filtered[0].ID
+	}
+
+	if !nonInteract {
+		reader := bufio.NewReader(os.Stdin)
+		fmt.Printf("Restore snapshot %s? [y/N]: ", chosenID)
+		in, _ := reader.ReadString('\n')
+		trimmed := strings.TrimSpace(strings.ToLower(in))
+		if trimmed != "y" && trimmed != "yes" {
+			fmt.Println("Restore cancelled.")
+			return nil
+		}
+	}
+
+	if restoreFile != "" {
+		restored, err := mgr.RestoreSingleFile(chosenID, restoreFile)
+		if err != nil {
+			return err
+		}
+		if restored {
+			fmt.Printf("Restored %s from snapshot %s.\n", restoreFile, chosenID)
+		} else {
+			fmt.Printf("Removed newly created file %s using snapshot %s.\n", restoreFile, chosenID)
+		}
+		return nil
 	}
 
 	res, err := mgr.RestoreSnapshot(chosenID, env.StateFilePath())
@@ -1396,6 +1420,17 @@ func runUninstall(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	if !nonInteract {
+		reader := bufio.NewReader(os.Stdin)
+		fmt.Printf("Uninstall %s (%s) at %s? [y/N]: ", tui.HarnessDisplayName(rec.Harness), rec.Scope, rec.RootDir)
+		in, _ := reader.ReadString('\n')
+		trimmed := strings.TrimSpace(strings.ToLower(in))
+		if trimmed != "y" && trimmed != "yes" {
+			fmt.Println("Uninstall cancelled.")
+			return nil
+		}
+	}
+
 	res, err := state.Uninstall(env, cat, *rec, backup.NewManager(env.BackupsDir()), restoreConfig)
 	if err != nil {
 		return err
@@ -1412,6 +1447,33 @@ func runUninstall(cmd *cobra.Command, args []string) error {
 }
 
 func runInit(cmd *cobra.Command, args []string) error {
+	if initOutput != "" || len(args) == 0 {
+		outPath := initOutput
+		if outPath == "" {
+			outPath = ".skill-installer.yaml"
+		}
+		exists, isSymlink := pathExistsOrSymlink(outPath)
+		if (exists || isSymlink) && !force {
+			return fmt.Errorf("%s already exists (use --force to overwrite)", outPath)
+		}
+		cfgContent := "target: claude\ntrack: opinionated\nbackup: true\n"
+		if dryRun {
+			fmt.Printf("WOULD CREATE: %s\n", outPath)
+			return nil
+		}
+		if _, err := installer.UnlinkIfSymlink(outPath, false); err != nil {
+			return err
+		}
+		if err := os.MkdirAll(filepath.Dir(outPath), 0755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(outPath, []byte(cfgContent), 0644); err != nil {
+			return fmt.Errorf("writing %s: %w", outPath, err)
+		}
+		fmt.Printf("CREATED: %s\n", outPath)
+		return nil
+	}
+
 	name := args[0]
 	model, _ := cmd.Flags().GetString("model")
 	initTags, _ := cmd.Flags().GetStringSlice("tag")
@@ -1742,6 +1804,7 @@ func findChecksumForFile(checksums, filename string) string {
 }
 
 func extractTarGzBinary(archivePath, binName, destPath string) error {
+	const maxBinBytes = 100 * 1024 * 1024
 	f, err := os.Open(archivePath)
 	if err != nil {
 		return err
@@ -1764,23 +1827,33 @@ func extractTarGzBinary(archivePath, binName, destPath string) error {
 			return err
 		}
 
-		if filepath.Base(hdr.Name) == binName && hdr.Typeflag == tar.TypeReg {
+		if filepath.Base(hdr.Name) == binName && (hdr.Typeflag == tar.TypeReg || hdr.Typeflag == tar.TypeRegA) {
+			if hdr.Size > maxBinBytes {
+				return fmt.Errorf("archive binary %s exceeds 100 MiB limit", binName)
+			}
 			out, err := os.Create(destPath)
 			if err != nil {
 				return err
 			}
-			_, copyErr := io.Copy(out, io.LimitReader(tr, 100*1024*1024))
+			n, copyErr := io.Copy(out, io.LimitReader(tr, maxBinBytes+1))
 			closeErr := out.Close()
 			if copyErr != nil {
 				return copyErr
 			}
-			return closeErr
+			if closeErr != nil {
+				return closeErr
+			}
+			if n > maxBinBytes {
+				return fmt.Errorf("archive binary %s exceeds 100 MiB limit", binName)
+			}
+			return nil
 		}
 	}
 	return fmt.Errorf("%s not found in archive", binName)
 }
 
 func extractZipBinary(archivePath, binName, destPath string) error {
+	const maxBinBytes = 100 * 1024 * 1024
 	r, err := zip.OpenReader(archivePath)
 	if err != nil {
 		return err
@@ -1789,6 +1862,12 @@ func extractZipBinary(archivePath, binName, destPath string) error {
 
 	for _, zf := range r.File {
 		if filepath.Base(zf.Name) == binName {
+			if zf.Mode()&os.ModeSymlink != 0 || zf.FileInfo().IsDir() {
+				return fmt.Errorf("unsafe archive entry mode for %s", binName)
+			}
+			if zf.UncompressedSize64 > maxBinBytes {
+				return fmt.Errorf("archive binary %s exceeds 100 MiB limit", binName)
+			}
 			rc, err := zf.Open()
 			if err != nil {
 				return err
@@ -1799,12 +1878,18 @@ func extractZipBinary(archivePath, binName, destPath string) error {
 			if err != nil {
 				return err
 			}
-			_, copyErr := io.Copy(out, io.LimitReader(rc, 100*1024*1024))
+			n, copyErr := io.Copy(out, io.LimitReader(rc, maxBinBytes+1))
 			closeErr := out.Close()
 			if copyErr != nil {
 				return copyErr
 			}
-			return closeErr
+			if closeErr != nil {
+				return closeErr
+			}
+			if n > maxBinBytes {
+				return fmt.Errorf("archive binary %s exceeds 100 MiB limit", binName)
+			}
+			return nil
 		}
 	}
 	return fmt.Errorf("%s not found in archive", binName)

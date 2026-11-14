@@ -104,10 +104,10 @@ func TestCheckAndApplyWithTarballSecurity(t *testing.T) {
 	tarball := buildRepoTarball(t, nil, nil)
 	runner := fakeRunner{
 		handlers: map[string][]byte{
-			"gh api repos/futuregerald/futuregerald-claude-plugin/commits/main":             []byte(`{"sha":"newsha999","commit":{"message":"feat: update plugin-updater\n\ndetails","committer":{"date":"2026-11-14T00:00:00Z"}}}`),
-			"gh api repos/futuregerald/futuregerald-claude-plugin/compare/oldsha111...main": []byte(`{"commits":[{"sha":"newsha999","commit":{"message":"feat: update plugin-updater"}}],"files":[{"filename":"internal/catalog/shared/skills/plugin-updater/SKILL.md"}]}`),
-			"gh api repos/futuregerald/futuregerald-claude-plugin/releases/latest":          []byte(`{"tag_name":"v4.1.0"}`),
-			"gh api repos/futuregerald/futuregerald-claude-plugin/tarball/main":             tarball,
+			"gh api repos/futuregerald/futuregerald-claude-plugin/commits/main":            []byte(`{"sha":"f9e8d7c6","commit":{"message":"feat: update plugin-updater\n\ndetails","committer":{"date":"2026-11-14T00:00:00Z"}}}`),
+			"gh api repos/futuregerald/futuregerald-claude-plugin/compare/a1b2c3d4...main": []byte(`{"commits":[{"sha":"f9e8d7c6","commit":{"message":"feat: update plugin-updater"}}],"files":[{"filename":"internal/catalog/shared/skills/plugin-updater/SKILL.md"}]}`),
+			"gh api repos/futuregerald/futuregerald-claude-plugin/releases/latest":         []byte(`{"tag_name":"v4.1.0"}`),
+			"gh api repos/futuregerald/futuregerald-claude-plugin/tarball/main":            tarball,
 		},
 	}
 
@@ -117,20 +117,24 @@ func TestCheckAndApplyWithTarballSecurity(t *testing.T) {
 	if err := os.MkdirAll(projDir, 0755); err != nil {
 		t.Fatal(err)
 	}
+	userClaudeMD := filepath.Join(projDir, "CLAUDE.md")
+	if err := os.WriteFile(userClaudeMD, []byte("# Custom User Project Config"), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	receipt := state.Receipt{
 		Harness:   "claude",
 		Scope:     "project",
 		RootDir:   projDir,
 		Track:     "basics",
-		CommitSHA: "oldsha111",
+		CommitSHA: "a1b2c3d4",
 	}
 
 	rep, err := Check(context.Background(), runner, receipt, "4.0.0")
 	if err != nil {
 		t.Fatalf("Check error: %v", err)
 	}
-	if !rep.UpdateAvailable || !rep.BinaryUpdate || rep.LatestSHA != "newsha999" {
+	if !rep.UpdateAvailable || !rep.BinaryUpdate || rep.LatestSHA != "f9e8d7c6" {
 		t.Errorf("unexpected CheckReport: %+v", rep)
 	}
 	if len(rep.ChangedSkills) != 1 || rep.ChangedSkills[0] != "plugin-updater" {
@@ -145,8 +149,12 @@ func TestCheckAndApplyWithTarballSecurity(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Apply error: %v", err)
 	}
-	if sha != "newsha999" || res.Receipt.CommitSHA != "newsha999" {
-		t.Errorf("expected CommitSHA updated to newsha999, got %q", res.Receipt.CommitSHA)
+	if sha != "f9e8d7c6" || res.Receipt.CommitSHA != "f9e8d7c6" {
+		t.Errorf("expected CommitSHA updated to f9e8d7c6, got %q", res.Receipt.CommitSHA)
+	}
+	gotClaudeMD, _ := os.ReadFile(userClaudeMD)
+	if string(gotClaudeMD) != "# Custom User Project Config" {
+		t.Errorf("expected Apply to preserve customized project CLAUDE.md, got %q", string(gotClaudeMD))
 	}
 	skillBytes, err := os.ReadFile(filepath.Join(projDir, ".claude", "skills", "plugin-updater", "SKILL.md"))
 	if err != nil {

@@ -87,7 +87,12 @@ func RenderSkillTable(cat *catalog.Catalog, harness, trackID string, showLong bo
 	}
 
 	var b strings.Builder
-	header := fmt.Sprintf("  %-28s %-15s %-18s %s\n", "SKILL", "CATEGORY", "SLASH / TRIGGER", "SHORT DESCRIPTION")
+	header := fmt.Sprintf("  %s %s %s %s\n",
+		PadRight("SKILL", 28),
+		PadRight("CATEGORY", 18),
+		PadRight("SLASH / TRIGGER", 18),
+		"SHORT DESCRIPTION",
+	)
 	b.WriteString(StepPillStyle.Render(header))
 	b.WriteString("  " + strings.Repeat("─", 96) + "\n")
 
@@ -103,10 +108,10 @@ func RenderSkillTable(cat *catalog.Catalog, harness, trackID string, showLong bo
 		if slash == "" {
 			slash = "(auto)"
 		}
-		b.WriteString(fmt.Sprintf("  %-28s %-24s %-18s %s\n",
-			TitleStyle.Render(sm.Name),
-			CategoryBadge(sm.Category),
-			SlashStyle.Render(slash),
+		b.WriteString(fmt.Sprintf("  %s %s %s %s\n",
+			PadRight(TitleStyle.Render(sm.Name), 28),
+			PadRight(CategoryBadge(sm.Category), 18),
+			PadRight(SlashStyle.Render(slash), 18),
 			sm.Short,
 		))
 		if showLong {

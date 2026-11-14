@@ -103,4 +103,23 @@ func TestStoreSaveFindAndUninstallPreservesUserAssetsAndHooks(t *testing.T) {
 	if !strings.Contains(string(hooksAfter), "impeccable-design-detector") || strings.Contains(string(hooksAfter), "autonomous-circuit-breaker") {
 		t.Errorf("unexpected hooks.json after uninstall:\n%s", string(hooksAfter))
 	}
+
+	symRepo := filepath.Join(t.TempDir(), "external-skills")
+	if err := os.MkdirAll(filepath.Join(symRepo, "start"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	externalSkill := filepath.Join(symRepo, "start", "SKILL.md")
+	if err := os.WriteFile(externalSkill, []byte("# external"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	symProj := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(symProj, ".claude"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(symRepo, filepath.Join(symProj, ".claude", "skills")); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := DiscoverLegacyReceipt(env, cat, "claude", "project", symProj); ok {
+		t.Errorf("DiscoverLegacyReceipt must not follow symlinked .claude/skills directory")
+	}
 }

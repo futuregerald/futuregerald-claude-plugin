@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -332,9 +333,16 @@ func TestWindowsPythonHookCommandAndSweep(t *testing.T) {
 		}
 		return "", errors.New("not found")
 	})
-	want := `py -3 "C:/Users/alice/.gemini/config/hooks/autonomous_breaker.py"`
+	want := `"C:/Windows/py.exe" -3 "C:/Users/alice/.gemini/config/hooks/autonomous_breaker.py"`
 	if cmd != want {
 		t.Errorf("WindowsPythonHookCommand = %q, want %q", cmd, want)
+	}
+
+	sanitized := WindowsPythonHookCommand(`C:\Users\alice"%$foo\.gemini`, func(name string) (string, error) {
+		return "", errors.New("not found")
+	})
+	if strings.ContainsAny(sanitized, "%$`") {
+		t.Errorf("expected unsafe shell chars stripped from WindowsPythonHookCommand, got %q", sanitized)
 	}
 
 	tmp := t.TempDir()

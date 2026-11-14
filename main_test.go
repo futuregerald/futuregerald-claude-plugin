@@ -29,14 +29,18 @@ func resetGlobals() {
 	skipAgents = false
 	skipCommands = false
 	globalInstall = false
+	projectInstall = false
 	installMode = ""
 	listLong = false
+	listCategory = ""
 	updateCheck = false
 	updateApply = false
 	updateSelf = false
 	updateJSON = false
 	restoreID = ""
+	restoreFile = ""
 	restoreConfig = false
+	initOutput = ""
 	updateRunner = nil
 }
 
@@ -240,7 +244,7 @@ func TestEndToEnd_4HarnessesBackupRestoreUninstallGuideAndUpdate(t *testing.T) {
 		t.Errorf("runUninstall failed: %v", err)
 	}
 
-	globalPIIRe := regexp.MustCompile(`geraldonyango|zombie\.atlassian\.net|0d3ebe47|cobalthq|/Users/geraldonyango`)
+	globalPIIRe := regexp.MustCompile(`geraldonyango|zombie|0d3ebe47|cobalthq|/Users/geraldonyango`)
 	antigravityPIIRe := regexp.MustCompile(`geraldonyango|Gerald|[Cc]obalt|zombie|0d3ebe47|[Mm]olly|DL-[0-9X]|cobalthq|futuregerald|/Users/[a-ce-zA-Z]|/Users/d[^e]`)
 	for _, root := range []string{"shared", "claude", "antigravity", "zed", "opencode"} {
 		_ = fs.WalkDir(content, root, func(p string, d fs.DirEntry, wErr error) error {
@@ -254,15 +258,75 @@ func TestEndToEnd_4HarnessesBackupRestoreUninstallGuideAndUpdate(t *testing.T) {
 			if rErr != nil {
 				t.Fatalf("reading %s: %v", p, rErr)
 			}
-			if loc := globalPIIRe.FindString(string(b)); loc != "" {
+			sanitized := strings.NewReplacer("zombie UI", "", "zombie buildings", "").Replace(string(b))
+			if loc := globalPIIRe.FindString(sanitized); loc != "" {
 				t.Errorf("embedded %s matched forbidden PII pattern %q", p, loc)
 			}
 			if root == "antigravity" {
-				if loc := antigravityPIIRe.FindString(string(b)); loc != "" {
+				if loc := antigravityPIIRe.FindString(sanitized); loc != "" {
 					t.Errorf("embedded %s matched forbidden antigravity PII pattern %q", p, loc)
 				}
 			}
 			return nil
 		})
+	}
+}
+
+func TestUntrustedFromSourceAndRerunStatePreservation(t *testing.T) {
+	resetGlobals()
+	defer resetGlobals()
+
+	tmpHome := t.TempDir()
+	t.Setenv("HOME", tmpHome)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpHome, ".xdg"))
+
+	projDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(projDir); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Chdir(origDir) }()
+
+	if err := os.WriteFile(filepath.Join(projDir, ".skill-installer.yaml"), []byte("from: http://127.0.0.1:9999/evil.tar.gz\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	targetType = "claude"
+	trackName = "basics"
+	nonInteract = true
+	force = true
+	if err := runInstall(nil, nil); err != nil {
+		t.Fatalf("runInstall should ignore auto-discovered CWD from field, got error: %v", err)
+	}
+	if fromSource != "" {
+		t.Fatalf("expected fromSource to remain empty when -c is not explicitly set, got %q", fromSource)
+	}
+
+	resetGlobals()
+	targetType = "claude"
+	nonInteract = true
+	fromSource = "http://example.com/archive.tar.gz"
+	if err := runInstall(nil, nil); err == nil {
+		t.Fatalf("expected non-https fromSource URL to be rejected")
+	}
+
+	resetGlobals()
+	targetType = "claude"
+	trackName = "basics"
+	nonInteract = true
+	force = false
+	if err := runInstall(nil, nil); err != nil {
+		t.Fatalf("rerun runInstall without --force failed: %v", err)
+	}
+
+	resetGlobals()
+	targetType = "claude"
+	projectInstall = true
+	nonInteract = true
+	if err := runUninstall(nil, nil); err != nil {
+		t.Fatalf("runUninstall after non-force rerun failed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(projDir, ".claude", "skills", "test-driven-development", "SKILL.md")); !os.IsNotExist(err) {
+		t.Errorf("expected uninstall after non-force rerun to remove tracked skills, err=%v", err)
 	}
 }

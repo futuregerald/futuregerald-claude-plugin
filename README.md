@@ -32,10 +32,10 @@ Instead of dropping 45+ raw markdown files into your home directory with zero ex
 
 | Harness (`--target`) | Global Path (macOS / Linux) | Global Path (Windows) | Project Path (`--project`) | Installed Artifacts |
 |---|---|---|---|---|
-| **Claude Code** (`claude`) | `~/.claude/` | `%USERPROFILE%\.claude\` | `<repo>/.claude/` | `skills/<name>/`, `commands/`, `agents/` |
-| **Google Antigravity** (`antigravity`) | `~/.gemini/` | `%USERPROFILE%\.gemini\` | `<repo>/.gemini/` | `GEMINI.md`, `config/skills/<name>/`, `config/plugins/antigravity-subagents/`, `config/hooks/`, `config/hooks.json` |
-| **Zed** (`zed`) | `~/.agents/skills/` & `~/.config/zed/` | `%USERPROFILE%\.agents\skills\` & `%APPDATA%\Zed\` | `<repo>/.agents/skills/` & `<repo>/.rules` | `.agents/skills/<name>/`, `.rules` (`default.md` in global config) |
-| **OpenCode** (`opencode`) | `~/.config/opencode/` (`$XDG_CONFIG_HOME/opencode/`) | `%USERPROFILE%\.config\opencode\` | `<repo>/.opencode/` & `<repo>/AGENTS.md` | `AGENTS.md`, `skills/<name>/`, `agents/`, `commands/` |
+| **Claude Code** (`claude`) | `~/.claude/` | `%USERPROFILE%\.claude\` | `<repo>/.claude/` & `<repo>/CLAUDE.md` | `CLAUDE.md`, `skills/<name>/`, `commands/`, `agents/` |
+| **Google Antigravity** (`antigravity`) | `~/.gemini/` | `%USERPROFILE%\.gemini\` | `<repo>/.agents/skills/`, `<repo>/.agents/agents/`, `<repo>/GEMINI.md` | `GEMINI.md`, `config/skills/<name>/`, `config/plugins/antigravity-subagents/`, `config/hooks/`, `config/hooks.json` |
+| **Zed** (`zed`) | `~/.agents/skills/` & `~/.config/zed/AGENTS.md` | `%USERPROFILE%\.agents\skills\` & `%APPDATA%\Zed\AGENTS.md` | `<repo>/.agents/skills/` & `<repo>/AGENTS.md` | `.agents/skills/<name>/`, `AGENTS.md` |
+| **OpenCode** (`opencode`) | `~/.config/opencode/` (`$XDG_CONFIG_HOME/opencode/`) | `%APPDATA%\opencode\` | `<repo>/.opencode/` & `<repo>/AGENTS.md` | `AGENTS.md`, `skills/<name>/`, `agents/`, `commands/` |
 
 > **Windows Compatibility:** On Windows (`GOOS=windows`), `skill-installer` automatically rewrites Antigravity's `hooks.json` command from `autonomous-breaker.sh` to `python "%USERPROFILE%\.gemini\config\hooks\autonomous_breaker.py"` so the PreToolUse circuit breaker works natively without requiring `bash` or WSL.
 
@@ -46,10 +46,10 @@ Instead of dropping 45+ raw markdown files into your home directory with zero ex
 You don't need to install everything on day one. Choose one of five tracks interactively or via `--track`:
 
 1. **`opinionated` — Full Opinionated Workflow (Recommended)**
-   - Installs all **48 skills** plus harness-native rules (`CLAUDE.md` / `GEMINI.md` / `.rules` / `AGENTS.md`), specialized review subagents, slash commands, and (on Antigravity) the autonomous circuit-breaker hook.
+   - Installs all **48 skills** plus harness-native rules (`CLAUDE.md` / `GEMINI.md` / `AGENTS.md`), specialized review subagents, slash commands, and (on Antigravity) the autonomous circuit-breaker hook.
    - Enables the complete 12-phase Development Lifecycle (`/start`, `/begin`, `/lifecycle`).
 2. **`basics` — Just the Basics (Core Coding & Debugging)**
-   - Installs **9 essentials** for everyday engineering without workflow ceremony: `test-driven-development`, `systematic-debugging`, `comprehensive-code-review`, `fix-check`, `code-simplifier`, `writing-plans`, `plan-review`, `pull-request-description`, and `plugin-updater`.
+   - Installs **8 essentials** for everyday engineering without workflow ceremony: `brainstorming`, `writing-plans`, `systematic-debugging`, `test-driven-development`, `comprehensive-code-review`, `pull-request-description`, `handoff`, and `plugin-updater`.
 3. **`product` — Product, Planning & Specs Only**
    - Installs **11 product & architecture skills**: `craftsmans-wisdom`, `future-grilling`, `future-wayfinder`, `grilling-page`, `brainstorming`, `write-a-prd`, `writing-plans`, `visualize-plan`, `to-spec`, `to-tickets`, `writing-tickets`, plus `plugin-updater`.
 4. **`copy-polish` — Copy, UI Design & Quality Polish**
@@ -112,9 +112,9 @@ Open the interactive 3-tab guide at any time—even without reinstalling:
 skill-installer guide
 ```
 
-- **`[1] Overview & How It Works`** — Plain-English guide to automatic vs. slash-command invocation, what changes on disk, and starter prompts you can copy-paste into your coding agent.
-- **`[2] The 12-Phase Lifecycle`** — Visual step-by-step walkthrough of Phases `0` (`Shape`) & `0½` (`UI Design`) through Phase `12` (`Handoff`), showing which skill and gate runs at each phase.
-- **`[3] Skill & Command Catalog`** — Searchable, categorized catalog of all 48 skills. Press `/` to filter, `↑`/`↓` to browse, and `Enter` to expand any skill's full description, invocation command, harness support, and a copy-pasteable **"Try typing:"** prompt.
+- **`1. What You Can Type Now`** — Copy-pasteable slash commands and starter prompts for your installed track and harness.
+- **`2. How This Toolkit Works`** — Plain-English guide to automatic vs. slash-command invocation, what changes on disk, and the 12-Phase Lifecycle (`0` `Shape` & `0½` `UI Design` through `12` `Handoff`).
+- **`3. Skill & Command Explorer`** — Searchable, categorized catalog of all 48 skills. Press `/` to filter, `↑`/`↓` to browse, and `Enter` to expand any skill's full description, invocation command, harness support, and a copy-pasteable **"Try typing:"** prompt.
 
 Running `skill-installer guide` in a non-TTY pipeline (`skill-installer guide | less`) automatically outputs a clean, readable Markdown reference.
 
@@ -159,7 +159,7 @@ skill-installer <subcommand> [flags]
 
 ## Safety Backups, Restore & Uninstall
 
-Whenever `skill-installer` updates or overwrites existing files, it can snapshot the pre-write state to an OS-appropriate state directory (`~/.local/state/skill-installer/` on Linux, `~/Library/Application Support/skill-installer/` on macOS, `%LOCALAPPDATA%\skill-installer\` on Windows):
+Whenever `skill-installer` updates or overwrites existing files, it can snapshot the pre-write state to an OS-appropriate state directory (`~/.config/skill-installer/` or `$XDG_CONFIG_HOME/skill-installer/` on macOS and Linux, `%APPDATA%\skill-installer\` on Windows):
 
 - **Restore a full snapshot:**
   ```bash

@@ -21,11 +21,62 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/futuregerald/futuregerald-claude-plugin/internal/backup"
 	"github.com/futuregerald/futuregerald-claude-plugin/internal/catalog"
 	"github.com/futuregerald/futuregerald-claude-plugin/internal/installer"
 	"github.com/futuregerald/futuregerald-claude-plugin/internal/platform"
 	"github.com/futuregerald/futuregerald-claude-plugin/internal/state"
 )
+
+func isValidCommitSHA(sha string) bool {
+	if len(sha) < 7 || len(sha) > 40 {
+		return false
+	}
+	for i := 0; i < len(sha); i++ {
+		c := sha[i]
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+			return false
+		}
+	}
+	return true
+}
+
+func isValidSemverTag(v string) bool {
+	s := normalizeVersion(v)
+	if s == "" || len(s) > 64 {
+		return false
+	}
+	parts := strings.Split(s, ".")
+	if len(parts) != 3 {
+		return false
+	}
+	for idx, p := range parts {
+		if idx == 2 {
+			if dash := strings.IndexByte(p, '-'); dash >= 0 {
+				suffix := p[dash+1:]
+				p = p[:dash]
+				if suffix == "" {
+					return false
+				}
+				for i := 0; i < len(suffix); i++ {
+					c := suffix[i]
+					if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '.' || c == '-') {
+						return false
+					}
+				}
+			}
+		}
+		if p == "" {
+			return false
+		}
+		for i := 0; i < len(p); i++ {
+			if p[i] < '0' || p[i] > '9' {
+				return false
+			}
+		}
+	}
+	return true
+}
 
 const (
 	DefaultRepo        = "futuregerald/futuregerald-claude-plugin"
@@ -184,21 +235,23 @@ func Check(ctx context.Context, runner Runner, receipt state.Receipt, currentVer
 		}
 	} else if !strings.HasPrefix(head.SHA, receipt.CommitSHA) && head.SHA != receipt.CommitSHA {
 		report.UpdateAvailable = true
-		cmpBytes, cmpErr := runner.Run(ctx, "gh", "api", fmt.Sprintf("repos/%s/compare/%s...main", DefaultRepo, receipt.CommitSHA))
-		if cmpErr == nil {
-			var cmp ghCompareResponse
-			if json.Unmarshal(cmpBytes, &cmp) == nil {
-				for _, c := range cmp.Commits {
-					report.Commits = append(report.Commits, CommitSummary{
-						SHA:     c.SHA,
-						Message: firstLine(c.Commit.Message),
-						Date:    c.Commit.Committer.Date,
-					})
+		if isValidCommitSHA(receipt.CommitSHA) {
+			cmpBytes, cmpErr := runner.Run(ctx, "gh", "api", fmt.Sprintf("repos/%s/compare/%s...main", DefaultRepo, receipt.CommitSHA))
+			if cmpErr == nil {
+				var cmp ghCompareResponse
+				if json.Unmarshal(cmpBytes, &cmp) == nil {
+					for _, c := range cmp.Commits {
+						report.Commits = append(report.Commits, CommitSummary{
+							SHA:     c.SHA,
+							Message: firstLine(c.Commit.Message),
+							Date:    c.Commit.Committer.Date,
+						})
+					}
+					for _, f := range cmp.Files {
+						report.ChangedFiles = append(report.ChangedFiles, f.Filename)
+					}
+					report.ChangedSkills = extractChangedSkills(report.ChangedFiles)
 				}
-				for _, f := range cmp.Files {
-					report.ChangedFiles = append(report.ChangedFiles, f.Filename)
-				}
-				report.ChangedSkills = extractChangedSkills(report.ChangedFiles)
 			}
 		}
 	}
@@ -385,6 +438,8 @@ func Apply(ctx context.Context, runner Runner, env platform.Env, receipt state.R
 		customSkills = receipt.Skills
 	}
 
+	skipConfig := shouldSkipConfigOnUpdate(env, receipt, trackID)
+
 	res, err := inst.ExecutePlan(installer.InstallPlan{
 		Env:                   env,
 		Catalog:               cat,
@@ -394,6 +449,7 @@ func Apply(ctx context.Context, runner Runner, env platform.Env, receipt state.R
 		TrackID:               trackID,
 		CustomSkills:          customSkills,
 		Mode:                  "full",
+		SkipConfig:            skipConfig,
 		Backup:                opts.Backup,
 		Force:                 true,
 		Version:               opts.CurrentVersion,
@@ -407,16 +463,58 @@ func Apply(ctx context.Context, runner Runner, env platform.Env, receipt state.R
 	return res, head.SHA, nil
 }
 
+func shouldSkipConfigOnUpdate(env platform.Env, receipt state.Receipt, trackID string) bool {
+	projDir := receipt.RootDir
+	if receipt.Scope == "global" {
+		projDir = "."
+	}
+	paths, err := env.ResolvePaths(receipt.Harness, receipt.Scope, projDir)
+	if err != nil || paths.ConfigFile == "" {
+		return false
+	}
+	curBytes, err := os.ReadFile(paths.ConfigFile)
+	if err != nil {
+		return false
+	}
+	if receipt.Scope != "global" {
+		return true
+	}
+	oldCat, err := catalog.Load(catalog.FS)
+	if err != nil {
+		return true
+	}
+	if tr, ok := oldCat.TrackByID(trackID); ok {
+		if tpl, tErr := oldCat.GlobalConfigTemplate(receipt.Harness, tr.LightweightConfig); tErr == nil {
+			if bytes.Equal(curBytes, tpl) {
+				return false
+			}
+		}
+	}
+	for _, lw := range []bool{false, true} {
+		if tpl, tErr := oldCat.GlobalConfigTemplate(receipt.Harness, lw); tErr == nil && bytes.Equal(curBytes, tpl) {
+			return false
+		}
+	}
+	return true
+}
+
 func validateReleaseURL(rawURL string, allowTestHost bool) error {
 	u, err := url.Parse(rawURL)
 	if err != nil {
 		return err
 	}
+	if strings.Contains(u.Path, "..") {
+		return fmt.Errorf("disallowed path traversal in release URL %q", rawURL)
+	}
 	if allowTestHost && (u.Hostname() == "127.0.0.1" || u.Hostname() == "localhost") {
 		return nil
 	}
-	if u.Scheme != "https" || (u.Hostname() != "github.com" && u.Hostname() != "api.github.com") {
+	if u.Scheme != "https" || u.Hostname() != "github.com" {
 		return fmt.Errorf("disallowed release download URL %q", rawURL)
+	}
+	expectedPrefix := "/" + DefaultRepo + "/releases/download/"
+	if !strings.HasPrefix(u.Path, expectedPrefix) {
+		return fmt.Errorf("disallowed release download path %q", u.Path)
 	}
 	return nil
 }
@@ -424,6 +522,9 @@ func validateReleaseURL(rawURL string, allowTestHost bool) error {
 func SelfUpgradeBinary(ctx context.Context, env platform.Env, exePath, targetVersion string, client *http.Client, baseReleaseURL string) (string, error) {
 	if client == nil {
 		client = http.DefaultClient
+	}
+	if !isValidSemverTag(targetVersion) {
+		return "", fmt.Errorf("invalid target semver version %q for binary self-upgrade", targetVersion)
 	}
 	normVer := normalizeVersion(targetVersion)
 	if normVer == "" {
@@ -533,6 +634,9 @@ func SelfUpgradeBinary(ctx context.Context, env platform.Env, exePath, targetVer
 		return "", err
 	}
 
+	if err := backup.RejectSymlinkInChain(exePath); err != nil {
+		return "", err
+	}
 	if env.GOOS == "windows" {
 		oldPath := exePath + ".old"
 		_ = os.Remove(oldPath)
@@ -549,6 +653,7 @@ func SelfUpgradeBinary(ctx context.Context, env platform.Env, exePath, targetVer
 	}
 
 	stagingPath := exePath + ".new"
+	_ = os.Remove(stagingPath)
 	if err := os.WriteFile(stagingPath, newBytes, 0755); err != nil {
 		return "", err
 	}
@@ -581,17 +686,26 @@ func extractBinaryFromTarGz(archivePath, binName, destPath string) error {
 		if err != nil {
 			return err
 		}
-		if path.Base(strings.ReplaceAll(hdr.Name, `\`, "/")) == binName && (hdr.Typeflag == tar.TypeReg || hdr.Typeflag == tar.TypeRegA) {
+		if path.Base(strings.ReplaceAll(hdr.Name, `\`, "/")) == binName {
+			if hdr.Typeflag != tar.TypeReg && hdr.Typeflag != tar.TypeRegA {
+				return fmt.Errorf("refusing non-regular binary entry %s in tar.gz", hdr.Name)
+			}
 			out, err := os.OpenFile(destPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0755)
 			if err != nil {
 				return err
 			}
-			_, copyErr := io.Copy(out, io.LimitReader(tr, maxArchiveBytes))
+			n, copyErr := io.Copy(out, io.LimitReader(tr, maxArchiveBytes+1))
 			closeErr := out.Close()
 			if copyErr != nil {
 				return copyErr
 			}
-			return closeErr
+			if closeErr != nil {
+				return closeErr
+			}
+			if n > maxArchiveBytes {
+				return fmt.Errorf("binary %s exceeds 100 MiB limit", binName)
+			}
+			return nil
 		}
 	}
 	return fmt.Errorf("binary %s not found in tar.gz", binName)
@@ -606,6 +720,9 @@ func extractBinaryFromZip(archivePath, binName, destPath string) error {
 
 	for _, zf := range zr.File {
 		if path.Base(strings.ReplaceAll(zf.Name, `\`, "/")) == binName && !zf.FileInfo().IsDir() {
+			if zf.Mode()&os.ModeSymlink != 0 {
+				return fmt.Errorf("refusing symlinked binary entry %s in zip", zf.Name)
+			}
 			rc, err := zf.Open()
 			if err != nil {
 				return err
@@ -615,13 +732,19 @@ func extractBinaryFromZip(archivePath, binName, destPath string) error {
 				rc.Close()
 				return err
 			}
-			_, copyErr := io.Copy(out, io.LimitReader(rc, maxArchiveBytes))
+			n, copyErr := io.Copy(out, io.LimitReader(rc, maxArchiveBytes+1))
 			rc.Close()
 			closeErr := out.Close()
 			if copyErr != nil {
 				return copyErr
 			}
-			return closeErr
+			if closeErr != nil {
+				return closeErr
+			}
+			if n > maxArchiveBytes {
+				return fmt.Errorf("binary %s exceeds 100 MiB limit", binName)
+			}
+			return nil
 		}
 	}
 	return fmt.Errorf("binary %s not found in zip", binName)
