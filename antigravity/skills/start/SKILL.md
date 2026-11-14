@@ -1,0 +1,35 @@
+---
+name: start
+description: >-
+  Antigravity-only 12-phase Development Lifecycle (/start, /begin) powered by the
+  Peer-Pipeline Swarm. Runs Phases 0–3 inline in the Coordinator, Phase 3½ with a
+  one-shot Carbon High plan review, Phases 4–9 as a hands-off peer pipeline
+  (Argon Medium share implementer + Claude Opus 5.5 High & Gemini 4 Carbon High
+  reviewers + Hydrogen Low stall monitor), and Phases 10–12 inline. Use whenever
+  the user invokes /start or /begin, or asks to run the Antigravity pipeline
+  workflow on a coding task.
+---
+
+# Antigravity Development Lifecycle (`/start`)
+
+Executes the full 12-phase Development Lifecycle in Antigravity using single-brain planning for Phases 0–3, the **Peer-Pipeline Swarm** ([`peer-pipeline-swarm`](../peer-pipeline-swarm/SKILL.md)) for Phases 4–9, and Coordinator-owned verification for Phases 10–12.
+
+- **What good looks like:** Every phase gate is verified with concrete evidence in `task.md`, cross-package callers are traced before code is written, Phases 4–9 resolve build/review/fix loops peer-to-peer without bloating the main conversation, and final gates + blast-radius checks are verified in the Coordinator's own shell before commit/PR.
+- **Exemptions:** Only pure documentation updates and `git revert` skip this lifecycle. Every code change gets a written plan (Phase 3); only Phase 3½ (`plan-review`) may be skipped for a trivial change with an obvious, self-contained blast radius.
+
+## Phase Sequence & Model Routing
+
+Create and maintain `<appDataDir>/brain/<conversation-id>/task.md` with all phases below, checking off each phase only when its gate passes:
+
+| # | Phase | Execution & Model | Action | Gate |
+|---|---|---|---|---|
+| **0** | **Shape** | **Inline Coordinator** (`Argon Med` default; `Hydrogen High` optional for fast Q&A) | **New/user-facing work:** Run `craftsmans-wisdom` (unless a brief is already confirmed), offer `future-grilling` (or `future-wayfinder` if multi-session), then `write-a-prd` / `brainstorming` if needed; use `grilling-page` for ≥3 independent questions. **Internal technical work:** Ask once per session whether to skip Phase 0 or grill open decisions. | Brief confirmed (or Phase 0 explicitly skipped for internal technical work) |
+| **0½** | **UI Design** | **Inline Coordinator** *(or `Hydrogen High`)* | **Net-new pages, new apps, or major UI changes:** Run `ui-design` (`huashu-design` 3-direction HTML prototypes in `design-demos/index.html`), open in browser, and stop for user selection (`direction-approved.md`). | Direction selected (or N/A for backend / trivial UI) |
+| **1** | **Receive** | **Inline Coordinator** | Load Prism `session_load_context` (turn 1). Understand task & repo rules (`GEMINI.md`, `AGENTS.md`, `CONTRIBUTING.md`, `docs/adr/`). Suggest a tracker ticket per org rules before creating one. Ensure you are on a fresh feature branch (check `gh pr view --json state,mergedAt && git fetch origin main` if reusing a branch). | Task understood; `task.md` created; feature branch ready |
+| **2** | **Trace** | **Inline Coordinator** | Map call chains upward (every direct/transitive caller + what it expects) and downward (DB/HTTP/queue/transaction side effects) via `git grep -n`. Check invisible edges (`send`, `constantize`, serializers, callbacks) and **both** E2E suites where applicable (`server/tests/e2e/` and `extension/e2e/`). | Every caller named with contract expectations |
+| **3** | **Plan** | **Inline Coordinator** (`Argon Med` 90% default; switch UI to `Carbon Med/High` only for ~10% complex architecture, auth/crypto, concurrency, or DB migrations) | Inspect repo lint/wording gates (`package.json`, `Makefile`, `scripts/check-*.mjs`) and sibling exemplars (`file:line`). Write uncommitted `PLAN.md` (`writing-plans`) with: Goal · **Affected Callers** · Approach · TDD tasks (paths, signatures, test cases, gates — never function bodies) · Risks · Rollback · Out of scope. | `PLAN.md` written with `Affected Callers` & repo gates |
+| **3½** | **Plan Review** | **Carbon High** (`swarm` one-shot `plan-rev` when UI is not on Carbon; `invoke_subagent` `plan-reviewer` when UI is already on Carbon) | Run one read-only adversarial audit of `PLAN.md` (**zero spikes / zero `run_command`**; no `monitor` needed for this single turn; `kill` `plan-rev` immediately after). Run `review-lens` (`--code` & `--concept`) where configured. Fix all CRITICAL/IMPORTANT findings in `PLAN.md` (never re-review). | All CRITICAL/IMPORTANT plan findings fixed (or skipped if trivial) |
+| **4–9** | **Build & Peer Review Pipeline** | **Peer-Pipeline Swarm** ([`peer-pipeline-swarm`](../peer-pipeline-swarm/SKILL.md)):<br>• `impl`: `gemini-4-argon-medium` (`workspace: "share"`)<br>• `code-rev`: `claude-opus-5-5-high`<br>• `sec-rev`: `gemini-4-carbon-high`<br>• `sql-rev`: `gemini-4-carbon-high` *(if SQL changed)*<br>• `monitor`: `gemini-4-hydrogen-low` | *(Trivial `<5-turn, ≤2-file` changes may run inline + `invoke_subagent` review.)* Otherwise load and execute [`peer-pipeline-swarm`](../peer-pipeline-swarm/SKILL.md): copy `PLAN.md` to `/tmp/plan-<project>-<stream>.md`, write `/tmp/subagent-context-<project>-<stream>.md`, and spawn `impl`, `code-rev`, `sec-rev` (+ `sql-rev`), and `monitor` in one turn. `impl` executes TDD (Phase 4), scoped fast tests (Phase 5), lint/typecheck (Phase 6), simplification (Phase 7), commits on its `share` branch, and resolves Phase 8/9 reviews peer-to-peer until all reviewers reply `[approved]`, then pings `@coordinator [green]`. *(On multi-phase single-PR roadmaps, run per-phase `impl` + fast gates, or full peer review per phase; always ensure final branch passes full review + `review-lens` before PR.)* | `@coordinator [green]` received; `share` branch merged into Coordinator branch; workers killed & `monitor` silenced (`[done]` or `kill`); temp files cleaned up |
+| **10** | **Blast-Radius Verify** | **Inline Coordinator** | **Always runs after merge & any review fixes.** Run version bump once if required (`node scripts/version.mjs bump ... && make version-check`). Run scoped fast unit tests and lint/typecheck directly in the Coordinator's shell (exit code `0`). Walk every `Affected Callers` row plus callers of any symbol touched in review fixes and verify with evidence. | Fast unit/lint gates green in Coordinator transcript; every caller verified |
+| **11** | **Commit** | **Inline Coordinator** | Create clean conventional commit(s) (zero code comments, ticket key per org rules) on the feature branch (never `main`). | Committed on feature branch |
+| **12** | **Handoff** | **Inline Coordinator** (+ `editor-pass` for user-facing work) | Run `editor-pass` (`invoke_subagent` or one-shot `Carbon High`) against Phase 0 brief for user-facing changes. On personal auto-PR repos, push, open PR (`pull-request-description`), immediately offer `/copy-edit` while watching CI (`gh pr checks <pr> --watch`), and fix any CI failures before reporting done. Never auto-merge. Save Prism `session_save_ledger` and `session_save_handoff`. | User acknowledged (and CI green on auto-PR repos) |

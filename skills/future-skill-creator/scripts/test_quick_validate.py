@@ -4,6 +4,13 @@ from pathlib import Path
 
 import pytest
 
+try:
+    import yaml
+except ModuleNotFoundError:
+    for candidate in (Path.home() / "Library" / "Python").glob("*/lib/python/site-packages"):
+        sys.path.append(str(candidate))
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import quick_validate
 
 SCRIPTS = Path(__file__).resolve().parent
@@ -98,3 +105,13 @@ def test_filled_template_passes_validation(tmp_path):
 def test_every_repo_skill_uses_only_known_frontmatter_keys(skill_dir):
     ok, message = quick_validate.validate_skill(skill_dir)
     assert "Unexpected key" not in message, message
+
+
+@pytest.mark.parametrize(
+    "skill_dir",
+    sorted(p.parent for p in (SKILLS_DIR.parent / "antigravity" / "skills").glob("*/SKILL.md")),
+    ids=lambda p: f"antigravity/{p.name}",
+)
+def test_every_antigravity_skill_passes_validation(skill_dir):
+    ok, message = quick_validate.validate_skill(skill_dir)
+    assert ok, message

@@ -171,6 +171,16 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "swarm",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.gemini/config/hooks/autonomous-breaker.sh",
+            "timeout": 5
+          }
+        ]
       }
     ]
   }

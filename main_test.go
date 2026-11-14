@@ -2,8 +2,10 @@ package main
 
 import (
 	"bufio"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -14,6 +16,14 @@ func resetGlobals() {
 	dryRun = false
 	nonInteract = false
 	targetType = ""
+	skipClaude = false
+	tags = nil
+	languages = nil
+	fromSource = ""
+	configFile = ""
+	skipAgents = false
+	skipCommands = false
+	globalInstall = false
 	installMode = ""
 }
 
@@ -392,5 +402,322 @@ func TestAskOverwriteAgents_NonInteractiveSkips(t *testing.T) {
 	}
 	if overwrite {
 		t.Error("expected false in non-interactive mode without --force")
+	}
+}
+
+func TestAskOverwriteAgents_DanglingSymlinkPromptsOrForces(t *testing.T) {
+	resetGlobals()
+	defer resetGlobals()
+
+	dir := t.TempDir()
+	if err := os.Symlink("/nonexistent/agent.md", filepath.Join(dir, "plan-reviewer.md")); err != nil {
+		t.Fatal(err)
+	}
+
+	nonInteract = true
+	force = false
+	reader := bufio.NewReader(strings.NewReader(""))
+	overwrite, err := askOverwriteAgents(reader, dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if overwrite {
+		t.Error("expected false in non-interactive mode without --force when dangling symlink exists")
+	}
+
+	force = true
+	overwrite, err = askOverwriteAgents(reader, dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !overwrite {
+		t.Error("expected true with --force when dangling symlink exists")
+	}
+
+	parent := t.TempDir()
+	symlinkDir := filepath.Join(parent, "agents")
+	if err := os.Symlink("/nonexistent/agents-dir", symlinkDir); err != nil {
+		t.Fatal(err)
+	}
+	force = false
+	nonInteract = true
+	overwrite, err = askOverwriteAgents(reader, symlinkDir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !overwrite {
+		t.Error("expected true in non-interactive mode when agentsDest itself is a symlink so symlink is replaced")
+	}
+
+	nonInteract = false
+	overwrite, err = askOverwriteAgents(bufio.NewReader(strings.NewReader("n\n")), symlinkDir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if overwrite {
+		t.Error("expected false in interactive mode when user declines replacing symlinked agentsDest")
+	}
+}
+
+func TestGetTarget_AntigravityAndGemini(t *testing.T) {
+	resetGlobals()
+	defer resetGlobals()
+
+	for _, mode := range []string{modeFullInstall, modeConfigOnly, modeAgentsOnly} {
+		for _, tc := range []struct {
+			key  string
+			name string
+		}{
+			{"antigravity", "Antigravity"},
+			{"gemini", "Gemini CLI"},
+		} {
+			targetType = tc.key
+			got, err := getTarget(bufio.NewReader(strings.NewReader("")), mode)
+			if err != nil {
+				t.Fatalf("getTarget(%q, %q) unexpected error: %v", tc.key, mode, err)
+			}
+			if got.Name != tc.name {
+				t.Errorf("getTarget(%q, %q).Name = %q, want %q", tc.key, mode, got.Name, tc.name)
+			}
+			if got.ConfigPath != "GEMINI.md" {
+				t.Errorf("getTarget(%q, %q).ConfigPath = %q, want GEMINI.md", tc.key, mode, got.ConfigPath)
+			}
+		}
+	}
+
+	targetType = ""
+	nonInteract = false
+	got1, err := getTarget(bufio.NewReader(strings.NewReader("1\n")), modeFullInstall)
+	if err != nil || got1.Name != "Claude Code" {
+		t.Fatalf("choice 1 = %v, %v; want Claude Code", got1.Name, err)
+	}
+	got2, err := getTarget(bufio.NewReader(strings.NewReader("2\n")), modeFullInstall)
+	if err != nil || got2.Name != "Antigravity" {
+		t.Fatalf("choice 2 = %v, %v; want Antigravity", got2.Name, err)
+	}
+	got3, err := getTarget(bufio.NewReader(strings.NewReader("3\n")), modeFullInstall)
+	if err != nil || got3.Name != "Gemini CLI" {
+		t.Fatalf("choice 3 = %v, %v; want Gemini CLI", got3.Name, err)
+	}
+}
+
+func TestGenerateConfigFile_GeminiTargetsUseGeminiTemplate(t *testing.T) {
+	resetGlobals()
+	defer resetGlobals()
+
+	for _, key := range []string{"antigravity", "gemini"} {
+		dir := t.TempDir()
+		origDir, _ := os.Getwd()
+		if err := os.Chdir(dir); err != nil {
+			t.Fatal(err)
+		}
+
+		force = true
+		nonInteract = true
+		target := targets[key]
+		err := generateConfigFile(nil, target, bufio.NewReader(strings.NewReader("")))
+		_ = os.Chdir(origDir)
+		if err != nil {
+			t.Fatalf("generateConfigFile(%s) error: %v", key, err)
+		}
+
+		data, err := os.ReadFile(filepath.Join(dir, "GEMINI.md"))
+		if err != nil {
+			t.Fatalf("reading GEMINI.md for %s: %v", key, err)
+		}
+		text := string(data)
+		if !strings.Contains(text, "/start") || !strings.Contains(text, "invoke_subagent") {
+			t.Errorf("GEMINI.md for %s missing /start or invoke_subagent", key)
+		}
+		if strings.Contains(text, "CLAUDE.md") || strings.Contains(text, "TaskCreate") {
+			t.Errorf("GEMINI.md for %s leaked CLAUDE.md or TaskCreate", key)
+		}
+	}
+}
+
+func TestEmbeddedContent_InstallsAntigravityAndGemini(t *testing.T) {
+	resetGlobals()
+	defer resetGlobals()
+
+	for _, key := range []string{"antigravity", "gemini"} {
+		projDir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(projDir, ".gitignore"), []byte(".claude/*\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		origDir, _ := os.Getwd()
+		if err := os.Chdir(projDir); err != nil {
+			t.Fatal(err)
+		}
+
+		resetGlobals()
+		targetType = key
+		nonInteract = true
+		force = true
+
+		err := runInstall(nil, nil)
+		_ = os.Chdir(origDir)
+		if err != nil {
+			t.Fatalf("runInstall(%s) project scope failed: %v", key, err)
+		}
+
+		if _, err := os.Stat(filepath.Join(projDir, "GEMINI.md")); err != nil {
+			t.Errorf("%s project install missing GEMINI.md: %v", key, err)
+		}
+		if _, err := os.Stat(filepath.Join(projDir, "init-claude-md")); !os.IsNotExist(err) {
+			t.Errorf("%s project install leaked commands into project root", key)
+		}
+		gitignoreData, _ := os.ReadFile(filepath.Join(projDir, ".gitignore"))
+		if strings.Contains(string(gitignoreData), "!.claude/project.json") {
+			t.Errorf("%s project install mutated .gitignore with .claude rule", key)
+		}
+
+		_, swarmErr := os.Stat(filepath.Join(projDir, ".agents", "skills", "peer-pipeline-swarm", "SKILL.md"))
+		if key == "antigravity" && swarmErr != nil {
+			t.Errorf("antigravity project install missing .agents/skills/peer-pipeline-swarm/SKILL.md: %v", swarmErr)
+		}
+		if key == "gemini" {
+			if _, err := os.Stat(filepath.Join(projDir, ".gemini", "skills", "peer-pipeline-swarm", "SKILL.md")); !os.IsNotExist(err) {
+				t.Errorf("gemini install should skip peer-pipeline-swarm/SKILL.md")
+			}
+		}
+
+		expectedSkillRoot := ".agents"
+		if key == "gemini" {
+			expectedSkillRoot = ".gemini"
+		}
+		lifecycleData, err := os.ReadFile(filepath.Join(projDir, expectedSkillRoot, "skills", "lifecycle", "SKILL.md"))
+		if err != nil {
+			t.Fatalf("%s missing %s/skills/lifecycle/SKILL.md: %v", key, expectedSkillRoot, err)
+		}
+		if strings.Contains(string(lifecycleData), "TaskCreate") {
+			t.Errorf("%s lifecycle/SKILL.md leaked TaskCreate", key)
+		}
+	}
+
+	tmpHome := t.TempDir()
+	t.Setenv("HOME", tmpHome)
+	for _, key := range []string{"antigravity", "gemini"} {
+		resetGlobals()
+		targetType = key
+		globalInstall = true
+		nonInteract = true
+		force = true
+		if err := runInstall(nil, nil); err != nil {
+			t.Fatalf("runInstall(%s, --global) failed: %v", key, err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(tmpHome, ".gemini", "config", "skills", "peer-pipeline-swarm", "SKILL.md")); err != nil {
+		t.Errorf("global antigravity missing ~/.gemini/config/skills/peer-pipeline-swarm/SKILL.md: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(tmpHome, ".gemini", "skills", "lifecycle", "SKILL.md")); err != nil {
+		t.Errorf("global gemini missing ~/.gemini/skills/lifecycle/SKILL.md: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(tmpHome, ".gemini", "skills", "peer-pipeline-swarm", "SKILL.md")); !os.IsNotExist(err) {
+		t.Errorf("global gemini should not install peer-pipeline-swarm into ~/.gemini/skills")
+	}
+	agSkill, err := os.ReadFile(filepath.Join(tmpHome, ".gemini", "config", "skills", "subagent-driven-development", "SKILL.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(agSkill), "~/.gemini/config/plugins/antigravity-subagents/agents/implementer.md") {
+		t.Errorf("global antigravity skill was overwritten with gemini paths")
+	}
+	globalGeminiMD, err := os.ReadFile(filepath.Join(tmpHome, ".gemini", "GEMINI.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(globalGeminiMD), "~/.gemini/config/skills/antigravity-orchestration/SKILL.md") {
+		t.Errorf("global ~/.gemini/GEMINI.md lost antigravity-orchestration path after gemini install")
+	}
+
+	piiRe := regexp.MustCompile(`geraldonyango|Gerald|[Cc]obalt|zombie|0d3ebe47|[Mm]olly|DL-[0-9X]|cobalthq|futuregerald|/Users/[a-ce-zA-Z]|/Users/d[^e]`)
+	_ = fs.WalkDir(content, "antigravity", func(p string, d fs.DirEntry, wErr error) error {
+		if wErr != nil || p == "antigravity/sync-from-local.sh" {
+			return wErr
+		}
+		if d.IsDir() {
+			if d.Name() == "__pycache__" || d.Name() == ".pytest_cache" {
+				return fs.SkipDir
+			}
+			return nil
+		}
+		if strings.HasSuffix(p, ".pyc") {
+			return nil
+		}
+		if strings.HasSuffix(p, ".local.md") || strings.HasSuffix(p, "/references/config.md") {
+			t.Errorf("embedded antigravity contains forbidden local file: %s", p)
+		}
+		b, rErr := fs.ReadFile(content, p)
+		if rErr != nil {
+			t.Fatalf("reading embedded %s: %v", p, rErr)
+		}
+		if loc := piiRe.FindString(string(b)); loc != "" {
+			t.Errorf("embedded %s matched forbidden PII/org pattern %q", p, loc)
+		}
+		return nil
+	})
+
+	symlinkProj := t.TempDir()
+	secretTarget := filepath.Join(t.TempDir(), "secret.txt")
+	if err := os.WriteFile(secretTarget, []byte("DO_NOT_TOUCH"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(secretTarget, filepath.Join(symlinkProj, "GEMINI.md")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(secretTarget, filepath.Join(symlinkProj, ".gitignore")); err != nil {
+		t.Fatal(err)
+	}
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(symlinkProj); err != nil {
+		t.Fatal(err)
+	}
+	resetGlobals()
+	force = true
+	nonInteract = true
+	_ = generateConfigFile(nil, targets["antigravity"], bufio.NewReader(strings.NewReader("")))
+	ensureGitignoreAllowsProjectJSON(bufio.NewReader(strings.NewReader("y\n")))
+	_ = os.Chdir(origDir)
+	secretData, _ := os.ReadFile(secretTarget)
+	if string(secretData) != "DO_NOT_TOUCH" {
+		t.Errorf("symlink target was overwritten by generateConfigFile or ensureGitignoreAllowsProjectJSON: %q", string(secretData))
+	}
+	resetGlobals()
+	targetType = "antigravity"
+	installMode = modeConfigOnly
+	globalInstall = true
+	nonInteract = true
+	force = true
+	if err := runInstall(nil, nil); err != nil {
+		t.Fatalf("runInstall(antigravity, config-only, --global) failed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(tmpHome, ".gemini", "GEMINI.md")); err != nil {
+		t.Errorf("global config-only missing ~/.gemini/GEMINI.md: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(tmpHome, ".gemini", "config", "hooks.json")); err != nil {
+		t.Errorf("global config-only missing ~/.gemini/config/hooks.json: %v", err)
+	}
+
+	resetGlobals()
+	targetType = "cursor"
+	installMode = modeConfigOnly
+	globalInstall = true
+	nonInteract = true
+	if err := runInstall(nil, nil); err == nil {
+		t.Errorf("expected error for --mode config-only --global with cursor target")
+	}
+
+	resetGlobals()
+	targetType = "unknown"
+	if err := runList(nil, nil); err == nil {
+		t.Errorf("expected error from runList with unknown target")
+	}
+
+	resetGlobals()
+	targetType = "antigravity"
+	tags = []string{"go"}
+	languages = []string{"go"}
+	if err := runList(nil, nil); err != nil {
+		t.Errorf("runList(antigravity) failed: %v", err)
 	}
 }

@@ -30,7 +30,7 @@ A Claude Code plugin that adds a curated library of AI coding skills and agents,
 This repository works in two ways:
 
 - **As a Claude Code plugin** -- Installed via symlink or `--plugin-dir`. Provides slash commands, skills, and agents directly inside Claude Code sessions.
-- **As a standalone CLI tool** (`skill-installer`) -- Installs skills, agents, and commands for Claude Code, GitHub Copilot, Cursor, OpenCode, and VS Code.
+- **As a standalone CLI tool** (`skill-installer`) -- Installs skills, agents, and commands for Claude Code, Antigravity, Gemini CLI, GitHub Copilot, Cursor, OpenCode, and VS Code.
 
 ### CLAUDE.md — Your Project's AI Configuration
 
@@ -350,11 +350,13 @@ The `skill-installer` binary installs skills, agents, and commands for any suppo
 
 | Target | Skills Path | Agents Path | Config File | Global Support |
 |--------|-------------|-------------|-------------|----------------|
-| Claude Code | `.claude/skills/` | `.claude/agents/` | `CLAUDE.md` | Yes |
-| GitHub Copilot | `.github/skills/` | `.github/*.agent.md` | `.github/copilot-instructions.md` | Yes |
-| Cursor | `.cursor/skills/` | `.cursor/agents/` | `.cursorrules` | No |
-| OpenCode | `.opencode/skills/` | `.opencode/agents/` | -- | No |
-| VS Code | `.vscode/claude/skills/` | `.vscode/claude/agents/` | -- | No |
+| Claude Code (`claude`) | `.claude/skills/` | `.claude/agents/` | `CLAUDE.md` | Yes (`~/.claude/`) |
+| Antigravity (`antigravity`) | `.agents/skills/` | `.agents/agents/` | `GEMINI.md` | Yes (`~/.gemini/config/skills/`, `~/.gemini/config/plugins/antigravity-subagents/agents/`, `~/.gemini/GEMINI.md`, hooks & rules) |
+| Gemini CLI (`gemini`) | `.gemini/skills/` | `.gemini/agents/` | `GEMINI.md` | Yes (`~/.gemini/skills/`, `~/.gemini/agents/`, `~/.gemini/GEMINI.md`, rules; excludes Antigravity-only `swarm` skills) |
+| GitHub Copilot (`copilot`) | `.github/skills/` | `.github/*.agent.md` | `.github/copilot-instructions.md` | Yes |
+| Cursor (`cursor`) | `.cursor/skills/` | `.cursor/agents/` | `.cursorrules` | No |
+| OpenCode (`opencode`) | `.opencode/skills/` | `.opencode/agents/` | -- | No |
+| VS Code (`vscode`) | `.vscode/claude/skills/` | `.vscode/claude/agents/` | -- | No |
 
 ### CLI Usage
 
@@ -376,6 +378,12 @@ skill-installer list --tag workflow
 
 # Install globally (user-level, available to all projects)
 skill-installer --global
+skill-installer --target antigravity --global --yes
+skill-installer --target gemini --global --yes
+
+# List skills for a specific target harness
+skill-installer list --target antigravity
+skill-installer list --target gemini
 
 # Skip agents or commands
 skill-installer --skip-agents --skip-commands
