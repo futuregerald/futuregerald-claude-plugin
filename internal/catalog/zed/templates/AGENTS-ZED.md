@@ -34,7 +34,6 @@ Invoke any skill in Zed's Agent Panel with `/<skill-name>`:
 2. **TDD (RED -> GREEN -> REFACTOR):** Write a failing unit test first, make it pass with minimal code, then simplify.
 3. **No code comments:** Write no code comments unless explicitly requested by the user.
 4. **Verify before done:** Run the scoped unit tests and linter in the current turn before claiming completion.
-5. **One upfront kickoff update (no per-tool narration):** Give one concise high-level kickoff update when given an ask, then do the work without narrating individual file reads or tool calls.
 
 ---
 

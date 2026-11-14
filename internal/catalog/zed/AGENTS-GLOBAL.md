@@ -12,5 +12,5 @@ In Zed's Agent Panel, type `/<skill-name>` (for example `/start`, `/shape`, `/ui
 3. **Test-Driven Development:** Follow RED -> GREEN -> REFACTOR (`test-driven-development`) and run fast, scoped unit tests (`<15s`) rather than full E2E suites during iteration.
 4. **No code comments:** Write no code comments unless explicitly asked by the user. Prefer self-explanatory names and focused functions.
 5. **Verify before completion:** Run tests and linters in this turn and read their exit codes before claiming work is complete.
-6. **Plain, concise communication:** Give one concise high-level kickoff update when given an ask, then do the work without narrating individual file reads or tool calls. Lead with the answer, cite `file:line` references, and avoid filler.
+6. **Plain, concise communication:** Lead with the answer, cite `file:line` references, and avoid filler.
 7. **Live updates:** Use `/plugin-update` (`plugin-updater`) or `skill-installer update` to check for updated skills.

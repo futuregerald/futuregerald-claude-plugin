@@ -13,5 +13,4 @@
 3. **Fresh review context:** Run `/plan-review` (`adversarial-plan-reviewer`) and `comprehensive-code-review` (`code-quality-reviewer`, `security-reviewer`, `sql-reviewer`) in fresh subagents, and verify fixes with `/fix-check`.
 4. **Strict TDD & zero comments:** Follow RED -> GREEN -> REFACTOR (`test-driven-development`) and write no code comments unless explicitly asked.
 5. **Verify before completion:** Run fast scoped tests and linters in the current turn before claiming work is done.
-6. **One upfront kickoff update (no per-tool narration):** Give one concise high-level kickoff update when given an ask, then execute without narrating individual file reads or tool calls.
-7. **Keep skills updated:** Run `/plugin-update` (`plugin-updater`) or `skill-installer update` to pull new skills from `main`.
+6. **Keep skills updated:** Run `/plugin-update` (`plugin-updater`) or `skill-installer update` to pull new skills from `main`.

@@ -38,8 +38,6 @@
 | 11. COMMIT | Conventional commit on a feature branch (never `main`) | — | Committed |
 | 12. HANDOFF | Run `editor-pass` on user-facing work, open PR (`pull-request-description`), offer `/copy-edit` | `editor-pass`, `pull-request-description`, `/copy-edit` | User acknowledged |
 
-**Communication:** Give one concise high-level kickoff update when given an ask, then execute without narrating individual file reads or tool calls. Lead with the answer and cite exact `file:line` paths.
-
 ---
 
 ## Quick Reference
