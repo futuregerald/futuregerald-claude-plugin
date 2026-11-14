@@ -62,7 +62,7 @@ func TestCreateListRestoreAndPrune(t *testing.T) {
 	if err := os.WriteFile(localNote, []byte("keep my local note"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	afterState := `{"version":1,"receipts":[{"id":"claude:project","harness":"claude","scope":"project","track":"opinionated"},{"id":"zed:global","harness":"zed","scope":"global","track":"product"}]}`
+	afterState := `{"version":1,"receipts":[{"id":"claude:project:` + filepath.ToSlash(projDir) + `/.claude","harness":"claude","scope":"project","root_dir":` + `"` + filepath.ToSlash(projDir) + `/.claude"` + `,"track":"opinionated"},{"id":"claude:project:/repoB/.claude","harness":"claude","scope":"project","root_dir":"/repoB/.claude","track":"product"},{"id":"zed:global","harness":"zed","scope":"global","track":"product"}]}`
 	if err := os.WriteFile(stateFile, []byte(afterState), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -94,8 +94,8 @@ func TestCreateListRestoreAndPrune(t *testing.T) {
 		t.Errorf("expected localNote (*.local.md) to be preserved on restore: %v", err)
 	}
 	gotState, _ := os.ReadFile(stateFile)
-	if !strings.Contains(string(gotState), `"track": "basics"`) || !strings.Contains(string(gotState), `"zed"`) {
-		t.Errorf("expected claude receipt restored to basics while preserving zed receipt, got:\n%s", string(gotState))
+	if !strings.Contains(string(gotState), `"track": "basics"`) || !strings.Contains(string(gotState), `"/repoB/.claude"`) || !strings.Contains(string(gotState), `"zed"`) {
+		t.Errorf("expected claude repoA receipt restored to basics while preserving repoB and zed receipts, got:\n%s", string(gotState))
 	}
 
 	deepSymlinkParent := filepath.Join(root, "deep-link")

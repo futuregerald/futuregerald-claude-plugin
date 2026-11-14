@@ -532,19 +532,13 @@ func (m *Model) selectTargetReceipt() state.Receipt {
 	if found, ok, err := store.Find(m.selectedHarness(), m.scope, paths.RootDir); err == nil && ok && found != nil {
 		return *found
 	}
-	receipts, _ := store.Load()
-	for _, r := range receipts {
-		if strings.EqualFold(r.Harness, m.selectedHarness()) && strings.EqualFold(r.Scope, m.scope) {
-			return r
+	if m.scope == "global" {
+		receipts, _ := store.Load()
+		for _, r := range receipts {
+			if strings.EqualFold(r.Harness, m.selectedHarness()) && strings.EqualFold(r.Scope, "global") {
+				return r
+			}
 		}
-	}
-	for _, r := range receipts {
-		if strings.EqualFold(r.Harness, m.selectedHarness()) {
-			return r
-		}
-	}
-	if len(receipts) == 1 {
-		return receipts[0]
 	}
 	return state.Receipt{
 		Harness: m.selectedHarness(),
@@ -1117,8 +1111,10 @@ func (m Model) viewGuide() string {
 
 func (m Model) viewUpdate() string {
 	var b strings.Builder
+	targetReceipt := m.selectTargetReceipt()
 	b.WriteString(m.renderBotHeader("LIVE UPDATER (GITHUB CLI)",
-		"\"Checking `futuregerald/futuregerald-claude-plugin` on `main` via your authenticated `gh` CLI...\""))
+		fmt.Sprintf("\"Checking `futuregerald/futuregerald-claude-plugin` on `main` for %s (%s · %s)...\"",
+			HarnessDisplayName(targetReceipt.Harness), targetReceipt.Scope, targetReceipt.RootDir)))
 
 	if m.errMsg != "" {
 		b.WriteString(UnselectedCardStyle.Render("Update check note: "+m.errMsg) + "\n")

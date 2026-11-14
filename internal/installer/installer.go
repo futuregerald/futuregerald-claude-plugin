@@ -612,6 +612,7 @@ func (i *Installer) InstallAgentsForHarness(destDir, harness string, isGlobal bo
 type GlobalAssetOptions struct {
 	LightweightConfig bool
 	InstallHooks      bool
+	SkipConfigFile    bool
 	Env               platform.Env
 }
 
@@ -637,19 +638,21 @@ func (i *Installer) InstallGlobalHarnessAssetsWithOptions(geminiHome, harness st
 		return nil, false, false, fmt.Errorf("refusing to modify symlinked config directory %s", configDir)
 	}
 
-	geminiTemplate := "antigravity/GEMINI.md"
-	if opts.LightweightConfig {
-		if _, err := fs.Stat(i.fsys, "antigravity/GEMINI-LIGHT.md"); err == nil {
-			geminiTemplate = "antigravity/GEMINI-LIGHT.md"
+	if !opts.SkipConfigFile {
+		geminiTemplate := "antigravity/GEMINI.md"
+		if opts.LightweightConfig {
+			if _, err := fs.Stat(i.fsys, "antigravity/GEMINI-LIGHT.md"); err == nil {
+				geminiTemplate = "antigravity/GEMINI-LIGHT.md"
+			}
 		}
-	}
-	if geminiMD, err := fs.ReadFile(i.fsys, geminiTemplate); err == nil {
-		targetMD := filepath.Join(geminiHome, "GEMINI.md")
-		res, err := i.writeFileWithRoot(targetMD, targetMD, geminiMD, 0644)
-		if err != nil {
-			return nil, false, false, err
+		if geminiMD, err := fs.ReadFile(i.fsys, geminiTemplate); err == nil {
+			targetMD := filepath.Join(geminiHome, "GEMINI.md")
+			res, err := i.writeFileWithRoot(targetMD, targetMD, geminiMD, 0644)
+			if err != nil {
+				return nil, false, false, err
+			}
+			results = append(results, res)
 		}
-		results = append(results, res)
 	}
 
 	if orgEx, err := fs.ReadFile(i.fsys, "antigravity/rules/org.example.md"); err == nil {
@@ -1047,10 +1050,11 @@ func (i *Installer) ExecutePlan(plan InstallPlan) (*InstallResult, error) {
 			}
 		}
 	}
-	if scope == "global" && plan.Harness == HarnessAntigravity && (mode == "full" || mode == "config-only") && !plan.SkipConfig {
+	if scope == "global" && plan.Harness == HarnessAntigravity && (mode == "full" || (mode == "config-only" && !plan.SkipConfig)) {
 		if sim, _, _, gErr := dryInst.InstallGlobalHarnessAssetsWithOptions(paths.GeminiHome, plan.Harness, GlobalAssetOptions{
 			LightweightConfig: track.LightweightConfig,
 			InstallHooks:      track.InstallHooks,
+			SkipConfigFile:    plan.SkipConfig,
 			Env:               plan.Env,
 		}); gErr == nil {
 			for _, line := range sim {
@@ -1115,35 +1119,38 @@ func (i *Installer) ExecutePlan(plan InstallPlan) (*InstallResult, error) {
 
 	hooksMerged := false
 	hooksCreated := false
-	if (mode == "config-only" || (mode == "full" && !plan.SkipConfig)) && paths.ConfigFile != "" {
+	if scope == "global" && plan.Harness == HarnessAntigravity && (mode == "full" || (mode == "config-only" && !plan.SkipConfig)) {
+		cfgInst := execInst
+		if plan.ForceConfig && !execInst.options.Force {
+			cfgInst = New(i.fsys, Options{Force: true, DryRun: execInst.options.DryRun})
+		}
+		res, hm, hc, gErr := cfgInst.InstallGlobalHarnessAssetsWithOptions(paths.GeminiHome, plan.Harness, GlobalAssetOptions{
+			LightweightConfig: track.LightweightConfig,
+			InstallHooks:      track.InstallHooks,
+			SkipConfigFile:    plan.SkipConfig,
+			Env:               plan.Env,
+		})
+		if gErr != nil {
+			return nil, gErr
+		}
+		recordActions(res)
+		hooksMerged = hm
+		hooksCreated = hc
+	} else if (mode == "config-only" || (mode == "full" && !plan.SkipConfig)) && paths.ConfigFile != "" {
 		cfgInst := execInst
 		if plan.ForceConfig && !execInst.options.Force {
 			cfgInst = New(i.fsys, Options{Force: true, DryRun: execInst.options.DryRun})
 		}
 		if scope == "global" {
-			if plan.Harness == HarnessAntigravity {
-				res, hm, hc, gErr := cfgInst.InstallGlobalHarnessAssetsWithOptions(paths.GeminiHome, plan.Harness, GlobalAssetOptions{
-					LightweightConfig: track.LightweightConfig,
-					InstallHooks:      track.InstallHooks,
-					Env:               plan.Env,
-				})
-				if gErr != nil {
-					return nil, gErr
-				}
-				recordActions(res)
-				hooksMerged = hm
-				hooksCreated = hc
-			} else {
-				tpl, tErr := cat.GlobalConfigTemplate(plan.Harness, track.LightweightConfig)
-				if tErr != nil {
-					return nil, tErr
-				}
-				res, wErr := cfgInst.writeFileWithRoot(paths.ConfigFile, paths.ConfigFile, tpl, 0644)
-				if wErr != nil {
-					return nil, wErr
-				}
-				recordActions([]string{res})
+			tpl, tErr := cat.GlobalConfigTemplate(plan.Harness, track.LightweightConfig)
+			if tErr != nil {
+				return nil, tErr
 			}
+			res, wErr := cfgInst.writeFileWithRoot(paths.ConfigFile, paths.ConfigFile, tpl, 0644)
+			if wErr != nil {
+				return nil, wErr
+			}
+			recordActions([]string{res})
 		} else {
 			tpl, tErr := cat.ProjectConfigTemplate(plan.Harness)
 			if tErr != nil {
@@ -1169,12 +1176,26 @@ func (i *Installer) ExecutePlan(plan InstallPlan) (*InstallResult, error) {
 		if paths.ConfigFile != "" {
 			cleanConfig = filepath.Clean(paths.ConfigFile)
 		}
+		cleanAgentsPrefix := ""
+		if paths.AgentsDir != "" {
+			cleanAgentsPrefix = filepath.Clean(paths.AgentsDir) + string(os.PathSeparator)
+		}
+		cleanCommandsPrefix := ""
+		if paths.CommandsDir != "" {
+			cleanCommandsPrefix = filepath.Clean(paths.CommandsDir) + string(os.PathSeparator)
+		}
 		for _, oldFile := range priorReceipt.InstalledFiles {
 			cleanOld := filepath.Clean(oldFile)
 			if plannedSet[cleanOld] || isPreservedLocalFile(cleanOld) {
 				continue
 			}
 			if cleanOld == cleanHooksJSON || cleanOld == cleanConfig {
+				continue
+			}
+			if plan.SkipAgents && cleanAgentsPrefix != "" && strings.HasPrefix(cleanOld, cleanAgentsPrefix) {
+				continue
+			}
+			if plan.SkipCommands && cleanCommandsPrefix != "" && strings.HasPrefix(cleanOld, cleanCommandsPrefix) {
 				continue
 			}
 			if err := backup.RejectSymlinkInChain(cleanOld); err != nil {

@@ -1235,9 +1235,6 @@ func resolveReceiptForOperation(env platform.Env, cat *catalog.Catalog) (*state.
 		}
 		return nil, fmt.Errorf("multiple installations match (%s); specify --target (-t) and --global (-g) or --project (-p)", strings.Join(names, ", "))
 	}
-	if !globalInstall && !projectInstall && len(receipts) == 1 {
-		return &receipts[0], nil
-	}
 	for _, h := range targetOrder {
 		if leg, ok := state.DiscoverLegacyReceipt(env, cat, h, scope, cwd); ok {
 			return leg, nil
@@ -1395,7 +1392,7 @@ func runRestore(cmd *cobra.Command, args []string) error {
 		if restored {
 			fmt.Printf("Restored %s from snapshot %s.\n", restoreFile, chosenID)
 		} else {
-			fmt.Printf("Removed newly created file %s using snapshot %s.\n", restoreFile, chosenID)
+			fmt.Printf("No pre-existing backup blob for %s in snapshot %s (nothing restored).\n", restoreFile, chosenID)
 		}
 		return nil
 	}
@@ -1440,6 +1437,9 @@ func runUninstall(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("Uninstalled %s (%s): removed %d tracked files.\n",
 		tui.HarnessDisplayName(rec.Harness), rec.Scope, len(res.RemovedFiles))
+	for _, skipped := range res.SkippedFiles {
+		fmt.Printf("Skipped (symlinked ancestor): %s\n", skipped)
+	}
 	if res.RestoredConfig != "" {
 		fmt.Printf("Restored pre-install config: %s\n", res.RestoredConfig)
 	}

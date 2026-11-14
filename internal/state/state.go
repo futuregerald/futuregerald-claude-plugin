@@ -40,6 +40,7 @@ type UninstallResult struct {
 	Harness        string
 	Scope          string
 	RemovedFiles   []string
+	SkippedFiles   []string
 	HooksCleaned   bool
 	RestoredConfig string
 }
@@ -418,6 +419,7 @@ func Uninstall(env platform.Env, _ *catalog.Catalog, receipt Receipt, backupMgr 
 			}
 		}
 		if err := backup.RejectSymlinkInChain(cleanFile); err != nil {
+			res.SkippedFiles = append(res.SkippedFiles, cleanFile)
 			continue
 		}
 		if _, err := os.Lstat(cleanFile); err == nil {

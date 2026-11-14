@@ -292,7 +292,7 @@ func TestUntrustedFromSourceAndRerunStatePreservation(t *testing.T) {
 	}
 
 	targetType = "claude"
-	trackName = "basics"
+	trackName = "opinionated"
 	nonInteract = true
 	force = true
 	if err := runInstall(nil, nil); err != nil {
@@ -312,11 +312,45 @@ func TestUntrustedFromSourceAndRerunStatePreservation(t *testing.T) {
 
 	resetGlobals()
 	targetType = "claude"
-	trackName = "basics"
+	trackName = "opinionated"
 	nonInteract = true
 	force = false
+	skipCommands = true
 	if err := runInstall(nil, nil); err != nil {
 		t.Fatalf("rerun runInstall without --force failed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(projDir, ".claude", "agents", "implementer.md")); err != nil {
+		t.Errorf("expected existing agent implementer.md preserved on second -y run without --force: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(projDir, ".claude", "commands", "start.md")); err != nil {
+		t.Errorf("expected existing command start.md preserved when --skip-commands is set: %v", err)
+	}
+
+	resetGlobals()
+	targetType = "antigravity"
+	trackName = "opinionated"
+	globalInstall = true
+	nonInteract = true
+	force = true
+	if err := runInstall(nil, nil); err != nil {
+		t.Fatalf("antigravity global install failed: %v", err)
+	}
+
+	resetGlobals()
+	targetType = "antigravity"
+	trackName = "opinionated"
+	globalInstall = true
+	nonInteract = true
+	force = true
+	skipClaude = true
+	if err := runInstall(nil, nil); err != nil {
+		t.Fatalf("antigravity global rerun with --skip-claude-md failed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(tmpHome, ".gemini", "config", "hooks", "autonomous-breaker.sh")); err != nil {
+		t.Errorf("expected autonomous-breaker.sh preserved when --skip-claude-md is set: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(tmpHome, ".gemini", "config", "rules", "org.example.md")); err != nil {
+		t.Errorf("expected org.example.md preserved when --skip-claude-md is set: %v", err)
 	}
 
 	resetGlobals()

@@ -26,6 +26,7 @@ type Manifest struct {
 	ID             string      `json:"id"`
 	Harness        string      `json:"harness"`
 	Scope          string      `json:"scope"`
+	RootDir        string      `json:"root_dir,omitempty"`
 	Track          string      `json:"track"`
 	CreatedAt      string      `json:"created_at"`
 	HasStateBackup bool        `json:"has_state_backup"`
@@ -99,6 +100,7 @@ func (m *Manager) CreateSnapshot(harness, scope, track string, targetPaths []str
 		ID:        id,
 		Harness:   harness,
 		Scope:     scope,
+		RootDir:   inferSnapshotRootDir(harness, scope, uniquePaths),
 		Track:     track,
 		CreatedAt: now.Format(time.RFC3339Nano),
 	}
@@ -377,7 +379,7 @@ func (m *Manager) RestoreSnapshot(id string, stateJSONPath string) (*RestoreResu
 		if err := RejectSymlinkInChain(stateJSONPath); err != nil {
 			return nil, err
 		}
-		if restoreStateReceiptForSnapshot(stateJSONPath, filepath.Join(snapDir, "state.json.bak"), mf.Harness, mf.Scope, mf.HasStateBackup) {
+		if restoreStateReceiptForSnapshot(stateJSONPath, filepath.Join(snapDir, "state.json.bak"), &mf) {
 			res.StateRestored = true
 		}
 	}
@@ -385,12 +387,93 @@ func (m *Manager) RestoreSnapshot(id string, stateJSONPath string) (*RestoreResu
 	return res, nil
 }
 
-func restoreStateReceiptForSnapshot(stateJSONPath, bakPath, harness, scope string, hasStateBackup bool) bool {
+func inferSnapshotRootDir(harness, scope string, paths []string) string {
+	for _, p := range paths {
+		clean := filepath.Clean(p)
+		slash := filepath.ToSlash(clean)
+		for _, marker := range []string{"/.claude/", "/.opencode/", "/.agents/", "/.gemini/"} {
+			if idx := strings.Index(slash, marker); idx >= 0 {
+				prefix := filepath.FromSlash(slash[:idx])
+				if strings.EqualFold(scope, "project") && (strings.EqualFold(harness, "antigravity") || strings.EqualFold(harness, "zed")) {
+					return filepath.Clean(prefix)
+				}
+				return filepath.Clean(filepath.FromSlash(slash[:idx+len(marker)-1]))
+			}
+		}
+		base := filepath.Base(clean)
+		if base == "CLAUDE.md" || base == "GEMINI.md" || base == "AGENTS.md" {
+			dir := filepath.Dir(clean)
+			if strings.EqualFold(scope, "project") {
+				switch strings.ToLower(harness) {
+				case "claude":
+					return filepath.Join(dir, ".claude")
+				case "opencode":
+					return filepath.Join(dir, ".opencode")
+				default:
+					return dir
+				}
+			}
+			return dir
+		}
+	}
+	if len(paths) > 0 {
+		return filepath.Dir(filepath.Clean(paths[0]))
+	}
+	return ""
+}
+
+func canonicalRootBase(root string) string {
+	if root == "" {
+		return ""
+	}
+	clean := filepath.Clean(root)
+	switch filepath.Base(clean) {
+	case ".claude", ".opencode", ".agents", ".gemini":
+		return filepath.Dir(clean)
+	default:
+		return clean
+	}
+}
+
+func receiptMatchesSnapshot(rm map[string]any, mf *Manifest) bool {
+	if mf == nil {
+		return false
+	}
+	h, _ := rm["harness"].(string)
+	s, _ := rm["scope"].(string)
+	if !strings.EqualFold(h, mf.Harness) || !strings.EqualFold(s, mf.Scope) {
+		return false
+	}
+	if strings.EqualFold(mf.Scope, "global") && mf.RootDir == "" {
+		return true
+	}
+	rRoot, _ := rm["root_dir"].(string)
+	if rRoot == "" {
+		return true
+	}
+	snapRoot := mf.RootDir
+	if snapRoot == "" {
+		var entryPaths []string
+		for _, e := range mf.Entries {
+			entryPaths = append(entryPaths, e.OriginalPath)
+		}
+		snapRoot = inferSnapshotRootDir(mf.Harness, mf.Scope, entryPaths)
+	}
+	if snapRoot == "" {
+		return true
+	}
+	if filepath.Clean(rRoot) == filepath.Clean(snapRoot) {
+		return true
+	}
+	return canonicalRootBase(rRoot) == canonicalRootBase(snapRoot)
+}
+
+func restoreStateReceiptForSnapshot(stateJSONPath, bakPath string, mf *Manifest) bool {
 	if info, err := os.Lstat(stateJSONPath); err == nil && info.Mode()&os.ModeSymlink != 0 {
 		_ = os.Remove(stateJSONPath)
 	}
 	var bakBytes []byte
-	if hasStateBackup {
+	if mf.HasStateBackup {
 		b, err := os.ReadFile(bakPath)
 		if err != nil {
 			return false
@@ -405,7 +488,7 @@ func restoreStateReceiptForSnapshot(stateJSONPath, bakPath, harness, scope strin
 	bakHasReceipts := len(bakBytes) > 0 && json.Unmarshal(bakBytes, &bakMap) == nil && bakMap["receipts"] != nil
 
 	if !curHasReceipts && !bakHasReceipts {
-		if !hasStateBackup {
+		if !mf.HasStateBackup {
 			return false
 		}
 		if err := os.MkdirAll(filepath.Dir(stateJSONPath), 0700); err != nil {
@@ -422,9 +505,7 @@ func restoreStateReceiptForSnapshot(stateJSONPath, bakPath, harness, scope strin
 				if !ok {
 					continue
 				}
-				h, _ := rm["harness"].(string)
-				s, _ := rm["scope"].(string)
-				if strings.EqualFold(h, harness) && strings.EqualFold(s, scope) {
+				if receiptMatchesSnapshot(rm, mf) {
 					continue
 				}
 				kept = append(kept, rm)
@@ -438,9 +519,7 @@ func restoreStateReceiptForSnapshot(stateJSONPath, bakPath, harness, scope strin
 				if !ok {
 					continue
 				}
-				h, _ := rm["harness"].(string)
-				s, _ := rm["scope"].(string)
-				if strings.EqualFold(h, harness) && strings.EqualFold(s, scope) {
+				if receiptMatchesSnapshot(rm, mf) {
 					kept = append(kept, rm)
 				}
 			}
