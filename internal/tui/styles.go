@@ -13,6 +13,8 @@ var (
 	colorPink         = lipgloss.AdaptiveColor{Light: "#DB2777", Dark: "#F472B6"}
 	colorViolet       = lipgloss.AdaptiveColor{Light: "#7C3AED", Dark: "#A78BFA"}
 	colorBlue         = lipgloss.AdaptiveColor{Light: "#2563EB", Dark: "#60A5FA"}
+	colorTeal         = lipgloss.AdaptiveColor{Light: "#0D9488", Dark: "#2DD4BF"}
+	colorIndigo       = lipgloss.AdaptiveColor{Light: "#4F46E5", Dark: "#818CF8"}
 	colorMuted        = lipgloss.AdaptiveColor{Light: "#64748B", Dark: "#94A3B8"}
 	colorSubtle       = lipgloss.AdaptiveColor{Light: "#94A3B8", Dark: "#64748B"}
 	colorText         = lipgloss.AdaptiveColor{Light: "#0F172A", Dark: "#F8FAFC"}
@@ -80,6 +82,20 @@ var botFrames = []string{
 	"[ -_- ]",
 }
 
+func CardWidth(termWidth int) int {
+	if termWidth <= 0 {
+		return 84
+	}
+	w := termWidth - 8
+	if w > 86 {
+		w = 86
+	}
+	if w < 52 {
+		w = 52
+	}
+	return w
+}
+
 func BotAvatar(frame int) string {
 	idx := frame % len(botFrames)
 	if idx < 0 {
@@ -91,21 +107,39 @@ func BotAvatar(frame int) string {
 func CategoryBadge(category string) string {
 	cat := strings.ToLower(strings.TrimSpace(category))
 	style := lipgloss.NewStyle().Bold(true)
+	label := cat
 	switch cat {
-	case "workflow":
+	case "core workflow", "workflow":
 		style = style.Foreground(colorBrand)
-	case "product":
+		label = "workflow"
+	case "product & shaping", "product", "shaping":
 		style = style.Foreground(colorViolet)
-	case "quality":
-		style = style.Foreground(colorSuccess)
-	case "copy-ui":
+		label = "shaping"
+	case "design, copy & ui", "copy-ui", "design-ui":
 		style = style.Foreground(colorPink)
-	case "architecture":
+		label = "design-ui"
+	case "planning & architecture", "architecture":
 		style = style.Foreground(colorAmber)
+		label = "architecture"
+	case "engineering & tdd", "tdd-code":
+		style = style.Foreground(colorSuccess)
+		label = "tdd-code"
+	case "review, security & qa", "quality", "review-qa":
+		style = style.Foreground(colorTeal)
+		label = "review-qa"
+	case "shipping, ops & team", "shipping":
+		style = style.Foreground(colorBlue)
+		label = "shipping"
+	case "research, browser & meta", "research":
+		style = style.Foreground(colorIndigo)
+		label = "research"
+	case "antigravity exclusives", "antigravity":
+		style = style.Foreground(colorBrand)
+		label = "antigravity"
 	default:
 		style = style.Foreground(colorBlue)
 	}
-	return style.Render("[" + cat + "]")
+	return style.Render("[" + label + "]")
 }
 
 func HarnessDisplayName(harness string) string {

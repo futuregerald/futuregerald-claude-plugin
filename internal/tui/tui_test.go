@@ -149,6 +149,28 @@ func TestRestoreUninstallConfirmAndCustomDeselect(t *testing.T) {
 		ProjectDir: projDir,
 		Version:    "4.0.0",
 	})
+	if m.selectedCustomCount() != 1 || !m.customSelected["plugin-updater"] {
+		t.Fatalf("expected custom picker to start with only plugin-updater preselected, got %d (%v)", m.selectedCustomCount(), m.customSelected)
+	}
+	m.customSelected["baton-pass"] = true
+	m.harnessIdx = 1
+	if m.selectedCustomCount() != 1 {
+		t.Fatalf("expected Antigravity-only skill excluded from Claude custom count, got %d", m.selectedCustomCount())
+	}
+
+	updated, tickCmd := m.Update(tickMsg{})
+	m = updated.(Model)
+	if tickCmd == nil {
+		t.Fatalf("expected tickMsg to schedule next animation frame")
+	}
+
+	plain := RenderPlainGuide(cat, "claude", "basics")
+	for _, nonASCII := range []string{"─", "•", "—"} {
+		if strings.Contains(plain, nonASCII) {
+			t.Errorf("expected pure-ASCII RenderPlainGuide without %q", nonASCII)
+		}
+	}
+
 	m.customSelected = map[string]bool{}
 	m.customSelected["brainstorming"] = true
 	m.customSelected["writing-plans"] = true
@@ -162,7 +184,7 @@ func TestRestoreUninstallConfirmAndCustomDeselect(t *testing.T) {
 
 	m.screen = screenUninstall
 	m.receipts = []state.Receipt{{Harness: "claude", Scope: "project", RootDir: projDir, Track: "basics"}}
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = updated.(Model)
 	if !m.confirmUninstall {
 		t.Fatalf("expected first Enter on screenUninstall to prompt confirmUninstall")

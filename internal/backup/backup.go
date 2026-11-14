@@ -66,6 +66,10 @@ func sanitizeSlug(s string) string {
 }
 
 func (m *Manager) CreateSnapshot(harness, scope, track string, targetPaths []string, stateJSONPath string) (*Manifest, error) {
+	return m.CreateSnapshotWithRoot(harness, scope, "", track, targetPaths, stateJSONPath)
+}
+
+func (m *Manager) CreateSnapshotWithRoot(harness, scope, rootDir, track string, targetPaths []string, stateJSONPath string) (*Manifest, error) {
 	if err := RejectSymlinkInChain(m.BackupsRoot); err != nil {
 		return nil, err
 	}
@@ -96,11 +100,16 @@ func (m *Manager) CreateSnapshot(harness, scope, track string, targetPaths []str
 	}
 	sort.Strings(uniquePaths)
 
+	resolvedRoot := inferSnapshotRootDir(harness, scope, uniquePaths)
+	if rootDir != "" {
+		resolvedRoot = filepath.Clean(rootDir)
+	}
+
 	manifest := &Manifest{
 		ID:        id,
 		Harness:   harness,
 		Scope:     scope,
-		RootDir:   inferSnapshotRootDir(harness, scope, uniquePaths),
+		RootDir:   resolvedRoot,
 		Track:     track,
 		CreatedAt: now.Format(time.RFC3339Nano),
 	}

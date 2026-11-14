@@ -11,7 +11,7 @@
 **Core Product Rule:** Never nudge users toward "install all 60+ skills at once." Every loaded skill competes for an AI agent's context window and attention. Users choose from **curated tracks** (`internal/catalog/tracks.yaml`) tailored to their role:
 1. **`opinionated` ("Opinionated Dev Workflow")** — Full 12-phase engineering lifecycle (`/start`, `/begin`, `/lifecycle`) for software engineers who want strict shaping, 3-direction HTML UI prototyping, caller tracing, TDD, adversarial reviews, and blast-radius verification.
 2. **`basics` ("Just the Basics")** — 8 everyday engineering skills (`brainstorming`, `writing-plans`, `systematic-debugging`, `test-driven-development`, `comprehensive-code-review`, `pull-request-description`, `handoff`, `plugin-updater`) with a lightweight config and zero hooks.
-3. **`product` ("Product & Strategy Flow")** — Non-developer pack for PMs, designers, founders, and engineering leads (`craftsmans-wisdom`, `/shape`, `future-grilling`, `future-wayfinder`, `grilling-page`, `write-a-prd`, `to-spec`, `to-tickets`, `writing-tickets`, `ticket-grooming`, `ui-design`, `huashu-design`, `no-slop-ui`, `prototype`, `visualize-plan`, `copy-edit`, `copywriting`, `marketing-psychology`, `editor-pass`, `research`, `meeting-debrief`, `team-pulse`, `plugin-updater`).
+3. **`product` ("Product & Strategy Flow")** — Non-developer pack for PMs, designers, founders, and engineering leads (`craftsmans-wisdom`, `/shape`, `brainstorming`, `future-grilling`, `future-wayfinder`, `grilling-page`, `write-a-prd`, `to-spec`, `to-tickets`, `writing-tickets`, `ticket-grooming`, `ui-design`, `huashu-design`, `no-slop-ui`, `prototype`, `visualize-plan`, `copy-edit`, `copywriting`, `marketing-psychology`, `editor-pass`, `research`, `meeting-debrief`, `team-pulse`, `plugin-updater`).
 4. **`copy-polish` ("Copy, Brand & UI Polish")** — Focused pack for auditing and elevating user-facing pages, landing copy, visual hierarchy, and motion (`copy-edit`, `copywriting`, `marketing-psychology`, `editor-pass`, `impeccable`, `no-slop-ui`, `huashu-design`, `animation-principles`, `plugin-updater`).
 5. **`custom` ("Pick Individual Skills")** — Interactive à la carte skill browser.
 
@@ -22,7 +22,7 @@
 **CRITICAL BOUNDARY FOR AGENTS:** Do **not** wire new or optional standalone skills into the mandatory 12-Phase Development Lifecycle unless the user explicitly asks to change the core workflow.
 
 ### The Core Opinionated 12-Phase Workflow
-Only these skills form the mandatory lifecycle gates in `CLAUDE-BASE.md`, `CLAUDE-GLOBAL.md`, `GEMINI.md`, `GEMINI-BASE.md`, `AGENTS-OPENCODE.md`, and `lifecycle/SKILL.md`:
+Only these skills form the mandatory lifecycle gates in `CLAUDE-BASE.md`, `CLAUDE-GLOBAL.md`, `GEMINI.md`, `GEMINI-BASE.md`, `AGENTS-ZED.md`, `AGENTS-OPENCODE.md`, `AGENTS-GLOBAL.md`, and `lifecycle/SKILL.md`:
 - **Entry & Orchestration:** `start` (`/start`), `begin` (`/begin`), `lifecycle` (`/lifecycle`), `subagent-driven-development`, `future-model-router` (plus Antigravity-only `antigravity-orchestration`, `peer-pipeline-swarm`, and `baton-pass`)
 - **Phase 0 (Shape):** `shape` (`/shape`), `craftsmans-wisdom`, `future-grilling`, `future-wayfinder`, `grilling-page`, `write-a-prd`, `brainstorming`
 - **Phase 0½ (UI Design):** `ui-design` (`/ui-design`), `huashu-design`, `no-slop-ui`

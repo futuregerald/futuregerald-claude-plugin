@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -69,6 +70,7 @@ type Model struct {
 	installRes       *installer.InstallResult
 	statusMsg        string
 	errMsg           string
+	updateIdx        int
 	updateReport     *updater.CheckReport
 	snapshots        []backup.Manifest
 	restoreIdx       int
@@ -126,14 +128,8 @@ func NewModel(cfg Config) Model {
 		bIdx = 1
 	}
 
-	customSel := make(map[string]bool)
-	if cfg.Catalog != nil {
-		if defSkills, err := cfg.Catalog.TrackSkills("opinionated", harnessOrder[hIdx]); err == nil {
-			for _, s := range defSkills {
-				customSel[s] = true
-			}
-		}
-		customSel["plugin-updater"] = true
+	customSel := map[string]bool{
+		"plugin-updater": true,
 	}
 
 	startScreen := screenHome
@@ -183,8 +179,11 @@ func (m Model) visibleSkills() []catalog.SkillMetadata {
 	h := m.selectedHarness()
 	tr := m.selectedTrack()
 
-	if m.screen == screenGuide && m.showAllInGuide {
-		return m.cfg.Catalog.SkillsForHarness(h)
+	if m.screen == screenGuide {
+		if m.showAllInGuide {
+			return m.cfg.Catalog.SkillsForHarness(h)
+		}
+		return m.installedOrSelectedSkills()
 	}
 	if tr.ID == "custom" {
 		return m.cfg.Catalog.SkillsForHarness(h)
@@ -202,10 +201,60 @@ func (m Model) visibleSkills() []catalog.SkillMetadata {
 	return out
 }
 
+func (m Model) installedOrSelectedSkills() []catalog.SkillMetadata {
+	if m.cfg.Catalog == nil {
+		return nil
+	}
+	h := m.selectedHarness()
+	if m.installRes != nil && len(m.installRes.Skills) > 0 {
+		var out []catalog.SkillMetadata
+		for _, name := range m.installRes.Skills {
+			if sm, ok := m.cfg.Catalog.SkillMeta(name); ok {
+				out = append(out, sm)
+			}
+		}
+		if len(out) > 0 {
+			return out
+		}
+	}
+	tr := m.selectedTrack()
+	if tr.ID == "custom" {
+		var out []catalog.SkillMetadata
+		for _, sm := range m.cfg.Catalog.SkillsForHarness(h) {
+			if m.customSelected[sm.Name] {
+				out = append(out, sm)
+			}
+		}
+		if len(out) > 0 {
+			return out
+		}
+	}
+	names, err := m.cfg.Catalog.TrackSkills(tr.ID, h)
+	if err != nil {
+		return m.cfg.Catalog.SkillsForHarness(h)
+	}
+	var out []catalog.SkillMetadata
+	for _, name := range names {
+		if sm, ok := m.cfg.Catalog.SkillMeta(name); ok {
+			out = append(out, sm)
+		}
+	}
+	return out
+}
+
 func (m Model) selectedCustomCount() int {
+	if m.cfg.Catalog == nil {
+		count := 0
+		for _, v := range m.customSelected {
+			if v {
+				count++
+			}
+		}
+		return count
+	}
 	count := 0
-	for _, v := range m.customSelected {
-		if v {
+	for _, sm := range m.cfg.Catalog.SkillsForHarness(m.selectedHarness()) {
+		if m.customSelected[sm.Name] {
 			count++
 		}
 	}
@@ -229,7 +278,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case tickMsg:
 		m.botFrame = (m.botFrame + 1) % len(botFrames)
-		return m, nil
+		return m, tea.Tick(2200*time.Millisecond, func(t time.Time) tea.Msg {
+			return tickMsg(t)
+		})
 	case tea.KeyMsg:
 		key := msg.String()
 		if key == "ctrl+c" || key == "q" {
@@ -288,6 +339,8 @@ func (m Model) updateHome(key string) (tea.Model, tea.Cmd) {
 			m.prevScreen = screenHome
 			m.screen = screenGuide
 		case 2:
+			m.loadReceipts()
+			m.updateIdx = 0
 			m.loadUpdateReport()
 			m.screen = screenUpdate
 		case 3:
@@ -517,16 +570,18 @@ func (m Model) updateGuide(key string) (tea.Model, tea.Cmd) {
 		if m.guideTab == 2 && m.skillCursor < len(skills)-1 {
 			m.skillCursor++
 		}
-	case "enter", " ":
-		if m.guideTab == 2 && m.skillCursor >= 0 && m.skillCursor < len(skills) {
-			name := skills[m.skillCursor].Name
-			m.skillExpanded[name] = !m.skillExpanded[name]
-		}
 	}
 	return m, nil
 }
 
 func (m *Model) selectTargetReceipt() state.Receipt {
+	if len(m.receipts) > 0 {
+		idx := m.updateIdx
+		if idx < 0 || idx >= len(m.receipts) {
+			idx = 0
+		}
+		return m.receipts[idx]
+	}
 	store := state.NewStore(m.cfg.Env.StateFilePath())
 	paths, _ := m.cfg.Env.ResolvePaths(m.selectedHarness(), m.scope, m.cfg.ProjectDir)
 	if found, ok, err := store.Find(m.selectedHarness(), m.scope, paths.RootDir); err == nil && ok && found != nil {
@@ -549,6 +604,8 @@ func (m *Model) selectTargetReceipt() state.Receipt {
 }
 
 func (m *Model) loadUpdateReport() {
+	m.errMsg = ""
+	m.updateReport = nil
 	targetReceipt := m.selectTargetReceipt()
 	rep, err := updater.Check(context.Background(), m.cfg.UpdateRunner, targetReceipt, m.cfg.Version)
 	if err != nil {
@@ -562,6 +619,18 @@ func (m Model) updateUpdateScreen(key string) (tea.Model, tea.Cmd) {
 	switch key {
 	case "esc", "backspace":
 		m.screen = screenHome
+	case "up", "k":
+		if len(m.receipts) > 1 && m.updateIdx > 0 {
+			m.updateIdx--
+			m.statusMsg = ""
+			m.loadUpdateReport()
+		}
+	case "down", "j":
+		if len(m.receipts) > 1 && m.updateIdx < len(m.receipts)-1 {
+			m.updateIdx++
+			m.statusMsg = ""
+			m.loadUpdateReport()
+		}
 	case "enter":
 		if m.updateReport != nil && m.updateReport.UpdateAvailable {
 			r := m.selectTargetReceipt()
@@ -574,8 +643,9 @@ func (m Model) updateUpdateScreen(key string) (tea.Model, tea.Cmd) {
 			if err != nil {
 				m.errMsg = err.Error()
 			} else {
-				m.statusMsg = fmt.Sprintf("Updated skills to latest commit %s!", shortSHA(sha))
+				m.statusMsg = fmt.Sprintf("Updated %s (%s) skills to latest commit %s.", HarnessDisplayName(r.Harness), r.Scope, shortSHA(sha))
 				m.updateReport.UpdateAvailable = false
+				m.loadReceipts()
 			}
 		}
 	}
@@ -728,19 +798,30 @@ func (m Model) View() string {
 	return PageStyle.Render(body)
 }
 
+func (m Model) botBoxStyle() lipgloss.Style {
+	return BotBoxStyle.Width(CardWidth(m.width))
+}
+
+func (m Model) cardStyle(selected bool) lipgloss.Style {
+	if selected {
+		return SelectedCardStyle.Width(CardWidth(m.width))
+	}
+	return UnselectedCardStyle.Width(CardWidth(m.width))
+}
+
 func (m Model) renderBotHeader(stepLabel, speech string) string {
 	line1 := fmt.Sprintf("%s  %s", BotAvatar(m.botFrame), TitleStyle.Render("SkillBot · skill-installer v4.0"))
 	if stepLabel != "" {
 		line1 += "   " + StepPillStyle.Render(stepLabel)
 	}
 	content := line1 + "\n\n" + SubtitleStyle.Render(speech)
-	return BotBoxStyle.Render(content) + "\n\n"
+	return m.botBoxStyle().Render(content) + "\n\n"
 }
 
 func (m Model) viewHome() string {
 	var b strings.Builder
 	b.WriteString(m.renderBotHeader("WELCOME",
-		"\"Hey there! I set up curated AI workflows, slash commands, and skills without burying you in 60+ random files.\"\n\"Pick one thing below — we'll take it one step at a time.\""))
+		"Hey there! I set up curated AI workflows, slash commands, and skills without burying you in 60+ random files.\nPick one thing below — we'll take it one step at a time."))
 
 	items := []struct {
 		title string
@@ -755,13 +836,12 @@ func (m Model) viewHome() string {
 
 	for idx, it := range items {
 		cursor := "  "
-		style := UnselectedCardStyle
-		if idx == m.homeIdx {
+		selected := idx == m.homeIdx
+		if selected {
 			cursor = "> "
-			style = SelectedCardStyle
 		}
 		card := fmt.Sprintf("%s%s\n  %s", cursor, TitleStyle.Render(it.title), SubtitleStyle.Render(it.sub))
-		b.WriteString(style.Render(card) + "\n")
+		b.WriteString(m.cardStyle(selected).Render(card) + "\n")
 	}
 
 	b.WriteString(FooterStyle.Render("Up/Down: move  ·  Enter: select  ·  ?: how this works  ·  q: quit"))
@@ -771,24 +851,25 @@ func (m Model) viewHome() string {
 func (m Model) viewHarness() string {
 	var b strings.Builder
 	b.WriteString(m.renderBotHeader("STEP 1 OF 3 · TARGET APP",
-		"\"Which AI coding or product assistant are we configuring today?\""))
+		"Which AI coding or product assistant are we configuring today?"))
 
 	for idx, h := range harnessOrder {
 		cursor := "  "
-		style := UnselectedCardStyle
-		if idx == m.harnessIdx {
+		selected := idx == m.harnessIdx
+		if selected {
 			cursor = "> "
-			style = SelectedCardStyle
 		}
-		paths, _ := m.cfg.Env.ResolvePaths(h, m.scope, m.cfg.ProjectDir)
-		pathHint := fmt.Sprintf("Skills: %s   Config: %s", paths.SkillsDir, paths.ConfigFile)
-		card := fmt.Sprintf("%s%s\n  %s\n  %s",
+		card := fmt.Sprintf("%s%s\n  %s",
 			cursor,
 			TitleStyle.Render(HarnessDisplayName(h)),
 			SubtitleStyle.Render(harnessTaglines[h]),
-			StepPillStyle.Render(pathHint),
 		)
-		b.WriteString(style.Render(card) + "\n")
+		if selected {
+			paths, _ := m.cfg.Env.ResolvePaths(h, m.scope, m.cfg.ProjectDir)
+			pathHint := fmt.Sprintf("Skills: %s   Config: %s", paths.SkillsDir, paths.ConfigFile)
+			card += "\n  " + StepPillStyle.Render(pathHint)
+		}
+		b.WriteString(m.cardStyle(selected).Render(card) + "\n")
 	}
 
 	scopeGlobal := "[ ] Global (all projects)"
@@ -807,15 +888,14 @@ func (m Model) viewTrack() string {
 	var b strings.Builder
 	appName := HarnessDisplayName(m.selectedHarness())
 	b.WriteString(m.renderBotHeader("STEP 2 OF 3 · WORKFLOW TRACK",
-		fmt.Sprintf("\"You don't need every skill installed at once. Pick the track that matches how you use %s.\"\n\"Press Space or 'p' on any track to peek inside its colorful skill table and long descriptions!\"", appName)))
+		fmt.Sprintf("You don't need every skill installed at once. Pick the track that matches how you use %s.\nPress Space or 'p' on any track to preview its skills, slash commands, and starter prompts.", appName)))
 
 	if m.cfg.Catalog != nil {
 		for idx, tr := range m.cfg.Catalog.Tracks {
 			cursor := "  "
-			style := UnselectedCardStyle
-			if idx == m.trackIdx {
+			selected := idx == m.trackIdx
+			if selected {
 				cursor = "> "
-				style = SelectedCardStyle
 			}
 			skills, _ := m.cfg.Catalog.TrackSkills(tr.ID, m.selectedHarness())
 			countLabel := fmt.Sprintf("%d curated skills", len(skills))
@@ -828,12 +908,14 @@ func (m Model) viewTrack() string {
 				BadgeStyle.Render("["+tr.Badge+"]"),
 				StepPillStyle.Render(countLabel),
 			)
-			card := fmt.Sprintf("%s\n  %s\n  %s",
+			card := fmt.Sprintf("%s\n  %s",
 				header,
 				SlashStyle.Render(tr.Tagline),
-				SubtitleStyle.Render(tr.Description),
 			)
-			b.WriteString(style.Render(card) + "\n")
+			if selected && tr.Description != "" {
+				card += "\n  " + SubtitleStyle.Render(tr.Description)
+			}
+			b.WriteString(m.cardStyle(selected).Render(card) + "\n")
 		}
 	}
 
@@ -846,10 +928,10 @@ func (m Model) viewSkillTable() string {
 	tr := m.selectedTrack()
 	skills := m.visibleSkills()
 
-	speech := fmt.Sprintf("\"Here is what's inside %s for %s. Press 'd' or Enter on any skill to read its full description and starter prompt.\"",
+	speech := fmt.Sprintf("Here is what's inside %s for %s. Press 'd' or Enter on any skill to read its full description and starter prompt.",
 		tr.Name, HarnessDisplayName(m.selectedHarness()))
 	if tr.ID == "custom" {
-		speech = "\"Toggle any skill with Space, press 'd' to expand its long description, and press Enter when your mix is ready.\""
+		speech = "Toggle any skill with Space, press 'd' to expand its long description, and press Enter when your mix is ready."
 	}
 	b.WriteString(m.renderBotHeader("SKILL & COMMAND INSPECTOR", speech))
 
@@ -865,12 +947,12 @@ func (m Model) viewSkillTable() string {
 
 	b.WriteString(fmt.Sprintf("  %s %s %s %s %s\n",
 		PadRight("", 4),
-		PadRight("SKILL", 28),
-		PadRight("CATEGORY", 18),
-		PadRight("SLASH COMMAND", 18),
+		PadRight("SKILL", 31),
+		PadRight("CATEGORY", 16),
+		PadRight("SLASH COMMAND", 31),
 		"SUMMARY",
 	))
-	b.WriteString("  " + strings.Repeat("─", 96) + "\n")
+	b.WriteString("  " + strings.Repeat("-", 104) + "\n")
 
 	for idx := start; idx < end; idx++ {
 		sm := skills[idx]
@@ -893,9 +975,9 @@ func (m Model) viewSkillTable() string {
 		row := fmt.Sprintf("%s%s %s %s %s %s\n",
 			cursor,
 			PadRight(check, 4),
-			PadRight(TitleStyle.Render(sm.Name), 28),
-			PadRight(CategoryBadge(sm.Category), 18),
-			PadRight(SlashStyle.Render(slash), 18),
+			PadRight(TitleStyle.Render(sm.Name), 31),
+			PadRight(CategoryBadge(sm.Category), 16),
+			PadRight(SlashStyle.Render(slash), 31),
 			sm.Short,
 		)
 		b.WriteString(row)
@@ -906,7 +988,7 @@ func (m Model) viewSkillTable() string {
 		}
 	}
 
-	b.WriteString(fmt.Sprintf("\n  Showing %d–%d of %d skills\n", start+1, end, len(skills)))
+	b.WriteString(fmt.Sprintf("\n  Showing %d-%d of %d skills\n", start+1, end, len(skills)))
 	if tr.ID == "custom" {
 		b.WriteString(FooterStyle.Render("Up/Down: move  ·  Space: toggle [x]  ·  d: expand long description  ·  Enter: confirm selection  ·  Esc: back"))
 	} else {
@@ -917,41 +999,61 @@ func (m Model) viewSkillTable() string {
 
 func (m Model) viewBackup() string {
 	var b strings.Builder
-	b.WriteString(m.renderBotHeader("STEP 3 OF 3 · SAFETY BACKUP",
-		"\"Before I write any files, should I save a timestamped safety backup of anything I overwrite?\"\n\"It's on by default so you can always run `skill-installer restore` if you change your mind.\""))
+	paths, _ := m.cfg.Env.ResolvePaths(m.selectedHarness(), m.scope, m.cfg.ProjectDir)
+	cfgName := "config file"
+	if paths.ConfigFile != "" {
+		cfgName = filepath.Base(paths.ConfigFile)
+	}
+	hasExistingCfg := m.existingConfigPresent()
 
-	opts := []struct {
+	speech := "Before writing files, should I save a timestamped safety snapshot so you can roll back anytime with `skill-installer restore`?"
+	if hasExistingCfg {
+		speech = fmt.Sprintf("I detected an existing %s at %s.\nChoose whether to back it up before updating, keep your existing %s untouched, or overwrite without a snapshot.",
+			cfgName, paths.ConfigFile, cfgName)
+	}
+	b.WriteString(m.renderBotHeader("STEP 3 OF 3 · SAFETY BACKUP", speech))
+
+	type backupOpt struct {
 		title string
 		sub   string
-	}{
-		{
-			"Yes, save a safety backup first (Recommended)",
-			fmt.Sprintf("Saves a clean snapshot in %s before touching any existing files", m.cfg.Env.BackupsDir()),
-		},
-		{
-			"No, skip backup and keep existing config file untouched (--no-backup)",
-			"Installs skills without a snapshot while preserving any existing CLAUDE.md / GEMINI.md / AGENTS.md",
-		},
 	}
-	if m.existingConfigPresent() {
-		opts = append(opts, struct {
-			title string
-			sub   string
-		}{
-			"No, skip backup and overwrite existing config file",
-			"Overwrites your existing config file without saving a snapshot first",
-		})
+	var opts []backupOpt
+	if hasExistingCfg {
+		opts = []backupOpt{
+			{
+				"Yes, back up existing files before updating (Recommended)",
+				fmt.Sprintf("Snapshots %s and any existing skills into %s before writing", cfgName, m.cfg.Env.BackupsDir()),
+			},
+			{
+				fmt.Sprintf("Keep my existing %s untouched (install skills only)", cfgName),
+				fmt.Sprintf("Installs skills and commands without modifying your current %s", cfgName),
+			},
+			{
+				"Overwrite without saving a backup",
+				fmt.Sprintf("Replaces %s and existing plugin files without saving a snapshot", cfgName),
+			},
+		}
+	} else {
+		opts = []backupOpt{
+			{
+				"Yes, save a safety snapshot (Recommended)",
+				fmt.Sprintf("Records a rollback receipt in %s so `skill-installer restore` can undo this run cleanly", m.cfg.Env.BackupsDir()),
+			},
+			{
+				"No, install without saving a snapshot",
+				"Writes your chosen track directly without recording a backup snapshot",
+			},
+		}
 	}
 
 	for idx, o := range opts {
 		cursor := "  "
-		style := UnselectedCardStyle
-		if idx == m.backupIdx {
+		selected := idx == m.backupIdx
+		if selected {
 			cursor = "> "
-			style = SelectedCardStyle
 		}
 		card := fmt.Sprintf("%s%s\n  %s", cursor, TitleStyle.Render(o.title), SubtitleStyle.Render(o.sub))
-		b.WriteString(style.Render(card) + "\n")
+		b.WriteString(m.cardStyle(selected).Render(card) + "\n")
 	}
 
 	b.WriteString(FooterStyle.Render("Up/Down: choose  ·  Enter: install now  ·  Esc: back"))
@@ -961,7 +1063,7 @@ func (m Model) viewBackup() string {
 func (m Model) viewDone() string {
 	var b strings.Builder
 	if m.errMsg != "" {
-		b.WriteString(m.renderBotHeader("OOPS", fmt.Sprintf("\"Something went wrong: %s\"", m.errMsg)))
+		b.WriteString(m.renderBotHeader("OOPS", fmt.Sprintf("Something went wrong: %s", m.errMsg)))
 		b.WriteString(FooterStyle.Render("Press q to exit"))
 		return b.String()
 	}
@@ -971,7 +1073,7 @@ func (m Model) viewDone() string {
 	tr := m.selectedTrack()
 
 	b.WriteString(m.renderBotHeader("ALL CONFIGURED!",
-		fmt.Sprintf("\"High five! %s is ready with the %s track.\"\n\"Want a quick 60-second tour of what you can type in your very next chat session?\"", appName, tr.Name)))
+		fmt.Sprintf("%s is ready with the %s track.\nWant a quick 60-second tour of what you can type in your very next chat session?", appName, tr.Name)))
 
 	if res != nil {
 		summary := fmt.Sprintf("App & Scope:    %s (%s)\nTrack:          %s (%d skills installed)\nSkills folder:  %s\nConfig file:    %s",
@@ -979,7 +1081,7 @@ func (m Model) viewDone() string {
 		if res.BackupID != "" {
 			summary += fmt.Sprintf("\nSafety backup:  %s (restore anytime with `skill-installer restore`)", res.BackupID)
 		}
-		b.WriteString(UnselectedCardStyle.Render(summary) + "\n\n")
+		b.WriteString(m.cardStyle(false).Render(summary) + "\n\n")
 	}
 
 	choices := []struct {
@@ -993,12 +1095,11 @@ func (m Model) viewDone() string {
 
 	for idx, ch := range choices {
 		cursor := "  "
-		style := UnselectedCardStyle
-		if idx == m.doneIdx {
+		selected := idx == m.doneIdx
+		if selected {
 			cursor = "> "
-			style = SelectedCardStyle
 		}
-		b.WriteString(style.Render(fmt.Sprintf("%s%s\n  %s", cursor, TitleStyle.Render(ch.title), SubtitleStyle.Render(ch.sub))) + "\n")
+		b.WriteString(m.cardStyle(selected).Render(fmt.Sprintf("%s%s\n  %s", cursor, TitleStyle.Render(ch.title), SubtitleStyle.Render(ch.sub))) + "\n")
 	}
 
 	b.WriteString(FooterStyle.Render("Up/Down: choose  ·  Enter: select  ·  q: quit"))
@@ -1007,11 +1108,12 @@ func (m Model) viewDone() string {
 
 func (m Model) viewGuide() string {
 	var b strings.Builder
-	appName := HarnessDisplayName(m.selectedHarness())
+	h := m.selectedHarness()
+	appName := HarnessDisplayName(h)
 	tr := m.selectedTrack()
 
 	b.WriteString(m.renderBotHeader("INTERACTIVE GUIDE & COMMAND EXPLORER",
-		fmt.Sprintf("\"Here's everything you need to know about using %s with %s — zero jargon, promise!\"", tr.Name, appName)))
+		fmt.Sprintf("Use 1-3 or Tab to try starter prompts, see how %s loads your setup, or browse every skill.", appName)))
 
 	tabs := []string{
 		"1. What You Can Type Now",
@@ -1030,19 +1132,26 @@ func (m Model) viewGuide() string {
 
 	switch m.guideTab {
 	case 0:
-		if m.cfg.Catalog != nil {
-			for _, c := range m.cfg.Catalog.Explainers.Concepts {
-				card := fmt.Sprintf("%s\n%s", BadgeStyle.Render(c.Title), c.Summary)
-				b.WriteString(UnselectedCardStyle.Render(card) + "\n")
-			}
+		loadLines := HarnessLoadLines(h)
+		var howBuilder strings.Builder
+		howBuilder.WriteString(BadgeStyle.Render(fmt.Sprintf("Slash Commands vs. Skills in %s", appName)) + "\n")
+		howBuilder.WriteString("Type a /slash command to run a workflow explicitly, or describe your task in plain English so matching skills load automatically.\n")
+		for _, l := range loadLines {
+			howBuilder.WriteString("  * " + SubtitleStyle.Render(l) + "\n")
 		}
+		b.WriteString(m.cardStyle(false).Render(strings.TrimRight(howBuilder.String(), "\n")) + "\n")
+
 		b.WriteString(TitleStyle.Render("Try typing one of these in your next session:") + "\n\n")
-		for idx, sm := range m.visibleSkills() {
+		for idx, sm := range m.installedOrSelectedSkills() {
 			if idx >= 4 {
 				break
 			}
-			b.WriteString(fmt.Sprintf("  • %s — %s\n    %s\n\n",
-				SlashStyle.Render(sm.SlashCommand),
+			slash := sm.SlashCommand
+			if slash == "" {
+				slash = sm.Name
+			}
+			b.WriteString(fmt.Sprintf("  * %s -- %s\n    %s\n\n",
+				SlashStyle.Render(slash),
 				sm.Short,
 				SubtitleStyle.Render(fmt.Sprintf("Prompt: %q", sm.StarterPrompt)),
 			))
@@ -1052,15 +1161,27 @@ func (m Model) viewGuide() string {
 		if m.cfg.Catalog != nil {
 			overview = strings.TrimSpace(m.cfg.Catalog.Explainers.RepoOverview)
 		}
-		b.WriteString(UnselectedCardStyle.Render(TitleStyle.Render("Why Curated Tracks?")+"\n"+overview) + "\n")
-		b.WriteString(UnselectedCardStyle.Render(TitleStyle.Render("Seamless Updates (gh CLI & GitHub MCP)")+
-			"\n• Ask your AI directly: \"Are there updates to the plugin?\" or type /plugin-update.\n"+
-			"• Or run `skill-installer update` from your terminal to pull the latest skills from main.") + "\n")
-		b.WriteString(UnselectedCardStyle.Render(TitleStyle.Render("Safety Backups, Restore & Uninstall")+
-			"\n• `skill-installer restore` rolls back any snapshot saved before an install or update.\n"+
-			"• `skill-installer uninstall` removes only tracked plugin files, leaving your custom skills safe.") + "\n")
+		b.WriteString(m.cardStyle(false).Render(TitleStyle.Render("Why Curated Tracks?")+"\n"+overview) + "\n")
+		if m.cfg.Catalog != nil {
+			for _, c := range m.cfg.Catalog.Explainers.Concepts {
+				card := fmt.Sprintf("%s\n%s", BadgeStyle.Render(c.Title), c.Summary)
+				b.WriteString(m.cardStyle(false).Render(card) + "\n")
+			}
+		}
 	case 2:
 		skills := m.visibleSkills()
+		totalForHarness := len(skills)
+		if m.cfg.Catalog != nil {
+			totalForHarness = len(m.cfg.Catalog.SkillsForHarness(h))
+		}
+		if m.showAllInGuide {
+			b.WriteString(fmt.Sprintf("  %s\n\n",
+				StepPillStyle.Render(fmt.Sprintf("Showing: All %d skills for %s — press 'a' to filter to %s", totalForHarness, appName, tr.Name))))
+		} else {
+			b.WriteString(fmt.Sprintf("  %s\n\n",
+				StepPillStyle.Render(fmt.Sprintf("Showing: %s (%d skills) — press 'a' to browse all %d skills for %s", tr.Name, len(skills), totalForHarness, appName))))
+		}
+
 		start := 0
 		pageSize := 8
 		if m.skillCursor >= pageSize {
@@ -1082,9 +1203,9 @@ func (m Model) viewGuide() string {
 			}
 			b.WriteString(fmt.Sprintf("%s%s %s %s %s\n",
 				cursor,
-				PadRight(TitleStyle.Render(sm.Name), 28),
-				PadRight(CategoryBadge(sm.Category), 18),
-				PadRight(SlashStyle.Render(slash), 18),
+				PadRight(TitleStyle.Render(sm.Name), 31),
+				PadRight(CategoryBadge(sm.Category), 16),
+				PadRight(SlashStyle.Render(slash), 31),
 				sm.Short,
 			))
 		}
@@ -1101,7 +1222,7 @@ func (m Model) viewGuide() string {
 				sel.Long,
 				SlashStyle.Render(sel.StarterPrompt),
 			)
-			b.WriteString("\n" + SelectedCardStyle.Render(card) + "\n")
+			b.WriteString("\n" + m.cardStyle(true).Render(card) + "\n")
 		}
 	}
 
@@ -1113,53 +1234,73 @@ func (m Model) viewUpdate() string {
 	var b strings.Builder
 	targetReceipt := m.selectTargetReceipt()
 	b.WriteString(m.renderBotHeader("LIVE UPDATER (GITHUB CLI)",
-		fmt.Sprintf("\"Checking `futuregerald/futuregerald-claude-plugin` on `main` for %s (%s · %s)...\"",
+		fmt.Sprintf("Checking futuregerald/futuregerald-claude-plugin on main for %s (%s · %s)...",
 			HarnessDisplayName(targetReceipt.Harness), targetReceipt.Scope, targetReceipt.RootDir)))
 
+	if len(m.receipts) > 1 {
+		for idx, r := range m.receipts {
+			cursor := "  "
+			selected := idx == m.updateIdx
+			if selected {
+				cursor = "> "
+			}
+			line := fmt.Sprintf("%s%s (%s) — track: %s · %s",
+				cursor, TitleStyle.Render(HarnessDisplayName(r.Harness)), r.Scope, r.Track, r.RootDir)
+			b.WriteString(m.cardStyle(selected).Render(line) + "\n")
+		}
+	}
+
 	if m.errMsg != "" {
-		b.WriteString(UnselectedCardStyle.Render("Update check note: "+m.errMsg) + "\n")
+		b.WriteString(m.cardStyle(false).Render("Update check note: "+m.errMsg) + "\n")
 	} else if m.statusMsg != "" {
-		b.WriteString(SelectedCardStyle.Render(SlashStyle.Render(m.statusMsg)) + "\n")
+		b.WriteString(m.cardStyle(true).Render(SlashStyle.Render(m.statusMsg)) + "\n")
 	} else if m.updateReport != nil {
 		rep := m.updateReport
 		if !rep.UpdateAvailable {
-			b.WriteString(SelectedCardStyle.Render(fmt.Sprintf("You're completely up to date on main (%s)!", shortSHA(rep.LatestSHA))) + "\n")
+			b.WriteString(m.cardStyle(true).Render(fmt.Sprintf("You're completely up to date on main (%s).", shortSHA(rep.LatestSHA))) + "\n")
 		} else {
-			info := fmt.Sprintf("Update available on main: %s -> %s\nChanged skills: %v\nPress Enter to backup & apply update now!",
-				shortSHA(rep.InstalledSHA), shortSHA(rep.LatestSHA), rep.ChangedSkills)
-			b.WriteString(SelectedCardStyle.Render(info) + "\n")
+			changedLabel := strings.Join(rep.ChangedSkills, ", ")
+			if changedLabel == "" {
+				changedLabel = "config, templates, or agent files"
+			}
+			info := fmt.Sprintf("Update available on main: %s -> %s\nChanged skills: %s\nPress Enter to back up & apply update now",
+				shortSHA(rep.InstalledSHA), shortSHA(rep.LatestSHA), changedLabel)
+			b.WriteString(m.cardStyle(true).Render(info) + "\n")
 		}
 	}
-	b.WriteString(FooterStyle.Render("Enter: apply update  ·  Esc: back to home  ·  q: quit"))
+	footer := "Enter: apply update  ·  Esc: back to home  ·  q: quit"
+	if len(m.receipts) > 1 {
+		footer = "Up/Down: select target  ·  " + footer
+	}
+	b.WriteString(FooterStyle.Render(footer))
 	return b.String()
 }
 
 func (m Model) viewRestore() string {
 	var b strings.Builder
 	b.WriteString(m.renderBotHeader("RESTORE A SAFETY BACKUP",
-		"\"Pick a timestamped snapshot below to restore overwritten files and remove files created in that run.\""))
+		"Pick a timestamped snapshot below to restore overwritten files and remove files created in that run."))
 
 	if m.statusMsg != "" {
-		b.WriteString(SelectedCardStyle.Render(SlashStyle.Render(m.statusMsg)) + "\n")
+		b.WriteString(m.cardStyle(true).Render(SlashStyle.Render(m.statusMsg)) + "\n")
 	}
 	if m.confirmRestore && m.restoreIdx >= 0 && m.restoreIdx < len(m.snapshots) {
 		snap := m.snapshots[m.restoreIdx]
-		b.WriteString(SelectedCardStyle.Render(BadgeStyle.Render(
+		b.WriteString(m.cardStyle(true).Render(BadgeStyle.Render(
 			fmt.Sprintf("Confirm restore of snapshot %s? Press Enter/y to confirm, Esc/n to cancel.", snap.ID))) + "\n")
 	}
 	if len(m.snapshots) == 0 {
-		b.WriteString(UnselectedCardStyle.Render("No safety backup snapshots found yet.") + "\n")
+		b.WriteString(m.cardStyle(false).Render("No safety backup snapshots found yet.") + "\n")
 	} else {
 		for idx, s := range m.snapshots {
 			cursor := "  "
-			style := UnselectedCardStyle
-			if idx == m.restoreIdx {
+			selected := idx == m.restoreIdx
+			if selected {
 				cursor = "> "
-				style = SelectedCardStyle
 			}
 			line := fmt.Sprintf("%s%s   (%s · %s · track: %s · %d tracked entries)",
 				cursor, TitleStyle.Render(s.ID), HarnessDisplayName(s.Harness), s.Scope, s.Track, len(s.Entries))
-			b.WriteString(style.Render(line) + "\n")
+			b.WriteString(m.cardStyle(selected).Render(line) + "\n")
 		}
 	}
 	b.WriteString(FooterStyle.Render("Up/Down: select snapshot  ·  Enter: restore  ·  Esc: back  ·  q: quit"))
@@ -1169,30 +1310,29 @@ func (m Model) viewRestore() string {
 func (m Model) viewUninstall() string {
 	var b strings.Builder
 	b.WriteString(m.renderBotHeader("SAFE UNINSTALL",
-		"\"Select an installation below to remove tracked plugin files while keeping your custom skills and *.local.md files untouched.\""))
+		"Select an installation below to remove tracked plugin files while keeping your custom skills and *.local.md files untouched."))
 
 	if m.statusMsg != "" {
-		b.WriteString(SelectedCardStyle.Render(SlashStyle.Render(m.statusMsg)) + "\n")
+		b.WriteString(m.cardStyle(true).Render(SlashStyle.Render(m.statusMsg)) + "\n")
 	}
 	if m.confirmUninstall && m.uninstallIdx >= 0 && m.uninstallIdx < len(m.receipts) {
 		rec := m.receipts[m.uninstallIdx]
-		b.WriteString(SelectedCardStyle.Render(BadgeStyle.Render(
+		b.WriteString(m.cardStyle(true).Render(BadgeStyle.Render(
 			fmt.Sprintf("Confirm uninstall of %s (%s)? Press Enter/y to confirm, Esc/n to cancel.",
 				HarnessDisplayName(rec.Harness), rec.Scope))) + "\n")
 	}
 	if len(m.receipts) == 0 {
-		b.WriteString(UnselectedCardStyle.Render("No tracked installations found.") + "\n")
+		b.WriteString(m.cardStyle(false).Render("No tracked installations found.") + "\n")
 	} else {
 		for idx, r := range m.receipts {
 			cursor := "  "
-			style := UnselectedCardStyle
-			if idx == m.uninstallIdx {
+			selected := idx == m.uninstallIdx
+			if selected {
 				cursor = "> "
-				style = SelectedCardStyle
 			}
 			line := fmt.Sprintf("%s%s (%s) — track: %s · %d files at %s",
 				cursor, TitleStyle.Render(HarnessDisplayName(r.Harness)), r.Scope, r.Track, len(r.InstalledFiles), r.RootDir)
-			b.WriteString(style.Render(line) + "\n")
+			b.WriteString(m.cardStyle(selected).Render(line) + "\n")
 		}
 	}
 	b.WriteString(FooterStyle.Render("Up/Down: select install  ·  Enter: uninstall  ·  Esc: back  ·  q: quit"))

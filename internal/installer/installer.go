@@ -1070,7 +1070,7 @@ func (i *Installer) ExecutePlan(plan InstallPlan) (*InstallResult, error) {
 	var backupID string
 	if plan.Backup && !execInst.options.DryRun {
 		mgr := backup.NewManager(plan.Env.BackupsDir())
-		mf, bErr := mgr.CreateSnapshot(plan.Harness, scope, trackID, candidateTargets, plan.Env.StateFilePath())
+		mf, bErr := mgr.CreateSnapshotWithRoot(plan.Harness, scope, paths.RootDir, trackID, candidateTargets, plan.Env.StateFilePath())
 		if bErr != nil {
 			return nil, fmt.Errorf("creating safety backup: %w", bErr)
 		}

@@ -7,7 +7,7 @@
 
 A self-contained, cross-platform CLI and curated skill catalog for **Claude Code**, **Google Antigravity**, **Zed**, and **OpenCode** across **Windows, Linux, and macOS**.
 
-Instead of dropping 45+ raw markdown files into your home directory with zero explanation, `skill-installer` guides you through a spacious terminal wizard, explains every skill and track in plain English, takes optional automatic backups before touching any file, and ships an interactive guide (`skill-installer guide`) you can open anytime.
+Instead of dropping 60+ raw markdown files into your home directory with zero explanation, `skill-installer` guides you through a spacious terminal wizard, explains every skill and track in plain English, takes optional automatic backups before touching any file, and ships an interactive guide (`skill-installer guide`) you can open anytime.
 
 ---
 
@@ -28,7 +28,7 @@ Instead of dropping 45+ raw markdown files into your home directory with zero ex
 
 ## Supported Harnesses & Cross-Platform Paths
 
-`skill-installer` embeds a unified catalog of 48 skills alongside harness-native rules, subagents, slash commands, and circuit-breaker hooks for four first-class AI coding harnesses:
+`skill-installer` embeds a unified catalog of **63 skills** (`60` shared across all harnesses + `3` Google Antigravity exclusives) alongside harness-native rules, subagents, slash commands, and circuit-breaker hooks for four first-class AI coding harnesses:
 
 | Harness (`--target`) | Global Path (macOS / Linux) | Global Path (Windows) | Project Path (`--project`) | Installed Artifacts |
 |---|---|---|---|---|
@@ -54,8 +54,8 @@ You don't need to install everything on day one. Choose one of five tracks inter
    - Installs **24 product, design & strategy skills**: `craftsmans-wisdom`, `shape`, `brainstorming`, `future-grilling`, `future-wayfinder`, `grilling-page`, `write-a-prd`, `to-spec`, `to-tickets`, `writing-tickets`, `ticket-grooming`, `ui-design`, `huashu-design`, `no-slop-ui`, `prototype`, `visualize-plan`, `copy-edit`, `copywriting`, `marketing-psychology`, `editor-pass`, `research`, `meeting-debrief`, `team-pulse`, and `plugin-updater`.
 4. **`copy-polish` — Copy, Brand & UI Polish**
    - Installs **9 design & copywriting skills**: `copy-edit`, `copywriting`, `marketing-psychology`, `editor-pass`, `impeccable`, `no-slop-ui`, `huashu-design`, `animation-principles`, and `plugin-updater`.
-5. **`custom` — Custom Pick (Choose Individual Skills)**
-   - Browse the full categorized catalog and pick individual skills (`--skills tdd,copywriting,...` or interactively with `Space` / `Enter` for plain-English details).
+5. **`custom` — Pick Individual Skills**
+   - Browse the full categorized catalog and pick individual skills (`--skills test-driven-development,copywriting,...` or interactively with `Space` to toggle and `d` for plain-English details; starts with only `plugin-updater` pre-checked).
 
 ---
 
@@ -79,12 +79,10 @@ Run with no arguments in any terminal:
 ./skill-installer
 ```
 
-The guided bot (`[ o_o ]`) walks you one question at a time through:
-1. **Which AI coding tool are you setting up?** (`Claude Code`, `Google Antigravity`, `Zed`, or `OpenCode`)
-2. **Where should these skills live?** (`Global` vs `This project only`)
-3. **How much do you want to install today?** (`Opinionated`, `Basics`, `Product`, `Copy & Polish`, or `Custom Pick`)
-4. **Safety Backup Before Installing** (`Yes, back up existing files first` — recommended when existing files are detected)
-5. **Review & Confirm**, live installation progress, and an optional **60-Second Interactive Tour** of how to invoke your new skills.
+From the Home menu (`Set up skills & workflow`, `See how this works & command guide`, `Check for updates (gh)`, `Restore a safety backup`, `Uninstall`), the guided bot (`[ o_o ]`) walks you one calm decision per screen through three steps:
+1. **Step 1 of 3 — Target App & Scope:** Pick `Google Antigravity`, `Claude Code`, `Zed Editor`, or `OpenCode`, and press `Tab` to toggle `Global (all projects)` vs `Current project folder`.
+2. **Step 2 of 3 — Workflow Track:** Choose `Opinionated Dev Workflow`, `Just the Basics`, `Product & Strategy Flow`, `Copy, Brand & UI Polish`, or `Pick Individual Skills` (press `Space` or `p` on any track to preview its skills, `/slash` commands, and starter prompts).
+3. **Step 3 of 3 — Safety Backup:** Save a timestamped rollback snapshot before writing (or keep an existing `CLAUDE.md` / `GEMINI.md` / `AGENTS.md` untouched), followed by a **60-Second Interactive Tour** of what you can type right away.
 
 ### 3. Non-Interactive / Headless Examples
 
@@ -112,11 +110,11 @@ Open the interactive 3-tab guide at any time—even without reinstalling:
 skill-installer guide
 ```
 
-- **`1. What You Can Type Now`** — Copy-pasteable slash commands and starter prompts for your installed track and harness.
-- **`2. How This Toolkit Works`** — Plain-English guide to automatic vs. slash-command invocation, what changes on disk, and the 12-Phase Lifecycle (`0` `Shape` & `0½` `UI Design` through `12` `Handoff`).
-- **`3. Skill & Command Explorer`** — Categorized catalog of all 48 skills. Press `↑`/`↓` to browse, `a` to toggle between your track and all skills, and `Enter` to expand any skill's full description, invocation command, harness support, and a copy-pasteable **"Try typing:"** prompt.
+- **`1. What You Can Type Now`** — Concise guide to how your chosen app loads `/slash` commands and skills, plus copy-pasteable starter prompts from your installed track.
+- **`2. How This Toolkit Works`** — Plain-English explainers on curated tracks, how slash commands vs. automatic skills work across harnesses, safety backups & one-command restore, and live updates.
+- **`3. Skill & Command Explorer`** — Categorized catalog of all 63 skills (`60` shared + `3` Antigravity-exclusive). Press `Up`/`Down` to browse with a live detail card below, and press `a` to toggle between your track and all skills for your harness.
 
-Running `skill-installer guide` in a non-TTY pipeline (`skill-installer guide | less`) automatically outputs a clean, readable Markdown reference.
+Running `skill-installer guide` in a non-TTY pipeline (`skill-installer guide | less`) automatically outputs a pure-ASCII reference safe across macOS, Linux, and Windows consoles.
 
 ---
 
@@ -132,8 +130,8 @@ skill-installer <subcommand> [flags]
 | Subcommand | Description |
 |---|---|
 | `skill-installer` | Launch the interactive TUI wizard (or run headlessly with `-y` / `--config`) |
-| `skill-installer guide` | Open the interactive 3-tab guide (Overview, 12-Phase Lifecycle, Searchable Skill Catalog) |
-| `skill-installer list [--category <cat>]` | List all 48 embedded skills with categories, commands, descriptions, and starter prompts |
+| `skill-installer guide` | Open the interactive 3-tab guide (What You Can Type Now, How This Toolkit Works, Skill & Command Explorer) |
+| `skill-installer list [--category <cat>]` | List all 63 embedded skills with categories, commands, descriptions, and starter prompts |
 | `skill-installer update [--check] [--self]` | Pull the latest skills and workflow updates from `main` via `gh` CLI (and optionally self-upgrade the binary) |
 | `skill-installer restore [snapshot-id] [--file <path>]` | Restore a complete pre-install backup snapshot or a single backed-up file |
 | `skill-installer uninstall` | Cleanly remove all files installed by `skill-installer` (preserving co-tenant hooks in `hooks.json`) |
@@ -217,7 +215,7 @@ When you install the **Opinionated** track, you can run `/start`, `/begin`, or `
 | **0** | **Shape** | Interview on what "good" means and write a confirmed brief (`craftsmans-wisdom`), then grill open decisions (`future-grilling`) or write a PRD (`write-a-prd`) | `/shape`, `/craftsmans-wisdom`, `/future-grilling`, `/write-a-prd` |
 | **0½** | **UI Design** | For new pages or major UI work: generate 3 distinct interactive HTML prototypes (`design-demos/index.html`) and pick a direction before planning | `/ui-design`, `/huashu-design` |
 | **1** | **Receive** | Confirm task scope, constraints, and task list | — |
-| **2** | **Trace** | Map the call chain upward (every caller to the entry point) and downward (side effects, DB/IO, invisible edges) | `codebase-memory-tracing` |
+| **2** | **Trace** | Map the call chain upward (every caller to the entry point) and downward (side effects, DB/IO, invisible edges) | — |
 | **3** | **Plan** | Write the implementation plan with an explicit **Affected Callers** section, test cases, and verification gates | `/writing-plans`, `/visualize-plan` |
 | **3½** | **Plan Review** | One-shot read-only adversarial plan review in a fresh subagent before any code is written | `/plan-review` |
 | **4** | **Implement** | Strict TDD (`RED → GREEN → REFACTOR`) in an isolated implementer subagent or Peer-Pipeline Swarm | `/test-driven-development`, `/subagent-driven-development`, `/peer-pipeline-swarm` |
@@ -234,28 +232,34 @@ When you install the **Opinionated** track, you can run `/start`, `/begin`, or `
 
 ## Skill Catalog by Category
 
-Run `skill-installer list` or `skill-installer guide` to inspect every skill's full description and starter prompt.
+Run `skill-installer list --long` or `skill-installer guide` to inspect every skill's full description and starter prompt (`63` skills total: `60` shared + `3` Antigravity-exclusive).
 
-### Lifecycle & Orchestration (8 skills)
-- `lifecycle` (`/lifecycle`), `start` (`/start`), `begin` (`/begin`), `peer-pipeline-swarm` (`/peer-pipeline-swarm`), `subagent-driven-development` (`/subagent-driven-development`), `dispatching-parallel-agents` (`/dispatching-parallel-agents`), `antigravity-orchestration` (`/antigravity-orchestration`), `future-model-router` (`/future-model-router`)
+### Core Workflow (3 skills)
+- `start` (`/start`), `begin` (`/begin`), `lifecycle` (`/lifecycle`)
 
-### Product, Planning & Architecture (14 skills)
-- `craftsmans-wisdom` (`/craftsmans-wisdom`), `future-grilling` (`/future-grilling`), `future-wayfinder` (`/future-wayfinder`), `grilling-page` (`/grilling-page`), `grill-with-docs` (`/grill-with-docs`), `brainstorming` (`/brainstorming`), `write-a-prd` (`/write-a-prd`), `writing-plans` (`/writing-plans`), `visualize-plan` (`/visualize-plan`), `to-spec` (`/to-spec`), `to-tickets` (`/to-tickets`), `writing-tickets` (`/writing-tickets`), `domain-modeling` (`/domain-modeling`), `architecture-decision-records` (`/architecture-decision-records`)
+### Product & Shaping (11 skills)
+- `shape` (`/shape`), `craftsmans-wisdom` (`/craftsmans-wisdom`), `brainstorming` (`/brainstorming`), `future-grilling` (`/future-grilling`), `future-wayfinder` (`/future-wayfinder`), `grilling-page` (`/grilling-page`), `write-a-prd` (`/write-a-prd`), `to-spec` (`/to-spec`), `to-tickets` (`/to-tickets`), `writing-tickets` (`/writing-tickets`), `ticket-grooming` (`/ticket-grooming`)
 
-### Implementation, Testing & Debugging (10 skills)
-- `implement` (`/implement`), `prototype` (`/prototype`), `test-driven-development` (`/test-driven-development`), `systematic-debugging` (`/systematic-debugging`), `javascript-testing-patterns` (`/javascript-testing-patterns`), `go-api-structure` (`/go-api-structure`), `codebase-design` (`/codebase-design`), `improve-codebase-architecture` (`/improve-codebase-architecture`), `sql-optimization-patterns` (`/sql-optimization-patterns`), `resolving-merge-conflicts` (`/resolving-merge-conflicts`)
+### Design, Copy & UI (12 skills)
+- `ui-design` (`/ui-design`), `huashu-design` (`/huashu-design`), `no-slop-ui` (`/no-slop-ui`), `impeccable` (`/impeccable`), `animation-principles` (`/animation-principles`), `copy-edit` (`/copy-edit`), `copywriting` (`/copywriting`), `marketing-psychology` (`/marketing-psychology`), `editor-pass` (`/editor-pass`), `prototype` (`/prototype`), `visualize-plan` (`/visualize-plan`), `vectorize` (`/vectorize`)
 
-### Code Review, Quality & Verification (6 skills)
-- `plan-review` (`/plan-review`), `comprehensive-code-review` (`/comprehensive-code-review`), `fix-check` (`/fix-check`), `code-simplifier` (`/code-simplifier`), `qa-verification` (`/qa-verification`), `editor-pass` (`/editor-pass`)
+### Planning & Architecture (8 skills)
+- `writing-plans` (`/writing-plans`), `plan-review` (`/plan-review`), `codebase-design` (`/codebase-design`), `improve-codebase-architecture` (`/improve-codebase-architecture`), `domain-modeling` (`/domain-modeling`), `architecture-decision-records` (`/architecture-decision-records`), `grill-with-docs` (`/grill-with-docs`), `go-api-structure` (`/go-api-structure`)
 
-### Design, Copy & UI (10 skills)
-- `ui-design` (`/ui-design`), `huashu-design` (`/huashu-design`), `impeccable` (`/impeccable`), `no-slop-ui` (`/no-slop-ui`), `animation-principles` (`/animation-principles`), `vectorize` (`/vectorize`), `copywriting` (`/copywriting`), `marketing-psychology` (`/marketing-psychology`), `copy-edit` (`/copy-edit`), `ui-implementer` (`/ui-implementer`)
+### Engineering & TDD (9 skills)
+- `test-driven-development` (`/test-driven-development`), `subagent-driven-development` (`/subagent-driven-development`), `implement` (`/implement`), `systematic-debugging` (`/systematic-debugging`), `code-simplifier` (`/code-simplifier`), `javascript-testing-patterns` (`/javascript-testing-patterns`), `using-git-worktrees` (`/using-git-worktrees`), `dispatching-parallel-agents` (`/dispatching-parallel-agents`), `resolving-merge-conflicts` (`/resolving-merge-conflicts`)
 
-### Team, Delivery & Context Management (6 skills)
-- `pull-request-description` (`/pull-request-description`), `ticket-grooming` (`/ticket-grooming`), `team-pulse` (`/team-pulse`), `meeting-debrief` (`/meeting-debrief`), `handoff` (`/handoff`), `baton-pass` (`/baton-pass`)
+### Review, Security & QA (6 skills)
+- `comprehensive-code-review` (`/comprehensive-code-review`), `fix-check` (`/fix-check`), `sql-optimization-patterns` (`/sql-optimization-patterns`), `review-lens` (`/review-lens`), `qa-verification` (`/qa-verification`), `skill-reviewer` (`/skill-reviewer`)
 
-### Research, Browser & Meta (5 skills)
-- `research` (`/research`), `agent-browser` (`/agent-browser`), `teach` (`/teach`), `future-skill-creator` (`/future-skill-creator`), `skill-reviewer` (`/skill-reviewer`), `plugin-updater` (`/plugin-update`)
+### Shipping, Ops & Team (5 skills)
+- `pull-request-description` (`/pull-request-description`), `handoff` (`/handoff`), `team-pulse` (`/team-pulse`), `meeting-debrief` (`/meeting-debrief`), `datadog-dashboards` (`/datadog-dashboards`)
+
+### Research, Browser & Meta (6 skills)
+- `agent-browser` (`/agent-browser`), `research` (`/research`), `teach` (`/teach`), `future-model-router` (`/future-model-router`), `future-skill-creator` (`/future-skill-creator`), `plugin-updater` (`/plugin-update`)
+
+### Antigravity Exclusives (3 skills)
+- `antigravity-orchestration` (`/antigravity-orchestration`), `peer-pipeline-swarm` (`/peer-pipeline-swarm`), `baton-pass` (`/baton-pass`)
 
 ---
 
@@ -266,13 +270,14 @@ All distributed assets live inside `internal/catalog/` and are compiled into the
 ```text
 internal/
   catalog/
-    embed.go              # Single //go:embed directive + 48-skill metadata registry & 5 track presets
-    shared/skills/        # 48 canonical cross-harness skills
-    claude/               # Claude Code agents, slash commands, and skill overrides
-    antigravity/          # GEMINI.md, Antigravity skill overrides, subagent plugins, and circuit-breaker hooks
-    zed/                  # Zed rules (default.md)
-    opencode/             # OpenCode AGENTS.md, agents, and commands
-  platform/               # 24-cell OS (darwin/linux/windows) × harness × scope path resolution
+    embed.go              # Single //go:embed directive + 63-skill metadata registry & 5 track presets
+    tracks.yaml           # Curated track definitions, plain-English skill copy, and starter prompts
+    shared/skills/        # 60 shared cross-harness skills
+    claude/               # Claude Code agents, slash commands, and CLAUDE.md templates
+    antigravity/          # GEMINI.md, 3 Antigravity-exclusive skills + overrides, subagent plugins, and circuit-breaker hooks
+    zed/                  # Zed AGENTS-GLOBAL.md and templates/AGENTS-ZED.md
+    opencode/             # OpenCode AGENTS-GLOBAL.md, templates/AGENTS-OPENCODE.md, agents, and commands
+  platform/               # Cross-platform (darwin/linux/windows) × harness × scope path resolution
   backup/                 # NTFS-safe indexed backup snapshots, restoration, and pruning
   state/                  # Installation receipts (state.json), legacy v3 discovery, and clean uninstallation
   installer/              # Plan computation, markdown harness adaptation, and atomic file installation
