@@ -437,3 +437,12 @@ func TestProjectDirAndMergeConfigCLI(t *testing.T) {
 		}
 	}
 }
+
+func TestBuildRootCommandDoesNotClobberTrackName(t *testing.T) {
+	resetGlobals()
+	t.Cleanup(resetGlobals)
+	_ = buildRootCommand()
+	if trackName != "" {
+		t.Fatalf("expected buildRootCommand() to leave trackName empty until flags are parsed, got %q", trackName)
+	}
+}

@@ -310,7 +310,7 @@ internal/
 
 ## Local-Only Docker & Desktop Harness E2E Suite
 
-To run the full containerized and host-sandbox end-to-end suite locally across all four harnesses (`claude`, `antigravity`, `zed`, `opencode`) — including real installed `@anthropic-ai/claude-code` and `opencode-ai` CLIs inside Docker, Claude Desktop and Antigravity Desktop coexistence checks, and live `autonomous-breaker` hook execution:
+To run the full containerized and host-sandbox end-to-end suite locally across all four harnesses (`claude`, `antigravity`, `zed`, `opencode`) — including real installed `@anthropic-ai/claude-code` and `opencode-ai` CLIs inside Docker, Claude Desktop and Antigravity Desktop coexistence checks, live `autonomous-breaker` hook execution, real PTY-driven interactive Bubble Tea TUI journeys, and full CLI flag/restore coverage:
 
 ```bash
 make test-e2e

@@ -293,6 +293,8 @@ func runVerifyAllHarnessesInSandbox(t *testing.T, binPath string, requireRealCLI
 	verifyZedDesktop(t, binPath, sandboxHome, xdgConfig)
 	verifyOpenCodeCLI(t, binPath, sandboxHome, xdgConfig, requireRealCLIs)
 	verifyProjectLanguageDetectionAndMergeModes(t, binPath, sandboxHome, xdgConfig)
+	verifyRemainingCLIFlagsAndSingleFileRestore(t, binPath, sandboxHome, xdgConfig)
+	verifyInteractivePTYTUIJourneys(t, binPath, sandboxHome, xdgConfig)
 }
 
 func verifyClaudeDesktopAndCLI(t *testing.T, binPath, sandboxHome, xdgConfig string, requireRealCLI bool) {
@@ -851,4 +853,282 @@ func verifyProjectLanguageDetectionAndMergeModes(t *testing.T, binPath, sandboxH
 	if strings.Contains(replaced, "# Project Custom Header") {
 		t.Fatal("expected --config-mode replace to overwrite custom header")
 	}
+}
+
+func verifyRemainingCLIFlagsAndSingleFileRestore(t *testing.T, binPath, sandboxHome, xdgConfig string) {
+	t.Helper()
+	assertIsolatedSandboxHome(t, sandboxHome)
+
+	dryRunDir := t.TempDir()
+	dryOut := mustRunCLIInSandbox(t, binPath, dryRunDir, sandboxHome, xdgConfig,
+		"-t", "claude", "--project-dir", dryRunDir, "--track", "opinionated", "--dry-run", "-y")
+	if !strings.Contains(dryOut, "dry run") && !strings.Contains(dryOut, "WOULD") {
+		t.Fatalf("expected dry-run output indicator, got:\n%s", dryOut)
+	}
+	mustNotExist(t, filepath.Join(dryRunDir, "CLAUDE.md"))
+	mustNotExist(t, filepath.Join(dryRunDir, ".claude"))
+
+	cfgOnlyDir := t.TempDir()
+	mustRunCLIInSandbox(t, binPath, cfgOnlyDir, sandboxHome, xdgConfig,
+		"-t", "claude", "--project-dir", cfgOnlyDir, "--mode", "config-only", "--track", "opinionated", "--no-backup", "-y")
+	mustExistFile(t, filepath.Join(cfgOnlyDir, "CLAUDE.md"))
+	mustNotExist(t, filepath.Join(cfgOnlyDir, ".claude", "skills"))
+	mustNotExist(t, filepath.Join(cfgOnlyDir, ".claude", "agents"))
+	mustNotExist(t, filepath.Join(cfgOnlyDir, ".claude", "commands"))
+
+	skipFlagsDir := t.TempDir()
+	mustRunCLIInSandbox(t, binPath, skipFlagsDir, sandboxHome, xdgConfig,
+		"-t", "claude", "--project-dir", skipFlagsDir, "--track", "opinionated",
+		"--skip-agents", "--skip-commands", "--skip-claude-md", "--no-backup", "-y")
+	mustExistFile(t, filepath.Join(skipFlagsDir, ".claude", "skills", "start", "SKILL.md"))
+	mustNotExist(t, filepath.Join(skipFlagsDir, ".claude", "agents"))
+	mustNotExist(t, filepath.Join(skipFlagsDir, ".claude", "commands"))
+	mustNotExist(t, filepath.Join(skipFlagsDir, "CLAUDE.md"))
+
+	restoreFileDir := t.TempDir()
+	claudePath := filepath.Join(restoreFileDir, "CLAUDE.md")
+	originalClaude := "Custom Project Config Before Install\n\nPreserve this file.\n"
+	if err := os.WriteFile(claudePath, []byte(originalClaude), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	mustRunCLIInSandbox(t, binPath, restoreFileDir, sandboxHome, xdgConfig,
+		"-t", "claude", "--project-dir", restoreFileDir, "--track", "basics", "--config-mode", "replace", "--backup", "--force", "-y")
+	if string(mustExistFile(t, claudePath)) == originalClaude {
+		t.Fatal("expected install with --config-mode replace to overwrite CLAUDE.md")
+	}
+	tddSkillPath := filepath.Join(restoreFileDir, ".claude", "skills", "test-driven-development", "SKILL.md")
+	mustExistFile(t, tddSkillPath)
+
+	mustRunCLIInSandbox(t, binPath, restoreFileDir, sandboxHome, xdgConfig,
+		"restore", "-t", "claude", "--project-dir", restoreFileDir, "--file", claudePath, "-y")
+	if got := string(mustExistFile(t, claudePath)); got != originalClaude {
+		t.Fatalf("expected restore --file to restore original CLAUDE.md, got:\n%s", got)
+	}
+	mustExistFile(t, tddSkillPath)
+}
+
+type ptyStep struct {
+	Wait string `json:"wait"`
+	Send string `json:"send"`
+}
+
+func runPTYTUIJourney(t *testing.T, binPath, workDir, sandboxHome, xdgConfig string, steps []ptyStep) string {
+	t.Helper()
+	assertIsolatedSandboxHome(t, sandboxHome)
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("python3 not found on PATH; skipping PTY TUI journey")
+	}
+
+	stepsJSON, err := json.Marshal(steps)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pyDriver := `
+import errno
+import fcntl
+import json
+import os
+import pty
+import re
+import select
+import struct
+import subprocess
+import sys
+import termios
+import time
+
+bin_path = sys.argv[1]
+steps = json.loads(sys.argv[2])
+ansi_re = re.compile(r"\x1b(?:\[[0-9;?]*[a-zA-Z]|\][^\x07\x1b]*(?:\x07|\x1b\\))")
+
+master, slave = pty.openpty()
+fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 80, 140, 0, 0))
+
+proc = subprocess.Popen(
+    [bin_path],
+    stdin=slave,
+    stdout=slave,
+    stderr=slave,
+    close_fds=True,
+)
+os.close(slave)
+
+full_raw = ""
+window_raw = ""
+cpr_sent = False
+
+def drain_available():
+    global full_raw, window_raw, cpr_sent
+    while True:
+        r, _, _ = select.select([master], [], [], 0)
+        if master not in r:
+            break
+        try:
+            chunk = os.read(master, 65536)
+        except OSError:
+            break
+        if not chunk:
+            break
+        text = chunk.decode("utf-8", errors="replace")
+        if "\x1b[6n" in text and not cpr_sent:
+            os.write(master, b"\x1b[1;1R")
+            cpr_sent = True
+        full_raw += text
+        window_raw += text
+
+def drain_until(target, timeout_sec):
+    global full_raw, window_raw, cpr_sent
+    deadline = time.monotonic() + timeout_sec
+    while time.monotonic() < deadline:
+        clean_win = ansi_re.sub("", window_raw)
+        if target in clean_win:
+            return True
+        r, _, _ = select.select([master], [], [], 0.05)
+        if master in r:
+            try:
+                chunk = os.read(master, 65536)
+            except OSError as exc:
+                if exc.errno == errno.EIO:
+                    break
+                raise
+            if not chunk:
+                break
+            text = chunk.decode("utf-8", errors="replace")
+            if "\x1b[6n" in text and not cpr_sent:
+                os.write(master, b"\x1b[1;1R")
+                cpr_sent = True
+            full_raw += text
+            window_raw += text
+    return target in ansi_re.sub("", window_raw)
+
+rc = 0
+try:
+    for idx, step in enumerate(steps):
+        wait_str = step["wait"]
+        send_str = step["send"]
+        if not drain_until(wait_str, 12.0):
+            clean_all = ansi_re.sub("", full_raw)
+            non_empty = "\n".join(line for line in clean_all.splitlines() if line.strip())
+            sys.stderr.write(f"PTY timeout at step {idx} waiting for {wait_str!r}\n--- BUFFER ---\n{non_empty[-2000:]}\n")
+            rc = 2
+            break
+        for ch_idx, ch in enumerate(send_str):
+            if ch_idx > 0:
+                time.sleep(0.025)
+                drain_available()
+            window_raw = ""
+            os.write(master, ch.encode("utf-8"))
+
+    if rc == 0:
+        deadline = time.monotonic() + 10.0
+        while time.monotonic() < deadline:
+            r, _, _ = select.select([master], [], [], 0.05)
+            if master in r:
+                try:
+                    chunk = os.read(master, 65536)
+                except OSError:
+                    break
+                if not chunk:
+                    break
+                full_raw += chunk.decode("utf-8", errors="replace")
+            elif proc.poll() is not None:
+                break
+        rc = proc.wait(timeout=5.0)
+        sys.stdout.write(ansi_re.sub("", full_raw))
+finally:
+    try:
+        os.close(master)
+    except OSError:
+        pass
+    if proc.poll() is None:
+        proc.kill()
+    proc.wait()
+
+sys.exit(rc)
+`
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", "-c", pyDriver, binPath, string(stepsJSON))
+	cmd.Dir = workDir
+	env := append(sandboxEnv(sandboxHome, xdgConfig), "TERM=xterm-256color")
+	cmd.Env = env
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("PTY TUI journey failed: %v\noutput:\n%s", err, string(out))
+	}
+	return string(out)
+}
+
+func verifyInteractivePTYTUIJourneys(t *testing.T, binPath, sandboxHome, xdgConfig string) {
+	t.Helper()
+	assertIsolatedSandboxHome(t, sandboxHome)
+
+	tuiWorkDir := t.TempDir()
+	journey1Steps := []ptyStep{
+		{Wait: "Choose a workflow track", Send: "\r"},
+		{Wait: "TARGET APP & SCOPE", Send: "\r"},
+		{Wait: "WORKFLOW TRACK", Send: "p"},
+		{Wait: "SKILL PREVIEW", Send: "d"},
+		{Wait: "Try typing:", Send: "\x1b"},
+		{Wait: "WORKFLOW TRACK", Send: "\r"},
+		{Wait: "CONFIG & SAFETY BACKUP", Send: "\r"},
+		{Wait: "SETUP COMPLETE", Send: "\r"},
+		{Wait: "Slash Commands vs. Skills", Send: "2"},
+		{Wait: "Why Curated Tracks?", Send: "3"},
+		{Wait: "Starter prompt to try:", Send: "q"},
+	}
+
+	out1 := runPTYTUIJourney(t, binPath, tuiWorkDir, sandboxHome, xdgConfig, journey1Steps)
+	if !strings.Contains(out1, "Installed Google Antigravity (opinionated) to global.") {
+		t.Fatalf("expected Journey 1 post-TUI output to confirm global Antigravity opinionated install, got:\n%s", out1)
+	}
+
+	geminiRoot := filepath.Join(sandboxHome, ".gemini")
+	mustExistFile(t, filepath.Join(geminiRoot, "GEMINI.md"))
+	mustExistFile(t, filepath.Join(geminiRoot, "config", "hooks.json"))
+	mustExistFile(t, filepath.Join(geminiRoot, "config", "hooks", "autonomous-breaker.sh"))
+	mustExistFile(t, filepath.Join(geminiRoot, "config", "plugins", "antigravity-subagents", "plugin.json"))
+	mustExistFile(t, filepath.Join(geminiRoot, "config", "skills", "baton-pass", "SKILL.md"))
+
+	mustRunCLIInSandbox(t, binPath, tuiWorkDir, sandboxHome, xdgConfig,
+		"uninstall", "-t", "antigravity", "-g", "--restore-config", "-y")
+	mustNotExist(t, filepath.Join(geminiRoot, "GEMINI.md"))
+	mustNotExist(t, filepath.Join(geminiRoot, "config", "hooks", "autonomous-breaker.sh"))
+	mustNotExist(t, filepath.Join(geminiRoot, "config", "skills", "baton-pass", "SKILL.md"))
+
+	customProj := t.TempDir()
+	preSeededHeader := "Existing Custom Project Header\n\nKeep me intact.\n"
+	if err := os.WriteFile(filepath.Join(customProj, "CLAUDE.md"), []byte(preSeededHeader), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	journey2Steps := []ptyStep{
+		{Wait: "Choose a workflow track", Send: "\r"},
+		{Wait: "TARGET APP & SCOPE", Send: "j"},
+		{Wait: ".claude/CLAUDE.md", Send: "e"},
+		{Wait: "Target project folder:", Send: "\x15" + customProj + "\r"},
+		{Wait: "[x] Specific project folder", Send: "\r"},
+		{Wait: "WORKFLOW TRACK", Send: "jjjj\r"},
+		{Wait: "CUSTOM SKILL PICKER", Send: " "},
+		{Wait: "[x]", Send: "\r"},
+		{Wait: "I detected an existing CLAUDE.md", Send: "\r"},
+		{Wait: "SETUP COMPLETE", Send: "q"},
+	}
+
+	out2 := runPTYTUIJourney(t, binPath, tuiWorkDir, sandboxHome, xdgConfig, journey2Steps)
+	if !strings.Contains(out2, "Installed Claude Code (custom) to project.") {
+		t.Fatalf("expected Journey 2 post-TUI output to confirm project Claude custom install, got:\n%s", out2)
+	}
+
+	mergedClaude := string(mustExistFile(t, filepath.Join(customProj, "CLAUDE.md")))
+	if !strings.Contains(mergedClaude, "Existing Custom Project Header") || !strings.Contains(mergedClaude, "<!-- BEGIN SKILL-INSTALLER WORKFLOW RULES -->") {
+		t.Fatalf("expected Journey 2 CLAUDE.md to preserve header and merge workflow block, got:\n%s", mergedClaude)
+	}
+	mustExistFile(t, filepath.Join(customProj, ".claude", "skills", "start", "SKILL.md"))
+	mustExistFile(t, filepath.Join(customProj, ".claude", "skills", "plugin-updater", "SKILL.md"))
+	mustNotExist(t, filepath.Join(customProj, ".claude", "skills", "begin", "SKILL.md"))
+	mustNotExist(t, filepath.Join(customProj, ".claude", "skills", "agent-browser", "SKILL.md"))
 }
