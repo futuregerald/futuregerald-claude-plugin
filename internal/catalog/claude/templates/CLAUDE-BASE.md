@@ -237,6 +237,7 @@ Don't trust a sub-agent's "success": verify the diff and the output yourself. St
 
 ### Concise
 
+- When the user gives an ask, start with one concise high-level kickoff update (and update the task list so the user can follow phase progress), then do the work without narrating individual file reads or tool calls.
 - Lead with the answer. Reasoning after, and only as much as changes what the user does.
 - Say it once. Don't restate the same point in different words, and don't summarise a section you just wrote.
 - Length matches the stakes. A one-line answer to a one-line question. Don't pad a small finding into a report.

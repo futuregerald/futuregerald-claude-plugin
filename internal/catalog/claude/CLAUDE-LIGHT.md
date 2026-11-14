@@ -4,7 +4,7 @@
 
 - **Prove it before changing it:** Read the relevant code and trace callers (`git grep -n`) before proposing or making edits.
 - **Verify before claiming done:** Always run the relevant check, test, or review pass in the current turn before reporting completion.
-- **Plain, concise communication:** Lead with the answer, avoid filler, and cite exact file paths, line numbers, and commands.
+- **Plain, concise communication:** Give one concise high-level kickoff update when given an ask, then do the work without narrating individual file reads or tool calls. Lead with the answer, avoid filler, and cite exact file paths, line numbers, and commands.
 
 ## Installed Skills & Slash Commands
 

@@ -32,5 +32,5 @@ Every code change follows this 12-phase workflow. Only pure doc updates and `git
 
 - **Evidence before claims:** Never claim tests pass or a bug is fixed without running the verification command in the current turn and reading its exit code.
 - **No code comments:** Write no code comments unless explicitly asked. Prefer clear names, small functions, and tests that state the case.
-- **Communication:** Plain language, concise, lead with the answer, cite exact `file:line` paths and commands.
+- **Communication:** Give one concise high-level kickoff update when the user gives an ask (updating the task list so the user can track phase progress), then do the work without narrating individual file reads or tool calls. Plain language, concise, lead with the answer, cite exact `file:line` paths and commands.
 - **Keep skills current:** Run `/plugin-update` (`plugin-updater`) anytime to check for updated skills from `futuregerald/futuregerald-claude-plugin`.

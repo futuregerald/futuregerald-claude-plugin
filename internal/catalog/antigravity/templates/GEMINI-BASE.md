@@ -12,7 +12,7 @@
 
 ## Delegating Work & Model Routing
 
-**Tell the user what you are doing before starting work:** Whenever the user asks or tells you to do anything, output a concise visible update on what you are about to do **before** making your first tool call—never begin with silent tool loops.
+**One upfront kickoff update & live phase tracking in `task.md`:** When the user gives an ask, output one concise high-level kickoff update (e.g., *"I'll kick off the workflow now—I've updated `task.md` so you can follow which phase is in progress"*), keep `task.md` updated at phase transitions, and execute without narrating individual file reads or tool calls.
 
 **Filter bulky output at the shell, never into context.** `cmd > /tmp/out.log 2>&1; rc=$?; tail -20 /tmp/out.log; echo $rc` — capture the exit code **before** the pipe, because `cmd | tail` exits 0 when `cmd` failed. For a count use a counting primitive (`grep -c`), never a match list tallied by eye.
 
