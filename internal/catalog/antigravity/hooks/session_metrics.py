@@ -226,13 +226,19 @@ def analyze_session(compact_path: str, full_path: str | None = None, state_dir: 
     comp_indices = compaction_step_indices(compact_steps)
     estimates = []
     segment_estimates_at_compaction = []
-    last_comp_pos = -1
     for idx, s in enumerate(compact_steps):
         if idx in comp_indices:
-            seg_bytes = full_raw_bytes[last_comp_pos + 1:idx] if last_comp_pos >= 0 else full_raw_bytes[:idx]
-            segment_estimates_at_compaction.append(sum(seg_bytes) // 4)
-            last_comp_pos = idx
-        estimates.append(context_estimate_tokens(full_raw_bytes[:idx + 1], [c for c in comp_indices if c <= idx]))
+            prior_comp = [c for c in comp_indices if c < idx]
+            segment_estimates_at_compaction.append(
+                context_estimate_tokens(full_raw_bytes[:idx], prior_comp, steps=compact_steps[:idx])
+            )
+        estimates.append(
+            context_estimate_tokens(
+                full_raw_bytes[:idx + 1],
+                [c for c in comp_indices if c <= idx],
+                steps=compact_steps[:idx + 1],
+            )
+        )
 
     max_estimate = max(estimates) if estimates else 0
 

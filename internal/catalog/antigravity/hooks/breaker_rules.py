@@ -124,8 +124,10 @@ def compaction_step_indices(steps: list[dict]) -> list[int]:
             continue
         if s.get("type") == "CHECKPOINT":
             content = s.get("content") or ""
-            if isinstance(content, str) and content.lstrip().startswith("# Resuming from a compaction"):
-                res.append(idx)
+            if isinstance(content, str):
+                stripped = content.lstrip()
+                if stripped.startswith("# Resuming from a compaction") or "<CONTEXT_SUMMARY>" in stripped:
+                    res.append(idx)
     return res
 
 def decode_json_strings(val):
@@ -196,15 +198,49 @@ def extract_conversation_id(payload: dict) -> str:
                 return parts[0]
     return str(payload.get("conversationId") or "")
 
-def context_estimate_tokens(full_lines_bytes: list[int], compaction_positions: list[int]) -> int:
-    if not full_lines_bytes:
+def _parse_token_field(val) -> int | None:
+    if val is None or val == "":
         return 0
-    if not compaction_positions:
-        return sum(full_lines_bytes) // 4
-    last_cp = compaction_positions[-1]
-    if last_cp + 1 >= len(full_lines_bytes):
-        return 0
-    return sum(full_lines_bytes[last_cp + 1:]) // 4
+    if isinstance(val, bool):
+        return None
+    if isinstance(val, str) and len(val.strip()) > 12:
+        return None
+    try:
+        n = int(val)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    if n < 0 or n > 100_000_000:
+        return None
+    return n
+
+def context_estimate_tokens(
+    full_lines_bytes: list[int],
+    compaction_positions: list[int],
+    steps: list[dict] | None = None,
+) -> int:
+    seg_start = (compaction_positions[-1] + 1) if compaction_positions else 0
+    byte_est = 0
+    if full_lines_bytes and seg_start < len(full_lines_bytes):
+        byte_est = sum(full_lines_bytes[seg_start:]) // 4
+
+    if steps and seg_start < len(steps):
+        for idx in range(len(steps) - 1, seg_start - 1, -1):
+            s = steps[idx]
+            if not isinstance(s, dict) or s.get("type") != "PLANNER_RESPONSE":
+                continue
+            inp = _parse_token_field(s.get("input_tokens"))
+            cache = _parse_token_field(s.get("cache_read_tokens"))
+            api_out = _parse_token_field(s.get("output_tokens"))
+            if inp is None or cache is None or api_out is None:
+                continue
+            api_in = inp + cache
+            if api_in > 0:
+                trailing_bytes = 0
+                if full_lines_bytes and idx + 1 < len(full_lines_bytes):
+                    trailing_bytes = sum(full_lines_bytes[idx + 1:]) // 4
+                return max(byte_est, api_in + api_out + trailing_bytes)
+
+    return byte_est
 
 def load_baton_state(conv_id: str, current_segment: int, state_dir: str = "~/.gemini/state") -> dict:
     if not conv_id:

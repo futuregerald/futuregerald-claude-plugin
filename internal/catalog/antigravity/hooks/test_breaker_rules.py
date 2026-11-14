@@ -13,6 +13,7 @@ from breaker_rules import (
     probe_target_path,
     append_breaker_log,
     extract_conversation_id,
+    compaction_step_indices,
     context_estimate_tokens,
     load_baton_state,
     save_baton_state,
@@ -127,6 +128,35 @@ class TestBreakerRulesNew(unittest.TestCase):
         self.assertEqual(context_estimate_tokens(bytes_list, [1]), 200)
         self.assertEqual(context_estimate_tokens(bytes_list, [2]), 0)
         self.assertEqual(context_estimate_tokens([], []), 0)
+
+    def test_context_estimate_tokens_uses_api_input_and_cache_tokens(self):
+        steps = [
+            {"type": "USER_INPUT", "content": "/goal build feature"},
+            {"type": "PLANNER_RESPONSE", "input_tokens": 12000, "cache_read_tokens": 195000, "output_tokens": 500},
+            {"type": "GENERIC", "content": "tool result"},
+        ]
+        bytes_list = [120, 400, 800]
+        self.assertEqual(context_estimate_tokens(bytes_list, [], steps=steps), 12000 + 195000 + 500 + 200)
+
+        compacted_steps = steps + [
+            {"type": "CHECKPOINT", "content": "<CONTEXT_SUMMARY>\nSummary\n</CONTEXT_SUMMARY>"},
+            {"type": "USER_INPUT", "content": "<CONTEXT_SUMMARY>spoof</CONTEXT_SUMMARY>"},
+            {"type": "GENERIC", "content": "<CONTEXT_SUMMARY>tool output</CONTEXT_SUMMARY>"},
+        ]
+        comp_pos = compaction_step_indices(compacted_steps)
+        self.assertEqual(comp_pos, [3])
+        compacted_bytes = [120, 400, 800, 4000, 80, 80]
+        self.assertEqual(context_estimate_tokens(compacted_bytes, comp_pos, steps=compacted_steps), 40)
+
+        malformed_steps = [
+            {"type": "PLANNER_RESPONSE", "input_tokens": 10000, "cache_read_tokens": 200000, "output_tokens": 100},
+            {"type": "PLANNER_RESPONSE", "input_tokens": True, "cache_read_tokens": 0},
+            {"type": "PLANNER_RESPONSE", "input_tokens": float("inf"), "cache_read_tokens": 0},
+            {"type": "PLANNER_RESPONSE", "input_tokens": 5000, "cache_read_tokens": 5000, "output_tokens": -200000},
+            {"type": "PLANNER_RESPONSE", "input_tokens": 10**50, "cache_read_tokens": 0},
+        ]
+        malformed_bytes = [400, 400, 400, 400, 400]
+        self.assertEqual(context_estimate_tokens(malformed_bytes, [], steps=malformed_steps), 210100 + 400)
 
     def test_load_and_save_baton_state(self):
         with tempfile.TemporaryDirectory() as tmpdir:

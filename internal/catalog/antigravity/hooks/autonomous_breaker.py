@@ -236,7 +236,9 @@ def _run_breaker(payload, stop_on_enforce=True, collector=None):
         except Exception:
             continue
         trunc = step.get("truncated_fields") or []
-        if "tool_calls" in trunc and full_path.is_file():
+        need_tools = "tool_calls" in trunc
+        need_checkpoint_content = step.get("type") == "CHECKPOINT" and "content" in trunc
+        if (need_tools or need_checkpoint_content) and full_path.is_file():
             if full_lines is None:
                 try:
                     with open(full_path, "r", encoding="utf-8") as ff:
@@ -246,7 +248,10 @@ def _run_breaker(payload, stop_on_enforce=True, collector=None):
             if full_lines and idx < len(full_lines):
                 try:
                     full_step = json.loads(full_lines[idx])
-                    step["tool_calls"] = full_step.get("tool_calls", step.get("tool_calls", []))
+                    if need_tools:
+                        step["tool_calls"] = full_step.get("tool_calls", step.get("tool_calls", []))
+                    if need_checkpoint_content:
+                        step["content"] = full_step.get("content", step.get("content", ""))
                 except Exception:
                     pass
         steps.append(step)
@@ -354,7 +359,7 @@ def _run_breaker(payload, stop_on_enforce=True, collector=None):
     if not is_subagent:
         comp_indices = compaction_step_indices(steps)
         current_segment = len(comp_indices)
-        estimate = context_estimate_tokens(full_lines_bytes, comp_indices)
+        estimate = context_estimate_tokens(full_lines_bytes, comp_indices, steps=steps)
         baton_state = load_baton_state(conv_id, current_segment, state_dir=state_dir)
 
         in_p = str(tool_args.get("Path") or tool_args.get("TargetFile") or tool_args.get("AbsolutePath") or "").replace("\\", "/")

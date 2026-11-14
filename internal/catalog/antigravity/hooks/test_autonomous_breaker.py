@@ -2814,5 +2814,63 @@ class TestAutonomousBreaker(unittest.TestCase):
             self.assertEqual(res_unlocked.returncode, 0)
             self.assertEqual(res_unlocked.stdout, "")
 
+    def test_baton_warns_and_blocks_from_api_tokens_when_raw_bytes_are_small(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            t_path = Path(tmpdir) / "transcript.jsonl"
+            t_full_path = Path(tmpdir) / "transcript_full.jsonl"
+            steps = [
+                {"step_index": 0, "source": "USER_EXPLICIT", "type": "USER_INPUT", "content": "/goal ship v4"},
+                {
+                    "step_index": 1,
+                    "source": "MODEL",
+                    "type": "PLANNER_RESPONSE",
+                    "input_tokens": 18000,
+                    "cache_read_tokens": 198000,
+                    "output_tokens": 400,
+                    "content": "checking",
+                    "tool_calls": [{"name": "run_command", "args": {"CommandLine": "git status"}}],
+                },
+                {"step_index": 2, "source": "SYSTEM", "type": "GENERIC", "content": "clean"},
+            ]
+            self.write_jsonl(t_path, steps)
+            self.write_jsonl(t_full_path, steps)
+
+            warn_payload = {
+                "conversationId": "test-api-token-baton",
+                "transcriptPath": str(t_path),
+                "stepIdx": 3,
+                "toolCall": {"name": "run_command", "args": {"CommandLine": "pwd"}},
+            }
+            res_warn = self.execute_breaker(warn_payload, env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir})
+            self.assertEqual(res_warn.returncode, 0)
+            data_warn = json.loads(res_warn.stdout)
+            self.assertEqual(data_warn.get("decision"), "deny")
+            self.assertIn("CIRCUIT BREAKER (Baton Warn)", data_warn.get("reason", ""))
+
+            steps.append({
+                "step_index": 3,
+                "source": "MODEL",
+                "type": "PLANNER_RESPONSE",
+                "input_tokens": 12000,
+                "cache_read_tokens": 225000,
+                "output_tokens": 600,
+                "content": "still going",
+                "tool_calls": [{"name": "run_command", "args": {"CommandLine": "ls"}}],
+            })
+            self.write_jsonl(t_path, steps)
+            self.write_jsonl(t_full_path, steps)
+
+            block_payload = {
+                "conversationId": "test-api-token-baton",
+                "transcriptPath": str(t_path),
+                "stepIdx": 4,
+                "toolCall": {"name": "run_command", "args": {"CommandLine": "whoami"}},
+            }
+            res_block = self.execute_breaker(block_payload, env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir})
+            self.assertEqual(res_block.returncode, 0)
+            data_block = json.loads(res_block.stdout)
+            self.assertEqual(data_block.get("decision"), "deny")
+            self.assertIn("CIRCUIT BREAKER (Baton Block)", data_block.get("reason", ""))
+
 if __name__ == "__main__":
     unittest.main()
