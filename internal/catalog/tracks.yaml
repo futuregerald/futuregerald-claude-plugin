@@ -1,0 +1,641 @@
+version: 4.0.0
+tracks:
+- id: opinionated
+  name: Opinionated Dev Workflow
+  badge: Recommended for Engineers
+  tagline: Full 12-phase engineering lifecycle from shaping & UI prototypes to TDD, adversarial reviews,
+    and PR handoff.
+  description: Installs the complete 12-phase engineering workflow (/start, /begin, /lifecycle), product
+    shaping (/shape), 3-direction UI prototyping (/ui-design), TDD & subagent orchestration, adversarial
+    plan/code/SQL reviews, and PR handoff. On Antigravity, also installs peer-pipeline-swarm, baton-pass,
+    and circuit-breaker hooks.
+  install_agents: true
+  install_hooks: true
+  lightweight_config: false
+  skills:
+  - start
+  - begin
+  - lifecycle
+  - shape
+  - craftsmans-wisdom
+  - brainstorming
+  - future-grilling
+  - future-wayfinder
+  - grilling-page
+  - write-a-prd
+  - ui-design
+  - huashu-design
+  - no-slop-ui
+  - writing-plans
+  - plan-review
+  - review-lens
+  - test-driven-development
+  - subagent-driven-development
+  - implement
+  - using-git-worktrees
+  - systematic-debugging
+  - code-simplifier
+  - comprehensive-code-review
+  - fix-check
+  - sql-optimization-patterns
+  - editor-pass
+  - copy-edit
+  - copywriting
+  - marketing-psychology
+  - pull-request-description
+  - handoff
+  - future-model-router
+  - plugin-updater
+  antigravity_skills:
+  - antigravity-orchestration
+  - peer-pipeline-swarm
+  - baton-pass
+- id: basics
+  name: Just the Basics
+  badge: Lightweight Starter
+  tagline: 8 essential everyday skills for planning, debugging, TDD, code review, and PRs without heavy
+    lifecycle gates.
+  description: A calm, lightweight pack of 8 everyday engineering skills—brainstorming, writing plans,
+    systematic debugging, TDD, code review, PR descriptions, session handoffs, and live updates—with a
+    concise global/project config and no circuit-breaker hooks.
+  install_agents: false
+  install_hooks: false
+  lightweight_config: true
+  skills:
+  - brainstorming
+  - writing-plans
+  - systematic-debugging
+  - test-driven-development
+  - comprehensive-code-review
+  - pull-request-description
+  - handoff
+  - plugin-updater
+- id: product
+  name: Product & Strategy Flow
+  badge: PMs, Founders & Leads
+  tagline: Turn rough ideas into point-of-view briefs, interactive UI prototypes, PRDs, tracer-bullet
+    tickets, and team pulse reports.
+  description: Designed for product managers, designers, founders, and engineering leads. Covers product
+    shaping, decision grilling, PRDs, spec/ticket writing, 3-direction HTML UI prototyping, visual plan
+    pages, copy reviews, research, meeting debriefs, and team pulse/forecasting—with zero code-gate noise.
+  install_agents: false
+  install_hooks: false
+  lightweight_config: true
+  skills:
+  - craftsmans-wisdom
+  - shape
+  - brainstorming
+  - future-grilling
+  - future-wayfinder
+  - grilling-page
+  - write-a-prd
+  - to-spec
+  - to-tickets
+  - writing-tickets
+  - ticket-grooming
+  - ui-design
+  - huashu-design
+  - no-slop-ui
+  - prototype
+  - visualize-plan
+  - copy-edit
+  - copywriting
+  - marketing-psychology
+  - editor-pass
+  - research
+  - meeting-debrief
+  - team-pulse
+  - plugin-updater
+- id: copy-polish
+  name: Copy, Brand & UI Polish
+  badge: Design & Marketing
+  tagline: Eliminate AI slop from interfaces and landing pages with behavioral psychology, copywriting,
+    motion, and visual craft.
+  description: Focused pack for auditing and elevating user-facing pages, landing copy, visual hierarchy,
+    and motion. Combines copywriting, 70+ marketing psychology mental models, anti-slop UI rules, high-craft
+    frontend polish, and Disney's 12 animation principles.
+  install_agents: false
+  install_hooks: false
+  lightweight_config: true
+  skills:
+  - copy-edit
+  - copywriting
+  - marketing-psychology
+  - editor-pass
+  - impeccable
+  - no-slop-ui
+  - huashu-design
+  - animation-principles
+  - plugin-updater
+- id: custom
+  name: Pick Individual Skills
+  badge: A la Carte Browser
+  tagline: Browse all skills by category with plain-English summaries and pick the exact subset you want.
+  description: Interactive skill picker where you can inspect short and long plain-English descriptions,
+    slash commands, and starter prompts, and toggle individual skills on or off (with plugin-updater pre-checked
+    by default).
+  install_agents: false
+  install_hooks: false
+  lightweight_config: true
+  skills:
+  - plugin-updater
+explainers:
+  repo_overview: skill-installer sets up curated packs of AI agent skills, slash commands, subagents,
+    and workspace guidelines for Claude Code, Google Antigravity, Zed Editor, and OpenCode across macOS,
+    Linux, and Windows. Instead of dumping 60+ files into your config at once, you pick a track tailored
+    to how you work—whether that is the full 12-phase engineering lifecycle, a lightweight 8-skill starter
+    pack, a Product & Strategy pack for PMs, or a Copy & UI Polish pack.
+  concepts:
+  - title: What is a Skill?
+    summary: A focused playbook (SKILL.md + optional references/scripts) that your AI assistant loads
+      on demand when your request matches its trigger or when you type its /slash command.
+  - title: Why Curated Tracks?
+    summary: Every loaded skill competes for your agent's attention. Curated tracks give engineers, PMs,
+      designers, and newcomers only the skills and rules that fit their workflow.
+  - title: How Slash Commands Work Across Harnesses
+    summary: Type /start, /shape, /ui-design, /copy-edit, /write-a-prd, /plan-review, /fix-check, or /plugin-update
+      directly in chat. Claude Code and OpenCode use installed command files; Antigravity and Zed register
+      every installed skill as a native /<skill> command.
+  - title: Safety Backups & One-Command Restore
+    summary: Before overwriting any existing file, skill-installer saves an out-of-band backup snapshot
+      (on by default; skip anytime with --no-backup) so `skill-installer restore` or `skill-installer
+      uninstall` can roll back cleanly.
+  - title: Staying Updated (/plugin-update & skill-installer update)
+    summary: Run `skill-installer update` in your terminal (uses `gh` CLI) or type `/plugin-update` inside
+      your AI assistant (uses `gh` CLI or GitHub MCP) to see a plain-English changelog and pull the latest
+      skills from main.
+skills:
+- name: start
+  category: Core Workflow
+  slash_command: /start
+  short: Run the full 12-phase engineering workflow from shaping to PR handoff.
+  long: 'Guides your AI agent through all 12 development phases: shaping the brief, 3-direction UI prototyping
+    (when UI changes), tracing callers, writing and reviewing a plan, TDD implementation, lint/simplification,
+    parallel code & security review, blast-radius verification, and PR handoff.'
+  starter_prompt: /start Add passwordless magic-link sign-in to the auth service
+- name: begin
+  category: Core Workflow
+  slash_command: /begin
+  short: Shortcut alias for /start to launch the 12-phase engineering workflow.
+  long: Identical to /start—runs the full 12-phase engineering lifecycle (Shape -> UI Design -> Trace
+    -> Plan -> Plan Review -> TDD Implement -> Test -> Lint -> Simplify -> Code Review -> Blast-Radius
+    Verify -> Commit & Handoff).
+  starter_prompt: /begin Refactor the billing webhook handler to be idempotent
+- name: lifecycle
+  category: Core Workflow
+  slash_command: /lifecycle
+  short: Master 12-phase development lifecycle with phase gates enforced.
+  long: Defines the 12 mandatory engineering phases and gates that prevent premature coding, untested
+    caller breakage, and rubber-stamped reviews. Invoked directly via /lifecycle or through /start and
+    /begin.
+  starter_prompt: /lifecycle Fix the race condition in the background job worker pool
+- name: shape
+  category: Product & Shaping
+  slash_command: /shape
+  short: 'Phase 0 shaping: interview for a point-of-view brief, grill decisions, and write a PRD.'
+  long: Runs before planning any new or user-facing feature. Challenges you one question at a time to
+    define what good means and what generic default to avoid, grills open design branches with recommended
+    answers, and produces a confirmed brief or PRD.
+  starter_prompt: /shape We want to redesign our onboarding flow for first-time CLI users
+- name: craftsmans-wisdom
+  category: Product & Shaping
+  slash_command: /craftsmans-wisdom
+  short: Define what 'good' actually means and what generic default to avoid before building.
+  long: Asks five focused craftsman questions—one at a time—to uncover who the work is for, what good
+    looks like, what generic AI default to avoid, and who maintains it, then writes a confirmed point-of-view
+    brief that steers the entire build.
+  starter_prompt: /craftsmans-wisdom Help me think through a new customer health dashboard
+- name: brainstorming
+  category: Product & Shaping
+  slash_command: /brainstorming
+  short: Turn rough ideas into a clear design through one-question-at-a-time dialogue.
+  long: Explores your current project context, asks clarifying questions one at a time, proposes 2–3 concrete
+    design approaches with trade-offs and a recommendation, and writes a concise design spec once you
+    approve.
+  starter_prompt: /brainstorming Let's explore how to add offline sync to our mobile notes app
+- name: future-grilling
+  category: Product & Shaping
+  slash_command: /future-grilling
+  short: Stress-test a plan or design decision tree one question at a time with recommendations.
+  long: Walks every branch of your design or architecture decision tree in dependency order (data model
+    before UI, contract before callers), asking one question at a time with a recommended option and why
+    until nothing is left ambiguous.
+  starter_prompt: /future-grilling Grill me on the edge cases for our multi-tenant RBAC design
+- name: future-wayfinder
+  category: Product & Shaping
+  slash_command: /future-wayfinder
+  short: Chart multi-session architecture or product decisions as a map of blocking decision tickets.
+  long: When a project has too many open questions for a single conversation, Wayfinder turns your point-of-view
+    brief into a dependency map of decision tickets, resolves one per session with research or prototypes,
+    and hands off to a PRD and roadmap when clear.
+  starter_prompt: /future-wayfinder Map the open architecture decisions for our v2 billing migration
+- name: grilling-page
+  category: Product & Shaping
+  slash_command: /grilling-page
+  short: Put 3+ open questions onto a single interactive HTML form so you can answer them all at once.
+  long: Whenever three or more independent questions are ready for you, generates a clean local HTML page
+    showing each question's context, source links, option trade-offs, and a pre-selected recommendation
+    so you can review and copy all answers in one click.
+  starter_prompt: /grilling-page Put the open product and schema questions on an HTML page for me
+- name: write-a-prd
+  category: Product & Shaping
+  slash_command: /write-a-prd
+  short: Interview, explore the codebase, design deep modules, and write a complete PRD.
+  long: Combines user problem discovery, codebase exploration, and deep-module boundary design into a
+    crisp Product Requirements Document ready to publish to GitHub Issues, Jira, or docs/.
+  starter_prompt: /write-a-prd Write a PRD for self-serve team invitations and role management
+- name: to-spec
+  category: Product & Shaping
+  slash_command: /to-spec
+  short: Synthesize the current conversation directly into a published spec—no extra interview.
+  long: Distills decisions already made in your current chat into a clean specification document and publishes
+    it to your issue tracker or repository without repeating questions you already answered.
+  starter_prompt: /to-spec Turn our discussion above into a technical spec
+- name: to-tickets
+  category: Product & Shaping
+  slash_command: /to-tickets
+  short: Break an approved plan or PRD into vertical tracer-bullet tickets with blocking links.
+  long: Splits a specification or implementation plan into end-to-end tracer-bullet stories rather than
+    horizontal layer slices, declaring explicit blocking edges between tickets and publishing them locally
+    or to your tracker.
+  starter_prompt: /to-tickets Break this PRD into vertical tracer-bullet tickets
+- name: writing-tickets
+  category: Product & Shaping
+  slash_command: /writing-tickets
+  short: Write or rewrite epics, stories, initiatives, and spikes with clear acceptance criteria.
+  long: Drafts or sharpens engineering tickets so every story states the user problem, concrete acceptance
+    criteria, out-of-scope boundaries, and verification steps in plain language.
+  starter_prompt: /writing-tickets Rewrite this vague bug report into a clear engineering story
+- name: ticket-grooming
+  category: Product & Shaping
+  slash_command: /ticket-grooming
+  short: Investigate a ticket in the codebase and post root cause, fix shape, estimate, and risks.
+  long: Traces a bug or feature ticket through git history and source files to identify what is happening,
+    the exact root cause, the proposed fix, size estimate, and blast-radius risks before sprint planning.
+  starter_prompt: /ticket-grooming Groom ticket PROJ-142 and summarize root cause and estimate
+- name: ui-design
+  category: Design, Copy & UI
+  slash_command: /ui-design
+  short: Generate 3 distinct interactive HTML prototypes on one comparison page before coding UI.
+  long: Creates three genuinely different, high-fidelity HTML directions for any new screen, page, or
+    major UI redesign, bundles them into design-demos/index.html, and opens it in your browser so you
+    can compare and pick a direction before writing production code.
+  starter_prompt: /ui-design Create 3 interactive UI directions for our analytics settings page
+- name: huashu-design
+  category: Design, Copy & UI
+  slash_command: /huashu-design
+  short: High-craft HTML prototyping, slide decks, data visualizations, and 3-direction design exploration.
+  long: Builds interactive HTML prototypes, presentation decks, and visual explorations using strict typography,
+    color, and motion craft—always presenting three distinct directions first so you never settle for
+    a generic first draft.
+  starter_prompt: /huashu-design Design an interactive HTML prototype for a developer changelog page
+- name: no-slop-ui
+  category: Design, Copy & UI
+  slash_command: /no-slop-ui
+  short: Catch and eliminate 11 visual tells that make an interface look like generic AI slop.
+  long: Audits interfaces and frontend code against 11 unmistakable AI-slop tells—rainbow gradients, pulsing
+    badges, fingernail cards, emoji icons, default Inter fonts, reflex glassmorphism, and hype taglines—and
+    replaces them with purposeful visual craft.
+  starter_prompt: /no-slop-ui Audit our landing page and remove every AI-slop visual tell
+- name: impeccable
+  category: Design, Copy & UI
+  slash_command: /impeccable
+  short: Deep frontend design critique, polish, typography, color, layout, and accessibility tuning.
+  long: Comprehensive UI design and refinement toolkit covering visual hierarchy, cognitive load, typography,
+    color systems, responsive spacing, micro-interactions, empty/error states, and design token extraction.
+  starter_prompt: /impeccable Critique and polish the visual hierarchy of our dashboard component
+- name: animation-principles
+  category: Design, Copy & UI
+  slash_command: /animation-principles
+  short: Apply Disney's 12 animation principles to CSS transitions, web animations, GSAP, and Rive.
+  long: Translates Disney's 12 classic animation principles—squash and stretch, anticipation, staging,
+    easing, follow-through, secondary action, and timing—into concrete CSS, Web Animations API, and JavaScript
+    motion values.
+  starter_prompt: /animation-principles Tune the drawer open/close and button hover transitions
+- name: copy-edit
+  category: Design, Copy & UI
+  slash_command: /copy-edit
+  short: Audit any page or flow using both conversion copywriting and marketing psychology.
+  long: Runs a combined audit using the copywriting and marketing-psychology skills, producing concrete
+    before/after headline, body, and CTA rewrites backed by behavioral science principles.
+  starter_prompt: /copy-edit Audit our pricing page copy and suggest higher-clarity rewrites
+- name: copywriting
+  category: Design, Copy & UI
+  slash_command: /copywriting
+  short: Write or rewrite headlines, landing pages, pricing pages, and product copy with clarity.
+  long: Sharpens marketing and product copy across homepages, feature pages, pricing tiers, and onboarding
+    flows—replacing vague buzzwords with concrete customer outcomes and clear calls to action.
+  starter_prompt: /copywriting Rewrite the hero and feature sections of our README and landing page
+- name: marketing-psychology
+  category: Design, Copy & UI
+  slash_command: /marketing-psychology
+  short: Apply 70+ behavioral science and buyer psychology mental models to product and marketing.
+  long: Organizes over 70 proven cognitive biases and behavioral science frameworks—anchoring, loss aversion,
+    jobs-to-be-done, social proof, friction reduction, and pricing psychology—for ethical product and
+    positioning decisions.
+  starter_prompt: /marketing-psychology How can we reduce decision friction on our plan comparison page?
+- name: editor-pass
+  category: Design, Copy & UI
+  slash_command: /editor-pass
+  short: Final quality critique that asks 'is this actually good?' and returns a lettered crit sheet.
+  long: Runs after correctness and slop checks as the final quality gate before shipping a page, PRD,
+    report, or skill. Evaluates the finished work against the original point-of-view brief and returns
+    a pinned, lettered critique sheet of specific fixes.
+  starter_prompt: /editor-pass Give this finished feature page an editor pass against our brief
+- name: prototype
+  category: Design, Copy & UI
+  slash_command: /prototype
+  short: Build a fast, throwaway prototype to test whether a UI or state model feels right.
+  long: Creates an isolated, disposable prototype in a scratch directory to answer a specific interaction
+    or state-modeling question quickly before committing to production architecture.
+  starter_prompt: /prototype Build a quick throwaway prototype of the keyboard-driven filter bar
+- name: visualize-plan
+  category: Design, Copy & UI
+  slash_command: /visualize-plan
+  short: Turn a markdown implementation plan into a rich visual HTML architecture and flow page.
+  long: Transforms a technical markdown plan into an interactive, readable HTML document with data-flow
+    diagrams, ER models, worked examples, and trade-off summaries while keeping the markdown plan as the
+    source of truth.
+  starter_prompt: /visualize-plan Create a visual HTML walkthrough of our current implementation plan
+- name: vectorize
+  category: Design, Copy & UI
+  slash_command: /vectorize
+  short: Convert PNG/JPG raster logos, mascots, and illustrations into clean, optimized SVG vectors.
+  long: Traces bitmap images into crisp, scalable SVG vector art using vtracer (color) or potrace (line
+    art), with optional background removal, svgo optimization, and visual verification.
+  starter_prompt: /vectorize Convert assets/logo.png into a clean optimized SVG
+- name: writing-plans
+  category: Planning & Architecture
+  slash_command: /writing-plans
+  short: Write structured TDD implementation plans with Affected Callers, exemplars, and test gates.
+  long: Produces an uncommitted engineering plan containing the Goal, Affected Callers (breaking callers
+    + untested callers), sibling exemplar citations, step-by-step TDD tasks with exact file paths and
+    signatures, risks, and rollback plan.
+  starter_prompt: /writing-plans Write an implementation plan for adding webhook signature rotation
+- name: plan-review
+  category: Planning & Architecture
+  slash_command: /plan-review
+  short: One-shot adversarial staff-engineer review of an implementation plan against the codebase.
+  long: Dispatches a fresh, read-only reviewer to verify every premise, file path, caller contract, and
+    security boundary in your plan against the actual code before a single line of implementation is written.
+  starter_prompt: /plan-review Review the current implementation plan against the codebase
+- name: codebase-design
+  category: Planning & Architecture
+  slash_command: /codebase-design
+  short: Design deep modules with narrow interfaces that hide complexity and make testing easy.
+  long: Applies deep-module design principles to shrink surface area, pull complexity downward behind
+    simple interfaces, choose clean dependency seams, and make packages easy for humans and AI agents
+    to navigate.
+  starter_prompt: /codebase-design How should we design the interface boundary for our notification service?
+- name: improve-codebase-architecture
+  category: Planning & Architecture
+  slash_command: /improve-codebase-architecture
+  short: Scan a codebase for shallow-module coupling and present a visual HTML refactoring report.
+  long: Analyzes package boundaries, pass-through methods, and high-fan-out coupling across your repo,
+    generates an interactive HTML report of module-deepening opportunities, and grills through whichever
+    candidate you pick.
+  starter_prompt: /improve-codebase-architecture Scan internal/ for module-deepening opportunities
+- name: domain-modeling
+  category: Planning & Architecture
+  slash_command: /domain-modeling
+  short: Establish a crisp ubiquitous language and domain model across code and docs.
+  long: Pins down core domain entities, invariants, and terminology so code symbols, APIs, database tables,
+    and product docs use the exact same language without overloaded terms.
+  starter_prompt: /domain-modeling Help us sharpen the domain model for subscriptions vs entitlements
+- name: architecture-decision-records
+  category: Planning & Architecture
+  slash_command: /architecture-decision-records
+  short: Write and maintain concise Architecture Decision Records (ADRs) with context and trade-offs.
+  long: Documents significant technical decisions in docs/adr/ with clear problem context, considered
+    alternatives, chosen direction, and downstream consequences.
+  starter_prompt: /architecture-decision-records Write an ADR for choosing SQLite WAL mode in local dev
+- name: grill-with-docs
+  category: Planning & Architecture
+  slash_command: /grill-with-docs
+  short: Relentless design interview that simultaneously writes ADRs and domain glossary entries.
+  long: Combines deep decision-tree grilling with live documentation, capturing settled architectural
+    choices as ADRs and domain terms in your project glossary as you answer each question.
+  starter_prompt: /grill-with-docs Grill me on the event-sourcing design and record ADRs as we go
+- name: go-api-structure
+  category: Planning & Architecture
+  slash_command: /go-api-structure
+  short: 'Idiomatic Go service architecture: consumer-declared interfaces, HTTP edges, and concurrency.'
+  long: Reference and review guide for structuring Go APIs and services—package layout, consumer-declared
+    interfaces, HTTP handler/DTO boundaries, context propagation, worker-pool backpressure, graceful shutdown,
+    and table-driven tests.
+  starter_prompt: /go-api-structure Review our Go service package layout and HTTP handler boundaries
+- name: test-driven-development
+  category: Engineering & TDD
+  slash_command: /test-driven-development
+  short: Strict RED -> GREEN -> REFACTOR workflow before writing implementation code.
+  long: Enforces writing a minimal failing test first, verifying that it fails for the expected reason,
+    writing the simplest code to pass, and refactoring cleanly with fast, scoped test runs.
+  starter_prompt: /test-driven-development Implement the rate-limiter token bucket with strict TDD
+- name: subagent-driven-development
+  category: Engineering & TDD
+  slash_command: /subagent-driven-development
+  short: Execute multi-stream implementation plans using isolated subagents and adversarial review.
+  long: Coordinates multi-step implementation plans by passing scoped context files to fresh implementer
+    subagents, verifying fast unit/lint gates in the orchestrator shell, and running independent code-quality
+    and security reviewers.
+  starter_prompt: /subagent-driven-development Execute the approved plan streams with fresh subagents
+- name: implement
+  category: Engineering & TDD
+  slash_command: /implement
+  short: Execute an approved spec or set of tracer-bullet tickets with TDD and verification gates.
+  long: Works through a spec or ticket list in dependency order, running TDD, scoped tests, and linters
+    for each vertical slice until every acceptance criterion is verified.
+  starter_prompt: '/implement Implement ticket #14 following our approved spec'
+- name: systematic-debugging
+  category: Engineering & TDD
+  slash_command: /systematic-debugging
+  short: 'Root-cause debugging discipline: reproduce, trace the chain, falsify hypotheses, then fix.'
+  long: Prevents guesswork and shotgun fixes when encountering bugs or test failures. Guides you through
+    minimal reproduction, call-chain tracing, hypothesis falsification, and regression-test verification.
+  starter_prompt: /systematic-debugging Investigate why the WebSocket reconnect test flakes under load
+- name: code-simplifier
+  category: Engineering & TDD
+  slash_command: /code-simplifier
+  short: Simplify recently modified code for clarity, reuse, and maintainability without changing behavior.
+  long: Reviews recently touched files to eliminate redundant nesting, dead branches, and duplicated helpers
+    while preserving exact external behavior and passing all existing tests.
+  starter_prompt: /code-simplifier Simplify the changes on this branch while keeping all tests green
+- name: javascript-testing-patterns
+  category: Engineering & TDD
+  slash_command: /javascript-testing-patterns
+  short: Fast, deterministic testing patterns for Jest, Vitest, React, and Node/TypeScript.
+  long: Practical patterns for writing reliable JavaScript and TypeScript unit and integration tests in
+    Vitest and Jest—covering fakes over heavy mocks, async timer control, and clean test fixtures.
+  starter_prompt: /javascript-testing-patterns Refactor these brittle Jest mocks into clean Vitest tests
+- name: using-git-worktrees
+  category: Engineering & TDD
+  slash_command: /using-git-worktrees
+  short: Create isolated git worktrees so parallel feature work never dirties your main checkout.
+  long: Sets up and verifies clean git worktrees under .worktrees/ with automatic gitignore safety checks
+    and dependency bootstrapping before executing implementation plans.
+  starter_prompt: /using-git-worktrees Create an isolated worktree for the v4 catalog refactor
+- name: dispatching-parallel-agents
+  category: Engineering & TDD
+  slash_command: /dispatching-parallel-agents
+  short: Fan out 2+ genuinely independent tasks across parallel agents without shared-file conflicts.
+  long: Helps partition independent problems into non-overlapping file and module ownership boundaries
+    so parallel subagents can investigate or build simultaneously without merge collisions.
+  starter_prompt: /dispatching-parallel-agents Split these 3 independent test failures across parallel
+    agents
+- name: resolving-merge-conflicts
+  category: Engineering & TDD
+  slash_command: /resolving-merge-conflicts
+  short: Safely analyze both sides' intent and resolve git merge or rebase conflicts.
+  long: Inspects commit history on both branches (`git log --merge -p`) to understand the intent behind
+    each conflicting change, resolves the conflict cleanly, and runs tests to verify nothing was dropped.
+  starter_prompt: /resolving-merge-conflicts Help me resolve the rebase conflicts on this branch
+- name: comprehensive-code-review
+  category: Review, Security & QA
+  slash_command: /comprehensive-code-review
+  short: Orchestrate parallel read-only code-quality and security reviews on a branch or PR.
+  long: Dispatches fresh, independent code-quality and security reviewers (plus SQL review when queries
+    change) to audit your diff for logic bugs, broken callers, injection/path-traversal risks, and missing
+    tests.
+  starter_prompt: /comprehensive-code-review Run a full code quality and security review on this branch
+- name: fix-check
+  category: Review, Security & QA
+  slash_command: /fix-check
+  short: Verify that a fix diff resolves each prior review finding and has a covering test.
+  long: Runs after a review fix round instead of a costly full re-review. Checks every original CRITICAL
+    and IMPORTANT finding against the fix diff and reports FIXED, PARTIAL, or NOT FIXED with file:line
+    and test evidence.
+  starter_prompt: /fix-check Verify that our latest commit fixes all findings from the code review
+- name: sql-optimization-patterns
+  category: Review, Security & QA
+  slash_command: /sql-optimization-patterns
+  short: Optimize SQL queries, composite indexes, EXPLAIN plans, and N+1 elimination.
+  long: Audits database queries and schema migrations for missing composite indexes, N+1 query loops,
+    unindexed sorts, lock contention, and unsafe raw SQL interpolation.
+  starter_prompt: /sql-optimization-patterns Audit the new reporting queries and recommend indexes
+- name: review-lens
+  category: Review, Security & QA
+  slash_command: /review-lens
+  short: Surface similar historical PR review objections from a local review corpus.
+  long: Queries a local corpus of past pull-request review comments to highlight recurring team objections
+    and edge cases before you open a PR or finalize a plan.
+  starter_prompt: /review-lens Check what reviewers historically flag on changes like this
+- name: qa-verification
+  category: Review, Security & QA
+  slash_command: /qa-verification
+  short: Verify shipped work against ticket acceptance criteria by both reading and running the app.
+  long: Confirms every acceptance criterion twice—tracing it in the source code and reproducing it against
+    a running local environment—then produces a clear QA report for product managers.
+  starter_prompt: /qa-verification Verify all acceptance criteria for ticket PROJ-210 against local dev
+- name: skill-reviewer
+  category: Review, Security & QA
+  slash_command: /skill-reviewer
+  short: Audit SKILL.md files for size budget, progressive disclosure, encoded judgment, and frontmatter.
+  long: Reviews agent skills against 12 staff-engineer criteria including token budget, progressive disclosure,
+    valid YAML frontmatter, decision trees, do/don't pairs, and absence of extraneous files.
+  starter_prompt: /skill-reviewer Audit our new custom skill against the 12 quality criteria
+- name: pull-request-description
+  category: Shipping, Ops & Team
+  slash_command: /pull-request-description
+  short: Write clear, structured pull request descriptions with summary, context, test plan, and rollback.
+  long: Generates complete PR descriptions from your branch diff and commit history, covering What Changed,
+    Background Context, Verification Evidence / Test Plan, and Rollback Plan.
+  starter_prompt: /pull-request-description Draft a PR description for the current branch
+- name: handoff
+  category: Shipping, Ops & Team
+  slash_command: /handoff
+  short: Compact the current session into a crisp handoff document for the next engineer or agent.
+  long: Summarizes completed work, key architectural decisions, touched files, verification status, and
+    exact next steps so another session or teammate can pick up seamlessly.
+  starter_prompt: /handoff Write a handoff summary of where we are and what remains
+- name: team-pulse
+  category: Shipping, Ops & Team
+  slash_command: /team-pulse
+  short: Engineering manager PULSE status reports and throughput-backed delivery FORECASTs.
+  long: 'Operates in two modes: PULSE (scannable team/project/1:1 status report covering progress, PRs
+    in flight, blockers, and risks) and FORECAST (verifies epic state against code and forecasts landing
+    dates from measured throughput).'
+  starter_prompt: /team-pulse Prep a team pulse summary for standup and 1:1s
+- name: meeting-debrief
+  category: Shipping, Ops & Team
+  slash_command: /meeting-debrief
+  short: Extract strategic insights, subtext, commitments, and risks from meeting transcripts.
+  long: Acts as a strategic second brain over call transcripts (1:1s, standups, planning syncs), surfacing
+    unspoken tensions, concrete action items, owner commitments, and follow-up recommendations.
+  starter_prompt: /meeting-debrief Analyze my latest meeting transcript and list commitments and risks
+- name: datadog-dashboards
+  category: Shipping, Ops & Team
+  slash_command: /datadog-dashboards
+  short: Build and verify Datadog dashboard JSON so every tile renders live metrics and logs.
+  long: 'Enforces three gates on Datadog dashboards: valid JSON schema, every widget query verified against
+    live data (no empty tiles), and trend widgets backed by retained metrics rather than short-lived logs.'
+  starter_prompt: /datadog-dashboards Review our service dashboard JSON and fix any tiles showing No Data
+- name: agent-browser
+  category: Research, Browser & Meta
+  slash_command: /agent-browser
+  short: Automate browser navigation, form interaction, screenshots, and live web app testing.
+  long: Drives headless or visible browser sessions to inspect rendered DOM state, fill forms, capture
+    screenshots, verify responsive layouts, and test web flows end-to-end.
+  starter_prompt: /agent-browser Open localhost:3000, test the signup flow, and capture screenshots
+- name: research
+  category: Research, Browser & Meta
+  slash_command: /research
+  short: Investigate technical or product questions against primary sources and save a cited report.
+  long: Researches APIs, specifications, library internals, or market questions using primary documentation
+    and source code, capturing a structured Markdown report with exact citations.
+  starter_prompt: /research Research how Bubble Tea handles Windows ANSI color and resize events
+- name: teach
+  category: Research, Browser & Meta
+  slash_command: /teach
+  short: Interactive tutor that teaches you a codebase module, language concept, or architecture.
+  long: Builds a personalized mental model of an unfamiliar codebase, protocol, or engineering concept
+    using real examples from your workspace, diagrams, and short comprehension checks.
+  starter_prompt: /teach Walk me through how the installer and catalog packages work in this repo
+- name: future-model-router
+  category: Research, Browser & Meta
+  slash_command: /future-model-router
+  short: Empirical benchmarks for when to run work inline vs subagents vs multi-model swarms.
+  long: Reference guide backed by token and pass-rate measurements explaining when to keep work inline,
+    when to dispatch a subagent, how restricted tool schemas cut startup cost by 45%, and which model
+    tier fits each phase.
+  starter_prompt: /future-model-router Should I run this refactor inline or dispatch subagents?
+- name: future-skill-creator
+  category: Research, Browser & Meta
+  slash_command: /future-skill-creator
+  short: Create or upgrade agent skills with encoded judgment, decision trees, and validation scripts.
+  long: Scaffolds and refines SKILL.md packages that encode real engineering judgment—decision trees,
+    do/don't pairs, progressive-disclosure reference files, and automated frontmatter validation.
+  starter_prompt: /future-skill-creator Help me create a new skill for our database migration workflow
+- name: plugin-updater
+  category: Research, Browser & Meta
+  slash_command: /plugin-update
+  short: Check for and install live skill and workflow updates from main via gh CLI or GitHub MCP.
+  long: Checks futuregerald/futuregerald-claude-plugin (main) for new or updated skills and CLI releases
+    using either skill-installer + gh CLI or your connected GitHub MCP server, summarizes changes in plain
+    English, and updates with optional backup.
+  starter_prompt: /plugin-update Check if there are any updates to my installed skills
+- name: antigravity-orchestration
+  category: Antigravity Exclusives
+  slash_command: /antigravity-orchestration
+  short: Antigravity session orchestration, role routing table, and search hierarchy reference.
+  long: Antigravity-exclusive reference covering Argon Medium vs Carbon High model routing, restricted-tool
+    subagent dispatch, Prism memory hooks, code-search hierarchy, and workflow trigger tables.
+  starter_prompt: /antigravity-orchestration Check the model routing rules for Phase 4 and Phase 8
+  antigravity_only: true
+- name: peer-pipeline-swarm
+  category: Antigravity Exclusives
+  slash_command: /peer-pipeline-swarm
+  short: Antigravity Phases 4–9 peer-to-peer TDD implementation and cross-model review swarm.
+  long: Antigravity-exclusive swarm workflow that spawns an isolated share-workspace TDD implementer paired
+    with cross-family high-deliberation code/security reviewers and a lightweight stall monitor so build,
+    test, and review rounds resolve peer-to-peer.
+  starter_prompt: /peer-pipeline-swarm Run Phases 4-9 in a peer-pipeline swarm
+  antigravity_only: true
+- name: baton-pass
+  category: Antigravity Exclusives
+  slash_command: /baton-pass
+  short: Deterministic ACTIVE_CONTEXT.md snapshot before Antigravity context compaction hits.
+  long: Antigravity-exclusive context handoff skill triggered when the circuit-breaker hook warns at ~205k
+    tokens (before the ~235k block), writing a complete ACTIVE_CONTEXT.md snapshot so a fresh session
+    resumes with zero re-reading.
+  starter_prompt: /baton-pass Save an ACTIVE_CONTEXT.md snapshot so I can continue in a fresh session
+  antigravity_only: true

@@ -6,7 +6,6 @@ import (
 	"bufio"
 	"compress/gzip"
 	"crypto/sha256"
-	"embed"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -21,6 +20,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/futuregerald/futuregerald-claude-plugin/internal/catalog"
 	"github.com/futuregerald/futuregerald-claude-plugin/internal/config"
 	"github.com/futuregerald/futuregerald-claude-plugin/internal/installer"
 	"github.com/spf13/cobra"
@@ -38,8 +38,7 @@ const (
 	cbMemBinName = "codebase-memory-mcp"
 )
 
-//go:embed all:skills all:agents all:templates all:commands all:antigravity
-var content embed.FS
+var content fs.FS = catalog.FS
 
 var (
 	version       = "3.6.0"
@@ -498,9 +497,9 @@ func generateConfigFile(_ *installer.Installer, target Target, reader *bufio.Rea
 		return err
 	}
 
-	templatePath := "templates/CLAUDE-BASE.md"
+	templatePath := "claude/templates/CLAUDE-BASE.md"
 	if installer.IsGeminiHarness(target.Harness) {
-		templatePath = "templates/GEMINI-BASE.md"
+		templatePath = "antigravity/templates/GEMINI-BASE.md"
 	}
 	baseContent, err := fs.ReadFile(content, templatePath)
 	if err != nil {

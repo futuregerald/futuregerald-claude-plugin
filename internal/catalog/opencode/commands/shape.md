@@ -1,0 +1,10 @@
+---
+description: Phase 0 product & design shaping — interview for point-of-view brief, grill open decisions, and shape PRD
+---
+
+# /shape
+
+Run Phase 0 (`Shape`) on `$ARGUMENTS` by reading and following the installed `shape` and `craftsmans-wisdom` skills.
+
+1. Locate and read `shape/SKILL.md` in `.opencode/skills/shape/SKILL.md` or `~/.config/opencode/skills/shape/SKILL.md`.
+2. Follow its workflow instructions step by step for `$ARGUMENTS`.

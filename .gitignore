@@ -1,6 +1,7 @@
 # Go build artifacts
 skill-installer
 *.exe
+*.exe.old
 
 # Generated archives
 skill-zips/
@@ -10,30 +11,44 @@ skill-zips/
 
 # OS files
 .DS_Store
+**/.DS_Store
+Thumbs.db
 
-# Python caches (skill scripts)
+# Python & SQLite caches (skill scripts)
 __pycache__/
 *.pyc
+*.db
+*.db-wal
+*.db-shm
+reviews.db
 
-# Implementation plans are working artifacts, never committed
+# Implementation plans & local UI prototype outputs
 docs/plans/
+**/design-demos/
+.video-tmp-*/
+**/.video-tmp-*/
+**/_narration/
+**/_narration_*/
+_style-research/
 
 # Bootstrapped venvs (e.g. vectorize skill's auto-created uv venv)
 .venv/
 **/.venv/
 
 # Installed by the codebase-memory-mcp binary; overwritten on every update.
-# Not ours to version, and its tracing guidance conflicts with this repo's.
-skills/codebase-memory-*/
+internal/catalog/**/skills/codebase-memory-*/
 
 # Local skill config -- may hold real site names, org slugs and paths.
 # The example template is tracked; the filled-in copy never is.
-skills/*/references/config.md
-skills/*/references/*.local.md
-skills/*/references/team.local.md
+internal/catalog/**/references/config.md
+internal/catalog/**/*.local.md
+internal/catalog/**/references/team.local.md
+internal/catalog/antigravity/rules/*.local.md
+internal/catalog/shared/skills/huashu-design/assets/personal-asset-index.json
+internal/catalog/shared/skills/huashu-design/demos/_frames_*.png
+internal/catalog/shared/skills/huashu-design/demos/_verify.js
+internal/catalog/shared/skills/huashu-design/demos/_verify.mjs
+internal/catalog/shared/skills/huashu-design/demos/**/*.mp4
 
 # Packaged skill zips (skills ship through the installer)
 *.skill
-antigravity/skills/*/references/config.md
-antigravity/skills/*/references/*.local.md
-antigravity/rules/*.local.md

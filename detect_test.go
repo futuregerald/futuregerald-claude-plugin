@@ -373,7 +373,7 @@ func TestApplyProjectDetection(t *testing.T) {
 `
 
 	mockFS := fstest.MapFS{
-		"templates/languages/go.md": &fstest.MapFile{
+		"shared/templates/languages/go.md": &fstest.MapFile{
 			Data: []byte(goLangTemplate),
 		},
 	}

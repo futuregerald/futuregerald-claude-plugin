@@ -27,7 +27,7 @@ func IsGeminiHarness(harness string) bool {
 }
 
 func isAntigravityOnlySkill(skillName string) bool {
-	return skillName == "antigravity-orchestration" || skillName == "peer-pipeline-swarm"
+	return skillName == "antigravity-orchestration" || skillName == "peer-pipeline-swarm" || skillName == "baton-pass"
 }
 
 func UnlinkIfSymlink(destPath string, dryRun bool) (bool, error) {
@@ -63,7 +63,11 @@ func shouldSkipSourcePath(relSlash string) bool {
 	if clean == "references/config.md" || strings.HasSuffix(clean, "/references/config.md") {
 		return true
 	}
-	if strings.HasPrefix(clean, "skills/codebase-memory-") || strings.HasPrefix(clean, "codebase-memory-") {
+	if strings.HasPrefix(clean, "shared/skills/codebase-memory-") || strings.HasPrefix(clean, "skills/codebase-memory-") || strings.HasPrefix(clean, "codebase-memory-") {
+		return true
+	}
+	base := path.Base(clean)
+	if (strings.HasPrefix(base, "test_") && strings.HasSuffix(lower, ".py")) || strings.HasSuffix(lower, "_test.py") {
 		return true
 	}
 	segments := strings.Split(clean, "/")
@@ -263,9 +267,18 @@ func (i *Installer) HasForce() bool {
 	return i.options.Force
 }
 
-// discoverSkills walks the skills/ directory finding directories that contain SKILL.md.
 func (i *Installer) discoverSkills() ([]Skill, error) {
+	if _, err := fs.Stat(i.fsys, "shared/skills"); err == nil {
+		return i.discoverSkillsInDir("shared/skills")
+	}
 	return i.discoverSkillsInDir("skills")
+}
+
+func trimSkillsPrefix(p string) string {
+	if strings.HasPrefix(p, "shared/skills/") {
+		return strings.TrimPrefix(p, "shared/skills/")
+	}
+	return strings.TrimPrefix(p, "skills/")
 }
 
 func (i *Installer) discoverSkillsInDir(rootDir string) ([]Skill, error) {
@@ -383,7 +396,7 @@ func (i *Installer) InstallSkillsForHarness(destDir, harness string, isGlobal bo
 			}
 
 			for _, file := range files {
-				relPath := strings.TrimPrefix(file, "skills/")
+				relPath := trimSkillsPrefix(file)
 				targetPath := filepath.Join(destDir, relPath)
 
 				fileContent, err := fs.ReadFile(i.fsys, file)
@@ -470,7 +483,7 @@ func (i *Installer) InstallSkillsForHarness(destDir, harness string, isGlobal bo
 				return nil, fmt.Errorf("listing files in %s: %w", baseSkill.DirPath, err)
 			}
 			for _, file := range files {
-				relPath := strings.TrimPrefix(file, "skills/")
+				relPath := trimSkillsPrefix(file)
 				if overrideFilesByRel[relPath] {
 					continue
 				}
@@ -533,9 +546,16 @@ func (i *Installer) InstallAgentsForHarness(destDir, harness string, isGlobal bo
 		results = append(results, fmt.Sprintf("WOULD UNLINK SYMLINK: %s", destDir))
 	}
 
-	agentsDir := "agents"
+	agentsDir := "claude/agents"
+	if _, err := fs.Stat(i.fsys, agentsDir); err != nil {
+		agentsDir = "agents"
+	}
 	if IsGeminiHarness(harness) {
 		agentsDir = "antigravity/plugins/antigravity-subagents/agents"
+	} else if harness == "opencode" {
+		if _, err := fs.Stat(i.fsys, "opencode/agents"); err == nil {
+			agentsDir = "opencode/agents"
+		}
 	}
 
 	entries, err := fs.ReadDir(i.fsys, agentsDir)
@@ -781,13 +801,17 @@ func (i *Installer) InstallCommands(destDir string) ([]string, error) {
 		results = append(results, fmt.Sprintf("WOULD UNLINK SYMLINK: %s", destDir))
 	}
 
-	files, err := i.listDirFiles("commands")
+	commandsRoot := "claude/commands"
+	if _, err := fs.Stat(i.fsys, commandsRoot); err != nil {
+		commandsRoot = "commands"
+	}
+	files, err := i.listDirFiles(commandsRoot)
 	if err != nil {
-		return results, nil // No commands directory is not an error
+		return results, nil
 	}
 
 	for _, file := range files {
-		relPath := strings.TrimPrefix(file, "commands/")
+		relPath := strings.TrimPrefix(file, commandsRoot+"/")
 		targetPath := filepath.Join(destDir, relPath)
 
 		content, err := fs.ReadFile(i.fsys, file)

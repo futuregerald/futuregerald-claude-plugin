@@ -1097,3 +1097,35 @@ func TestParseSkill_FoldedDescription(t *testing.T) {
 		t.Errorf("got description %q, want %q", skill.Description, want)
 	}
 }
+
+func TestInstallSkills_SkipsPythonTestFiles(t *testing.T) {
+	testFS := fstest.MapFS{
+		"shared/skills/demo/SKILL.md": &fstest.MapFile{
+			Data: []byte("---\nname: demo\ndescription: Demo\n---\n# Demo"),
+		},
+		"shared/skills/demo/scripts/check_demo.py": &fstest.MapFile{
+			Data: []byte("print('ok')\n"),
+		},
+		"shared/skills/demo/scripts/test_check_demo.py": &fstest.MapFile{
+			Data: []byte("def test_ok(): pass\n"),
+		},
+		"shared/skills/demo/scripts/check_demo_test.py": &fstest.MapFile{
+			Data: []byte("def test_ok2(): pass\n"),
+		},
+	}
+
+	destDir := t.TempDir()
+	inst := New(testFS, Options{Force: true})
+	if _, err := inst.InstallSkills(destDir, nil, nil); err != nil {
+		t.Fatalf("InstallSkills error: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(destDir, "demo", "scripts", "check_demo.py")); err != nil {
+		t.Errorf("expected check_demo.py to be installed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(destDir, "demo", "scripts", "test_check_demo.py")); !os.IsNotExist(err) {
+		t.Errorf("expected test_check_demo.py to be skipped during install")
+	}
+	if _, err := os.Stat(filepath.Join(destDir, "demo", "scripts", "check_demo_test.py")); !os.IsNotExist(err) {
+		t.Errorf("expected check_demo_test.py to be skipped during install")
+	}
+}

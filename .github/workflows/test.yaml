@@ -30,7 +30,7 @@ jobs:
         run: pip install pytest pyyaml
 
       - name: Run skill script tests
-        run: PYTHONDONTWRITEBYTECODE=1 pytest -p no:cacheprovider -q skills/*/scripts antigravity/hooks
+        run: PYTHONDONTWRITEBYTECODE=1 pytest -p no:cacheprovider -q internal/catalog/shared/skills/editor-pass/scripts internal/catalog/shared/skills/future-skill-creator/scripts internal/catalog/shared/skills/grilling-page/scripts internal/catalog/shared/skills/team-pulse/scripts internal/catalog/shared/skills/visualize-plan/scripts internal/catalog/antigravity/hooks
 
       - name: Build
         run: go build -o skill-installer .
