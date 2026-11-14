@@ -394,4 +394,40 @@ func TestApply_CustomTrackDropsRetiredSkillsFromReceipt(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(pathsLegacyNil.SkillsDir, "brainstorming", "SKILL.md")); !os.IsNotExist(err) {
 		t.Errorf("expected brainstorming NOT installed on legacy nil-skills custom update, err=%v", err)
 	}
+
+	projMergedCfg := filepath.Join(tmp, "merged-cfg-proj")
+	pathsMergedCfg, err := env.ResolvePaths("claude", "project", projMergedCfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(projMergedCfg, 0755); err != nil {
+		t.Fatal(err)
+	}
+	initialMerged := state.MergeConfigContent([]byte("# Custom Team Rules\n- Keep handlers thin\n"), []byte("# Old Workflow Rules"))
+	if err := os.WriteFile(pathsMergedCfg.ConfigFile, initialMerged, 0644); err != nil {
+		t.Fatal(err)
+	}
+	mergedReceipt := state.Receipt{
+		ID:        state.ReceiptKey("claude", "project", pathsMergedCfg.RootDir),
+		Harness:   "claude",
+		Scope:     "project",
+		RootDir:   pathsMergedCfg.RootDir,
+		Track:     "basics",
+		Skills:    []string{"brainstorming", "plugin-updater"},
+		CommitSHA: "a1b2c3d4",
+	}
+	if _, _, err := Apply(context.Background(), runner, env, mergedReceipt, ApplyOptions{
+		Backup:         false,
+		Force:          true,
+		CurrentVersion: "4.0.0",
+	}); err != nil {
+		t.Fatalf("Apply(merged project config) error: %v", err)
+	}
+	updatedMergedBytes, err := os.ReadFile(pathsMergedCfg.ConfigFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(updatedMergedBytes), "Keep handlers thin") || strings.Contains(string(updatedMergedBytes), "# Old Workflow Rules") {
+		t.Errorf("expected Apply to preserve custom rules and update managed section in project CLAUDE.md, got:\n%s", string(updatedMergedBytes))
+	}
 }

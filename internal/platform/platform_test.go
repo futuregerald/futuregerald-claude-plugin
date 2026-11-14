@@ -356,3 +356,33 @@ func TestWindowsPythonHookCommandAndSweep(t *testing.T) {
 		t.Errorf("expected %s to be removed by SweepStaleExecutable", oldExe)
 	}
 }
+
+func TestExpandPath_CrossOSAndTilde(t *testing.T) {
+	macEnv := Env{GOOS: "darwin", HomeDir: "/Users/alice"}
+	if got := macEnv.ExpandPath("~", "/work"); got != "/Users/alice" {
+		t.Errorf("ExpandPath(~) = %q, want /Users/alice", got)
+	}
+	if got := macEnv.ExpandPath("~/dev/my-app", "/work"); got != "/Users/alice/dev/my-app" {
+		t.Errorf("ExpandPath(~/dev/my-app) = %q, want /Users/alice/dev/my-app", got)
+	}
+	if got := macEnv.ExpandPath(`"~/dev/my-app"`, "/work"); got != "/Users/alice/dev/my-app" {
+		t.Errorf("ExpandPath(quoted) = %q, want /Users/alice/dev/my-app", got)
+	}
+	if got := macEnv.ExpandPath("sub/repo", "/work"); got != "/work/sub/repo" {
+		t.Errorf("ExpandPath(relative) = %q, want /work/sub/repo", got)
+	}
+	if got := macEnv.ExpandPath(".", "/work"); got != "/work" {
+		t.Errorf("ExpandPath(.) = %q, want /work", got)
+	}
+
+	winEnv := Env{GOOS: "windows", HomeDir: `C:\Users\alice`}
+	if got := winEnv.ExpandPath(`~\repos\app`, `C:\work`); got != `C:\Users\alice\repos\app` {
+		t.Errorf("windows ExpandPath(~\\repos\\app) = %q, want C:\\Users\\alice\\repos\\app", got)
+	}
+	if got := winEnv.ExpandPath(`sub\repo`, `C:\work`); got != `C:\work\sub\repo` {
+		t.Errorf("windows ExpandPath(sub\\repo) = %q, want C:\\work\\sub\\repo", got)
+	}
+	if got := winEnv.ExpandPath(`D:\other\repo`, `C:\work`); got != `D:\other\repo` {
+		t.Errorf("windows ExpandPath(abs) = %q, want D:\\other\\repo", got)
+	}
+}

@@ -15,6 +15,8 @@ type Config struct {
 	Tags         []string `yaml:"tags"`
 	Languages    []string `yaml:"languages"`
 	SkipClaudeMD bool     `yaml:"skip_claude_md"`
+	ConfigMode   string   `yaml:"config_mode"`
+	ProjectDir   string   `yaml:"project_dir"`
 	From         string   `yaml:"from"`
 	Mode         string   `yaml:"mode"`
 }

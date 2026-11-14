@@ -10,6 +10,7 @@ import (
 	"github.com/futuregerald/futuregerald-claude-plugin/internal/backup"
 	"github.com/futuregerald/futuregerald-claude-plugin/internal/catalog"
 	"github.com/futuregerald/futuregerald-claude-plugin/internal/platform"
+	"github.com/futuregerald/futuregerald-claude-plugin/internal/state"
 )
 
 func TestParseSkill_FullFrontmatter(t *testing.T) {
@@ -421,5 +422,130 @@ func TestExecutePlan_LegacyUpgradePrunesRetiredV3SkillsAndBacksUp(t *testing.T) 
 	}
 	if _, err := os.Stat(filepath.Join(allRetiredRes.Paths.CommandsDir, "config", "show.md")); !os.IsNotExist(err) {
 		t.Errorf("expected subdir command config/show.md NOT installed when selectedSkills is empty, err=%v", err)
+	}
+}
+
+func TestMergeConfigContent_IdempotentAndPreservesUserRules(t *testing.T) {
+	userRules := "# My Custom Project Rules\n\n- Always run `npm run check`.\r\n"
+	incoming1 := "# Workflow Rules v1\n\nPhase 1 -> Phase 12"
+	merged1 := MergeConfigContent([]byte(userRules), []byte(incoming1))
+	s1 := string(merged1)
+	if !strings.Contains(s1, "# My Custom Project Rules") || !strings.Contains(s1, "Always run `npm run check`") {
+		t.Fatalf("expected user rules preserved in merged output:\n%s", s1)
+	}
+	if !HasManagedWorkflowSection(merged1) || !strings.Contains(s1, "Phase 1 -> Phase 12") {
+		t.Fatalf("expected managed workflow section in merged output:\n%s", s1)
+	}
+
+	incoming2 := "# Workflow Rules v2\n\nUpdated phases"
+	merged2 := MergeConfigContent(merged1, []byte(incoming2))
+	s2 := string(merged2)
+	if strings.Count(s2, ManagedWorkflowBegin) != 1 || strings.Count(s2, ManagedWorkflowEnd) != 1 {
+		t.Fatalf("expected exactly 1 managed section after second merge, got:\n%s", s2)
+	}
+	if strings.Contains(s2, "Workflow Rules v1") || !strings.Contains(s2, "Workflow Rules v2") {
+		t.Fatalf("expected v1 replaced by v2 in-place, got:\n%s", s2)
+	}
+
+	stripped, ok := StripManagedWorkflowSection(merged2)
+	if !ok {
+		t.Fatalf("expected StripManagedWorkflowSection to return true")
+	}
+	if HasManagedWorkflowSection(stripped) || !strings.Contains(string(stripped), "# My Custom Project Rules") {
+		t.Fatalf("expected only user rules remaining after strip, got:\n%s", string(stripped))
+	}
+
+	freshMerged := MergeConfigContent(nil, []byte(incoming1))
+	emptyAfterStrip, ok := StripManagedWorkflowSection(freshMerged)
+	if !ok || len(emptyAfterStrip) != 0 {
+		t.Fatalf("expected empty content when stripping file created purely from managed section, got %q (ok=%v)", string(emptyAfterStrip), ok)
+	}
+}
+
+func TestExecutePlan_ConfigModeMergeReplaceSkipAndUninstallStrip(t *testing.T) {
+	cat, err := catalog.Load(catalog.FS)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmpHome := t.TempDir()
+	projDir := filepath.Join(tmpHome, "repo")
+	if err := os.MkdirAll(projDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	env := platform.Env{GOOS: "darwin", GOARCH: "arm64", HomeDir: tmpHome}
+
+	claudeMD := filepath.Join(projDir, "CLAUDE.md")
+	originalUserContent := "# Team Rules\n\nKeep domain logic pure.\n"
+	if err := os.WriteFile(claudeMD, []byte(originalUserContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	inst := New(catalog.FS, Options{Force: false})
+	resMerge, err := inst.ExecutePlan(InstallPlan{
+		Env:        env,
+		Catalog:    cat,
+		Harness:    HarnessClaude,
+		Scope:      "project",
+		ProjectDir: projDir,
+		TrackID:    "basics",
+		ConfigMode: ConfigModeMerge,
+		Backup:     true,
+		Force:      false,
+		Version:    "4.0.0",
+	})
+	if err != nil {
+		t.Fatalf("ExecutePlan(ConfigModeMerge) error: %v", err)
+	}
+	if resMerge.ConfigAction != "merged" {
+		t.Errorf("ConfigAction = %q, want merged", resMerge.ConfigAction)
+	}
+	gotBytes, err := os.ReadFile(claudeMD)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(gotBytes), "Keep domain logic pure.") || !HasManagedWorkflowSection(gotBytes) {
+		t.Fatalf("expected user content + managed section in CLAUDE.md, got:\n%s", string(gotBytes))
+	}
+
+	postInstallEdit := string(gotBytes) + "\n## Added After Install\n- Post-install note\n"
+	if err := os.WriteFile(claudeMD, []byte(postInstallEdit), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	mgr := backup.NewManager(env.BackupsDir())
+	unRes, err := state.Uninstall(env, cat, resMerge.Receipt, mgr, true)
+	if err != nil {
+		t.Fatalf("state.Uninstall error: %v", err)
+	}
+	if unRes.RestoredConfig != claudeMD {
+		t.Errorf("expected RestoredConfig=%q, got %q", claudeMD, unRes.RestoredConfig)
+	}
+	afterUninstall, err := os.ReadFile(claudeMD)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if HasManagedWorkflowSection(afterUninstall) {
+		t.Errorf("expected managed workflow section stripped on uninstall, got:\n%s", string(afterUninstall))
+	}
+	if !strings.Contains(string(afterUninstall), "Keep domain logic pure.") || !strings.Contains(string(afterUninstall), "Post-install note") {
+		t.Errorf("expected both pre- and post-install user rules preserved on uninstall, got:\n%s", string(afterUninstall))
+	}
+
+	resGlobalMerge, err := inst.ExecutePlan(InstallPlan{
+		Env:        env,
+		Catalog:    cat,
+		Harness:    HarnessAntigravity,
+		Scope:      "global",
+		TrackID:    "basics",
+		ConfigMode: ConfigModeMerge,
+		Backup:     false,
+		Force:      false,
+		Version:    "4.0.0",
+	})
+	if err != nil {
+		t.Fatalf("ExecutePlan(global Antigravity ConfigModeMerge) error: %v", err)
+	}
+	if resGlobalMerge.ConfigAction != "created" {
+		t.Errorf("expected ConfigAction=created on fresh global GEMINI.md, got %q", resGlobalMerge.ConfigAction)
 	}
 }

@@ -26,7 +26,44 @@ const (
 	HarnessAntigravity = catalog.HarnessAntigravity
 	HarnessZed         = catalog.HarnessZed
 	HarnessOpenCode    = catalog.HarnessOpenCode
+
+	ConfigModeReplace    = "replace"
+	ConfigModeMerge      = "merge"
+	ConfigModeSkip       = "skip"
+	ManagedWorkflowBegin = state.ManagedWorkflowBegin
+	ManagedWorkflowEnd   = state.ManagedWorkflowEnd
 )
+
+func HasManagedWorkflowSection(content []byte) bool {
+	return state.HasManagedWorkflowSection(content)
+}
+
+func MergeConfigContent(existing, incoming []byte) []byte {
+	return state.MergeConfigContent(existing, incoming)
+}
+
+func StripManagedWorkflowSection(content []byte) ([]byte, bool) {
+	return state.StripManagedWorkflowSection(content)
+}
+
+func ReadExistingRegularConfigFile(filePath string) ([]byte, bool) {
+	return readExistingRegularConfigFile(filePath)
+}
+
+func readExistingRegularConfigFile(filePath string) ([]byte, bool) {
+	if filePath == "" || backup.RejectSymlinkInChain(filePath) != nil {
+		return nil, false
+	}
+	info, err := os.Lstat(filePath)
+	if err != nil || !info.Mode().IsRegular() {
+		return nil, false
+	}
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, false
+	}
+	return data, true
+}
 
 func IsGeminiHarness(harness string) bool {
 	return harness == HarnessAntigravity
@@ -613,6 +650,7 @@ type GlobalAssetOptions struct {
 	LightweightConfig bool
 	InstallHooks      bool
 	SkipConfigFile    bool
+	ConfigMode        string
 	Env               platform.Env
 }
 
@@ -638,7 +676,7 @@ func (i *Installer) InstallGlobalHarnessAssetsWithOptions(geminiHome, harness st
 		return nil, false, false, fmt.Errorf("refusing to modify symlinked config directory %s", configDir)
 	}
 
-	if !opts.SkipConfigFile {
+	if !opts.SkipConfigFile && opts.ConfigMode != ConfigModeSkip {
 		geminiTemplate := "antigravity/GEMINI.md"
 		if opts.LightweightConfig {
 			if _, err := fs.Stat(i.fsys, "antigravity/GEMINI-LIGHT.md"); err == nil {
@@ -647,7 +685,16 @@ func (i *Installer) InstallGlobalHarnessAssetsWithOptions(geminiHome, harness st
 		}
 		if geminiMD, err := fs.ReadFile(i.fsys, geminiTemplate); err == nil {
 			targetMD := filepath.Join(geminiHome, "GEMINI.md")
-			res, err := i.writeFileWithRoot(targetMD, targetMD, geminiMD, 0644)
+			outBytes := geminiMD
+			writer := i
+			if opts.ConfigMode == ConfigModeMerge {
+				existingBytes, _ := readExistingRegularConfigFile(targetMD)
+				outBytes = MergeConfigContent(existingBytes, geminiMD)
+			}
+			if (opts.ConfigMode == ConfigModeMerge || opts.ConfigMode == ConfigModeReplace) && !writer.options.Force {
+				writer = New(i.fsys, Options{Force: true, DryRun: i.options.DryRun})
+			}
+			res, err := writer.writeFileWithRoot(targetMD, targetMD, outBytes, 0644)
 			if err != nil {
 				return nil, false, false, err
 			}
@@ -892,6 +939,7 @@ type InstallPlan struct {
 	Tags                  []string
 	Languages             []string
 	Mode                  string
+	ConfigMode            string
 	SkipConfig            bool
 	SkipAgents            bool
 	SkipCommands          bool
@@ -914,7 +962,18 @@ type InstallResult struct {
 	Actions      []string
 	WrittenFiles []string
 	BackupID     string
+	ConfigAction string
 	Receipt      state.Receipt
+}
+
+func resolvePlanConfigMode(plan InstallPlan) string {
+	if plan.SkipConfig || strings.EqualFold(plan.ConfigMode, ConfigModeSkip) {
+		return ConfigModeSkip
+	}
+	if strings.EqualFold(plan.ConfigMode, ConfigModeMerge) {
+		return ConfigModeMerge
+	}
+	return ConfigModeReplace
 }
 
 func extractWrittenPath(action string) (string, bool) {
@@ -948,6 +1007,14 @@ func (i *Installer) ExecutePlan(plan InstallPlan) (*InstallResult, error) {
 	paths, err := plan.Env.ResolvePaths(plan.Harness, scope, projDir)
 	if err != nil {
 		return nil, err
+	}
+	if scope == "project" && projDir != "." {
+		if err := backup.RejectSymlinkInChain(projDir); err != nil {
+			return nil, err
+		}
+		if info, lErr := os.Lstat(projDir); lErr == nil && info.Mode()&os.ModeSymlink != 0 {
+			return nil, fmt.Errorf("refusing to install into symlinked project directory %s", projDir)
+		}
 	}
 
 	trackID := plan.TrackID
@@ -1023,7 +1090,8 @@ func (i *Installer) ExecutePlan(plan InstallPlan) (*InstallResult, error) {
 	if hasPrior && priorReceipt != nil {
 		candidateTargets = append(candidateTargets, priorReceipt.InstalledFiles...)
 	}
-	if (mode == "config-only" || (mode == "full" && !plan.SkipConfig)) && paths.ConfigFile != "" {
+	cfgMode := resolvePlanConfigMode(plan)
+	if (mode == "config-only" || (mode == "full" && cfgMode != ConfigModeSkip)) && paths.ConfigFile != "" {
 		addPlanned(paths.ConfigFile)
 	}
 	if paths.HooksJSON != "" {
@@ -1063,11 +1131,12 @@ func (i *Installer) ExecutePlan(plan InstallPlan) (*InstallResult, error) {
 			}
 		}
 	}
-	if scope == "global" && plan.Harness == HarnessAntigravity && (mode == "full" || (mode == "config-only" && !plan.SkipConfig)) {
+	if scope == "global" && plan.Harness == HarnessAntigravity && (mode == "full" || (mode == "config-only" && cfgMode != ConfigModeSkip)) {
 		if sim, _, _, gErr := dryInst.InstallGlobalHarnessAssetsWithOptions(paths.GeminiHome, plan.Harness, GlobalAssetOptions{
 			LightweightConfig: track.LightweightConfig,
 			InstallHooks:      track.InstallHooks,
-			SkipConfigFile:    plan.SkipConfig,
+			SkipConfigFile:    cfgMode == ConfigModeSkip,
+			ConfigMode:        cfgMode,
 			Env:               plan.Env,
 		}); gErr == nil {
 			for _, line := range sim {
@@ -1132,52 +1201,79 @@ func (i *Installer) ExecutePlan(plan InstallPlan) (*InstallResult, error) {
 
 	hooksMerged := false
 	hooksCreated := false
-	if scope == "global" && plan.Harness == HarnessAntigravity && (mode == "full" || (mode == "config-only" && !plan.SkipConfig)) {
+	configAction := "skipped"
+	_, configExistedBefore := readExistingRegularConfigFile(paths.ConfigFile)
+	recordConfigLine := func(line string) {
+		switch {
+		case strings.HasPrefix(line, "CREATED:") || strings.HasPrefix(line, "WOULD CREATE:"):
+			configAction = "created"
+		case strings.HasPrefix(line, "UPDATED:") || strings.HasPrefix(line, "WOULD OVERWRITE:"):
+			if cfgMode == ConfigModeMerge && configExistedBefore {
+				configAction = "merged"
+			} else {
+				configAction = "replaced"
+			}
+		case strings.HasPrefix(line, "SKIP:"):
+			configAction = "skipped"
+		}
+	}
+
+	if scope == "global" && plan.Harness == HarnessAntigravity && (mode == "full" || (mode == "config-only" && cfgMode != ConfigModeSkip)) {
 		cfgInst := execInst
-		if plan.ForceConfig && !execInst.options.Force {
+		if (plan.ForceConfig || cfgMode == ConfigModeMerge) && !execInst.options.Force {
 			cfgInst = New(i.fsys, Options{Force: true, DryRun: execInst.options.DryRun})
 		}
 		res, hm, hc, gErr := cfgInst.InstallGlobalHarnessAssetsWithOptions(paths.GeminiHome, plan.Harness, GlobalAssetOptions{
 			LightweightConfig: track.LightweightConfig,
 			InstallHooks:      track.InstallHooks,
-			SkipConfigFile:    plan.SkipConfig,
+			SkipConfigFile:    cfgMode == ConfigModeSkip,
+			ConfigMode:        cfgMode,
 			Env:               plan.Env,
 		})
 		if gErr != nil {
 			return nil, gErr
 		}
+		for _, l := range res {
+			if paths.ConfigFile != "" && strings.HasSuffix(strings.TrimSpace(l), paths.ConfigFile) {
+				recordConfigLine(l)
+			} else if strings.Contains(l, paths.ConfigFile) {
+				recordConfigLine(l)
+			}
+		}
 		recordActions(res)
 		hooksMerged = hm
 		hooksCreated = hc
-	} else if (mode == "config-only" || (mode == "full" && !plan.SkipConfig)) && paths.ConfigFile != "" {
+	} else if (mode == "config-only" || (mode == "full" && cfgMode != ConfigModeSkip)) && paths.ConfigFile != "" {
 		cfgInst := execInst
-		if plan.ForceConfig && !execInst.options.Force {
+		if (plan.ForceConfig || cfgMode == ConfigModeMerge) && !execInst.options.Force {
 			cfgInst = New(i.fsys, Options{Force: true, DryRun: execInst.options.DryRun})
 		}
+		var tpl []byte
+		var tErr error
 		if scope == "global" {
-			tpl, tErr := cat.GlobalConfigTemplate(plan.Harness, track.LightweightConfig)
-			if tErr != nil {
-				return nil, tErr
-			}
-			res, wErr := cfgInst.writeFileWithRoot(paths.ConfigFile, paths.ConfigFile, tpl, 0644)
-			if wErr != nil {
-				return nil, wErr
-			}
-			recordActions([]string{res})
+			tpl, tErr = cat.GlobalConfigTemplate(plan.Harness, track.LightweightConfig)
 		} else {
-			tpl, tErr := cat.ProjectConfigTemplate(plan.Harness)
-			if tErr != nil {
-				return nil, tErr
-			}
-			if plan.ProjectConfigRenderer != nil {
+			tpl, tErr = cat.ProjectConfigTemplate(plan.Harness)
+			if tErr == nil && plan.ProjectConfigRenderer != nil {
 				tpl = plan.ProjectConfigRenderer(tpl, plan.Harness, projDir)
 			}
-			res, wErr := cfgInst.writeFileWithRoot(paths.ConfigFile, paths.ConfigFile, tpl, 0644)
-			if wErr != nil {
-				return nil, wErr
-			}
-			recordActions([]string{res})
 		}
+		if tErr != nil {
+			return nil, tErr
+		}
+		if cfgMode == ConfigModeMerge {
+			existingBytes, _ := readExistingRegularConfigFile(paths.ConfigFile)
+			tpl = MergeConfigContent(existingBytes, tpl)
+		}
+		if err := backup.RejectSymlinkInChain(paths.ConfigFile); err != nil {
+			return nil, err
+		}
+		res, wErr := cfgInst.writeFileWithRoot(paths.ConfigFile, paths.ConfigFile, tpl, 0644)
+		if wErr != nil {
+			return nil, wErr
+		}
+		recordConfigLine(res)
+		recordActions([]string{res})
 	}
 
 	if hasPrior && priorReceipt != nil && mode == "full" && !execInst.options.DryRun {
@@ -1287,6 +1383,7 @@ func (i *Installer) ExecutePlan(plan InstallPlan) (*InstallResult, error) {
 		Actions:      actions,
 		WrittenFiles: trackedList,
 		BackupID:     backupID,
+		ConfigAction: configAction,
 		Receipt:      receipt,
 	}, nil
 }

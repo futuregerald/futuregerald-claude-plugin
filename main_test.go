@@ -30,6 +30,9 @@ func resetGlobals() {
 	skipCommands = false
 	globalInstall = false
 	projectInstall = false
+	projectDirFlag = ""
+	configModeFlag = ""
+	mergeConfigFlag = false
 	installMode = ""
 	listLong = false
 	listCategory = ""
@@ -362,5 +365,75 @@ func TestUntrustedFromSourceAndRerunStatePreservation(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(projDir, ".claude", "skills", "test-driven-development", "SKILL.md")); !os.IsNotExist(err) {
 		t.Errorf("expected uninstall after non-force rerun to remove tracked skills, err=%v", err)
+	}
+}
+
+func TestProjectDirAndMergeConfigCLI(t *testing.T) {
+	resetGlobals()
+	defer resetGlobals()
+
+	tmpHome := t.TempDir()
+	t.Setenv("HOME", tmpHome)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpHome, ".xdg"))
+
+	otherDir := t.TempDir()
+	existingRules := "# Custom Project Rules\n\nKeep this section.\n"
+	if err := os.WriteFile(filepath.Join(otherDir, "CLAUDE.md"), []byte(existingRules), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	targetType = "claude"
+	trackName = "basics"
+	projectDirFlag = otherDir
+	mergeConfigFlag = true
+	nonInteract = true
+
+	if err := runInstall(nil, nil); err != nil {
+		t.Fatalf("runInstall with --project-dir and --merge-config failed: %v", err)
+	}
+
+	gotBytes, err := os.ReadFile(filepath.Join(otherDir, "CLAUDE.md"))
+	if err != nil {
+		t.Fatalf("reading merged CLAUDE.md in otherDir: %v", err)
+	}
+	got := string(gotBytes)
+	if !strings.Contains(got, "# Custom Project Rules") {
+		t.Errorf("expected existing custom rules preserved in %s/CLAUDE.md", otherDir)
+	}
+	if !strings.Contains(got, "<!-- BEGIN SKILL-INSTALLER WORKFLOW RULES -->") {
+		t.Errorf("expected managed workflow section in %s/CLAUDE.md", otherDir)
+	}
+	if _, err := os.Stat(filepath.Join(otherDir, ".claude", "skills", "test-driven-development", "SKILL.md")); err != nil {
+		t.Errorf("expected skills installed into %s: %v", otherDir, err)
+	}
+
+	resetGlobals()
+	targetType = "claude"
+	projectDirFlag = otherDir
+	nonInteract = true
+	if err := runUninstall(nil, nil); err != nil {
+		t.Fatalf("runUninstall with --project-dir failed: %v", err)
+	}
+	afterUninstall, err := os.ReadFile(filepath.Join(otherDir, "CLAUDE.md"))
+	if err != nil {
+		t.Fatalf("expected CLAUDE.md preserved on uninstall of merged config: %v", err)
+	}
+	if strings.Contains(string(afterUninstall), "<!-- BEGIN SKILL-INSTALLER WORKFLOW RULES -->") {
+		t.Errorf("expected managed section stripped on uninstall")
+	}
+	if !strings.Contains(string(afterUninstall), "# Custom Project Rules") {
+		t.Errorf("expected custom project rules preserved after uninstall")
+	}
+
+	symlinkDir := filepath.Join(t.TempDir(), "symlink-proj")
+	if err := os.Symlink(otherDir, symlinkDir); err == nil {
+		resetGlobals()
+		targetType = "claude"
+		trackName = "basics"
+		projectDirFlag = symlinkDir
+		nonInteract = true
+		if err := runInstall(nil, nil); err == nil {
+			t.Errorf("expected symlinked --project-dir to be rejected")
+		}
 	}
 }
