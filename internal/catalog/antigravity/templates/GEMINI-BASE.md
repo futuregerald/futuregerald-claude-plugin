@@ -12,6 +12,8 @@
 
 ## Delegating Work & Model Routing
 
+**Tell the user what you are doing before starting work:** Whenever the user asks or tells you to do anything, output a concise visible update on what you are about to do **before** making your first tool call—never begin with silent tool loops.
+
 **Filter bulky output at the shell, never into context.** `cmd > /tmp/out.log 2>&1; rc=$?; tail -20 /tmp/out.log; echo $rc` — capture the exit code **before** the pipe, because `cmd | tail` exits 0 when `cmd` failed. For a count use a counting primitive (`grep -c`), never a match list tallied by eye.
 
 **Triage before delegation (`Argon Medium` `1×` default + surgical `Carbon High` `2×` & `Opus 5.5 High` reviews):**
