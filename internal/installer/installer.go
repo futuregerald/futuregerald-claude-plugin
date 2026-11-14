@@ -14,20 +14,26 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/futuregerald/futuregerald-claude-plugin/internal/backup"
+	"github.com/futuregerald/futuregerald-claude-plugin/internal/catalog"
+	"github.com/futuregerald/futuregerald-claude-plugin/internal/platform"
+	"github.com/futuregerald/futuregerald-claude-plugin/internal/state"
 )
 
 const (
-	HarnessClaude      = "claude"
-	HarnessAntigravity = "antigravity"
-	HarnessGemini      = "gemini"
+	HarnessClaude      = catalog.HarnessClaude
+	HarnessAntigravity = catalog.HarnessAntigravity
+	HarnessZed         = catalog.HarnessZed
+	HarnessOpenCode    = catalog.HarnessOpenCode
 )
 
 func IsGeminiHarness(harness string) bool {
-	return harness == HarnessAntigravity || harness == HarnessGemini
+	return harness == HarnessAntigravity
 }
 
 func isAntigravityOnlySkill(skillName string) bool {
-	return skillName == "antigravity-orchestration" || skillName == "peer-pipeline-swarm"
+	return catalog.IsAntigravityOnlySkill(skillName)
 }
 
 func UnlinkIfSymlink(destPath string, dryRun bool) (bool, error) {
@@ -63,7 +69,11 @@ func shouldSkipSourcePath(relSlash string) bool {
 	if clean == "references/config.md" || strings.HasSuffix(clean, "/references/config.md") {
 		return true
 	}
-	if strings.HasPrefix(clean, "skills/codebase-memory-") || strings.HasPrefix(clean, "codebase-memory-") {
+	if strings.HasPrefix(clean, "shared/skills/codebase-memory-") || strings.HasPrefix(clean, "skills/codebase-memory-") || strings.HasPrefix(clean, "codebase-memory-") {
+		return true
+	}
+	base := path.Base(clean)
+	if (strings.HasPrefix(base, "test_") && strings.HasSuffix(lower, ".py")) || strings.HasSuffix(lower, "_test.py") {
 		return true
 	}
 	segments := strings.Split(clean, "/")
@@ -82,6 +92,14 @@ func isPreservedLocalFile(filePath string) bool {
 }
 
 func AdaptMarkdownForGemini(content []byte, harness string, isGlobal bool) []byte {
+	return AdaptMarkdownForHarness(content, harness, isGlobal)
+}
+
+func AdaptMarkdownForHarness(content []byte, harness string, isGlobal bool) []byte {
+	if harness == "" || harness == HarnessClaude {
+		return content
+	}
+
 	text := string(content)
 	text = stripFrontmatterModelAndEffort(text)
 
@@ -91,43 +109,63 @@ func AdaptMarkdownForGemini(content []byte, harness string, isGlobal bool) []byt
 	globalAgents := "~/.gemini/config/plugins/antigravity-subagents/agents"
 	globalAgentsHome := "$HOME/.gemini/config/plugins/antigravity-subagents/agents"
 	scopedAgents := ".agents/agents"
+	globalConfig := "~/.gemini/GEMINI.md"
+	globalConfigHome := "$HOME/.gemini/GEMINI.md"
+	scopedConfig := "GEMINI.md"
+	povDir := "~/.gemini/point-of-view"
+	povDirHome := "$HOME/.gemini/point-of-view"
 
-	if harness == HarnessGemini {
-		globalSkills = "~/.gemini/skills"
-		globalSkillsHome = "$HOME/.gemini/skills"
-		scopedSkills = ".gemini/skills"
-		globalAgents = "~/.gemini/agents"
-		globalAgentsHome = "$HOME/.gemini/agents"
-		scopedAgents = ".gemini/agents"
-	} else if isGlobal {
+	switch harness {
+	case HarnessZed:
+		globalSkills = "~/.agents/skills"
+		globalSkillsHome = "$HOME/.agents/skills"
+		scopedSkills = ".agents/skills"
+		globalAgents = "~/.agents/skills"
+		globalAgentsHome = "$HOME/.agents/skills"
+		scopedAgents = ".agents/skills"
+		globalConfig = "~/.config/zed/AGENTS.md"
+		globalConfigHome = "$HOME/.config/zed/AGENTS.md"
+		scopedConfig = "AGENTS.md"
+		povDir = "~/.agents/point-of-view"
+		povDirHome = "$HOME/.agents/point-of-view"
+	case HarnessOpenCode:
+		globalSkills = "~/.config/opencode/skills"
+		globalSkillsHome = "$HOME/.config/opencode/skills"
+		scopedSkills = ".opencode/skills"
+		globalAgents = "~/.config/opencode/agents"
+		globalAgentsHome = "$HOME/.config/opencode/agents"
+		scopedAgents = ".opencode/agents"
+		globalConfig = "~/.config/opencode/AGENTS.md"
+		globalConfigHome = "$HOME/.config/opencode/AGENTS.md"
+		scopedConfig = "AGENTS.md"
+		povDir = "~/.config/opencode/point-of-view"
+		povDirHome = "$HOME/.config/opencode/point-of-view"
+	}
+
+	if isGlobal {
 		scopedSkills = globalSkills
 		scopedAgents = globalAgents
 	}
 
-	if harness == HarnessGemini && isGlobal {
-		scopedSkills = globalSkills
-		scopedAgents = globalAgents
-	}
-
-	replacer := strings.NewReplacer(
-		"$HOME/.claude/point-of-view", "$HOME/.gemini/point-of-view",
-		"~/.claude/point-of-view", "~/.gemini/point-of-view",
+	pairs := []string{
+		"$HOME/.claude/point-of-view", povDirHome,
+		"~/.claude/point-of-view", povDir,
 		"$HOME/.claude/skills", globalSkillsHome,
 		"~/.claude/skills", globalSkills,
 		"$HOME/.claude/agents", globalAgentsHome,
 		"~/.claude/agents", globalAgents,
-		"$HOME/.claude/CLAUDE.md", "$HOME/.gemini/GEMINI.md",
-		"~/.claude/CLAUDE.md", "~/.gemini/GEMINI.md",
-		".claude/CLAUDE.md", "GEMINI.md",
+		"$HOME/.claude/CLAUDE.md", globalConfigHome,
+		"~/.claude/CLAUDE.md", globalConfig,
+		".claude/CLAUDE.md", scopedConfig,
 		".claude/skills", scopedSkills,
 		".claude/agents", scopedAgents,
-		"TaskCreate", "task.md",
-	)
-	text = replacer.Replace(text)
-
-	if harness == HarnessGemini {
-		text = adaptOverlayPathsForGeminiCLI(text)
 	}
+	if harness == HarnessAntigravity {
+		pairs = append(pairs, "TaskCreate", "task.md")
+	}
+
+	replacer := strings.NewReplacer(pairs...)
+	text = replacer.Replace(text)
 
 	lines := strings.Split(text, "\n")
 	inFrontmatter := false
@@ -145,23 +183,13 @@ func AdaptMarkdownForGemini(content []byte, harness string, isGlobal bool) []byt
 			}
 			continue
 		}
-		if strings.Contains(line, "GEMINI.md") {
+		if strings.Contains(line, scopedConfig) {
 			continue
 		}
-		lines[idx] = replaceStandaloneClaudeMD(line)
+		lines[idx] = replaceStandaloneClaudeMDWith(line, scopedConfig)
 	}
 
 	return []byte(strings.Join(lines, "\n"))
-}
-
-func adaptOverlayPathsForGeminiCLI(text string) string {
-	r := strings.NewReplacer(
-		"$HOME/.gemini/config/skills", "$HOME/.gemini/skills",
-		"~/.gemini/config/skills", "~/.gemini/skills",
-		"$HOME/.gemini/config/plugins/antigravity-subagents/agents", "$HOME/.gemini/agents",
-		"~/.gemini/config/plugins/antigravity-subagents/agents", "~/.gemini/agents",
-	)
-	return r.Replace(text)
 }
 
 func stripFrontmatterModelAndEffort(text string) string {
@@ -194,6 +222,10 @@ func isTokenBoundaryChar(b byte) bool {
 }
 
 func replaceStandaloneClaudeMD(line string) string {
+	return replaceStandaloneClaudeMDWith(line, "GEMINI.md")
+}
+
+func replaceStandaloneClaudeMDWith(line, replacement string) string {
 	const needle = "CLAUDE.md"
 	if !strings.Contains(line, needle) {
 		return line
@@ -212,7 +244,7 @@ func replaceStandaloneClaudeMD(line string) string {
 		validEnd := endPos == len(line) || !isTokenBoundaryChar(line[endPos])
 		if validStart && validEnd {
 			b.WriteString(line[i:absPos])
-			b.WriteString("GEMINI.md")
+			b.WriteString(replacement)
 			i = endPos
 		} else {
 			b.WriteString(line[i : absPos+len(needle)])
@@ -222,35 +254,29 @@ func replaceStandaloneClaudeMD(line string) string {
 	return b.String()
 }
 
-// Skill represents a skill definition parsed from frontmatter.
 type Skill struct {
 	Name        string
 	Description string
 	Model       string
 	Tags        []string
 	Languages   []string
-	DirPath     string // Directory path within embedded FS (e.g., "skills/systematic-debugging")
-	FilePath    string // SKILL.md path within embedded FS
-	Content     []byte // Content of SKILL.md
+	DirPath     string
+	FilePath    string
+	Content     []byte
 }
 
-// Options configures the installer behavior.
 type Options struct {
-	Force  bool // Overwrite existing files
-	DryRun bool // Don't actually write files
+	Force  bool
+	DryRun bool
 }
 
-// AgentNameFunc transforms an agent filename for the target framework.
-// Pass nil to keep original names.
 type AgentNameFunc func(originalName string) string
 
-// Installer handles installing skills, agents, and commands.
 type Installer struct {
 	fsys    fs.FS
 	options Options
 }
 
-// New creates a new Installer with the given filesystem and options.
 func New(fsys fs.FS, opts Options) *Installer {
 	return &Installer{
 		fsys:    fsys,
@@ -258,14 +284,25 @@ func New(fsys fs.FS, opts Options) *Installer {
 	}
 }
 
-// HasForce returns whether the installer has Force enabled.
 func (i *Installer) HasForce() bool {
 	return i.options.Force
 }
 
-// discoverSkills walks the skills/ directory finding directories that contain SKILL.md.
 func (i *Installer) discoverSkills() ([]Skill, error) {
+	if _, err := fs.Stat(i.fsys, "shared/skills"); err == nil {
+		return i.discoverSkillsInDir("shared/skills")
+	}
 	return i.discoverSkillsInDir("skills")
+}
+
+func trimSkillsPrefix(p string) string {
+	if strings.HasPrefix(p, "shared/skills/") {
+		return strings.TrimPrefix(p, "shared/skills/")
+	}
+	if strings.HasPrefix(p, "antigravity/skills/") {
+		return strings.TrimPrefix(p, "antigravity/skills/")
+	}
+	return strings.TrimPrefix(p, "skills/")
 }
 
 func (i *Installer) discoverSkillsInDir(rootDir string) ([]Skill, error) {
@@ -294,13 +331,10 @@ func (i *Installer) discoverSkillsInDir(rootDir string) ([]Skill, error) {
 	return skills, nil
 }
 
-// tryParseSkillDir attempts to parse a skill directory by reading SKILL.md.
 func (i *Installer) tryParseSkillDir(dirPath string) (Skill, bool) {
-	// Try SKILL.md (uppercase first)
 	skillMD := path.Join(dirPath, "SKILL.md")
 	content, err := fs.ReadFile(i.fsys, skillMD)
 	if err != nil {
-		// Try skill.md (lowercase fallback)
 		skillMD = path.Join(dirPath, "skill.md")
 		content, err = fs.ReadFile(i.fsys, skillMD)
 		if err != nil {
@@ -310,7 +344,6 @@ func (i *Installer) tryParseSkillDir(dirPath string) (Skill, bool) {
 
 	skill, err := parseSkill(content)
 	if err != nil {
-		// If frontmatter parse fails, use directory name as name
 		skill = Skill{
 			Name:    path.Base(dirPath),
 			Content: content,
@@ -326,7 +359,6 @@ func (i *Installer) tryParseSkillDir(dirPath string) (Skill, bool) {
 	return skill, true
 }
 
-// listDirFiles returns all file paths under a directory in the embedded FS.
 func (i *Installer) listDirFiles(dirPath string) ([]string, error) {
 	var files []string
 	err := fs.WalkDir(i.fsys, dirPath, func(p string, d fs.DirEntry, err error) error {
@@ -348,12 +380,15 @@ func (i *Installer) listDirFiles(dirPath string) ([]string, error) {
 	return files, err
 }
 
-// InstallSkills copies entire skill directories to destDir, optionally filtered by tags/languages.
 func (i *Installer) InstallSkills(destDir string, tags, languages []string) ([]string, error) {
 	return i.InstallSkillsForHarness(destDir, HarnessClaude, false, tags, languages)
 }
 
 func (i *Installer) InstallSkillsForHarness(destDir, harness string, isGlobal bool, tags, languages []string) ([]string, error) {
+	return i.InstallSelectedSkillsForHarness(destDir, harness, isGlobal, nil, tags, languages)
+}
+
+func (i *Installer) InstallSelectedSkillsForHarness(destDir, harness string, isGlobal bool, allowlist, tags, languages []string) ([]string, error) {
 	var results []string
 
 	unlinked, err := UnlinkIfSymlink(destDir, i.options.DryRun)
@@ -369,36 +404,9 @@ func (i *Installer) InstallSkillsForHarness(destDir, harness string, isGlobal bo
 		return nil, err
 	}
 
-	if !IsGeminiHarness(harness) {
-		for _, skill := range skills {
-			if len(tags) > 0 || len(languages) > 0 {
-				if !matchesFilter(skill, tags, languages) {
-					continue
-				}
-			}
-
-			files, err := i.listDirFiles(skill.DirPath)
-			if err != nil {
-				return nil, fmt.Errorf("listing files in %s: %w", skill.DirPath, err)
-			}
-
-			for _, file := range files {
-				relPath := strings.TrimPrefix(file, "skills/")
-				targetPath := filepath.Join(destDir, relPath)
-
-				fileContent, err := fs.ReadFile(i.fsys, file)
-				if err != nil {
-					return nil, fmt.Errorf("reading %s: %w", file, err)
-				}
-
-				result, err := i.writeFileWithRoot(destDir, targetPath, fileContent, 0644)
-				if err != nil {
-					return nil, err
-				}
-				results = append(results, result)
-			}
-		}
-		return results, nil
+	allowMap := make(map[string]bool, len(allowlist))
+	for _, s := range allowlist {
+		allowMap[s] = true
 	}
 
 	baseByDirName := make(map[string]Skill, len(skills))
@@ -415,32 +423,31 @@ func (i *Installer) InstallSkillsForHarness(destDir, harness string, isGlobal bo
 
 	overrideByDirName := make(map[string]Skill)
 	overrideFilesByRel := make(map[string]bool)
-	if _, statErr := fs.Stat(i.fsys, "antigravity/skills"); statErr == nil {
-		overSkills, overErr := i.discoverSkillsInDir("antigravity/skills")
-		if overErr == nil {
-			for _, override := range overSkills {
-				dirName := path.Base(override.DirPath)
-				if harness == HarnessGemini && isAntigravityOnlySkill(dirName) {
-					continue
-				}
-				if base, hasBase := baseByDirName[dirName]; hasBase {
-					if len(override.Tags) == 0 {
-						override.Tags = base.Tags
+	if harness == HarnessAntigravity {
+		if _, statErr := fs.Stat(i.fsys, "antigravity/skills"); statErr == nil {
+			overSkills, overErr := i.discoverSkillsInDir("antigravity/skills")
+			if overErr == nil {
+				for _, override := range overSkills {
+					dirName := path.Base(override.DirPath)
+					if base, hasBase := baseByDirName[dirName]; hasBase {
+						if len(override.Tags) == 0 {
+							override.Tags = base.Tags
+						}
+						if len(override.Languages) == 0 {
+							override.Languages = base.Languages
+						}
 					}
-					if len(override.Languages) == 0 {
-						override.Languages = base.Languages
+					overrideByDirName[dirName] = override
+					if !seenNames[dirName] {
+						seenNames[dirName] = true
+						orderedNames = append(orderedNames, dirName)
 					}
-				}
-				overrideByDirName[dirName] = override
-				if !seenNames[dirName] {
-					seenNames[dirName] = true
-					orderedNames = append(orderedNames, dirName)
-				}
-				oFiles, fErr := i.listDirFiles(override.DirPath)
-				if fErr == nil {
-					for _, of := range oFiles {
-						rel := strings.TrimPrefix(of, "antigravity/skills/")
-						overrideFilesByRel[rel] = true
+					oFiles, fErr := i.listDirFiles(override.DirPath)
+					if fErr == nil {
+						for _, of := range oFiles {
+							rel := strings.TrimPrefix(of, "antigravity/skills/")
+							overrideFilesByRel[rel] = true
+						}
 					}
 				}
 			}
@@ -448,9 +455,13 @@ func (i *Installer) InstallSkillsForHarness(destDir, harness string, isGlobal bo
 	}
 
 	for _, dirName := range orderedNames {
-		if harness == HarnessGemini && isAntigravityOnlySkill(dirName) {
+		if harness != HarnessAntigravity && isAntigravityOnlySkill(dirName) {
 			continue
 		}
+		if len(allowMap) > 0 && !allowMap[dirName] {
+			continue
+		}
+
 		baseSkill, hasBase := baseByDirName[dirName]
 		overSkill, hasOver := overrideByDirName[dirName]
 
@@ -470,18 +481,21 @@ func (i *Installer) InstallSkillsForHarness(destDir, harness string, isGlobal bo
 				return nil, fmt.Errorf("listing files in %s: %w", baseSkill.DirPath, err)
 			}
 			for _, file := range files {
-				relPath := strings.TrimPrefix(file, "skills/")
+				relPath := trimSkillsPrefix(file)
 				if overrideFilesByRel[relPath] {
 					continue
 				}
-				fileContent, err := fs.ReadFile(i.fsys, file)
-				if err != nil {
-					return nil, fmt.Errorf("reading %s: %w", file, err)
+				var fileContent []byte
+				if !i.options.DryRun {
+					fileContent, err = fs.ReadFile(i.fsys, file)
+					if err != nil {
+						return nil, fmt.Errorf("reading %s: %w", file, err)
+					}
+					if harness != HarnessClaude && strings.HasSuffix(strings.ToLower(relPath), ".md") {
+						fileContent = AdaptMarkdownForHarness(fileContent, harness, isGlobal)
+					}
 				}
-				if strings.HasSuffix(strings.ToLower(relPath), ".md") {
-					fileContent = AdaptMarkdownForGemini(fileContent, harness, isGlobal)
-				}
-				targetPath := filepath.Join(destDir, relPath)
+				targetPath := filepath.Join(destDir, filepath.FromSlash(relPath))
 				result, err := i.writeFileWithRoot(destDir, targetPath, fileContent, 0644)
 				if err != nil {
 					return nil, err
@@ -497,14 +511,14 @@ func (i *Installer) InstallSkillsForHarness(destDir, harness string, isGlobal bo
 			}
 			for _, file := range files {
 				relPath := strings.TrimPrefix(file, "antigravity/skills/")
-				fileContent, err := fs.ReadFile(i.fsys, file)
-				if err != nil {
-					return nil, fmt.Errorf("reading %s: %w", file, err)
+				var fileContent []byte
+				if !i.options.DryRun {
+					fileContent, err = fs.ReadFile(i.fsys, file)
+					if err != nil {
+						return nil, fmt.Errorf("reading %s: %w", file, err)
+					}
 				}
-				if harness == HarnessGemini && strings.HasSuffix(strings.ToLower(relPath), ".md") {
-					fileContent = []byte(adaptOverlayPathsForGeminiCLI(string(fileContent)))
-				}
-				targetPath := filepath.Join(destDir, relPath)
+				targetPath := filepath.Join(destDir, filepath.FromSlash(relPath))
 				result, err := i.writeFileWithRoot(destDir, targetPath, fileContent, 0644)
 				if err != nil {
 					return nil, err
@@ -517,13 +531,15 @@ func (i *Installer) InstallSkillsForHarness(destDir, harness string, isGlobal bo
 	return results, nil
 }
 
-// InstallAgents copies agent .md files to destDir with optional renaming.
 func (i *Installer) InstallAgents(destDir string, nameFunc AgentNameFunc) ([]string, error) {
 	return i.InstallAgentsForHarness(destDir, HarnessClaude, false, nameFunc)
 }
 
 func (i *Installer) InstallAgentsForHarness(destDir, harness string, isGlobal bool, nameFunc AgentNameFunc) ([]string, error) {
 	var results []string
+	if destDir == "" || harness == HarnessZed {
+		return results, nil
+	}
 
 	unlinked, err := UnlinkIfSymlink(destDir, i.options.DryRun)
 	if err != nil {
@@ -533,9 +549,16 @@ func (i *Installer) InstallAgentsForHarness(destDir, harness string, isGlobal bo
 		results = append(results, fmt.Sprintf("WOULD UNLINK SYMLINK: %s", destDir))
 	}
 
-	agentsDir := "agents"
-	if IsGeminiHarness(harness) {
+	agentsDir := "claude/agents"
+	if _, err := fs.Stat(i.fsys, agentsDir); err != nil {
+		agentsDir = "agents"
+	}
+	if harness == HarnessAntigravity {
 		agentsDir = "antigravity/plugins/antigravity-subagents/agents"
+	} else if harness == HarnessOpenCode {
+		if _, err := fs.Stat(i.fsys, "opencode/agents"); err == nil {
+			agentsDir = "opencode/agents"
+		}
 	}
 
 	entries, err := fs.ReadDir(i.fsys, agentsDir)
@@ -555,9 +578,6 @@ func (i *Installer) InstallAgentsForHarness(destDir, harness string, isGlobal bo
 		content, err := fs.ReadFile(i.fsys, srcPath)
 		if err != nil {
 			return nil, fmt.Errorf("reading agent %s: %w", entry.Name(), err)
-		}
-		if harness == HarnessGemini {
-			content = []byte(adaptOverlayPathsForGeminiCLI(string(content)))
 		}
 
 		destName := entry.Name()
@@ -589,36 +609,47 @@ func (i *Installer) InstallAgentsForHarness(destDir, harness string, isGlobal bo
 	return results, nil
 }
 
+type GlobalAssetOptions struct {
+	LightweightConfig bool
+	InstallHooks      bool
+	SkipConfigFile    bool
+	Env               platform.Env
+}
+
 func (i *Installer) InstallGlobalHarnessAssets(geminiHome, harness string) ([]string, error) {
-	if !IsGeminiHarness(harness) {
-		return nil, nil
+	res, _, _, err := i.InstallGlobalHarnessAssetsWithOptions(geminiHome, harness, GlobalAssetOptions{
+		InstallHooks: true,
+		Env:          platform.Env{GOOS: "darwin"},
+	})
+	return res, err
+}
+
+func (i *Installer) InstallGlobalHarnessAssetsWithOptions(geminiHome, harness string, opts GlobalAssetOptions) ([]string, bool, bool, error) {
+	if harness != HarnessAntigravity {
+		return nil, false, false, nil
 	}
 
 	var results []string
 	if info, err := os.Lstat(geminiHome); err == nil && info.Mode()&os.ModeSymlink != 0 {
-		return nil, fmt.Errorf("refusing to modify symlinked gemini home directory %s", geminiHome)
+		return nil, false, false, fmt.Errorf("refusing to modify symlinked gemini home directory %s", geminiHome)
 	}
 	configDir := filepath.Join(geminiHome, "config")
 	if info, err := os.Lstat(configDir); err == nil && info.Mode()&os.ModeSymlink != 0 {
-		return nil, fmt.Errorf("refusing to modify symlinked config directory %s", configDir)
+		return nil, false, false, fmt.Errorf("refusing to modify symlinked config directory %s", configDir)
 	}
 
-	if geminiMD, err := fs.ReadFile(i.fsys, "antigravity/GEMINI.md"); err == nil {
-		targetMD := filepath.Join(geminiHome, "GEMINI.md")
-		if harness == HarnessGemini {
-			if _, lstatErr := os.Lstat(targetMD); lstatErr == nil {
-				results = append(results, fmt.Sprintf("SKIP: %s (shared global GEMINI.md already exists)", targetMD))
-			} else {
-				res, err := i.writeFileWithRoot(targetMD, targetMD, geminiMD, 0644)
-				if err != nil {
-					return nil, err
-				}
-				results = append(results, res)
+	if !opts.SkipConfigFile {
+		geminiTemplate := "antigravity/GEMINI.md"
+		if opts.LightweightConfig {
+			if _, err := fs.Stat(i.fsys, "antigravity/GEMINI-LIGHT.md"); err == nil {
+				geminiTemplate = "antigravity/GEMINI-LIGHT.md"
 			}
-		} else {
+		}
+		if geminiMD, err := fs.ReadFile(i.fsys, geminiTemplate); err == nil {
+			targetMD := filepath.Join(geminiHome, "GEMINI.md")
 			res, err := i.writeFileWithRoot(targetMD, targetMD, geminiMD, 0644)
 			if err != nil {
-				return nil, err
+				return nil, false, false, err
 			}
 			results = append(results, res)
 		}
@@ -627,65 +658,97 @@ func (i *Installer) InstallGlobalHarnessAssets(geminiHome, harness string) ([]st
 	if orgEx, err := fs.ReadFile(i.fsys, "antigravity/rules/org.example.md"); err == nil {
 		rulesDir := filepath.Join(configDir, "rules")
 		if info, err := os.Lstat(rulesDir); err == nil && info.Mode()&os.ModeSymlink != 0 {
-			return nil, fmt.Errorf("refusing to modify symlinked rules directory %s", rulesDir)
+			return nil, false, false, fmt.Errorf("refusing to modify symlinked rules directory %s", rulesDir)
 		}
 		targetOrg := filepath.Join(rulesDir, "org.example.md")
 		res, err := i.writeFileWithRoot(targetOrg, targetOrg, orgEx, 0644)
 		if err != nil {
-			return nil, err
+			return nil, false, false, err
 		}
 		results = append(results, res)
 	}
 
-	if harness == HarnessAntigravity {
-		hooksDest := filepath.Join(configDir, "hooks")
-		unlinkedHooks, err := UnlinkIfSymlink(hooksDest, i.options.DryRun)
+	hooksDest := filepath.Join(configDir, "hooks")
+	hooksJSONDest := filepath.Join(configDir, "hooks.json")
+
+	if !opts.InstallHooks {
+		if !i.options.DryRun {
+			_, _ = state.RemoveCircuitBreakerHook(hooksJSONDest, hooksDest, false)
+		}
+		return results, false, false, nil
+	}
+
+	unlinkedHooks, err := UnlinkIfSymlink(hooksDest, i.options.DryRun)
+	if err != nil {
+		return nil, false, false, err
+	}
+	if unlinkedHooks && i.options.DryRun {
+		results = append(results, fmt.Sprintf("WOULD UNLINK SYMLINK: %s", hooksDest))
+	}
+
+	if _, err := fs.Stat(i.fsys, "antigravity/hooks"); err == nil {
+		hookFiles, err := i.listDirFiles("antigravity/hooks")
 		if err != nil {
-			return nil, err
+			return nil, false, false, fmt.Errorf("listing antigravity/hooks: %w", err)
 		}
-		if unlinkedHooks && i.options.DryRun {
-			results = append(results, fmt.Sprintf("WOULD UNLINK SYMLINK: %s", hooksDest))
-		}
-
-		if _, err := fs.Stat(i.fsys, "antigravity/hooks"); err == nil {
-			hookFiles, err := i.listDirFiles("antigravity/hooks")
-			if err != nil {
-				return nil, fmt.Errorf("listing antigravity/hooks: %w", err)
+		for _, hf := range hookFiles {
+			base := path.Base(hf)
+			if strings.HasPrefix(base, "test_") || strings.HasSuffix(base, "_test.py") {
+				continue
 			}
-			for _, hf := range hookFiles {
-				base := path.Base(hf)
-				if strings.HasPrefix(base, "test_") || strings.HasSuffix(base, "_test.py") {
-					continue
-				}
-				rel := strings.TrimPrefix(hf, "antigravity/hooks/")
-				data, err := fs.ReadFile(i.fsys, hf)
-				if err != nil {
-					return nil, fmt.Errorf("reading %s: %w", hf, err)
-				}
-				mode := os.FileMode(0644)
-				if strings.HasSuffix(base, ".sh") {
-					mode = 0755
-				}
-				targetPath := filepath.Join(hooksDest, rel)
-				res, err := i.writeFileWithRoot(hooksDest, targetPath, data, mode)
-				if err != nil {
-					return nil, err
-				}
-				results = append(results, res)
-			}
-		}
-
-		if hooksJSONBytes, err := fs.ReadFile(i.fsys, "antigravity/hooks.json"); err == nil {
-			hooksJSONDest := filepath.Join(configDir, "hooks.json")
-			res, err := i.mergeHooksJSON(hooksJSONDest, hooksJSONBytes)
+			rel := strings.TrimPrefix(hf, "antigravity/hooks/")
+			data, err := fs.ReadFile(i.fsys, hf)
 			if err != nil {
-				return nil, err
+				return nil, false, false, fmt.Errorf("reading %s: %w", hf, err)
+			}
+			mode := os.FileMode(0644)
+			if strings.HasSuffix(base, ".sh") {
+				mode = 0755
+			}
+			targetPath := filepath.Join(hooksDest, filepath.FromSlash(rel))
+			res, err := i.writeFileWithRoot(hooksDest, targetPath, data, mode)
+			if err != nil {
+				return nil, false, false, err
 			}
 			results = append(results, res)
 		}
 	}
 
-	return results, nil
+	hooksMerged := false
+	hooksCreated := false
+	if hooksJSONBytes, err := fs.ReadFile(i.fsys, "antigravity/hooks.json"); err == nil {
+		if opts.Env.GOOS == "windows" {
+			winCmd := platform.WindowsPythonHookCommand(geminiHome, nil)
+			hooksJSONBytes = rewriteHooksJSONCommand(hooksJSONBytes, winCmd)
+		}
+		existedBefore := fileExists(hooksJSONDest)
+		res, err := i.mergeHooksJSON(hooksJSONDest, hooksJSONBytes)
+		if err != nil {
+			return nil, false, false, err
+		}
+		results = append(results, res)
+		hooksMerged = true
+		hooksCreated = !existedBefore && strings.HasPrefix(res, "CREATED:")
+	}
+
+	return results, hooksMerged, hooksCreated, nil
+}
+
+func rewriteHooksJSONCommand(srcBytes []byte, newCommand string) []byte {
+	replaced := strings.ReplaceAll(
+		string(srcBytes),
+		`"bash ~/.gemini/config/hooks/autonomous-breaker.sh"`,
+		marshalJSONString(newCommand),
+	)
+	return []byte(replaced)
+}
+
+func marshalJSONString(s string) string {
+	b, err := json.Marshal(s)
+	if err != nil {
+		return `"` + s + `"`
+	}
+	return string(b)
 }
 
 func (i *Installer) mergeHooksJSON(hooksJSONPath string, srcBytes []byte) (string, error) {
@@ -764,14 +827,15 @@ func (i *Installer) mergeHooksJSON(hooksJSONPath string, srcBytes []byte) (strin
 	return fmt.Sprintf("UPDATED: %s", hooksJSONPath), nil
 }
 
-// CopilotAgentName converts "debugger.md" to "debugger.agent.md".
-func CopilotAgentName(name string) string {
-	return strings.TrimSuffix(name, ".md") + ".agent.md"
+func (i *Installer) InstallCommands(destDir string) ([]string, error) {
+	return i.InstallCommandsForHarness(destDir, HarnessClaude, nil)
 }
 
-// InstallCommands copies command directories to destDir.
-func (i *Installer) InstallCommands(destDir string) ([]string, error) {
+func (i *Installer) InstallCommandsForHarness(destDir, harness string, allowedRelPaths []string) ([]string, error) {
 	var results []string
+	if destDir == "" || (harness != HarnessClaude && harness != HarnessOpenCode) {
+		return results, nil
+	}
 
 	unlinked, err := UnlinkIfSymlink(destDir, i.options.DryRun)
 	if err != nil {
@@ -781,14 +845,26 @@ func (i *Installer) InstallCommands(destDir string) ([]string, error) {
 		results = append(results, fmt.Sprintf("WOULD UNLINK SYMLINK: %s", destDir))
 	}
 
-	files, err := i.listDirFiles("commands")
+	commandsRoot := path.Join(harness, "commands")
+	if _, err := fs.Stat(i.fsys, commandsRoot); err != nil {
+		commandsRoot = "commands"
+	}
+	files, err := i.listDirFiles(commandsRoot)
 	if err != nil {
-		return results, nil // No commands directory is not an error
+		return results, nil
+	}
+
+	allowSet := make(map[string]bool, len(allowedRelPaths))
+	for _, rel := range allowedRelPaths {
+		allowSet[rel] = true
 	}
 
 	for _, file := range files {
-		relPath := strings.TrimPrefix(file, "commands/")
-		targetPath := filepath.Join(destDir, relPath)
+		relPath := strings.TrimPrefix(file, commandsRoot+"/")
+		if len(allowSet) > 0 && !allowSet[relPath] {
+			continue
+		}
+		targetPath := filepath.Join(destDir, filepath.FromSlash(relPath))
 
 		content, err := fs.ReadFile(i.fsys, file)
 		if err != nil {
@@ -805,12 +881,420 @@ func (i *Installer) InstallCommands(destDir string) ([]string, error) {
 	return results, nil
 }
 
-// ListSkills returns metadata about all discovered skills.
+type InstallPlan struct {
+	Env                   platform.Env
+	Catalog               *catalog.Catalog
+	Harness               string
+	Scope                 string
+	ProjectDir            string
+	TrackID               string
+	CustomSkills          []string
+	Tags                  []string
+	Languages             []string
+	Mode                  string
+	SkipConfig            bool
+	SkipAgents            bool
+	SkipCommands          bool
+	Backup                bool
+	Force                 bool
+	ForceAgents           bool
+	ForceConfig           bool
+	DryRun                bool
+	Version               string
+	CommitSHA             string
+	ProjectConfigRenderer func(baseTemplate []byte, harness string, projectDir string) []byte
+}
+
+type InstallResult struct {
+	Harness      string
+	Scope        string
+	TrackID      string
+	Paths        platform.HarnessPaths
+	Skills       []string
+	Actions      []string
+	WrittenFiles []string
+	BackupID     string
+	Receipt      state.Receipt
+}
+
+func extractWrittenPath(action string) (string, bool) {
+	for _, prefix := range []string{"CREATED: ", "UPDATED: "} {
+		if strings.HasPrefix(action, prefix) {
+			return strings.TrimSpace(strings.TrimPrefix(action, prefix)), true
+		}
+	}
+	return "", false
+}
+
+func (i *Installer) ExecutePlan(plan InstallPlan) (*InstallResult, error) {
+	cat := plan.Catalog
+	if cat == nil {
+		loaded, err := catalog.Load(i.fsys)
+		if err != nil {
+			return nil, err
+		}
+		cat = loaded
+	}
+
+	scope := plan.Scope
+	if scope == "" {
+		scope = "project"
+	}
+	projDir := plan.ProjectDir
+	if projDir == "" {
+		projDir = "."
+	}
+
+	paths, err := plan.Env.ResolvePaths(plan.Harness, scope, projDir)
+	if err != nil {
+		return nil, err
+	}
+
+	trackID := plan.TrackID
+	if trackID == "" {
+		trackID = "opinionated"
+	}
+	track, hasTrack := cat.TrackByID(trackID)
+	if !hasTrack {
+		return nil, fmt.Errorf("unknown track %q", trackID)
+	}
+
+	var selectedSkills []string
+	hasTagOrLangFilter := false
+	if len(plan.CustomSkills) > 0 || trackID == "custom" {
+		selectedSkills = []string{}
+		hasTagOrLangFilter = len(plan.CustomSkills) == 0 && (len(plan.Tags) > 0 || len(plan.Languages) > 0)
+		seen := make(map[string]bool)
+		for _, s := range plan.CustomSkills {
+			s = strings.TrimSpace(s)
+			if s == "" {
+				continue
+			}
+			if strings.ContainsAny(s, "/\\") || s == "." || s == ".." {
+				continue
+			}
+			if isAntigravityOnlySkill(s) && plan.Harness != HarnessAntigravity {
+				continue
+			}
+			_, inCatalog := cat.SkillMeta(s)
+			_, inShared := fs.Stat(i.fsys, path.Join("shared/skills", s, "SKILL.md"))
+			_, inAgy := fs.Stat(i.fsys, path.Join("antigravity/skills", s, "SKILL.md"))
+			if !inCatalog && inShared != nil && (plan.Harness != HarnessAntigravity || inAgy != nil) {
+				continue
+			}
+			if !seen[s] {
+				seen[s] = true
+				selectedSkills = append(selectedSkills, s)
+			}
+		}
+	} else {
+		selectedSkills, err = cat.TrackSkills(trackID, plan.Harness)
+		if err != nil {
+			return nil, err
+		}
+	}
+	shouldInstallSkills := len(selectedSkills) > 0 || hasTagOrLangFilter
+
+	mode := plan.Mode
+	if mode == "" {
+		mode = "full"
+	}
+
+	store := state.NewStore(plan.Env.StateFilePath())
+	priorReceipt, hasPrior, _ := store.Find(plan.Harness, scope, paths.RootDir)
+	if !hasPrior {
+		if leg, ok := state.DiscoverLegacyReceipt(plan.Env, cat, plan.Harness, scope, projDir); ok {
+			priorReceipt = leg
+			hasPrior = true
+		}
+	}
+
+	dryInst := New(i.fsys, Options{Force: true, DryRun: true})
+	execInst := New(i.fsys, Options{Force: i.options.Force || plan.Force, DryRun: i.options.DryRun || plan.DryRun})
+	var candidateTargets []string
+	plannedSet := make(map[string]bool)
+	addPlanned := func(p string) {
+		clean := filepath.Clean(strings.TrimSpace(p))
+		if clean != "" {
+			plannedSet[clean] = true
+			candidateTargets = append(candidateTargets, clean)
+		}
+	}
+	if hasPrior && priorReceipt != nil {
+		candidateTargets = append(candidateTargets, priorReceipt.InstalledFiles...)
+	}
+	if (mode == "config-only" || (mode == "full" && !plan.SkipConfig)) && paths.ConfigFile != "" {
+		addPlanned(paths.ConfigFile)
+	}
+	if paths.HooksJSON != "" {
+		candidateTargets = append(candidateTargets, paths.HooksJSON)
+	}
+	if mode == "full" && paths.SkillsDir != "" && shouldInstallSkills {
+		if sim, sErr := dryInst.InstallSelectedSkillsForHarness(paths.SkillsDir, plan.Harness, scope == "global", selectedSkills, plan.Tags, plan.Languages); sErr == nil {
+			for _, line := range sim {
+				for _, pfx := range []string{"WOULD CREATE: ", "WOULD OVERWRITE: "} {
+					if strings.HasPrefix(line, pfx) {
+						addPlanned(strings.TrimPrefix(line, pfx))
+					}
+				}
+			}
+		}
+	}
+	if (mode == "agents-only" || (mode == "full" && track.InstallAgents && !plan.SkipAgents)) && paths.AgentsDir != "" {
+		if sim, aErr := dryInst.InstallAgentsForHarness(paths.AgentsDir, plan.Harness, scope == "global", nil); aErr == nil {
+			for _, line := range sim {
+				for _, pfx := range []string{"WOULD CREATE: ", "WOULD OVERWRITE: "} {
+					if strings.HasPrefix(line, pfx) {
+						addPlanned(strings.TrimPrefix(line, pfx))
+					}
+				}
+			}
+		}
+	}
+	if mode == "full" && !plan.SkipCommands && paths.CommandsDir != "" {
+		allowedCmds := cat.CommandsForSkills(plan.Harness, selectedSkills)
+		if sim, cErr := dryInst.InstallCommandsForHarness(paths.CommandsDir, plan.Harness, allowedCmds); cErr == nil {
+			for _, line := range sim {
+				for _, pfx := range []string{"WOULD CREATE: ", "WOULD OVERWRITE: "} {
+					if strings.HasPrefix(line, pfx) {
+						addPlanned(strings.TrimPrefix(line, pfx))
+					}
+				}
+			}
+		}
+	}
+	if scope == "global" && plan.Harness == HarnessAntigravity && (mode == "full" || (mode == "config-only" && !plan.SkipConfig)) {
+		if sim, _, _, gErr := dryInst.InstallGlobalHarnessAssetsWithOptions(paths.GeminiHome, plan.Harness, GlobalAssetOptions{
+			LightweightConfig: track.LightweightConfig,
+			InstallHooks:      track.InstallHooks,
+			SkipConfigFile:    plan.SkipConfig,
+			Env:               plan.Env,
+		}); gErr == nil {
+			for _, line := range sim {
+				for _, pfx := range []string{"WOULD CREATE: ", "WOULD OVERWRITE: "} {
+					if strings.HasPrefix(line, pfx) {
+						addPlanned(strings.TrimPrefix(line, pfx))
+					}
+				}
+			}
+		}
+	}
+
+	var backupID string
+	if plan.Backup && !execInst.options.DryRun {
+		mgr := backup.NewManager(plan.Env.BackupsDir())
+		mf, bErr := mgr.CreateSnapshotWithRoot(plan.Harness, scope, paths.RootDir, trackID, candidateTargets, plan.Env.StateFilePath())
+		if bErr != nil {
+			return nil, fmt.Errorf("creating safety backup: %w", bErr)
+		}
+		backupID = mf.ID
+	}
+
+	var actions []string
+	var writtenFiles []string
+	recordActions := func(lines []string) {
+		for _, l := range lines {
+			actions = append(actions, l)
+			if p, ok := extractWrittenPath(l); ok {
+				writtenFiles = append(writtenFiles, filepath.Clean(p))
+			}
+		}
+	}
+
+	if mode == "full" && paths.SkillsDir != "" && shouldInstallSkills {
+		res, sErr := execInst.InstallSelectedSkillsForHarness(paths.SkillsDir, plan.Harness, scope == "global", selectedSkills, plan.Tags, plan.Languages)
+		if sErr != nil {
+			return nil, sErr
+		}
+		recordActions(res)
+	}
+
+	if (mode == "agents-only" || (mode == "full" && track.InstallAgents && !plan.SkipAgents)) && paths.AgentsDir != "" {
+		agentInst := execInst
+		if plan.ForceAgents && !execInst.options.Force {
+			agentInst = New(i.fsys, Options{Force: true, DryRun: execInst.options.DryRun})
+		}
+		res, aErr := agentInst.InstallAgentsForHarness(paths.AgentsDir, plan.Harness, scope == "global", nil)
+		if aErr != nil {
+			return nil, aErr
+		}
+		recordActions(res)
+	}
+
+	if mode == "full" && !plan.SkipCommands && paths.CommandsDir != "" {
+		allowedCmds := cat.CommandsForSkills(plan.Harness, selectedSkills)
+		res, cErr := execInst.InstallCommandsForHarness(paths.CommandsDir, plan.Harness, allowedCmds)
+		if cErr != nil {
+			return nil, cErr
+		}
+		recordActions(res)
+	}
+
+	hooksMerged := false
+	hooksCreated := false
+	if scope == "global" && plan.Harness == HarnessAntigravity && (mode == "full" || (mode == "config-only" && !plan.SkipConfig)) {
+		cfgInst := execInst
+		if plan.ForceConfig && !execInst.options.Force {
+			cfgInst = New(i.fsys, Options{Force: true, DryRun: execInst.options.DryRun})
+		}
+		res, hm, hc, gErr := cfgInst.InstallGlobalHarnessAssetsWithOptions(paths.GeminiHome, plan.Harness, GlobalAssetOptions{
+			LightweightConfig: track.LightweightConfig,
+			InstallHooks:      track.InstallHooks,
+			SkipConfigFile:    plan.SkipConfig,
+			Env:               plan.Env,
+		})
+		if gErr != nil {
+			return nil, gErr
+		}
+		recordActions(res)
+		hooksMerged = hm
+		hooksCreated = hc
+	} else if (mode == "config-only" || (mode == "full" && !plan.SkipConfig)) && paths.ConfigFile != "" {
+		cfgInst := execInst
+		if plan.ForceConfig && !execInst.options.Force {
+			cfgInst = New(i.fsys, Options{Force: true, DryRun: execInst.options.DryRun})
+		}
+		if scope == "global" {
+			tpl, tErr := cat.GlobalConfigTemplate(plan.Harness, track.LightweightConfig)
+			if tErr != nil {
+				return nil, tErr
+			}
+			res, wErr := cfgInst.writeFileWithRoot(paths.ConfigFile, paths.ConfigFile, tpl, 0644)
+			if wErr != nil {
+				return nil, wErr
+			}
+			recordActions([]string{res})
+		} else {
+			tpl, tErr := cat.ProjectConfigTemplate(plan.Harness)
+			if tErr != nil {
+				return nil, tErr
+			}
+			if plan.ProjectConfigRenderer != nil {
+				tpl = plan.ProjectConfigRenderer(tpl, plan.Harness, projDir)
+			}
+			res, wErr := cfgInst.writeFileWithRoot(paths.ConfigFile, paths.ConfigFile, tpl, 0644)
+			if wErr != nil {
+				return nil, wErr
+			}
+			recordActions([]string{res})
+		}
+	}
+
+	if hasPrior && priorReceipt != nil && mode == "full" && !execInst.options.DryRun {
+		cleanHooksJSON := ""
+		if paths.HooksJSON != "" {
+			cleanHooksJSON = filepath.Clean(paths.HooksJSON)
+		}
+		cleanConfig := ""
+		if paths.ConfigFile != "" {
+			cleanConfig = filepath.Clean(paths.ConfigFile)
+		}
+		cleanAgentsPrefix := ""
+		if paths.AgentsDir != "" {
+			cleanAgentsPrefix = filepath.Clean(paths.AgentsDir) + string(os.PathSeparator)
+		}
+		cleanCommandsPrefix := ""
+		if paths.CommandsDir != "" {
+			cleanCommandsPrefix = filepath.Clean(paths.CommandsDir) + string(os.PathSeparator)
+		}
+		for _, oldFile := range priorReceipt.InstalledFiles {
+			cleanOld := filepath.Clean(oldFile)
+			if plannedSet[cleanOld] || isPreservedLocalFile(cleanOld) {
+				continue
+			}
+			if cleanOld == cleanHooksJSON || cleanOld == cleanConfig {
+				continue
+			}
+			if plan.SkipAgents && cleanAgentsPrefix != "" && strings.HasPrefix(cleanOld, cleanAgentsPrefix) {
+				continue
+			}
+			if plan.SkipCommands && cleanCommandsPrefix != "" && strings.HasPrefix(cleanOld, cleanCommandsPrefix) {
+				continue
+			}
+			if err := backup.RejectSymlinkInChain(cleanOld); err != nil {
+				continue
+			}
+			if _, err := os.Lstat(cleanOld); err == nil {
+				if err := os.Remove(cleanOld); err == nil {
+					actions = append(actions, fmt.Sprintf("REMOVED: %s", cleanOld))
+					backup.PruneEmptyParents(filepath.Dir(cleanOld), 3)
+				}
+			}
+		}
+	}
+
+	allTracked := make(map[string]bool)
+	for _, wf := range writtenFiles {
+		if paths.HooksJSON != "" && filepath.Clean(wf) == filepath.Clean(paths.HooksJSON) {
+			continue
+		}
+		allTracked[filepath.Clean(wf)] = true
+	}
+	if hasPrior && priorReceipt != nil {
+		for _, of := range priorReceipt.InstalledFiles {
+			cleanOld := filepath.Clean(of)
+			if paths.HooksJSON != "" && cleanOld == filepath.Clean(paths.HooksJSON) {
+				continue
+			}
+			if _, err := os.Lstat(cleanOld); err == nil {
+				allTracked[cleanOld] = true
+			}
+		}
+	}
+
+	var trackedList []string
+	for f := range allTracked {
+		trackedList = append(trackedList, f)
+	}
+	sort.Strings(trackedList)
+
+	receipt := state.Receipt{
+		ID:               state.ReceiptKey(plan.Harness, scope, paths.RootDir),
+		Harness:          plan.Harness,
+		Scope:            scope,
+		RootDir:          filepath.Clean(paths.RootDir),
+		Track:            trackID,
+		Skills:           selectedSkills,
+		InstalledFiles:   trackedList,
+		HooksMerged:      hooksMerged,
+		HooksFileCreated: hooksCreated,
+		Version:          plan.Version,
+		CommitSHA:        plan.CommitSHA,
+		LastBackupID:     backupID,
+	}
+	if hasPrior && priorReceipt != nil {
+		if backupID == "" {
+			receipt.LastBackupID = priorReceipt.LastBackupID
+		}
+		if receipt.CommitSHA == "" {
+			receipt.CommitSHA = priorReceipt.CommitSHA
+		}
+		if priorReceipt.HooksFileCreated && hooksMerged {
+			receipt.HooksFileCreated = true
+		}
+	}
+
+	if !execInst.options.DryRun {
+		_ = store.Upsert(receipt)
+	}
+
+	return &InstallResult{
+		Harness:      plan.Harness,
+		Scope:        scope,
+		TrackID:      trackID,
+		Paths:        paths,
+		Skills:       selectedSkills,
+		Actions:      actions,
+		WrittenFiles: trackedList,
+		BackupID:     backupID,
+		Receipt:      receipt,
+	}, nil
+}
+
 func (i *Installer) ListSkills() ([]Skill, error) {
 	return i.discoverSkills()
 }
 
-// ListAllSkills is an alias for ListSkills (kept for backward compat).
 func (i *Installer) ListAllSkills() ([]Skill, error) {
 	return i.discoverSkills()
 }
@@ -820,8 +1304,15 @@ func (i *Installer) ListSkillsForHarness(harness string) ([]Skill, error) {
 	if err != nil {
 		return nil, err
 	}
-	if !IsGeminiHarness(harness) {
-		return baseSkills, nil
+	if harness != HarnessAntigravity {
+		var filtered []Skill
+		for _, s := range baseSkills {
+			if isAntigravityOnlySkill(s.Name) {
+				continue
+			}
+			filtered = append(filtered, s)
+		}
+		return filtered, nil
 	}
 
 	byDir := make(map[string]Skill, len(baseSkills))
@@ -837,9 +1328,6 @@ func (i *Installer) ListSkillsForHarness(harness string) ([]Skill, error) {
 		if overErr == nil {
 			for _, override := range overSkills {
 				d := path.Base(override.DirPath)
-				if harness == HarnessGemini && isAntigravityOnlySkill(d) {
-					continue
-				}
 				if base, hasBase := byDir[d]; hasBase {
 					if len(override.Tags) == 0 {
 						override.Tags = base.Tags
@@ -858,15 +1346,11 @@ func (i *Installer) ListSkillsForHarness(harness string) ([]Skill, error) {
 	sort.Strings(order)
 	var merged []Skill
 	for _, d := range order {
-		if harness == HarnessGemini && isAntigravityOnlySkill(d) {
-			continue
-		}
 		merged = append(merged, byDir[d])
 	}
 	return merged, nil
 }
 
-// InstallFromLocal installs skills from a local directory (copies all files preserving structure).
 func (i *Installer) InstallFromLocal(srcDir, destDir string) ([]string, error) {
 	var results []string
 
@@ -914,7 +1398,6 @@ func (i *Installer) InstallFromLocal(srcDir, destDir string) ([]string, error) {
 	return results, err
 }
 
-// InstallFromGit clones a git repo and installs skills from it.
 func (i *Installer) InstallFromGit(repoURL, destDir string) ([]string, error) {
 	tmpDir, err := os.MkdirTemp("", "skill-installer-*")
 	if err != nil {
@@ -935,7 +1418,6 @@ func (i *Installer) InstallFromGit(repoURL, destDir string) ([]string, error) {
 	return i.InstallFromLocal(skillsDir, destDir)
 }
 
-// InstallFromURL downloads and extracts a tarball of skills.
 func (i *Installer) InstallFromURL(url, destDir string) ([]string, error) {
 	resp, err := http.Get(url)
 	if err != nil {
@@ -961,12 +1443,18 @@ func (i *Installer) InstallFromURL(url, destDir string) ([]string, error) {
 }
 
 func extractTarGz(r io.Reader, destDir string) error {
+	const (
+		maxFileBytes  = 10 * 1024 * 1024
+		maxTotalBytes = 100 * 1024 * 1024
+	)
 	gzr, err := gzip.NewReader(r)
 	if err != nil {
 		return err
 	}
 	defer gzr.Close()
 
+	cleanDest := filepath.Clean(destDir)
+	var totalBytes int64
 	tr := tar.NewReader(gzr)
 	for {
 		header, err := tr.Next()
@@ -976,32 +1464,64 @@ func extractTarGz(r io.Reader, destDir string) error {
 		if err != nil {
 			return err
 		}
+		if header.Typeflag == tar.TypeXGlobalHeader || header.Typeflag == tar.TypeXHeader || header.Name == "pax_global_header" {
+			continue
+		}
 
-		target := filepath.Join(destDir, header.Name)
-
-		// Prevent zip-slip: ensure target stays within destDir
-		if !strings.HasPrefix(filepath.Clean(target), filepath.Clean(destDir)+string(os.PathSeparator)) {
+		target := filepath.Join(cleanDest, header.Name)
+		cleanTarget := filepath.Clean(target)
+		if !strings.HasPrefix(cleanTarget, cleanDest+string(os.PathSeparator)) {
 			return fmt.Errorf("illegal path in archive: %s", header.Name)
 		}
 
 		switch header.Typeflag {
 		case tar.TypeDir:
-			if err := os.MkdirAll(target, 0755); err != nil {
+			if err := backup.RejectSymlinkInChain(cleanTarget); err != nil {
 				return err
 			}
-		case tar.TypeReg:
-			if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+			if err := os.MkdirAll(cleanTarget, 0755); err != nil {
 				return err
 			}
-			f, err := os.OpenFile(target, os.O_CREATE|os.O_RDWR, os.FileMode(header.Mode))
+		case tar.TypeReg, tar.TypeRegA:
+			if header.Size > maxFileBytes {
+				return fmt.Errorf("archive entry %s exceeds 10 MiB limit (%d bytes)", header.Name, header.Size)
+			}
+			if err := backup.RejectSymlinkInChain(cleanTarget); err != nil {
+				return err
+			}
+			if info, lErr := os.Lstat(cleanTarget); lErr == nil && info.Mode()&os.ModeSymlink != 0 {
+				if err := os.Remove(cleanTarget); err != nil {
+					return err
+				}
+			}
+			if err := os.MkdirAll(filepath.Dir(cleanTarget), 0755); err != nil {
+				return err
+			}
+			mode := os.FileMode(0644)
+			if header.Mode&0111 != 0 {
+				mode = 0755
+			}
+			f, err := os.OpenFile(cleanTarget, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode)
 			if err != nil {
 				return err
 			}
-			if _, err := io.Copy(f, tr); err != nil {
-				f.Close()
-				return err
+			n, copyErr := io.Copy(f, io.LimitReader(tr, maxFileBytes+1))
+			closeErr := f.Close()
+			if copyErr != nil {
+				return copyErr
 			}
-			f.Close()
+			if closeErr != nil {
+				return closeErr
+			}
+			if n > maxFileBytes {
+				return fmt.Errorf("archive entry %s exceeds 10 MiB limit", header.Name)
+			}
+			totalBytes += n
+			if totalBytes > maxTotalBytes {
+				return fmt.Errorf("archive total extracted size exceeds 100 MiB limit")
+			}
+		default:
+			return fmt.Errorf("unsupported tar entry type %d for %s", header.Typeflag, header.Name)
 		}
 	}
 	return nil
@@ -1108,7 +1628,6 @@ func fileExists(filePath string) bool {
 	return err == nil && !info.IsDir()
 }
 
-// parseSkill extracts skill metadata from frontmatter.
 func parseSkill(content []byte) (Skill, error) {
 	lines := strings.Split(string(content), "\n")
 
@@ -1161,7 +1680,6 @@ func parseSkill(content []byte) (Skill, error) {
 		} else if strings.HasPrefix(trimmed, "languages:") {
 			skill.Languages = parseYAMLList(strings.TrimPrefix(trimmed, "languages:"))
 		}
-		// Ignore unknown fields (allowed-tools, argument-hint, etc.)
 	}
 	if inDescriptionBlock {
 		skill.Description = strings.Join(descParts, " ")
@@ -1173,7 +1691,6 @@ func parseSkill(content []byte) (Skill, error) {
 	return skill, nil
 }
 
-// parseYAMLList parses a simple YAML list like [a, b, c].
 func parseYAMLList(s string) []string {
 	s = strings.TrimSpace(s)
 	if s == "" {
@@ -1247,7 +1764,6 @@ func contains(slice []string, item string) bool {
 	return false
 }
 
-// titleCase capitalizes the first letter of a string.
 func titleCase(s string) string {
 	if s == "" {
 		return s
@@ -1261,7 +1777,6 @@ func titleCase(s string) string {
 	return strings.Join(words, " ")
 }
 
-// GenerateSkillTemplate creates a new skill file with proper frontmatter.
 func GenerateSkillTemplate(name, description, model string, tags, languages []string) string {
 	tagsStr := "[" + strings.Join(tags, ", ") + "]"
 	langsStr := "[" + strings.Join(languages, ", ") + "]"

@@ -5,8 +5,8 @@ import (
 	"archive/zip"
 	"bufio"
 	"compress/gzip"
+	"context"
 	"crypto/sha256"
-	"embed"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -16,14 +16,20 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
-	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/futuregerald/futuregerald-claude-plugin/internal/backup"
+	"github.com/futuregerald/futuregerald-claude-plugin/internal/catalog"
 	"github.com/futuregerald/futuregerald-claude-plugin/internal/config"
 	"github.com/futuregerald/futuregerald-claude-plugin/internal/installer"
+	"github.com/futuregerald/futuregerald-claude-plugin/internal/platform"
+	"github.com/futuregerald/futuregerald-claude-plugin/internal/state"
+	"github.com/futuregerald/futuregerald-claude-plugin/internal/tui"
+	"github.com/futuregerald/futuregerald-claude-plugin/internal/updater"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 const (
@@ -38,27 +44,42 @@ const (
 	cbMemBinName = "codebase-memory-mcp"
 )
 
-//go:embed all:skills all:agents all:templates all:commands all:antigravity
-var content embed.FS
+var content fs.FS = catalog.FS
 
 var (
-	version       = "3.6.0"
-	force         bool
-	dryRun        bool
-	nonInteract   bool
-	targetType    string
-	skipClaude    bool
-	tags          []string
-	languages     []string
-	fromSource    string
-	configFile    string
-	skipAgents    bool
-	skipCommands  bool
-	globalInstall bool
-	installMode   string
+	version        = "4.0.0"
+	force          bool
+	dryRun         bool
+	nonInteract    bool
+	targetType     string
+	trackName      string
+	selectedSkills []string
+	backupFlag     = true
+	noBackupFlag   bool
+	backupExplicit bool
+	skipClaude     bool
+	tags           []string
+	languages      []string
+	fromSource     string
+	configFile     string
+	skipAgents     bool
+	skipCommands   bool
+	globalInstall  bool
+	projectInstall bool
+	installMode    string
+	listLong       bool
+	listCategory   string
+	updateCheck    bool
+	updateApply    bool
+	updateSelf     bool
+	updateJSON     bool
+	restoreID      string
+	restoreFile    string
+	restoreConfig  bool
+	initOutput     string
+	updateRunner   updater.Runner
 )
 
-// Target represents an installation target (IDE/tool).
 type Target struct {
 	Name             string
 	Harness          string
@@ -70,149 +91,127 @@ type Target struct {
 	GlobalAgentsPath string
 }
 
-func homeDir() string {
-	h, err := os.UserHomeDir()
-	if err != nil {
-		return ""
-	}
-	return h
-}
-
-func resolveGlobalSkillsPath(t Target) string {
-	switch t.Harness {
-	case installer.HarnessAntigravity:
-		return filepath.Join(homeDir(), ".gemini", "config", "skills")
-	case installer.HarnessGemini:
-		return filepath.Join(homeDir(), ".gemini", "skills")
-	case installer.HarnessClaude:
-		return filepath.Join(homeDir(), ".claude", "skills")
-	default:
-		if t.Name == "GitHub Copilot" {
-			return filepath.Join(homeDir(), ".copilot", "skills")
-		}
-		return t.GlobalSkillsPath
-	}
-}
-
-func resolveGlobalAgentsPath(t Target) string {
-	switch t.Harness {
-	case installer.HarnessAntigravity:
-		return filepath.Join(homeDir(), ".gemini", "config", "plugins", "antigravity-subagents", "agents")
-	case installer.HarnessGemini:
-		return filepath.Join(homeDir(), ".gemini", "agents")
-	case installer.HarnessClaude:
-		return filepath.Join(homeDir(), ".claude", "agents")
-	default:
-		return t.GlobalAgentsPath
-	}
+var targetOrder = []string{
+	installer.HarnessClaude,
+	installer.HarnessAntigravity,
+	installer.HarnessZed,
+	installer.HarnessOpenCode,
 }
 
 var targets = map[string]Target{
-	"claude": {
-		Name:             "Claude Code",
-		Harness:          installer.HarnessClaude,
-		SkillsPath:       ".claude/skills",
-		AgentsPath:       ".claude/agents",
-		CommandsPath:     ".claude/commands",
-		ConfigPath:       "CLAUDE.md",
-		GlobalSkillsPath: filepath.Join(homeDir(), ".claude", "skills"),
-		GlobalAgentsPath: filepath.Join(homeDir(), ".claude", "agents"),
+	installer.HarnessClaude: {
+		Name:         "Claude Code",
+		Harness:      installer.HarnessClaude,
+		SkillsPath:   ".claude/skills",
+		AgentsPath:   ".claude/agents",
+		CommandsPath: ".claude/commands",
+		ConfigPath:   "CLAUDE.md",
 	},
-	"antigravity": {
-		Name:             "Antigravity",
-		Harness:          installer.HarnessAntigravity,
-		SkillsPath:       ".agents/skills",
-		AgentsPath:       ".agents/agents",
-		CommandsPath:     "",
-		ConfigPath:       "GEMINI.md",
-		GlobalSkillsPath: filepath.Join(homeDir(), ".gemini", "config", "skills"),
-		GlobalAgentsPath: filepath.Join(homeDir(), ".gemini", "config", "plugins", "antigravity-subagents", "agents"),
-	},
-	"gemini": {
-		Name:             "Gemini CLI",
-		Harness:          installer.HarnessGemini,
-		SkillsPath:       ".gemini/skills",
-		AgentsPath:       ".gemini/agents",
-		CommandsPath:     "",
-		ConfigPath:       "GEMINI.md",
-		GlobalSkillsPath: filepath.Join(homeDir(), ".gemini", "skills"),
-		GlobalAgentsPath: filepath.Join(homeDir(), ".gemini", "agents"),
-	},
-	"copilot": {
-		Name:             "GitHub Copilot",
-		SkillsPath:       ".github/skills",
-		AgentsPath:       ".github",
-		CommandsPath:     "",
-		ConfigPath:       ".github/copilot-instructions.md",
-		GlobalSkillsPath: filepath.Join(homeDir(), ".copilot", "skills"),
-		GlobalAgentsPath: "",
-	},
-	"cursor": {
-		Name:         "Cursor",
-		SkillsPath:   ".cursor/skills",
-		AgentsPath:   ".cursor/agents",
+	installer.HarnessAntigravity: {
+		Name:         "Antigravity",
+		Harness:      installer.HarnessAntigravity,
+		SkillsPath:   ".agents/skills",
+		AgentsPath:   ".agents/agents",
 		CommandsPath: "",
-		ConfigPath:   ".cursorrules",
+		ConfigPath:   "GEMINI.md",
 	},
-	"opencode": {
-		Name:         "OpenCode",
-		SkillsPath:   ".opencode/skills",
-		AgentsPath:   ".opencode/agents",
-		CommandsPath: "",
-		ConfigPath:   "",
-	},
-	"vscode": {
-		Name:         "VS Code (with Claude extension)",
-		SkillsPath:   ".vscode/claude/skills",
-		AgentsPath:   ".vscode/claude/agents",
-		CommandsPath: "",
-		ConfigPath:   "",
-	},
-	"claude-desktop": {
-		Name:         "Claude Desktop (macOS)",
-		SkillsPath:   "",
+	installer.HarnessZed: {
+		Name:         "Zed Editor",
+		Harness:      installer.HarnessZed,
+		SkillsPath:   ".agents/skills",
 		AgentsPath:   "",
 		CommandsPath: "",
-		ConfigPath:   "",
+		ConfigPath:   "AGENTS.md",
+	},
+	installer.HarnessOpenCode: {
+		Name:         "OpenCode",
+		Harness:      installer.HarnessOpenCode,
+		SkillsPath:   ".opencode/skills",
+		AgentsPath:   ".opencode/agents",
+		CommandsPath: ".opencode/commands",
+		ConfigPath:   "AGENTS.md",
 	},
 }
 
+func resolveBackupChoice(cmd *cobra.Command, reader *bufio.Reader) (bool, error) {
+	if noBackupFlag {
+		return false, nil
+	}
+	if cmd != nil {
+		if cmd.Flags().Changed("no-backup") && noBackupFlag {
+			return false, nil
+		}
+		if cmd.Flags().Changed("backup") {
+			return backupFlag, nil
+		}
+	}
+	if backupExplicit {
+		return backupFlag, nil
+	}
+	if nonInteract || reader == nil {
+		return backupFlag, nil
+	}
+	return askBackupConfirmation(reader)
+}
+
+func askBackupConfirmation(reader *bufio.Reader) (bool, error) {
+	fmt.Print("\nSave a safety backup before writing files? [Y/n]: ")
+	input, err := reader.ReadString('\n')
+	if err != nil && err != io.EOF {
+		return true, err
+	}
+	trimmed := strings.TrimSpace(strings.ToLower(input))
+	if trimmed == "n" || trimmed == "no" {
+		return false, nil
+	}
+	return true, nil
+}
+
 func main() {
+	if exe, err := os.Executable(); err == nil {
+		platform.SweepStaleExecutable(exe)
+	}
+
+	rootCmd := buildRootCommand()
+	if err := rootCmd.Execute(); err != nil {
+		os.Exit(1)
+	}
+}
+
+func buildRootCommand() *cobra.Command {
 	rootCmd := &cobra.Command{
 		Use:   "skill-installer",
-		Short: "Install AI coding assistant skills",
-		Long: `A CLI tool to install AI coding assistant skills for various IDEs and tools.
+		Short: "Spacious graphical installer & updater for AI coding and product workflows",
+		Long: `skill-installer v4.0 — Curated workflows, slash commands, subagents, and skills
+for Google Antigravity, Claude Code, Zed Editor, and OpenCode across Windows, Linux, and macOS.
 
-Supported targets:
-  - Claude Code (.claude/skills)
-  - Antigravity (.gemini/skills, ~/.gemini/config/skills)
-  - Gemini CLI (.gemini/skills, ~/.gemini/config/skills)
-  - Claude Desktop (macOS — Customize > Skills)
-  - GitHub Copilot (.github/skills)
-  - OpenCode (.opencode/skills)
-  - Cursor (.cursor/skills)
-  - VS Code with Claude extension (.vscode/claude/skills)
-
-Configuration can be stored in .skill-installer.yaml`,
+Run without flags in a terminal to launch the guided graphical TUI, or pass flags for CLI/CI runs.`,
 		RunE: runInstall,
 	}
 
-	// Install flags
 	rootCmd.Flags().BoolVarP(&force, "force", "f", false, "Overwrite existing files")
 	rootCmd.Flags().BoolVarP(&dryRun, "dry-run", "n", false, "Show what would be done without making changes")
 	rootCmd.Flags().BoolVarP(&nonInteract, "yes", "y", false, "Non-interactive mode with defaults")
-	rootCmd.Flags().StringVarP(&targetType, "target", "t", "", "Target: claude, antigravity, gemini, claude-desktop, copilot, opencode, cursor, vscode")
-	rootCmd.Flags().BoolVar(&skipClaude, "skip-claude-md", false, "Skip updating project config file (CLAUDE.md, GEMINI.md, etc.) or global harness config")
+	rootCmd.Flags().BoolVar(&nonInteract, "non-interactive", false, "Non-interactive mode with defaults")
+	rootCmd.Flags().StringVarP(&targetType, "target", "t", "", "Target harness: claude, antigravity, zed, opencode")
+	rootCmd.Flags().StringVar(&trackName, "track", "", "Curated track: opinionated, basics, product, copy-polish, custom")
+	rootCmd.Flags().StringSliceVar(&selectedSkills, "skill", nil, "Specific skill names to install (implies custom selection)")
+	rootCmd.Flags().StringSliceVar(&selectedSkills, "skills", nil, "Comma-separated skill names to install (implies custom selection)")
+	rootCmd.Flags().BoolVar(&backupFlag, "backup", true, "Save a safety backup snapshot before overwriting files (default true)")
+	rootCmd.Flags().BoolVar(&noBackupFlag, "no-backup", false, "Skip creating a safety backup snapshot")
+	rootCmd.MarkFlagsMutuallyExclusive("backup", "no-backup")
+	rootCmd.Flags().BoolVar(&skipClaude, "skip-claude-md", false, "Skip updating project/global config file (CLAUDE.md, GEMINI.md, AGENTS.md)")
 	rootCmd.Flags().StringSliceVar(&tags, "tag", nil, "Filter skills by tags")
 	rootCmd.Flags().StringSliceVar(&languages, "lang", nil, "Filter skills by language")
-	rootCmd.Flags().StringVar(&fromSource, "from", "", "Install from source (local path, git URL, or URL)")
+	rootCmd.Flags().StringVar(&fromSource, "from", "", "Install from external source (local path, git URL, or tarball URL)")
 	rootCmd.Flags().StringVarP(&configFile, "config", "c", "", "Config file path")
-	rootCmd.Flags().BoolVar(&skipAgents, "skip-agents", false, "Skip installing agents")
-	rootCmd.Flags().BoolVar(&skipCommands, "skip-commands", false, "Skip installing commands")
-	rootCmd.Flags().BoolVar(&globalInstall, "global", false, "Install to global/user-level directory")
+	rootCmd.Flags().BoolVar(&skipAgents, "skip-agents", false, "Skip installing subagents")
+	rootCmd.Flags().BoolVar(&skipCommands, "skip-commands", false, "Skip installing slash commands")
+	rootCmd.Flags().BoolVarP(&globalInstall, "global", "g", false, "Install to global user-level directory")
+	rootCmd.Flags().BoolVarP(&projectInstall, "project", "p", false, "Install to current repository project directory")
+	rootCmd.MarkFlagsMutuallyExclusive("global", "project")
 	rootCmd.Flags().StringVarP(&installMode, "mode", "m", "", "Installation mode: full, config-only, agents-only")
 
-	// Version command
 	versionCmd := &cobra.Command{
 		Use:   "version",
 		Short: "Print the version number",
@@ -221,73 +220,151 @@ Configuration can be stored in .skill-installer.yaml`,
 		},
 	}
 
-	// List command
 	listCmd := &cobra.Command{
 		Use:   "list",
-		Short: "List available skills",
-		Long: `List available skills with optional filtering.
-
-Examples:
-  skill-installer list                    # List all skills
-  skill-installer list --tag testing      # List skills tagged with 'testing'
-  skill-installer list --lang python      # List Python-compatible skills`,
-		RunE: runList,
+		Short: "List curated tracks and skills with slash commands and descriptions",
+		RunE:  runList,
 	}
 	listCmd.Flags().StringSliceVar(&tags, "tag", nil, "Filter by tags")
 	listCmd.Flags().StringSliceVar(&languages, "lang", nil, "Filter by language")
-	listCmd.Flags().StringVarP(&targetType, "target", "t", "", "Filter skills for target harness (claude, antigravity, gemini, etc.)")
+	listCmd.Flags().StringVar(&listCategory, "category", "", "Filter skills by category")
+	listCmd.Flags().StringVarP(&targetType, "target", "t", "", "Filter skills for target harness (claude, antigravity, zed, opencode)")
+	listCmd.Flags().StringVar(&trackName, "track", "", "Filter skills by curated track (opinionated, basics, product, copy-polish)")
+	listCmd.Flags().BoolVar(&listLong, "long", false, "Show full long descriptions and starter prompts")
 
-	// Init command
+	guideCmd := &cobra.Command{
+		Use:   "guide",
+		Short: "Interactive plain-English guide to slash commands, skills, and tracks",
+		RunE:  runGuide,
+	}
+	guideCmd.Flags().StringVarP(&targetType, "target", "t", "", "Target harness (claude, antigravity, zed, opencode)")
+	guideCmd.Flags().StringVar(&trackName, "track", "opinionated", "Track to preview in guide")
+	guideCmd.Flags().BoolVarP(&nonInteract, "yes", "y", false, "Print formatted guide to stdout without launching TUI")
+	guideCmd.Flags().BoolVar(&nonInteract, "non-interactive", false, "Print formatted guide to stdout without launching TUI")
+
+	updateCmd := &cobra.Command{
+		Use:   "update",
+		Short: "Check for and apply live skill updates from main via gh CLI",
+		RunE:  runUpdate,
+	}
+	updateCmd.Flags().BoolVar(&updateCheck, "check", false, "Only check whether updates are available without applying")
+	updateCmd.Flags().BoolVar(&updateApply, "apply", false, "Apply available updates from main")
+	updateCmd.Flags().BoolVar(&updateSelf, "self", false, "Upgrade the skill-installer binary from GitHub Releases")
+	updateCmd.Flags().BoolVar(&updateSelf, "self-upgrade", false, "Upgrade the skill-installer binary from GitHub Releases")
+	updateCmd.Flags().BoolVar(&updateJSON, "json", false, "Emit machine-readable JSON output for /plugin-update")
+	updateCmd.Flags().StringVarP(&targetType, "target", "t", "", "Target harness to update (claude, antigravity, zed, opencode)")
+	updateCmd.Flags().BoolVarP(&globalInstall, "global", "g", false, "Update global installation")
+	updateCmd.Flags().BoolVarP(&projectInstall, "project", "p", false, "Update project installation")
+	updateCmd.MarkFlagsMutuallyExclusive("global", "project")
+	updateCmd.Flags().BoolVar(&backupFlag, "backup", true, "Save a safety backup before applying update")
+	updateCmd.Flags().BoolVar(&noBackupFlag, "no-backup", false, "Skip safety backup when updating")
+	updateCmd.MarkFlagsMutuallyExclusive("backup", "no-backup")
+	updateCmd.Flags().BoolVarP(&nonInteract, "yes", "y", false, "Apply updates without interactive confirmation")
+	updateCmd.Flags().BoolVar(&nonInteract, "non-interactive", false, "Apply updates without interactive confirmation")
+
+	restoreCmd := &cobra.Command{
+		Use:   "restore [snapshot-id]",
+		Short: "Restore files from a timestamped safety backup snapshot",
+		Args:  cobra.MaximumNArgs(1),
+		RunE:  runRestore,
+	}
+	restoreCmd.Flags().StringVar(&restoreID, "id", "", "Snapshot ID to restore (defaults to latest matching snapshot)")
+	restoreCmd.Flags().StringVar(&restoreFile, "file", "", "Restore only a single file from the snapshot")
+	restoreCmd.Flags().StringVar(&restoreFile, "path", "", "Restore only a single file from the snapshot")
+	restoreCmd.Flags().StringVarP(&targetType, "target", "t", "", "Filter snapshots by harness (claude, antigravity, zed, opencode)")
+	restoreCmd.Flags().BoolVarP(&globalInstall, "global", "g", false, "Filter by global scope")
+	restoreCmd.Flags().BoolVarP(&projectInstall, "project", "p", false, "Filter by project scope")
+	restoreCmd.MarkFlagsMutuallyExclusive("global", "project")
+	restoreCmd.Flags().BoolVarP(&nonInteract, "yes", "y", false, "Restore without interactive prompt")
+	restoreCmd.Flags().BoolVar(&nonInteract, "non-interactive", false, "Restore without interactive prompt")
+
+	uninstallCmd := &cobra.Command{
+		Use:   "uninstall",
+		Short: "Safely remove tracked plugin files while preserving your custom skills",
+		RunE:  runUninstall,
+	}
+	uninstallCmd.Flags().StringVarP(&targetType, "target", "t", "", "Target harness to uninstall (claude, antigravity, zed, opencode)")
+	uninstallCmd.Flags().BoolVarP(&globalInstall, "global", "g", false, "Uninstall from global user-level directory")
+	uninstallCmd.Flags().BoolVarP(&projectInstall, "project", "p", false, "Uninstall from current project directory")
+	uninstallCmd.MarkFlagsMutuallyExclusive("global", "project")
+	uninstallCmd.Flags().BoolVar(&restoreConfig, "restore-config", false, "Restore pre-install config file from backup if available")
+	uninstallCmd.Flags().BoolVarP(&nonInteract, "yes", "y", false, "Uninstall without interactive confirmation")
+	uninstallCmd.Flags().BoolVar(&nonInteract, "non-interactive", false, "Uninstall without interactive confirmation")
+
 	initCmd := &cobra.Command{
 		Use:   "init [name]",
-		Short: "Create a new skill from template",
-		Long: `Create a new skill file with proper frontmatter.
-
-Examples:
-  skill-installer init my-skill
-  skill-installer init my-skill --model opus --tag quality,review`,
-		Args: cobra.ExactArgs(1),
-		RunE: runInit,
+		Short: "Create a new skill from template or generate a .skill-installer.yaml config",
+		Args:  cobra.MaximumNArgs(1),
+		RunE:  runInit,
 	}
 	var initModel string
 	var initTags []string
 	var initLangs []string
 	var initDesc string
+	initCmd.Flags().StringVarP(&initOutput, "output", "o", "", "Output file path for .skill-installer.yaml config")
 	initCmd.Flags().StringVar(&initModel, "model", "sonnet", "Model to use (haiku, sonnet, opus)")
 	initCmd.Flags().StringSliceVar(&initTags, "tag", nil, "Tags for the skill")
 	initCmd.Flags().StringSliceVar(&initLangs, "lang", []string{"any"}, "Languages for the skill")
 	initCmd.Flags().StringVarP(&initDesc, "desc", "d", "", "Description of the skill")
 
-	rootCmd.AddCommand(versionCmd, listCmd, initCmd)
+	rootCmd.AddCommand(versionCmd, listCmd, guideCmd, updateCmd, restoreCmd, uninstallCmd, initCmd)
+	return rootCmd
+}
 
-	if err := rootCmd.Execute(); err != nil {
-		os.Exit(1)
+func isInteractiveSession(cmd *cobra.Command) bool {
+	if cmd == nil || nonInteract || dryRun || fromSource != "" || installMode != "" || targetType != "" || trackName != "" || len(selectedSkills) > 0 {
+		return false
 	}
+	return term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd()))
+}
+
+func renderProjectConfigBytes(baseTemplate []byte, harness string, projectDir string) []byte {
+	info := detectProject(projectDir)
+	rendered := applyProjectDetection(baseTemplate, info, content)
+	return rendered
 }
 
 func runInstall(cmd *cobra.Command, args []string) error {
-	reader := bufio.NewReader(os.Stdin)
+	env := platform.EnvFromOS()
+	cat, err := catalog.Load(content)
+	if err != nil {
+		return fmt.Errorf("loading catalog: %w", err)
+	}
 
-	// Load config
 	cfg, err := loadConfig()
 	if err != nil {
 		return fmt.Errorf("loading config: %w", err)
 	}
 	applyConfig(cfg)
 
-	// Ask installation mode first (so getTarget can adapt prompts)
+	if isInteractiveSession(cmd) {
+		cwd, _ := os.Getwd()
+		m := tui.NewModel(tui.Config{
+			Env:                   env,
+			Catalog:               cat,
+			InitialBackup:         !noBackupFlag && backupFlag,
+			ProjectDir:            cwd,
+			Version:               version,
+			UpdateRunner:          updateRunner,
+			ProjectConfigRenderer: renderProjectConfigBytes,
+		})
+		p := tea.NewProgram(m, tea.WithAltScreen())
+		_, err := p.Run()
+		return err
+	}
+
+	reader := bufio.NewReader(os.Stdin)
+
 	mode, err := askInstallMode(reader)
 	if err != nil {
 		return err
 	}
 
-	// Get target framework (mode-aware filtering and prompts)
 	target, err := getTarget(reader, mode)
 	if err != nil {
 		return err
 	}
 
-	// Validate contradictory flags
 	if mode == modeConfigOnly && skipClaude {
 		return fmt.Errorf("--mode config-only and --skip-claude-md are contradictory")
 	}
@@ -302,159 +379,162 @@ func runInstall(cmd *cobra.Command, args []string) error {
 
 	switch mode {
 	case modeConfigOnly:
-		return runConfigOnly(reader, inst, target)
+		return runConfigOnly(cmd, reader, env, cat, inst, target)
 	case modeAgentsOnly:
-		return runAgentsOnly(reader, inst, target)
+		return runAgentsOnly(cmd, reader, env, inst, target)
 	default:
-		return runFullInstall(reader, inst, target)
+		return runFullInstall(cmd, reader, env, cat, inst, target)
 	}
 }
 
-func runFullInstall(reader *bufio.Reader, inst *installer.Installer, target Target) error {
+func runFullInstall(cmd *cobra.Command, reader *bufio.Reader, env platform.Env, cat *catalog.Catalog, inst *installer.Installer, target Target) error {
 	scope, err := askScope(reader, target)
 	if err != nil {
 		return err
 	}
 
-	var skillsDest, agentsDest, commandsDest string
-	if scope == "global" {
-		skillsDest = resolveGlobalSkillsPath(target)
-		agentsDest = resolveGlobalAgentsPath(target)
-	} else {
-		if target.SkillsPath != "" {
-			skillsDest = filepath.Join(".", target.SkillsPath)
-		}
-		if target.AgentsPath != "" {
-			agentsDest = filepath.Join(".", target.AgentsPath)
-		}
-		if target.CommandsPath != "" {
-			commandsDest = filepath.Join(".", target.CommandsPath)
-		}
+	cwd, err := os.Getwd()
+	if err != nil {
+		cwd = "."
 	}
-
-	// Claude Desktop: resolve skills path dynamically
-	if target.Name == "Claude Desktop (macOS)" {
-		desktopDir, err := findClaudeDesktopDir()
-		if err != nil {
-			return err
-		}
-		skillsDest = filepath.Join(desktopDir, "skills")
-		agentsDest = ""   // Desktop doesn't support agents
-		commandsDest = "" // Desktop doesn't support commands
-		scope = "global"  // force global
-	}
-
-	updateConfig := false
-	if scope == "project" && target.ConfigPath != "" && !skipClaude {
-		updateConfig, err = askUpdateConfig(reader, target)
-		if err != nil {
-			return err
-		}
-	}
-
-	// Install skills
-	fmt.Println("\nInstalling skills...")
-	var results []string
-
-	if fromSource != "" {
-		if strings.HasPrefix(fromSource, "http://") || strings.HasPrefix(fromSource, "https://") {
-			if strings.Contains(fromSource, "github.com") || strings.Contains(fromSource, "gitlab.com") {
-				results, err = inst.InstallFromGit(fromSource, skillsDest)
-			} else {
-				results, err = inst.InstallFromURL(fromSource, skillsDest)
-			}
-		} else {
-			results, err = inst.InstallFromLocal(fromSource, skillsDest)
-		}
-	} else {
-		results, err = inst.InstallSkillsForHarness(skillsDest, target.Harness, scope == "global", tags, languages)
-	}
-
+	paths, err := env.ResolvePaths(target.Harness, scope, cwd)
 	if err != nil {
 		return err
 	}
-	for _, r := range results {
+
+	if fromSource != "" {
+		fmt.Println("\nInstalling skills from external source...")
+		var results []string
+		if strings.Contains(fromSource, "://") || strings.HasPrefix(fromSource, "http:") || strings.HasPrefix(fromSource, "https:") {
+			u, uErr := url.Parse(fromSource)
+			if uErr != nil || u.Scheme != "https" || u.Hostname() == "" {
+				return fmt.Errorf("external source URLs must use https:// with a valid hostname: %s", fromSource)
+			}
+			host := strings.ToLower(u.Hostname())
+			if host == "github.com" || host == "gitlab.com" {
+				results, err = inst.InstallFromGit(fromSource, paths.SkillsDir)
+			} else {
+				results, err = inst.InstallFromURL(fromSource, paths.SkillsDir)
+			}
+		} else {
+			results, err = inst.InstallFromLocal(fromSource, paths.SkillsDir)
+		}
+		if err != nil {
+			return err
+		}
+		for _, r := range results {
+			fmt.Println(r)
+		}
+		return nil
+	}
+
+	chosenTrack := trackName
+	if chosenTrack == "" {
+		if len(selectedSkills) > 0 {
+			chosenTrack = "custom"
+		} else {
+			chosenTrack = "opinionated"
+		}
+	}
+	track, hasTrack := cat.TrackByID(chosenTrack)
+	if !hasTrack {
+		return fmt.Errorf("unknown track %q (valid: opinionated, basics, product, copy-polish, custom)", chosenTrack)
+	}
+
+	doBackup, err := resolveBackupChoice(cmd, reader)
+	if err != nil {
+		return err
+	}
+
+	var allowSkills []string
+	if chosenTrack == "custom" {
+		allowSkills = selectedSkills
+	} else if len(tags) == 0 && len(languages) == 0 {
+		allowSkills, err = cat.TrackSkills(chosenTrack, target.Harness)
+		if err != nil {
+			return err
+		}
+	}
+
+	skipCfg := skipClaude
+	forceCfg := false
+	if scope == "project" && target.ConfigPath != "" && !skipCfg {
+		updateConfig, uErr := askUpdateConfig(reader, target)
+		if uErr != nil {
+			return uErr
+		}
+		if !updateConfig {
+			skipCfg = true
+		} else if !force && !nonInteract {
+			exists, isSymlink := pathExistsOrSymlink(paths.ConfigFile)
+			if exists || isSymlink {
+				fmt.Printf("%s already exists. Overwrite? [y/N]: ", target.ConfigPath)
+				input, rErr := reader.ReadString('\n')
+				if rErr != nil {
+					return rErr
+				}
+				trimmed := strings.TrimSpace(strings.ToLower(input))
+				if trimmed == "y" || trimmed == "yes" {
+					forceCfg = true
+				} else {
+					fmt.Printf("SKIP: %s\n", paths.ConfigFile)
+					skipCfg = true
+				}
+			}
+		}
+	}
+
+	skipAg := skipAgents
+	forceAg := false
+	if !skipAg && track.InstallAgents && paths.AgentsDir != "" {
+		overwrite, oErr := askOverwriteAgents(reader, paths.AgentsDir)
+		if oErr != nil {
+			return oErr
+		}
+		if overwrite {
+			forceAg = true
+		} else {
+			fmt.Println("\nSkipping agent installation.")
+			skipAg = true
+		}
+	}
+
+	fmt.Println("\nInstalling skills...")
+	res, err := inst.ExecutePlan(installer.InstallPlan{
+		Env:                   env,
+		Catalog:               cat,
+		Harness:               target.Harness,
+		Scope:                 scope,
+		ProjectDir:            cwd,
+		TrackID:               chosenTrack,
+		CustomSkills:          allowSkills,
+		Tags:                  tags,
+		Languages:             languages,
+		Mode:                  modeFullInstall,
+		SkipConfig:            skipCfg,
+		SkipAgents:            skipAg,
+		SkipCommands:          skipCommands,
+		Backup:                doBackup,
+		Force:                 force,
+		ForceAgents:           forceAg,
+		ForceConfig:           forceCfg,
+		DryRun:                dryRun,
+		Version:               version,
+		ProjectConfigRenderer: renderProjectConfigBytes,
+	})
+	if err != nil {
+		return err
+	}
+	for _, r := range res.Actions {
 		fmt.Println(r)
 	}
 
-	// Update Claude Desktop manifest
-	if target.Name == "Claude Desktop (macOS)" {
-		if err := updateDesktopManifest(skillsDest, inst); err != nil {
-			fmt.Printf("Warning: Could not update Claude Desktop manifest: %v\n", err)
-		}
-	}
-
-	// Install agents
-	if !skipAgents && agentsDest != "" {
-		overwrite, err := askOverwriteAgents(reader, agentsDest)
-		if err != nil {
-			return err
-		}
-
-		if overwrite {
-			agentInst := inst
-			if !inst.HasForce() {
-				// User confirmed overwrite — use a local installer with Force enabled
-				agentInst = installer.New(content, installer.Options{Force: true, DryRun: dryRun})
-			}
-
-			fmt.Println("\nInstalling agents...")
-			var nameFunc installer.AgentNameFunc
-			if target.Name == "GitHub Copilot" {
-				nameFunc = installer.CopilotAgentName
-			}
-
-			agentResults, err := agentInst.InstallAgentsForHarness(agentsDest, target.Harness, scope == "global", nameFunc)
-			if err != nil {
-				return err
-			}
-			for _, r := range agentResults {
-				fmt.Println(r)
-			}
-		} else {
-			fmt.Println("\nSkipping agent installation.")
-		}
-	}
-
-	if scope == "global" && installer.IsGeminiHarness(target.Harness) && !skipClaude {
-		fmt.Println("\nInstalling global harness assets...")
-		globalResults, err := inst.InstallGlobalHarnessAssets(filepath.Join(homeDir(), ".gemini"), target.Harness)
-		if err != nil {
-			return err
-		}
-		for _, r := range globalResults {
-			fmt.Println(r)
-		}
-	}
-
-	// Install commands (if target supports it and project-scoped)
-	if !skipCommands && commandsDest != "" && scope == "project" {
-		fmt.Println("\nInstalling commands...")
-		cmdResults, err := inst.InstallCommands(commandsDest)
-		if err != nil {
-			return err
-		}
-		for _, r := range cmdResults {
-			fmt.Println(r)
-		}
-	}
-
-	// Generate config file
-	if updateConfig {
-		err = generateConfigFile(inst, target, reader)
-		if err != nil {
-			fmt.Printf("Warning: Could not generate %s: %v\n", target.ConfigPath, err)
-		}
-	}
-
-	// Ensure .gitignore allows .claude/project.json for project-scoped installs
-	if scope == "project" && !dryRun && !installer.IsGeminiHarness(target.Harness) {
+	if scope == "project" && !dryRun && target.Harness == installer.HarnessClaude {
 		ensureGitignoreAllowsProjectJSON(reader)
 	}
 
-	// Offer Codebase Memory MCP setup
-	if !dryRun && !installer.IsGeminiHarness(target.Harness) {
-		if err := askCodebaseMemoryMCP(reader); err != nil {
+	if !dryRun && target.Harness == installer.HarnessClaude {
+		if err := askCodebaseMemoryMCP(reader, env); err != nil {
 			fmt.Printf("Warning: Codebase Memory MCP setup skipped: %v\n", err)
 		}
 	}
@@ -462,7 +542,11 @@ func runFullInstall(reader *bufio.Reader, inst *installer.Installer, target Targ
 	if dryRun {
 		fmt.Println("\n(dry run - no files were modified)")
 	} else {
-		fmt.Println("\nDone! Skills and agents installed successfully.")
+		fmt.Printf("\nDone! %s (%s track) configured for %s.\n", target.Name, track.Name, scope)
+		if res.BackupID != "" {
+			fmt.Printf("Safety backup saved: %s (restore anytime with `skill-installer restore`)\n", res.BackupID)
+		}
+		fmt.Printf("New to these commands? Run `skill-installer guide -t %s --track %s` for a 60-second tour!\n", target.Harness, chosenTrack)
 	}
 
 	return nil
@@ -471,7 +555,6 @@ func runFullInstall(reader *bufio.Reader, inst *installer.Installer, target Targ
 func generateConfigFile(_ *installer.Installer, target Target, reader *bufio.Reader) error {
 	configPath := filepath.Join(".", target.ConfigPath)
 
-	// Detect project type (safe in dry-run: only reads the filesystem)
 	cwd, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("cannot determine working directory: %w", err)
@@ -498,33 +581,24 @@ func generateConfigFile(_ *installer.Installer, target Target, reader *bufio.Rea
 		return err
 	}
 
-	templatePath := "templates/CLAUDE-BASE.md"
-	if installer.IsGeminiHarness(target.Harness) {
-		templatePath = "templates/GEMINI-BASE.md"
+	cat, err := catalog.Load(content)
+	if err != nil {
+		return err
 	}
-	baseContent, err := fs.ReadFile(content, templatePath)
+	baseContent, err := cat.ProjectConfigTemplate(target.Harness)
 	if err != nil {
 		return fmt.Errorf("reading template: %w", err)
 	}
 
-	var configContent []byte
-	switch {
-	case target.Name == "Claude Code" || installer.IsGeminiHarness(target.Harness):
-		configContent = applyProjectDetection(baseContent, info, content)
-	default:
-		configContent = generateFrameworkConfig(target, baseContent, info)
-	}
+	configContent := applyProjectDetection(baseContent, info, content)
 
 	exists, isSymlink := pathExistsOrSymlink(configPath)
 	if exists || isSymlink {
 		if force {
-			// --force: overwrite without prompting
 		} else if nonInteract {
-			// -y without --force: skip silently
 			fmt.Printf("SKIP: %s (already exists, use --force to overwrite)\n", configPath)
 			return nil
 		} else {
-			// Interactive: ask user
 			fmt.Printf("%s already exists. Overwrite? [y/N]: ", target.ConfigPath)
 			input, err := reader.ReadString('\n')
 			if err != nil {
@@ -549,21 +623,12 @@ func generateConfigFile(_ *installer.Installer, target Target, reader *bufio.Rea
 	return nil
 }
 
-func generateFrameworkConfig(target Target, baseContent []byte, info ProjectInfo) []byte {
-	header := fmt.Sprintf("# %s - AI Agent Configuration\n\n", target.Name)
-	header += fmt.Sprintf("Skills are installed in `%s/`\n", target.SkillsPath)
-	if target.AgentsPath != "" {
-		header += fmt.Sprintf("Agents are installed in `%s/`\n", target.AgentsPath)
-	}
-
-	processed := applyProjectDetection(baseContent, info, content)
-
-	return []byte(header + "\n---\n\n" + string(processed))
-}
-
 func loadConfig() (*config.Config, error) {
 	if configFile != "" {
 		return config.LoadFile(configFile)
+	}
+	if globalInstall {
+		return &config.Config{}, nil
 	}
 	return config.Load(".")
 }
@@ -575,6 +640,16 @@ func applyConfig(cfg *config.Config) {
 	if targetType == "" && cfg.Target != "" {
 		targetType = cfg.Target
 	}
+	if trackName == "" && cfg.Track != "" {
+		trackName = cfg.Track
+	}
+	if len(selectedSkills) == 0 && len(cfg.Skills) > 0 {
+		selectedSkills = cfg.Skills
+	}
+	if !backupExplicit && cfg.Backup != nil {
+		backupFlag = *cfg.Backup
+		noBackupFlag = !*cfg.Backup
+	}
 	if len(tags) == 0 && len(cfg.Tags) > 0 {
 		tags = cfg.Tags
 	}
@@ -584,7 +659,7 @@ func applyConfig(cfg *config.Config) {
 	if !skipClaude && cfg.SkipClaudeMD {
 		skipClaude = true
 	}
-	if fromSource == "" && cfg.From != "" {
+	if fromSource == "" && cfg.From != "" && configFile != "" {
 		fromSource = cfg.From
 	}
 	if installMode == "" && cfg.Mode != "" {
@@ -593,17 +668,13 @@ func applyConfig(cfg *config.Config) {
 }
 
 func getTarget(reader *bufio.Reader, mode string) (Target, error) {
-	allOptions := []string{"claude", "antigravity", "gemini", "claude-desktop", "copilot", "cursor", "opencode", "vscode"}
-
-	// Filter targets by mode
-	options := filterTargetsByMode(allOptions, mode)
+	options := filterTargetsByMode(targetOrder, mode)
 
 	if targetType != "" {
 		t, ok := targets[targetType]
 		if !ok {
-			return Target{}, fmt.Errorf("unknown target: %s", targetType)
+			return Target{}, fmt.Errorf("unknown target %q (supported: claude, antigravity, zed, opencode)", targetType)
 		}
-		// Validate target supports the requested mode
 		if err := validateTargetForMode(t, mode); err != nil {
 			return Target{}, err
 		}
@@ -611,10 +682,9 @@ func getTarget(reader *bufio.Reader, mode string) (Target, error) {
 	}
 
 	if nonInteract {
-		return targets["claude"], nil
+		return targets[installer.HarnessClaude], nil
 	}
 
-	// Mode-aware prompt text
 	prompt, pathFunc := modePromptInfo(mode)
 	fmt.Println(prompt)
 	fmt.Println()
@@ -643,7 +713,6 @@ func getTarget(reader *bufio.Reader, mode string) (Target, error) {
 	return targets[options[choice-1]], nil
 }
 
-// filterTargetsByMode returns only the target keys that support the given mode.
 func filterTargetsByMode(allOptions []string, mode string) []string {
 	var filtered []string
 	for _, key := range allOptions {
@@ -663,7 +732,6 @@ func filterTargetsByMode(allOptions []string, mode string) []string {
 	return filtered
 }
 
-// validateTargetForMode checks that a target supports the requested mode.
 func validateTargetForMode(t Target, mode string) error {
 	switch mode {
 	case modeConfigOnly:
@@ -678,7 +746,6 @@ func validateTargetForMode(t Target, mode string) error {
 	return nil
 }
 
-// modePromptInfo returns the prompt text and a function to extract the relevant path for display.
 func modePromptInfo(mode string) (string, func(Target) string) {
 	switch mode {
 	case modeConfigOnly:
@@ -721,14 +788,7 @@ func askUpdateConfig(reader *bufio.Reader, target Target) (bool, error) {
 	return input == "" || input == "y" || input == "yes", nil
 }
 
-func askScope(reader *bufio.Reader, target Target) (string, error) {
-	if target.GlobalSkillsPath == "" {
-		return "project", nil
-	}
-	// Claude Desktop is always global (installed to ~/Library/Application Support/Claude/)
-	if target.Name == "Claude Desktop (macOS)" {
-		return "global", nil
-	}
+func askScope(reader *bufio.Reader, _ Target) (string, error) {
 	if globalInstall {
 		return "global", nil
 	}
@@ -754,7 +814,6 @@ func askScope(reader *bufio.Reader, target Target) (string, error) {
 }
 
 func askInstallMode(reader *bufio.Reader) (string, error) {
-	// CLI flag takes precedence
 	if installMode != "" {
 		switch installMode {
 		case modeFullInstall, modeConfigOnly, modeAgentsOnly:
@@ -764,14 +823,13 @@ func askInstallMode(reader *bufio.Reader) (string, error) {
 		}
 	}
 
-	// Non-interactive defaults to full
 	if nonInteract {
 		return modeFullInstall, nil
 	}
 
 	fmt.Println("\nWhat would you like to do?")
 	fmt.Println("  1) Full installation (skills, agents, commands, and config file)")
-	fmt.Println("  2) Generate config file only (e.g., CLAUDE.md)")
+	fmt.Println("  2) Generate config file only (e.g., CLAUDE.md, GEMINI.md, AGENTS.md)")
 	fmt.Println("  3) Install agents only")
 	fmt.Print("Enter choice [1]: ")
 
@@ -793,22 +851,46 @@ func askInstallMode(reader *bufio.Reader) (string, error) {
 	}
 }
 
-func runConfigOnly(reader *bufio.Reader, inst *installer.Installer, target Target) error {
+func runConfigOnly(cmd *cobra.Command, reader *bufio.Reader, env platform.Env, cat *catalog.Catalog, inst *installer.Installer, target Target) error {
 	if target.ConfigPath == "" {
 		return fmt.Errorf("config file generation is not supported for %s", target.Name)
 	}
 
+	_, _ = resolveBackupChoice(cmd, reader)
+
 	if globalInstall {
-		if !installer.IsGeminiHarness(target.Harness) {
-			return fmt.Errorf("global config-only mode is not supported for %s", target.Name)
-		}
-		fmt.Println("\nInstalling global harness configuration...")
-		results, err := inst.InstallGlobalHarnessAssets(filepath.Join(homeDir(), ".gemini"), target.Harness)
+		paths, err := env.ResolvePaths(target.Harness, "global", ".")
 		if err != nil {
 			return err
 		}
-		for _, r := range results {
-			fmt.Println(r)
+		fmt.Println("\nInstalling global harness configuration...")
+		if target.Harness == installer.HarnessAntigravity {
+			results, _, _, err := inst.InstallGlobalHarnessAssetsWithOptions(paths.GeminiHome, target.Harness, installer.GlobalAssetOptions{
+				InstallHooks: true,
+				Env:          env,
+			})
+			if err != nil {
+				return err
+			}
+			for _, r := range results {
+				fmt.Println(r)
+			}
+		} else {
+			tpl, err := cat.GlobalConfigTemplate(target.Harness, false)
+			if err != nil {
+				return err
+			}
+			if !dryRun {
+				if err := os.MkdirAll(filepath.Dir(paths.ConfigFile), 0755); err != nil {
+					return err
+				}
+				if err := os.WriteFile(paths.ConfigFile, tpl, 0644); err != nil {
+					return err
+				}
+				fmt.Printf("CREATED: %s\n", paths.ConfigFile)
+			} else {
+				fmt.Printf("WOULD CREATE: %s\n", paths.ConfigFile)
+			}
 		}
 		if dryRun {
 			fmt.Println("\n(dry run - no files were modified)")
@@ -831,7 +913,7 @@ func runConfigOnly(reader *bufio.Reader, inst *installer.Installer, target Targe
 	return nil
 }
 
-func runAgentsOnly(reader *bufio.Reader, inst *installer.Installer, target Target) error {
+func runAgentsOnly(cmd *cobra.Command, reader *bufio.Reader, env platform.Env, inst *installer.Installer, target Target) error {
 	if target.AgentsPath == "" {
 		return fmt.Errorf("agents are not supported for %s", target.Name)
 	}
@@ -841,17 +923,18 @@ func runAgentsOnly(reader *bufio.Reader, inst *installer.Installer, target Targe
 		return err
 	}
 
-	var agentsDest string
-	if scope == "global" {
-		if target.GlobalAgentsPath == "" {
-			return fmt.Errorf("global agents are not supported for %s", target.Name)
-		}
-		agentsDest = resolveGlobalAgentsPath(target)
-	} else {
-		agentsDest = filepath.Join(".", target.AgentsPath)
+	_, _ = resolveBackupChoice(cmd, reader)
+
+	cwd, _ := os.Getwd()
+	paths, err := env.ResolvePaths(target.Harness, scope, cwd)
+	if err != nil {
+		return err
+	}
+	if paths.AgentsDir == "" {
+		return fmt.Errorf("agents are not supported for %s in %s scope", target.Name, scope)
 	}
 
-	overwrite, err := askOverwriteAgents(reader, agentsDest)
+	overwrite, err := askOverwriteAgents(reader, paths.AgentsDir)
 	if err != nil {
 		return err
 	}
@@ -865,12 +948,7 @@ func runAgentsOnly(reader *bufio.Reader, inst *installer.Installer, target Targe
 		fmt.Println("\nSkipping agent installation.")
 	} else {
 		fmt.Println("\nInstalling agents...")
-		var nameFunc installer.AgentNameFunc
-		if target.Name == "GitHub Copilot" {
-			nameFunc = installer.CopilotAgentName
-		}
-
-		agentResults, err := agentInst.InstallAgentsForHarness(agentsDest, target.Harness, scope == "global", nameFunc)
+		agentResults, err := agentInst.InstallAgentsForHarness(paths.AgentsDir, target.Harness, scope == "global", nil)
 		if err != nil {
 			return err
 		}
@@ -928,8 +1006,6 @@ func askOverwriteAgents(reader *bufio.Reader, agentsDest string) (bool, error) {
 	return input == "y" || input == "yes", nil
 }
 
-// ensureGitignoreAllowsProjectJSON checks if .gitignore blocks .claude/project.json
-// and prompts the user to add an exception if needed.
 func ensureGitignoreAllowsProjectJSON(reader *bufio.Reader) {
 	gitignorePath := ".gitignore"
 	info, err := os.Lstat(gitignorePath)
@@ -938,37 +1014,32 @@ func ensureGitignoreAllowsProjectJSON(reader *bufio.Reader) {
 	}
 	data, err := os.ReadFile(gitignorePath)
 	if err != nil {
-		return // no .gitignore, nothing to do
+		return
 	}
 
-	content := string(data)
-	lines := strings.Split(content, "\n")
+	contentStr := string(data)
+	lines := strings.Split(contentStr, "\n")
 
-	// Check if .claude/* (or .claude/) is in .gitignore
-	hasCloudeGlob := false
+	hasClaudeGlob := false
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
 		if trimmed == ".claude/*" || trimmed == ".claude/" {
-			hasCloudeGlob = true
+			hasClaudeGlob = true
 			break
 		}
 	}
-	if !hasCloudeGlob {
-		return // .claude/ isn't gitignored, project.json will be tracked by default
+	if !hasClaudeGlob {
+		return
 	}
 
-	// Check if exception already exists
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
 		if trimmed == "!.claude/project.json" {
-			return // already allowed
+			return
 		}
 	}
 
-	// Prompt user
-	if nonInteract {
-		// In non-interactive mode, just do it
-	} else {
+	if !nonInteract {
 		fmt.Println("\n.gitignore blocks .claude/* but .claude/project.json needs to be tracked")
 		fmt.Println("for project initialization state to persist across sessions.")
 		fmt.Print("Add !.claude/project.json to .gitignore? [Y/n]: ")
@@ -983,7 +1054,6 @@ func ensureGitignoreAllowsProjectJSON(reader *bufio.Reader) {
 		}
 	}
 
-	// Insert the exception right after the .claude/* or .claude/ line
 	var result []string
 	inserted := false
 	for _, line := range lines {
@@ -996,7 +1066,7 @@ func ensureGitignoreAllowsProjectJSON(reader *bufio.Reader) {
 	}
 
 	if !inserted {
-		return // shouldn't happen given hasCloudeGlob check, but be safe
+		return
 	}
 
 	if err := os.WriteFile(gitignorePath, []byte(strings.Join(result, "\n")), 0644); err != nil {
@@ -1008,6 +1078,10 @@ func ensureGitignoreAllowsProjectJSON(reader *bufio.Reader) {
 
 func runList(cmd *cobra.Command, args []string) error {
 	inst := installer.New(content, installer.Options{})
+	cat, err := catalog.Load(content)
+	if err != nil {
+		return err
+	}
 
 	harness := installer.HarnessClaude
 	if targetType != "" {
@@ -1018,37 +1092,388 @@ func runList(cmd *cobra.Command, args []string) error {
 		harness = t.Harness
 	}
 
+	var trackAllow map[string]bool
+	if trackName != "" {
+		ts, err := cat.TrackSkills(trackName, harness)
+		if err != nil {
+			return err
+		}
+		trackAllow = make(map[string]bool, len(ts))
+		for _, s := range ts {
+			trackAllow[s] = true
+		}
+	}
+
 	skills, err := inst.ListSkillsForHarness(harness)
 	if err != nil {
 		return err
 	}
 
-	var filtered []installer.Skill
+	var matchedNames []string
 	for _, s := range skills {
+		if trackAllow != nil && !trackAllow[s.Name] {
+			continue
+		}
+		if listCategory != "" {
+			sm, ok := cat.SkillMeta(s.Name)
+			if !ok || !strings.EqualFold(sm.Category, listCategory) {
+				continue
+			}
+		}
 		if !installer.MatchesFilter(s, tags, languages) {
 			continue
 		}
-		filtered = append(filtered, s)
+		matchedNames = append(matchedNames, s.Name)
 	}
 
-	if len(filtered) == 0 {
+	if len(matchedNames) == 0 {
 		fmt.Println("No skills match the specified filters.")
 		return nil
 	}
 
-	fmt.Printf("Available skills (%d):\n\n", len(filtered))
-	for _, s := range filtered {
-		tagsStr := ""
-		if len(s.Tags) > 0 {
-			tagsStr = " [" + strings.Join(s.Tags, ", ") + "]"
-		}
-		fmt.Printf("  %-35s %s%s\n", s.Name, truncate(s.Description, 45), tagsStr)
+	fmt.Printf("Curated tracks for %s:\n", tui.HarnessDisplayName(harness))
+	for _, tr := range cat.Tracks {
+		ts, _ := cat.TrackSkills(tr.ID, harness)
+		fmt.Printf("  • %-14s %-28s (%d skills) — %s\n", tr.ID, tr.Name, len(ts), tr.Tagline)
+	}
+	fmt.Printf("\nAvailable skills (%d):\n\n", len(matchedNames))
+	fmt.Print(tui.RenderSkillTable(cat, harness, trackName, listLong, matchedNames))
+	return nil
+}
+
+func runGuide(cmd *cobra.Command, args []string) error {
+	env := platform.EnvFromOS()
+	cat, err := catalog.Load(content)
+	if err != nil {
+		return err
+	}
+	harness := targetType
+	if harness == "" {
+		harness = installer.HarnessClaude
+	}
+	if !catalog.IsSupportedHarness(harness) {
+		return fmt.Errorf("unsupported target %q (supported: claude, antigravity, zed, opencode)", harness)
+	}
+	tr := trackName
+	if tr == "" {
+		tr = "opinionated"
 	}
 
+	if !nonInteract && cmd != nil && term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd())) {
+		cwd, _ := os.Getwd()
+		m := tui.NewModel(tui.Config{
+			Env:            env,
+			Catalog:        cat,
+			InitialHarness: harness,
+			InitialTrack:   tr,
+			StartInGuide:   true,
+			ProjectDir:     cwd,
+			Version:        version,
+		})
+		p := tea.NewProgram(m, tea.WithAltScreen())
+		_, err := p.Run()
+		return err
+	}
+
+	fmt.Print(tui.RenderPlainGuide(cat, harness, tr))
+	return nil
+}
+
+func resolveReceiptForOperation(env platform.Env, cat *catalog.Catalog) (*state.Receipt, error) {
+	store := state.NewStore(env.StateFilePath())
+	cwd, _ := os.Getwd()
+	scope := "project"
+	if globalInstall {
+		scope = "global"
+	}
+
+	if targetType != "" {
+		if !catalog.IsSupportedHarness(targetType) {
+			return nil, fmt.Errorf("unsupported target %q (supported: claude, antigravity, zed, opencode)", targetType)
+		}
+		paths, err := env.ResolvePaths(targetType, scope, cwd)
+		if err != nil {
+			return nil, err
+		}
+		if rec, ok, err := store.Find(targetType, scope, paths.RootDir); err == nil && ok {
+			return rec, nil
+		}
+		if leg, ok := state.DiscoverLegacyReceipt(env, cat, targetType, scope, cwd); ok {
+			return leg, nil
+		}
+		return &state.Receipt{
+			Harness: targetType,
+			Scope:   scope,
+			RootDir: paths.RootDir,
+			Track:   "opinionated",
+		}, nil
+	}
+
+	receipts, _ := store.Load()
+	var filtered []state.Receipt
+	for _, r := range receipts {
+		if globalInstall && r.Scope != "global" {
+			continue
+		}
+		if projectInstall && r.Scope != "project" {
+			continue
+		}
+		if !globalInstall && r.Scope == "project" {
+			if p, err := env.ResolvePaths(r.Harness, "project", cwd); err == nil && filepath.Clean(r.RootDir) != filepath.Clean(p.RootDir) {
+				continue
+			}
+		}
+		filtered = append(filtered, r)
+	}
+	if len(filtered) == 1 {
+		return &filtered[0], nil
+	}
+	if len(filtered) > 1 {
+		var names []string
+		for _, r := range filtered {
+			names = append(names, fmt.Sprintf("%s (%s)", r.Harness, r.Scope))
+		}
+		return nil, fmt.Errorf("multiple installations match (%s); specify --target (-t) and --global (-g) or --project (-p)", strings.Join(names, ", "))
+	}
+	for _, h := range targetOrder {
+		if leg, ok := state.DiscoverLegacyReceipt(env, cat, h, scope, cwd); ok {
+			return leg, nil
+		}
+	}
+	paths, _ := env.ResolvePaths(installer.HarnessClaude, scope, cwd)
+	return &state.Receipt{
+		Harness: installer.HarnessClaude,
+		Scope:   scope,
+		RootDir: paths.RootDir,
+		Track:   "opinionated",
+	}, nil
+}
+
+func runUpdate(cmd *cobra.Command, args []string) error {
+	env := platform.EnvFromOS()
+	cat, err := catalog.Load(content)
+	if err != nil {
+		return err
+	}
+	rec, err := resolveReceiptForOperation(env, cat)
+	if err != nil {
+		return err
+	}
+
+	rep, err := updater.Check(context.Background(), updateRunner, *rec, version)
+	if err != nil {
+		return err
+	}
+
+	if updateJSON {
+		data, err := json.MarshalIndent(rep, "", "  ")
+		if err != nil {
+			return err
+		}
+		fmt.Println(string(data))
+		return nil
+	}
+
+	fmt.Printf("Checking updates for %s (%s · track: %s)...\n", tui.HarnessDisplayName(rec.Harness), rec.Scope, rec.Track)
+	if !rep.UpdateAvailable && !rep.BinaryUpdate {
+		fmt.Printf("Already up to date on main (%s).\n", rep.LatestSHA)
+		return nil
+	}
+
+	if rep.UpdateAvailable {
+		fmt.Printf("Skill/catalog update available on main: %s -> %s\n", rep.InstalledSHA, rep.LatestSHA)
+		if len(rep.ChangedSkills) > 0 {
+			fmt.Printf("Changed skills: %s\n", strings.Join(rep.ChangedSkills, ", "))
+		}
+		for _, c := range rep.Commits {
+			fmt.Printf("  • %s %s\n", c.SHA, c.Message)
+		}
+	}
+	if rep.BinaryUpdate {
+		fmt.Printf("New CLI release available: v%s -> v%s (run `skill-installer update --self`)\n", rep.CurrentVersion, rep.LatestVersion)
+	}
+
+	if updateCheck && !updateApply && !updateSelf {
+		return nil
+	}
+
+	if updateSelf && rep.LatestVersion != "" {
+		exePath, err := os.Executable()
+		if err != nil {
+			return err
+		}
+		upgraded, err := updater.SelfUpgradeBinary(context.Background(), env, exePath, rep.LatestVersion, nil, "")
+		if err != nil {
+			return err
+		}
+		fmt.Printf("Upgraded skill-installer binary to v%s.\n", upgraded)
+		if !updateApply {
+			return nil
+		}
+	}
+
+	reader := bufio.NewReader(os.Stdin)
+	if !nonInteract && !updateApply {
+		fmt.Print("\nApply skill updates from main now? [Y/n]: ")
+		in, _ := reader.ReadString('\n')
+		trimmed := strings.TrimSpace(strings.ToLower(in))
+		if trimmed == "n" || trimmed == "no" {
+			fmt.Println("Update skipped.")
+			return nil
+		}
+	}
+
+	doBackup, err := resolveBackupChoice(cmd, reader)
+	if err != nil {
+		return err
+	}
+
+	res, newSHA, err := updater.Apply(context.Background(), updateRunner, env, *rec, updater.ApplyOptions{
+		Backup:                doBackup,
+		Force:                 true,
+		CurrentVersion:        version,
+		ProjectConfigRenderer: renderProjectConfigBytes,
+	})
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Updated %s (%s) to commit %s (%d skills synced).\n", tui.HarnessDisplayName(rec.Harness), rec.Scope, newSHA, len(res.Skills))
+	if res.BackupID != "" {
+		fmt.Printf("Safety backup saved: %s\n", res.BackupID)
+	}
+	return nil
+}
+
+func runRestore(cmd *cobra.Command, args []string) error {
+	env := platform.EnvFromOS()
+	mgr := backup.NewManager(env.BackupsDir())
+
+	chosenID := restoreID
+	if chosenID == "" && len(args) > 0 {
+		chosenID = args[0]
+	}
+	if chosenID == "" {
+		snaps, err := mgr.ListSnapshots(targetType)
+		if err != nil {
+			return err
+		}
+		var filtered []backup.Manifest
+		for _, s := range snaps {
+			if globalInstall && s.Scope != "global" {
+				continue
+			}
+			if projectInstall && s.Scope != "project" {
+				continue
+			}
+			filtered = append(filtered, s)
+		}
+		if len(filtered) == 0 {
+			return fmt.Errorf("no safety backup snapshots found in %s", env.BackupsDir())
+		}
+		chosenID = filtered[0].ID
+	}
+
+	if !nonInteract {
+		reader := bufio.NewReader(os.Stdin)
+		fmt.Printf("Restore snapshot %s? [y/N]: ", chosenID)
+		in, _ := reader.ReadString('\n')
+		trimmed := strings.TrimSpace(strings.ToLower(in))
+		if trimmed != "y" && trimmed != "yes" {
+			fmt.Println("Restore cancelled.")
+			return nil
+		}
+	}
+
+	if restoreFile != "" {
+		restored, err := mgr.RestoreSingleFile(chosenID, restoreFile)
+		if err != nil {
+			return err
+		}
+		if restored {
+			fmt.Printf("Restored %s from snapshot %s.\n", restoreFile, chosenID)
+		} else {
+			fmt.Printf("No pre-existing backup blob for %s in snapshot %s (nothing restored).\n", restoreFile, chosenID)
+		}
+		return nil
+	}
+
+	res, err := mgr.RestoreSnapshot(chosenID, env.StateFilePath())
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Restored snapshot %s (%d files restored, %d created files removed).\n",
+		res.SnapshotID, len(res.RestoredFiles), len(res.RemovedFiles))
+	return nil
+}
+
+func runUninstall(cmd *cobra.Command, args []string) error {
+	env := platform.EnvFromOS()
+	cat, err := catalog.Load(content)
+	if err != nil {
+		return err
+	}
+	rec, err := resolveReceiptForOperation(env, cat)
+	if err != nil {
+		return err
+	}
+
+	if !nonInteract {
+		reader := bufio.NewReader(os.Stdin)
+		fmt.Printf("Uninstall %s (%s) at %s? [y/N]: ", tui.HarnessDisplayName(rec.Harness), rec.Scope, rec.RootDir)
+		in, _ := reader.ReadString('\n')
+		trimmed := strings.TrimSpace(strings.ToLower(in))
+		if trimmed != "y" && trimmed != "yes" {
+			fmt.Println("Uninstall cancelled.")
+			return nil
+		}
+	}
+
+	res, err := state.Uninstall(env, cat, *rec, backup.NewManager(env.BackupsDir()), restoreConfig)
+	if err != nil {
+		return err
+	}
+	store := state.NewStore(env.StateFilePath())
+	_ = store.Remove(rec.Harness, rec.Scope, rec.RootDir)
+
+	fmt.Printf("Uninstalled %s (%s): removed %d tracked files.\n",
+		tui.HarnessDisplayName(rec.Harness), rec.Scope, len(res.RemovedFiles))
+	for _, skipped := range res.SkippedFiles {
+		fmt.Printf("Skipped (symlinked ancestor): %s\n", skipped)
+	}
+	if res.RestoredConfig != "" {
+		fmt.Printf("Restored pre-install config: %s\n", res.RestoredConfig)
+	}
 	return nil
 }
 
 func runInit(cmd *cobra.Command, args []string) error {
+	if initOutput != "" || len(args) == 0 {
+		outPath := initOutput
+		if outPath == "" {
+			outPath = ".skill-installer.yaml"
+		}
+		exists, isSymlink := pathExistsOrSymlink(outPath)
+		if (exists || isSymlink) && !force {
+			return fmt.Errorf("%s already exists (use --force to overwrite)", outPath)
+		}
+		cfgContent := "target: claude\ntrack: opinionated\nbackup: true\n"
+		if dryRun {
+			fmt.Printf("WOULD CREATE: %s\n", outPath)
+			return nil
+		}
+		if _, err := installer.UnlinkIfSymlink(outPath, false); err != nil {
+			return err
+		}
+		if err := os.MkdirAll(filepath.Dir(outPath), 0755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(outPath, []byte(cfgContent), 0644); err != nil {
+			return fmt.Errorf("writing %s: %w", outPath, err)
+		}
+		fmt.Printf("CREATED: %s\n", outPath)
+		return nil
+	}
+
 	name := args[0]
 	model, _ := cmd.Flags().GetString("model")
 	initTags, _ := cmd.Flags().GetStringSlice("tag")
@@ -1097,145 +1522,6 @@ func runInit(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// findClaudeDesktopDir locates the Claude Desktop skills-plugin directory.
-// It walks the UUID-based directory structure to find the manifest.json.
-func findClaudeDesktopDir() (string, error) {
-	if runtime.GOOS != "darwin" {
-		return "", fmt.Errorf("Claude Desktop skills installation is currently only supported on macOS")
-	}
-
-	base := filepath.Join(homeDir(), "Library", "Application Support", "Claude",
-		"local-agent-mode-sessions", "skills-plugin")
-	if _, err := os.Stat(base); err != nil {
-		return "", fmt.Errorf("Claude Desktop skills directory not found at %s\nMake sure Claude Desktop is installed and you've opened Customize > Skills at least once", base)
-	}
-
-	var manifestPath string
-	_ = filepath.WalkDir(base, func(path string, d fs.DirEntry, err error) error {
-		if err != nil || manifestPath != "" {
-			return err
-		}
-		if d.Name() == "manifest.json" {
-			manifestPath = path
-			return filepath.SkipAll
-		}
-		return nil
-	})
-
-	if manifestPath == "" {
-		return "", fmt.Errorf("no manifest.json found under %s\nOpen Claude Desktop > Customize > Skills first to initialize", base)
-	}
-
-	return filepath.Clean(filepath.Dir(manifestPath)), nil
-}
-
-// desktopManifest represents the Claude Desktop skills manifest.json.
-type desktopManifest struct {
-	LastUpdated int64               `json:"lastUpdated"`
-	Skills      []desktopSkillEntry `json:"skills"`
-}
-
-// desktopSkillEntry represents a single skill in the manifest.
-type desktopSkillEntry struct {
-	SkillID     string `json:"skillId"`
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	CreatorType string `json:"creatorType"`
-	UpdatedAt   string `json:"updatedAt"`
-	Enabled     bool   `json:"enabled"`
-}
-
-// updateDesktopManifest reads the manifest.json, adds/updates entries for installed skills,
-// and writes it back. skillsDir is the path to the skills/ directory.
-func updateDesktopManifest(skillsDir string, inst *installer.Installer) error {
-	manifestPath := filepath.Join(filepath.Dir(skillsDir), "manifest.json")
-
-	data, err := os.ReadFile(manifestPath)
-	if err != nil {
-		return fmt.Errorf("reading manifest: %w", err)
-	}
-
-	var manifest desktopManifest
-	if err := json.Unmarshal(data, &manifest); err != nil {
-		return fmt.Errorf("parsing manifest: %w", err)
-	}
-
-	// Build map of existing skills by name
-	existing := make(map[string]int)
-	for i, s := range manifest.Skills {
-		existing[s.Name] = i
-	}
-
-	// Get skill descriptions from embedded content
-	allSkills, _ := inst.ListAllSkills()
-	descMap := make(map[string]string)
-	for _, s := range allSkills {
-		descMap[s.Name] = s.Description
-	}
-
-	now := time.Now().UTC().Format(time.RFC3339)
-
-	// Walk the skills directory to find installed skills
-	entries, err := os.ReadDir(skillsDir)
-	if err != nil {
-		return fmt.Errorf("reading skills directory: %w", err)
-	}
-
-	updated := 0
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		name := entry.Name()
-		// Verify it has a SKILL.md
-		if _, err := os.Stat(filepath.Join(skillsDir, name, "SKILL.md")); err != nil {
-			continue
-		}
-
-		desc := descMap[name]
-		if desc == "" {
-			desc = "Skill installed via plugin"
-		}
-
-		if idx, ok := existing[name]; ok {
-			// Update existing entry
-			manifest.Skills[idx].Description = desc
-			manifest.Skills[idx].UpdatedAt = now
-			manifest.Skills[idx].Enabled = true
-		} else {
-			// Add new entry
-			manifest.Skills = append(manifest.Skills, desktopSkillEntry{
-				SkillID:     "skill_user_" + name,
-				Name:        name,
-				Description: desc,
-				CreatorType: "user",
-				UpdatedAt:   now,
-				Enabled:     true,
-			})
-		}
-		updated++
-	}
-
-	manifest.LastUpdated = time.Now().UnixMilli()
-
-	if dryRun {
-		fmt.Printf("WOULD UPDATE: %s (%d skills)\n", manifestPath, updated)
-		return nil
-	}
-
-	out, err := json.MarshalIndent(manifest, "", "  ")
-	if err != nil {
-		return fmt.Errorf("marshaling manifest: %w", err)
-	}
-
-	if err := os.WriteFile(manifestPath, out, 0600); err != nil {
-		return fmt.Errorf("writing manifest: %w", err)
-	}
-
-	fmt.Printf("UPDATED: %s (%d skills registered)\n", manifestPath, updated)
-	return nil
-}
-
 func fileExists(path string) bool {
 	info, err := os.Stat(path)
 	return err == nil && !info.IsDir()
@@ -1259,25 +1545,23 @@ func truncate(s string, max int) string {
 	return s[:max-3] + "..."
 }
 
-func askCodebaseMemoryMCP(reader *bufio.Reader) error {
+func askCodebaseMemoryMCP(reader *bufio.Reader, env platform.Env) error {
 	if nonInteract {
 		return nil
 	}
 
 	binName := cbMemBinName
-	if runtime.GOOS == "windows" {
+	if env.GOOS == "windows" {
 		binName += ".exe"
 	}
-	binPath := filepath.Join(homeDir(), ".local", "bin", binName)
+	binPath := filepath.Join(env.HomeDir, ".local", "bin", binName)
 
-	// Check if already fully installed (binary exists AND MCP configured)
 	binaryExists := fileExists(binPath)
-	configExists := mcpServerConfigured(cbMemBinName)
+	configExists := mcpServerConfigured(cbMemBinName, env.HomeDir)
 	if binaryExists && configExists {
 		fmt.Printf("\nCodebase Memory MCP already installed at %s — skipping.\n", binPath)
 		return nil
 	}
-	// If only the config exists (user installed binary elsewhere), skip
 	if configExists {
 		fmt.Println("\nCodebase Memory MCP server already configured — skipping.")
 		return nil
@@ -1298,7 +1582,6 @@ func askCodebaseMemoryMCP(reader *bufio.Reader) error {
 		return nil
 	}
 
-	// Ask scope
 	fmt.Println("\nWhere should the MCP server be configured?")
 	fmt.Println("  1) Global — available to all projects (recommended)")
 	fmt.Println("  2) Local — this project only (.mcp.json)")
@@ -1311,35 +1594,31 @@ func askCodebaseMemoryMCP(reader *bufio.Reader) error {
 	isGlobal := scopeInput != "2"
 
 	if !binaryExists {
-		// Detect platform
-		platform := cbMemPlatform()
-		if platform == "" {
-			return fmt.Errorf("unsupported platform: %s/%s — install manually from https://github.com/%s/releases", runtime.GOOS, runtime.GOARCH, cbMemRepo)
+		plat := cbMemPlatform(env)
+		if plat == "" {
+			return fmt.Errorf("unsupported platform: %s/%s — install manually from https://github.com/%s/releases", env.GOOS, env.GOARCH, cbMemRepo)
 		}
 
 		ext := "tar.gz"
-		if runtime.GOOS == "windows" {
+		if env.GOOS == "windows" {
 			ext = "zip"
 		}
-		archiveName := fmt.Sprintf("codebase-memory-mcp-%s.%s", platform, ext)
+		archiveName := fmt.Sprintf("codebase-memory-mcp-%s.%s", plat, ext)
 		downloadURL := fmt.Sprintf("https://github.com/%s/releases/download/%s/%s", cbMemRepo, cbMemVersion, archiveName)
 		checksumsURL := fmt.Sprintf("https://github.com/%s/releases/download/%s/checksums.txt", cbMemRepo, cbMemVersion)
 
-		fmt.Printf("\nDownloading codebase-memory-mcp %s (%s)...\n", cbMemVersion, platform)
+		fmt.Printf("\nDownloading codebase-memory-mcp %s (%s)...\n", cbMemVersion, plat)
 
-		// Download checksums
 		checksumsData, err := httpGetBytes(checksumsURL)
 		if err != nil {
 			return fmt.Errorf("downloading checksums: %w", err)
 		}
 
-		// Find expected hash
 		expectedHash := findChecksumForFile(string(checksumsData), archiveName)
 		if expectedHash == "" {
 			return fmt.Errorf("checksum not found for %s in checksums.txt", archiveName)
 		}
 
-		// Download archive to temp directory
 		tmpDir, err := os.MkdirTemp("", "cbmem-*")
 		if err != nil {
 			return fmt.Errorf("creating temp dir: %w", err)
@@ -1351,17 +1630,15 @@ func askCodebaseMemoryMCP(reader *bufio.Reader) error {
 			return fmt.Errorf("downloading %s: %w", archiveName, err)
 		}
 
-		// Verify checksum
 		actualHash, err := sha256File(archivePath)
 		if err != nil {
 			return fmt.Errorf("computing checksum: %w", err)
 		}
 		if actualHash != expectedHash {
-			return fmt.Errorf("checksum verification failed!\n  expected: %s\n  got:      %s\nThe download may be corrupted. Try again or install manually from https://github.com/%s/releases", expectedHash, actualHash, cbMemRepo)
+			return fmt.Errorf("checksum verification failed!\n  expected: %s\n  got:      %s", expectedHash, actualHash)
 		}
 		fmt.Println("Checksum verified.")
 
-		// Extract binary
 		if err := os.MkdirAll(filepath.Dir(binPath), 0755); err != nil {
 			return fmt.Errorf("creating %s: %w", filepath.Dir(binPath), err)
 		}
@@ -1381,14 +1658,13 @@ func askCodebaseMemoryMCP(reader *bufio.Reader) error {
 		fmt.Printf("Installed: %s\n", binPath)
 	}
 
-	// Configure MCP
 	serverConfig := map[string]interface{}{
 		"type":    "stdio",
 		"command": binPath,
 	}
 
 	if isGlobal {
-		if err := addGlobalMCPServer("codebase-memory-mcp", serverConfig); err != nil {
+		if err := addGlobalMCPServer("codebase-memory-mcp", serverConfig, env.HomeDir); err != nil {
 			return fmt.Errorf("configuring global MCP: %w", err)
 		}
 		fmt.Println("Configured: ~/.claude/settings.json (global)")
@@ -1399,51 +1675,31 @@ func askCodebaseMemoryMCP(reader *bufio.Reader) error {
 		fmt.Println("Configured: .mcp.json (local)")
 	}
 
-	// Check if ~/.local/bin is on PATH
-	binDir := filepath.Dir(binPath)
-	pathDirs := strings.Split(os.Getenv("PATH"), string(os.PathListSeparator))
-	inPath := false
-	for _, d := range pathDirs {
-		if d == binDir {
-			inPath = true
-			break
-		}
-	}
-	if !inPath {
-		fmt.Printf("\nNote: %s is not in your PATH. Add it to use codebase-memory-mcp directly:\n", binDir)
-		fmt.Printf("  export PATH=\"%s:$PATH\"\n", binDir)
-	}
-
-	fmt.Println("\nCodebase Memory MCP installed! Say \"index this project\" in Claude Code to get started.")
 	return nil
 }
 
-func cbMemPlatform() string {
-	goos := runtime.GOOS
-	goarch := runtime.GOARCH
+func cbMemPlatform(env platform.Env) string {
 	switch {
-	case goos == "darwin" && goarch == "arm64":
+	case env.GOOS == "darwin" && env.GOARCH == "arm64":
 		return "darwin-arm64"
-	case goos == "darwin" && goarch == "amd64":
+	case env.GOOS == "darwin" && env.GOARCH == "amd64":
 		return "darwin-amd64"
-	case goos == "linux" && goarch == "amd64":
+	case env.GOOS == "linux" && env.GOARCH == "amd64":
 		return "linux-amd64"
-	case goos == "linux" && goarch == "arm64":
+	case env.GOOS == "linux" && env.GOARCH == "arm64":
 		return "linux-arm64"
-	case goos == "windows" && goarch == "amd64":
+	case env.GOOS == "windows" && env.GOARCH == "amd64":
 		return "windows-amd64"
 	default:
 		return ""
 	}
 }
 
-func mcpServerConfigured(name string) bool {
-	// Check global settings
-	globalPath := filepath.Join(homeDir(), ".claude", "settings.json")
+func mcpServerConfigured(name, home string) bool {
+	globalPath := filepath.Join(home, ".claude", "settings.json")
 	if checkMCPConfigFile(globalPath, name) {
 		return true
 	}
-	// Check local .mcp.json
 	return checkMCPConfigFile(".mcp.json", name)
 }
 
@@ -1469,7 +1725,6 @@ func checkMCPConfigFile(path, serverName string) bool {
 
 const allowedDownloadHost = "github.com"
 
-// validateDownloadURL ensures the URL points to the allowed host to prevent SSRF.
 func validateDownloadURL(rawURL string) error {
 	u, err := url.Parse(rawURL)
 	if err != nil {
@@ -1549,6 +1804,7 @@ func findChecksumForFile(checksums, filename string) string {
 }
 
 func extractTarGzBinary(archivePath, binName, destPath string) error {
+	const maxBinBytes = 100 * 1024 * 1024
 	f, err := os.Open(archivePath)
 	if err != nil {
 		return err
@@ -1571,23 +1827,33 @@ func extractTarGzBinary(archivePath, binName, destPath string) error {
 			return err
 		}
 
-		if filepath.Base(hdr.Name) == binName && hdr.Typeflag == tar.TypeReg {
+		if filepath.Base(hdr.Name) == binName && (hdr.Typeflag == tar.TypeReg || hdr.Typeflag == tar.TypeRegA) {
+			if hdr.Size > maxBinBytes {
+				return fmt.Errorf("archive binary %s exceeds 100 MiB limit", binName)
+			}
 			out, err := os.Create(destPath)
 			if err != nil {
 				return err
 			}
-			_, copyErr := io.Copy(out, io.LimitReader(tr, 100*1024*1024)) // 100MB safety limit
+			n, copyErr := io.Copy(out, io.LimitReader(tr, maxBinBytes+1))
 			closeErr := out.Close()
 			if copyErr != nil {
 				return copyErr
 			}
-			return closeErr
+			if closeErr != nil {
+				return closeErr
+			}
+			if n > maxBinBytes {
+				return fmt.Errorf("archive binary %s exceeds 100 MiB limit", binName)
+			}
+			return nil
 		}
 	}
 	return fmt.Errorf("%s not found in archive", binName)
 }
 
 func extractZipBinary(archivePath, binName, destPath string) error {
+	const maxBinBytes = 100 * 1024 * 1024
 	r, err := zip.OpenReader(archivePath)
 	if err != nil {
 		return err
@@ -1596,6 +1862,12 @@ func extractZipBinary(archivePath, binName, destPath string) error {
 
 	for _, zf := range r.File {
 		if filepath.Base(zf.Name) == binName {
+			if zf.Mode()&os.ModeSymlink != 0 || zf.FileInfo().IsDir() {
+				return fmt.Errorf("unsafe archive entry mode for %s", binName)
+			}
+			if zf.UncompressedSize64 > maxBinBytes {
+				return fmt.Errorf("archive binary %s exceeds 100 MiB limit", binName)
+			}
 			rc, err := zf.Open()
 			if err != nil {
 				return err
@@ -1606,19 +1878,25 @@ func extractZipBinary(archivePath, binName, destPath string) error {
 			if err != nil {
 				return err
 			}
-			_, copyErr := io.Copy(out, io.LimitReader(rc, 100*1024*1024)) // 100MB safety limit
+			n, copyErr := io.Copy(out, io.LimitReader(rc, maxBinBytes+1))
 			closeErr := out.Close()
 			if copyErr != nil {
 				return copyErr
 			}
-			return closeErr
+			if closeErr != nil {
+				return closeErr
+			}
+			if n > maxBinBytes {
+				return fmt.Errorf("archive binary %s exceeds 100 MiB limit", binName)
+			}
+			return nil
 		}
 	}
 	return fmt.Errorf("%s not found in archive", binName)
 }
 
-func addGlobalMCPServer(name string, serverConfig map[string]interface{}) error {
-	settingsPath := filepath.Join(homeDir(), ".claude", "settings.json")
+func addGlobalMCPServer(name string, serverConfig map[string]interface{}, home string) error {
+	settingsPath := filepath.Join(home, ".claude", "settings.json")
 
 	var settings map[string]interface{}
 	if fileExists(settingsPath) {

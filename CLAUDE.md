@@ -2,8 +2,15 @@
 
 ## Key Directories
 
-- `internal/`
-- `docs/`
+- `internal/catalog/` — Embedded shared skills (`shared/skills/`) and harness-specific adapters (`claude/`, `antigravity/`, `zed/`, `opencode/`)
+- `internal/platform/` — Cross-platform OS (`darwin`, `linux`, `windows`) and harness target path matrix (`claude`, `antigravity`, `zed`, `opencode`)
+- `internal/backup/` — NTFS-safe pre-write backup snapshots, restoration, and pruning
+- `internal/state/` — Installation receipt tracking (`state.json`) and safe uninstallation
+- `internal/installer/` — Curated track installation (`opinionated`, `basics`, `product`, `copy-polish`, `custom`) and markdown adaptation
+- `internal/updater/` — Live updates from `main` via `gh` CLI and self-upgrading release binaries
+- `internal/tui/` — Charmbracelet Bubble Tea & Lip Gloss graphical installer wizard and interactive `guide`
+- `scripts/` — Sync and maintenance utilities (`scripts/sync-antigravity-from-local.sh`)
+- `docs/` — Architecture, design skills guide, and provenance documentation
 
 ---
 

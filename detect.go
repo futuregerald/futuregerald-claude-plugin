@@ -371,9 +371,10 @@ func applyProjectDetection(baseContent []byte, info ProjectInfo, embeddedFS fs.F
 	config = strings.ReplaceAll(config, "{{BUILD_COMMAND}}", info.BuildCommand)
 	config = strings.ReplaceAll(config, "{{FRAMEWORK}}", info.Framework)
 
-	// Insert language-specific template at marker
 	if info.LanguageTemplate != "" {
-		if langContent, err := fs.ReadFile(embeddedFS, "templates/languages/"+info.LanguageTemplate); err == nil {
+		if langContent, err := fs.ReadFile(embeddedFS, "shared/templates/languages/"+info.LanguageTemplate); err == nil {
+			config = strings.ReplaceAll(config, "<!-- LANGUAGE_SPECIFIC -->", string(langContent))
+		} else if langContent, err := fs.ReadFile(embeddedFS, "templates/languages/"+info.LanguageTemplate); err == nil {
 			config = strings.ReplaceAll(config, "<!-- LANGUAGE_SPECIFIC -->", string(langContent))
 		}
 	}
