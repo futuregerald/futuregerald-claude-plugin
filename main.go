@@ -247,7 +247,7 @@ Run without flags in a terminal to launch the guided graphical TUI, or pass flag
 		RunE:  runGuide,
 	}
 	guideCmd.Flags().StringVarP(&targetType, "target", "t", "", "Target harness (claude, antigravity, zed, opencode)")
-	guideCmd.Flags().StringVar(&trackName, "track", "opinionated", "Track to preview in guide")
+	guideCmd.Flags().StringVar(&trackName, "track", "", "Track to preview in guide")
 	guideCmd.Flags().BoolVarP(&nonInteract, "yes", "y", false, "Print formatted guide to stdout without launching TUI")
 	guideCmd.Flags().BoolVar(&nonInteract, "non-interactive", false, "Print formatted guide to stdout without launching TUI")
 

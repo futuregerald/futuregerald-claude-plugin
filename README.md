@@ -30,6 +30,7 @@ Install curated AI coding workflows, `/slash` commands, and review subagents for
 - [The 12-Phase Development Lifecycle](#the-12-phase-development-lifecycle)
 - [Skill Catalog by Category](#skill-catalog-by-category)
 - [Architecture](#architecture)
+- [Local-Only Docker & Desktop Harness E2E Suite](#local-only-docker--desktop-harness-e2e-suite)
 
 ---
 
@@ -303,6 +304,22 @@ internal/
   installer/              # Plan computation, markdown harness adaptation, and atomic file installation
   updater/                # Live main-branch tarball updates via gh CLI and self-upgrading binary logic
   tui/                    # Bubble Tea + Lip Gloss interactive wizard, progressive disclosure table, and 3-tab guide
+```
+
+---
+
+## Local-Only Docker & Desktop Harness E2E Suite
+
+To run the full containerized and host-sandbox end-to-end suite locally across all four harnesses (`claude`, `antigravity`, `zed`, `opencode`) — including real installed `@anthropic-ai/claude-code` and `opencode-ai` CLIs inside Docker, Claude Desktop and Antigravity Desktop coexistence checks, live `autonomous-breaker` hook execution, real PTY-driven interactive Bubble Tea TUI journeys, and full CLI flag/restore coverage:
+
+```bash
+make test-e2e
+```
+
+`e2e/e2e_test.go` is guarded by `//go:build e2e` so `make test` (`go test ./...`) and GitHub Actions CI never run the Docker E2E suite. You can also run the host-isolated desktop compatibility sandbox directly without Docker:
+
+```bash
+HOME=$(mktemp -d) go test -v -tags=e2e ./e2e -run TestHostDesktopAppsCompatibilitySandbox
 ```
 
 ## License
