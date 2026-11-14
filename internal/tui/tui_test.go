@@ -48,6 +48,12 @@ func TestGuidedWizardInstallAndPostInstallTour(t *testing.T) {
 	if !strings.Contains(homeView, "SkillBot") || !strings.Contains(homeView, "Choose a workflow track") {
 		t.Fatalf("unexpected home view:\n%s", homeView)
 	}
+	if !strings.Contains(homeView, ".---.") || !strings.Contains(homeView, "| o_o |") {
+		t.Fatalf("expected 3-line Direction 01 ASCII mascot in home view:\n%s", homeView)
+	}
+	if !strings.Contains(homeView, "install") || !strings.Contains(homeView, "update") || !strings.Contains(homeView, "restore") || !strings.Contains(homeView, "uninstall") {
+		t.Fatalf("expected Direction 01 top mode bar in home view:\n%s", homeView)
+	}
 
 	sendSpecial(tea.KeyEnter)
 	if m.screen != screenHarness {
