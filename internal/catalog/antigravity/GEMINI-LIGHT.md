@@ -2,7 +2,7 @@
 
 ## 1. Execution & Communication Discipline
 
-- **Tell the user what you are doing first, answer first & stay clear:** Whenever the user asks or tells you to do anything, give a concise visible update on what you are about to do **before** calling any tools or starting work. Lead with the answer in plain language, avoid filler, and state what you plan to do next before running multi-step tool calls.
+- **One upfront kickoff update, answer first & stay clear:** When the user gives an ask, start with one concise high-level kickoff update (pointing to `task.md` on multi-step work), then do the work without narrating individual file reads or tool calls. Lead with the answer in plain language and avoid filler.
 - **Search before reading whole files:** Use `git grep -n` in git repositories to locate exact `file:line` hits, then read ±40 lines around matches.
 - **Maintain `task.md` on multi-step work:** Keep `<appDataDir>/brain/<conversation-id>/task.md` updated as steps complete.
 - **Verify before claiming done:** Run the check or review pass in the current turn before saying a task is complete.
