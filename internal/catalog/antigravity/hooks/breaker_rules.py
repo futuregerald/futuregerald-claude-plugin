@@ -117,6 +117,44 @@ def is_complaint(user_text: str) -> bool:
         return False
     return bool(COMPLAINT_PATTERN.search(user_text))
 
+def classify_swarm_steps(
+    steps: list[dict],
+    inflight_name: str = "",
+    inflight_args: dict | None = None,
+    tool_calls_extractor=None,
+) -> tuple[bool, bool]:
+    last_user_content = ""
+    for s in steps:
+        if isinstance(s, dict) and s.get("type") == "USER_INPUT":
+            last_user_content = s.get("content") or ""
+    has_prior_swarm_add = False
+    has_prior_worker_board_calls = False
+    for idx, s in enumerate(steps):
+        if isinstance(s, dict) and s.get("type") == "PLANNER_RESPONSE":
+            t_calls = tool_calls_extractor(idx, s) if tool_calls_extractor is not None else (s.get("tool_calls") or [])
+            for c in t_calls:
+                if not isinstance(c, dict):
+                    continue
+                c_name = c.get("name", "")
+                raw_args = c.get("args") or {}
+                c_args = decode_json_strings(raw_args) if isinstance(raw_args, dict) else {}
+                if c_name == "swarm" and isinstance(c_args, dict) and c_args.get("action") == "add" and not has_prior_worker_board_calls:
+                    has_prior_swarm_add = True
+                elif c_name in ("read_board", "post_message", "swarm_wait") and not has_prior_swarm_add:
+                    has_prior_worker_board_calls = True
+    in_args = inflight_args if isinstance(inflight_args, dict) else {}
+    has_coordinator_swarm_add = has_prior_swarm_add or (
+        inflight_name == "swarm" and in_args.get("action") == "add" and not has_prior_worker_board_calls
+    )
+    has_worker_board_calls = has_prior_worker_board_calls or (
+        not has_coordinator_swarm_add and inflight_name in ("read_board", "post_message", "swarm_wait")
+    )
+    is_swarm_worker = (not has_coordinator_swarm_add) and (
+        has_worker_board_calls
+        or bool(re.match(r"^@[a-z0-9-]+(?:\s|$)", str(last_user_content).lstrip()))
+    )
+    return has_coordinator_swarm_add, is_swarm_worker
+
 def compaction_step_indices(steps: list[dict]) -> list[int]:
     res = []
     for idx, s in enumerate(steps):

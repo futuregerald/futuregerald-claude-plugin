@@ -190,8 +190,9 @@ class TestBreakerRulesNew(unittest.TestCase):
 
         all_required = [
             "call_mcp_tool", "edit_file", "find_by_name", "grep_search", "invoke_subagent",
-            "list_dir", "manage_task", "read_file", "read_url_content", "replace_file_content",
-            "run_command", "schedule", "search_web", "send_message", "swarm", "view_file",
+            "list_dir", "manage_task", "post_message", "read_board", "read_file",
+            "read_url_content", "replace_file_content", "run_command", "schedule",
+            "search_web", "send_message", "swarm", "swarm_wait", "view_file",
             "write_file", "write_to_file"
         ]
         current = sorted(m["matcher"] for m in data["autonomous-circuit-breaker"]["PreToolUse"])

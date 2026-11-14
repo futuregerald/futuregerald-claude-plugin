@@ -179,11 +179,53 @@ class TestReplayBreaker(unittest.TestCase):
         cb = data.get("autonomous-circuit-breaker", {})
         self.assertTrue(cb.get("enabled"))
         pre_tool_use = cb.get("PreToolUse", [])
-        self.assertEqual(len(pre_tool_use), 18)
+        self.assertEqual(len(pre_tool_use), 21)
         matchers = {entry["matcher"] for entry in pre_tool_use}
         self.assertIn("swarm", matchers)
+        self.assertIn("swarm_wait", matchers)
+        self.assertIn("read_board", matchers)
+        self.assertIn("post_message", matchers)
         for entry in pre_tool_use:
             self.assertEqual(entry["hooks"][0]["command"], "bash ~/.gemini/config/hooks/autonomous-breaker.sh")
+
+    def test_swarm_worker_context_cap_counts_as_block_not_warn_in_replay(self):
+        root = Path(self.test_tmpdir) / "brain"
+        conv_id = "test-swarm-worker-cap-replay"
+        logs_dir = root / conv_id / ".system_generated" / "logs"
+        t_path = logs_dir / "transcript.jsonl"
+        t_full_path = logs_dir / "transcript_full.jsonl"
+        steps = [
+            {"step_index": 0, "source": "USER_EXPLICIT", "type": "USER_INPUT", "content": "@impl implement phase 1"},
+            {
+                "step_index": 1,
+                "source": "MODEL",
+                "type": "PLANNER_RESPONSE",
+                "input_tokens": 20000,
+                "cache_read_tokens": 220000,
+                "output_tokens": 500,
+                "content": "working",
+                "tool_calls": [{"name": "read_board", "args": {}}],
+            },
+            {"step_index": 2, "source": "TOOL", "type": "GENERIC", "content": "ok"},
+            {
+                "step_index": 3,
+                "source": "MODEL",
+                "type": "PLANNER_RESPONSE",
+                "content": "edit",
+                "tool_calls": [{"name": "edit_file", "args": {"Path": "/repo/main.go", "Target": "a", "Replacement": "b"}}],
+            },
+            {"step_index": 4, "source": "SYSTEM", "type": "CHECKPOINT", "content": "<CONTEXT_SUMMARY>\ncompacted\n</CONTEXT_SUMMARY>"},
+        ]
+        self.write_jsonl(t_path, steps)
+        self.write_jsonl(t_full_path, steps)
+        out_path = Path(self.test_tmpdir) / "out.json"
+        res = replay_breaker.run_replay(root=str(root), last_n=10, out_path=str(out_path))
+        self.assertEqual(res["baton"]["total_warns"], 0)
+        self.assertEqual(res["baton"]["total_blocks"], 1)
+        self.assertEqual(res["baton"]["total_compactions"], 0)
+        self.assertEqual(res["rules"]["BATON"]["helper_triggers"], 1)
+        self.assertEqual(res["rules"]["BATON"]["main_triggers"], 0)
+        self.assertEqual(res["longest_4_authorized_sessions"], [])
 
 
 

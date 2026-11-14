@@ -146,13 +146,13 @@ Hook: `~/.gemini/config/hooks/autonomous_breaker.py` (registered in `~/.gemini/c
 | TRUELOOP | 3rd re-read of ≥50% already-read lines, or same command, within 20 planner steps, no edit between | enforce |
 | H1 | authorized main session makes a 7th code edit without dispatching a helper | enforce |
 | H2 | helper reaches `BREAKER_SUBAGENT_STEP_MAX` planner turns (opt-in; default `0` / disabled) | enforce (when cap > 0) |
-| BATON | context estimate (bytes since last compaction ÷ 4) warn 205k, block 235k (256k compaction on Carbon, Argon, Hydrogen & Flash 3.8) | enforce |
+| BATON | context estimate (`input_tokens + cache_read_tokens + output_tokens` + trailing bytes ÷ 4 since compaction) warn `205k`, block `235k` (Coordinator) & `235k` worker cap (`256k` compaction on Carbon, Argon, Hydrogen & Flash 3.8) | enforce |
 
-**Baton-pass:** when the breaker warns (or the estimate nears 205k), hand off at the next natural break using the `baton-pass` skill:
-1. Write `~/.gemini/handoffs/<project-key>/<YYYY-MM-DD-HHMMSS>-<slug>-ACTIVE_CONTEXT.md` (mirror to the brain dir) with four sections: Active Files & Contracts · Decisions, Evidence, Test Results · Pending Steps · Negative Constraints.
-2. Save Prism `session_save_handoff`.
-3. Give the user: `Ingest ~/.gemini/handoffs/<project-key>/<file> and continue from Pending Steps.`
+**Baton-pass (dual-mode `swarm` + non-`swarm`):** when the breaker warns (or the estimate nears `205k`), hand off at the next natural break using the `baton-pass` skill:
+1. **Without `swarm` (`subagent` / `inline`):** Fold any `/tmp/subagent-context-*.md` notes, write `~/.gemini/handoffs/<project-key>/<YYYY-MM-DD-HHMMSS>-<slug>-ACTIVE_CONTEXT.md` (`Execution Mode: subagent | inline`, mirrored to the brain dir) with four sections (`Active Files & Contracts` · `Decisions, Evidence & Test Results` · `Pending Steps (Ordered)` · `Negative Constraints (Do Not Repeat)`), and save Prism `session_save_handoff`.
+2. **With `swarm` (`peer-pipeline-swarm` / native `swarm`):** Write `ACTIVE_CONTEXT.md` first if at `>=235k` to unlock `+50k` tokens (`read_board`, `post_message`, `swarm{action: "status"|"kill"}`, and `/tmp/*.md` reads stay exempt; `swarm_wait` is blocked at `>=235k`). Run `git fetch "<SHARE_ROOT>" "<SHA>" && git rev-parse --verify "<SHA>^{commit}"` and merge or anchor `git branch -f "baton/<stream>" "<SHA>"` **before** calling `swarm{action: "kill"}` on all workers (including `monitor`), then update `ACTIVE_CONTEXT.md` (`Execution Mode: swarm`) and save Prism `session_save_handoff`.
+3. Give the user: `Ingest ~/.gemini/handoffs/<project-key>/<YYYY-MM-DD-HHMMSS>-<slug>-ACTIVE_CONTEXT.md and continue from Pending Steps.` (Session B resumes in Turn 1 without re-reading the codebase and gets fresh worker names `impl`, `code-rev`, `sec-rev`, `monitor`).
 
-The old `pre-subagent-baton-gate.sh` is unregistered; this rule replaces it. Escape hatch: `BREAKER_BATON_MODE=log`. At block level only the handoff write, Prism calls and reading the handoff are allowed; `invoke_subagent` is denied because a helper's report grows the parent context. Writing the handoff unlocks this conversation until the estimate grows another 50k.
+Escape hatch: `BREAKER_BATON_MODE=log`. Writing `ACTIVE_CONTEXT.md` unlocks the Coordinator for `+50k` tokens (`invoke_subagent`, `swarm add`, and `swarm_wait` are otherwise denied at `>=235k`). Swarm workers are exempt from the `205k` warn; if a swarm worker reaches `235k`, writing `/tmp/subagent-context-*.md` unlocks `+25k` tokens to commit WIP in `SHARE_ROOT` and post `@coordinator [blocked] context-cap SHARE_ROOT=<path> SHA=<sha>`.
 
 **Strike escalation:** when an implementer or helper subagent trips STRIKES (or opt-in EXPLORE) it writes its 4-section handoff with the failing diff and test output; the orchestrator diagnoses in one turn and resolves without stopping for confirmation.

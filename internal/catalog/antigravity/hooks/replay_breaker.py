@@ -15,6 +15,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import autonomous_breaker
 from breaker_rules import (
     is_authorized,
+    classify_swarm_steps,
     compaction_step_indices,
 )
 
@@ -90,6 +91,7 @@ def run_replay(
                     full_steps = []
 
             is_subagent = not any(s.get("type") == "USER_INPUT" for s in steps)
+            _, is_swarm_worker = classify_swarm_steps(full_steps if full_steps else steps)
             if is_subagent:
                 total_helpers += 1
 
@@ -188,7 +190,7 @@ def run_replay(
                         if r_name in rule_stats:
                             rule_stats[r_name]["total_triggers"] += 1
                             rule_stats[r_name]["sessions_affected"].add(conv_id)
-                            if is_subagent:
+                            if is_subagent or is_swarm_worker:
                                 rule_stats[r_name]["helper_triggers"] += 1
                             else:
                                 rule_stats[r_name]["main_triggers"] += 1
@@ -210,13 +212,13 @@ def run_replay(
                         elif r_name == "H2":
                             h2_helper_sessions.add(conv_id)
                         elif r_name == "BATON":
-                            if "Warn" in tr.get("reason", ""):
+                            if "Baton Warn" in tr.get("reason", ""):
                                 total_baton_warns += 1
                                 session_warn_steps.append(k)
                             else:
                                 total_baton_blocks += 1
 
-            if not is_subagent:
+            if not is_subagent and not is_swarm_worker:
                 u_indices = [idx for idx, s in enumerate(steps) if s.get("type") == "USER_INPUT"]
                 has_any_auth = any(
                     is_authorized(steps[u_idx].get("content") or "", conv_id, state_dir=state_dir)

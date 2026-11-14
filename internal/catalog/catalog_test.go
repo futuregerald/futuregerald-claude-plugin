@@ -392,3 +392,97 @@ func TestCommandsForSkillsFiltering(t *testing.T) {
 		t.Errorf("expected nil installedSkills to preserve wildcard subdir commands, got %v", nilCmds)
 	}
 }
+
+func TestAntigravityDualModeBatonPassCatalogInvariants(t *testing.T) {
+	t.Parallel()
+
+	hooksBytes, err := fs.ReadFile(FS, "antigravity/hooks.json")
+	if err != nil {
+		t.Fatalf("reading antigravity/hooks.json: %v", err)
+	}
+	hooksStr := string(hooksBytes)
+	for _, matcher := range []string{`"swarm"`, `"read_board"`, `"post_message"`, `"swarm_wait"`} {
+		if !strings.Contains(hooksStr, matcher) {
+			t.Errorf("antigravity/hooks.json missing matcher %s", matcher)
+		}
+	}
+
+	batonSkillBytes, err := fs.ReadFile(FS, "antigravity/skills/baton-pass/SKILL.md")
+	if err != nil {
+		t.Fatalf("reading baton-pass/SKILL.md: %v", err)
+	}
+	batonTemplateBytes, err := fs.ReadFile(FS, "antigravity/skills/baton-pass/references/template.md")
+	if err != nil {
+		t.Fatalf("reading baton-pass/references/template.md: %v", err)
+	}
+	batonSkill := string(batonSkillBytes)
+	batonTemplate := string(batonTemplateBytes)
+
+	sharedHeadings := []string{
+		"Execution Mode:",
+		"## 1. Active Files & Contracts",
+		"## 2. Decisions, Evidence & Test Results",
+		"## 3. Pending Steps (Ordered)",
+		"## 4. Negative Constraints (Do Not Repeat)",
+	}
+	for _, heading := range sharedHeadings {
+		if !strings.Contains(batonSkill, heading) {
+			t.Errorf("baton-pass/SKILL.md missing aligned heading/field %q", heading)
+		}
+		if !strings.Contains(batonTemplate, heading) {
+			t.Errorf("baton-pass/references/template.md missing aligned heading/field %q", heading)
+		}
+	}
+	for _, needle := range []string{
+		"Without Swarm",
+		"With Swarm",
+		"status --porcelain",
+		"wip: baton snapshot",
+		"Ingest ~/.gemini/handoffs/<project-key>/<YYYY-MM-DD-HHMMSS>-<slug>-ACTIVE_CONTEXT.md and continue from Pending Steps.",
+	} {
+		if !strings.Contains(batonSkill, needle) {
+			t.Errorf("baton-pass/SKILL.md missing required dual-mode content %q", needle)
+		}
+	}
+
+	swarmSkillBytes, err := fs.ReadFile(FS, "antigravity/skills/peer-pipeline-swarm/SKILL.md")
+	if err != nil {
+		t.Fatalf("reading peer-pipeline-swarm/SKILL.md: %v", err)
+	}
+	swarmSkill := string(swarmSkillBytes)
+	for _, needle := range []string{
+		"### 5. Baton-Pass Mid-Swarm or Between Phases",
+		"git rev-parse --verify",
+		"status --porcelain",
+		"wip: baton snapshot",
+		"@coordinator [blocked] context-cap",
+	} {
+		if !strings.Contains(swarmSkill, needle) {
+			t.Errorf("peer-pipeline-swarm/SKILL.md missing %q", needle)
+		}
+	}
+
+	orchBytes, err := fs.ReadFile(FS, "antigravity/skills/antigravity-orchestration/SKILL.md")
+	if err != nil {
+		t.Fatalf("reading antigravity-orchestration/SKILL.md: %v", err)
+	}
+	orchStr := string(orchBytes)
+	if strings.Contains(orchStr, "bytes since last compaction") {
+		t.Errorf("antigravity-orchestration/SKILL.md still contains stale bytes-only BATON formula")
+	}
+	if !strings.Contains(orchStr, "input_tokens") {
+		t.Errorf("antigravity-orchestration/SKILL.md missing API telemetry BATON formula")
+	}
+
+	readmeBytes, err := fs.ReadFile(FS, "antigravity/README.md")
+	if err != nil {
+		t.Fatalf("reading antigravity/README.md: %v", err)
+	}
+	readmeStr := string(readmeBytes)
+	if !strings.Contains(readmeStr, "21 tools") {
+		t.Errorf("antigravity/README.md missing '21 tools' registration count")
+	}
+	if strings.Contains(readmeStr, "transcript bytes since the last compaction") {
+		t.Errorf("antigravity/README.md still contains stale bytes-only BATON description")
+	}
+}

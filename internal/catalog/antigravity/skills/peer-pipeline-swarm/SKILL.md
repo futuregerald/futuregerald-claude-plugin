@@ -56,10 +56,10 @@ Board tools (`read_board`, `post_message`, `swarm_wait`) appear one turn *after*
 1. **`impl` (`gemini-4-argon-medium`, `workspace: "share"`):**
    ```text
    Read ~/.gemini/config/plugins/antigravity-subagents/agents/implementer.md, /tmp/plan-<project>-<stream>.md, and /tmp/subagent-context-<project>-<stream>.md first.
-   1. Execute all TDD tasks (RED -> GREEN -> REFACTOR) with zero code comments. Do NOT run version-bump scripts or E2E suites.
+   1. Immediately append `SHARE_ROOT=$(pwd)` and `BRANCH=$(git rev-parse --abbrev-ref HEAD)` to /tmp/subagent-context-<project>-<stream>.md before editing files so your share checkout path is recorded even if context caps later. Then execute all TDD tasks (RED -> GREEN -> REFACTOR) with zero code comments. Do NOT run version-bump scripts or E2E suites.
    2. Run scoped fast unit tests and lint/typecheck/wording gates (filtering output to /tmp/t.log; if a CLI fails twice, read Makefile/package.json/vitest.config.* immediately). Perform a self-simplification pass while keeping tests green.
    3. Stage and commit your changes on your share branch (`git rev-parse --abbrev-ref HEAD` and `git rev-parse HEAD`).
-   4. Append `SHARE_ROOT=$(pwd)`, `BRANCH`, `COMMIT_SHA`, your 4-section handoff, passing gate exit codes, and `git diff -U5 <base>...HEAD` to /tmp/subagent-context-<project>-<stream>.md.
+   4. Append `COMMIT_SHA`, your 4-section handoff, passing gate exit codes, and `git diff -U5 <base>...HEAD` to /tmp/subagent-context-<project>-<stream>.md.
    5. Tag `@code-rev @sec-rev` (and `@sql-rev` if present) with a <=5-line pointer (SHARE_ROOT, SHA, context file path — NEVER paste diffs or logs on the board), then `swarm_wait` for ALL assigned reviewers to reply before acting.
    6. If any reviewer replies `[changes-requested]`, fix all findings in one pass, re-run fast gates, commit a new SHA, append the fix diff to the context file, and tag ONLY the reviewer(s) who requested changes (plus `@sec-rev` if auth/input/SQL/network changed) for a 1-turn fix-check. Cap at 2 fix rounds; escalate `@coordinator [blocked]` if unresolved.
    7. Once EVERY assigned reviewer has replied `[approved]` on the current SHA, post ONE <=5-line message: `@coordinator [green] SHARE_ROOT=<path> BRANCH=<branch> SHA=<sha> Context=/tmp/subagent-context-<project>-<stream>.md`.
@@ -104,6 +104,20 @@ Once `@coordinator [green]` arrives for every stream in the phase:
    - Run repo version bump **once** if applicable (e.g., `node scripts/version.mjs bump patch|minor && make version-check`).
    - Run scoped fast unit tests and linter/typecheck directly in the Coordinator's shell and inspect exit codes (`0`).
    - Execute **Phase 10 (Blast-radius verify)** across all `Affected Callers` plus any symbols touched during review fixes, then proceed to **Phase 11 (Commit)** and **Phase 12 (Handoff)**.
+
+### 5. Baton-Pass Mid-Swarm or Between Phases
+
+1. **Coordinator hits `205k` (`Baton Warn`) or `235k` (`Baton Block`):**
+   - At `>=235k`, `swarm_wait` is blocked while `read_board`, `post_message`, `swarm{action: "status"|"kill"}`, and `/tmp/*.md` reads remain allowed. Write `~/.gemini/handoffs/<project-key>/<YYYY-MM-DD-HHMMSS>-<slug>-ACTIVE_CONTEXT.md` first (see [`baton-pass`](../baton-pass/SKILL.md)) to unlock `+50k` tokens.
+   - Read `read_board` and `/tmp/subagent-context-<project>-<stream>.md` to obtain `SHARE_ROOT` and latest `SHA`. If `/tmp/subagent-context-<project>-<stream>.md` has `SHARE_ROOT` without a posted `<SHA>` yet, confirm `impl` is idle via `swarm{action: "status"}`, snapshot uncommitted edits in `<SHARE_ROOT>` if dirty (`git -C "<SHARE_ROOT>" status --porcelain`; if non-empty, `git -C "<SHARE_ROOT>" add -A && git -C "<SHARE_ROOT>" commit -m "wip: baton snapshot"`), and read `SHA=$(git -C "<SHARE_ROOT>" rev-parse HEAD)`. Fetch and verify **before** killing any `share` worker:
+     ```bash
+     git fetch "<SHARE_ROOT>" "<SHA>" && git rev-parse --verify "<SHA>^{commit}"
+     ```
+     Merge if `[green]` or anchor WIP via `git branch -f "baton/<stream>" "<SHA>"`.
+   - Call `swarm{action: "kill"}` on **all** workers including `monitor`, update `ACTIVE_CONTEXT.md` (`Execution Mode: swarm`), save Prism `session_save_handoff`, and print the Session B prompt. Session B starts with fresh worker names (`impl`, `code-rev`, `sec-rev`, `monitor`).
+2. **Worker hits `235k` (`Swarm Worker Context Cap`):**
+   - The breaker instructs the worker to write `SHARE_ROOT=$(pwd)` and WIP state to `/tmp/subagent-context-<project>-<stream>.md` (unlocking `+25k` tokens), commit WIP in `SHARE_ROOT`, and post `@coordinator [blocked] context-cap SHARE_ROOT=<path> SHA=<sha>`.
+   - On wakeup, Coordinator runs `git fetch "<SHARE_ROOT>" "<SHA>" && git rev-parse --verify "<SHA>^{commit}"` first, kills the exhausted worker (`swarm{action: "kill"}`), and either spawns a `-2` continuation worker (`impl-2`, `code-rev-2`, etc.) if Coordinator context is `<205k` or executes `baton-pass` to Session B.
 
 ## Do / Don't
 

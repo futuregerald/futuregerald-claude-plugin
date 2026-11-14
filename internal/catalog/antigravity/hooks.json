@@ -181,6 +181,36 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "read_board",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.gemini/config/hooks/autonomous-breaker.sh",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "post_message",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.gemini/config/hooks/autonomous-breaker.sh",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "swarm_wait",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.gemini/config/hooks/autonomous-breaker.sh",
+            "timeout": 5
+          }
+        ]
       }
     ]
   }
