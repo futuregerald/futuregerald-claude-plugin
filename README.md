@@ -5,17 +5,24 @@
 [![Go Version](https://img.shields.io/github/go-mod/go-version/futuregerald/futuregerald-claude-plugin)](https://go.dev/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A self-contained, cross-platform CLI and curated skill catalog for **Claude Code**, **Google Antigravity**, **Zed**, and **OpenCode** across **Windows, Linux, and macOS**.
+Install curated AI coding workflows, `/slash` commands, and review subagents for **Claude Code**, **Google Antigravity**, **Zed**, and **OpenCode** — without dumping 50+ noisy skill files into your config.
 
-Instead of dropping 50+ raw markdown files into your home directory with zero explanation, `skill-installer` guides you through a spacious terminal wizard, explains every skill and track in plain English, takes optional automatic backups before touching any file, and ships an interactive guide (`skill-installer guide`) you can open anytime.
+`skill-installer` gives you an interactive terminal wizard on **macOS, Linux, and Windows**: pick a track that matches your role, preview every skill in plain English, merge or back up existing configs before writing a single byte (with one-command rollback via `skill-installer restore`), and explore your new commands anytime with `skill-installer guide`.
+
+```bash
+# Launch the interactive 3-step terminal wizard
+./skill-installer
+# Or install the full Opinionated Dev Workflow for Claude Code in one command
+./skill-installer -t claude -g --track opinionated --backup -y
+```
 
 ---
 
 ## Table of Contents
 
-- [Supported Harnesses & Cross-Platform Paths](#supported-harnesses--cross-platform-paths)
 - [Curated Installation Tracks](#curated-installation-tracks)
 - [Quick Start](#quick-start)
+- [Supported Harnesses & Cross-Platform Paths](#supported-harnesses--cross-platform-paths)
 - [Interactive Graphical TUI & Guide](#interactive-graphical-tui--guide)
 - [CLI Reference](#cli-reference)
 - [Safety Backups, Restore & Uninstall](#safety-backups-restore--uninstall)
@@ -26,27 +33,14 @@ Instead of dropping 50+ raw markdown files into your home directory with zero ex
 
 ---
 
-## Supported Harnesses & Cross-Platform Paths
-
-`skill-installer` embeds a unified catalog of **54 skills** (`51` shared across all harnesses + `3` Google Antigravity exclusives) alongside harness-native rules, subagents, slash commands, and circuit-breaker hooks for four first-class AI coding harnesses:
-
-| Harness (`--target`) | Global Path (macOS / Linux) | Global Path (Windows) | Project Path (`--project`) | Installed Artifacts |
-|---|---|---|---|---|
-| **Claude Code** (`claude`) | `~/.claude/` | `%USERPROFILE%\.claude\` | `<repo>/.claude/` & `<repo>/CLAUDE.md` | `CLAUDE.md`, `skills/<name>/`, `commands/`, `agents/` |
-| **Google Antigravity** (`antigravity`) | `~/.gemini/` | `%USERPROFILE%\.gemini\` | `<repo>/.agents/skills/`, `<repo>/.agents/agents/`, `<repo>/GEMINI.md` | `GEMINI.md`, `config/skills/<name>/`, `config/plugins/antigravity-subagents/`, `config/hooks/`, `config/hooks.json` |
-| **Zed** (`zed`) | `~/.agents/skills/` & `~/.config/zed/AGENTS.md` | `%USERPROFILE%\.agents\skills\` & `%APPDATA%\Zed\AGENTS.md` | `<repo>/.agents/skills/` & `<repo>/AGENTS.md` | `.agents/skills/<name>/`, `AGENTS.md` |
-| **OpenCode** (`opencode`) | `~/.config/opencode/` (`$XDG_CONFIG_HOME/opencode/`) | `%USERPROFILE%\.config\opencode\` (`$XDG_CONFIG_HOME\opencode\`) | `<repo>/.opencode/` & `<repo>/AGENTS.md` | `AGENTS.md`, `skills/<name>/`, `agents/`, `commands/` |
-
-> **Windows Compatibility:** On Windows (`GOOS=windows`), `skill-installer` automatically rewrites Antigravity's `hooks.json` command from `autonomous-breaker.sh` to `"C:/Python312/python.exe" "C:/Users/<you>/.gemini/config/hooks/autonomous_breaker.py"` (or `python`/`py -3` if not resolved on `PATH`) so the PreToolUse circuit breaker works natively without requiring `bash` or WSL.
-
----
-
 ## Curated Installation Tracks
 
 You don't need to install everything on day one. Choose one of five tracks interactively or via `--track`:
 
-1. **`opinionated` — Full Opinionated Workflow (Recommended)**
-   - Installs all **32–35 workflow skills** (`32` on Claude/Zed/OpenCode, `35` on Antigravity) plus harness-native rules (`CLAUDE.md` / `GEMINI.md` / `AGENTS.md`), specialized review subagents, slash commands, and (on Antigravity) the autonomous circuit-breaker hook.
+> **Note:** Not sure between **Opinionated** and **Just the Basics**? Choose **Opinionated** if you want `/start` to run caller tracing, plan review, TDD, and adversarial code/security reviews automatically. Choose **Just the Basics** if you want the 8 core skills on demand with zero workflow gates or hooks.
+
+1. **`opinionated` — Opinionated Dev Workflow (Recommended)**
+   - Installs all **32–35 workflow skills** (`32` on Claude/Zed/OpenCode, `35` on Antigravity) plus harness-native rules (`CLAUDE.md` / `GEMINI.md` / `AGENTS.md`), specialized review subagents, slash commands, and (on Antigravity) the context-window safety hook (`autonomous-breaker`, which saves a handoff before long sessions hit compaction limits).
    - Enables the complete 12-phase Development Lifecycle (`/start`, `/begin`, `/lifecycle`).
 2. **`basics` — Just the Basics (Core Coding & Debugging)**
    - Installs **8 essentials** for everyday engineering without workflow ceremony: `brainstorming`, `writing-plans`, `systematic-debugging`, `test-driven-development`, `comprehensive-code-review`, `pull-request-description`, `handoff`, and `plugin-updater`.
@@ -61,15 +55,22 @@ You don't need to install everything on day one. Choose one of five tracks inter
 
 ## Quick Start
 
-### 1. Build from Source or Download Release Binary
+### 1. Download a Prebuilt Binary (or Build from Source)
+
+Download the prebuilt binary for **macOS** (`darwin-arm64`, `darwin-amd64`), **Linux** (`linux-amd64`, `linux-arm64`), or **Windows** (`windows-amd64.exe`) from the [Releases page](https://github.com/futuregerald/futuregerald-claude-plugin/releases) and run it directly:
+
+```bash
+chmod +x ./skill-installer
+./skill-installer
+```
+
+Or build from source with Go:
 
 ```bash
 git clone https://github.com/futuregerald/futuregerald-claude-plugin.git
 cd futuregerald-claude-plugin
 make build
 ```
-
-Or download a prebuilt binary for **macOS** (`darwin-arm64`, `darwin-amd64`), **Linux** (`linux-amd64`, `linux-arm64`), or **Windows** (`windows-amd64.exe`) from the [Releases page](https://github.com/futuregerald/futuregerald-claude-plugin/releases).
 
 ### 2. Run the Interactive Guided Installer
 
@@ -79,10 +80,10 @@ Run with no arguments in any terminal:
 ./skill-installer
 ```
 
-From the Home menu (`Set up skills & workflow`, `See how this works & command guide`, `Check for updates (gh)`, `Restore a safety backup`, `Uninstall`), the guided bot (`[ o_o ]`) walks you one calm decision per screen through three steps:
-1. **Step 1 of 3 — Target App & Scope:** Pick `Google Antigravity`, `Claude Code`, `Zed Editor`, or `OpenCode`, and press `Tab` to toggle `Global (all projects)` vs `Current project folder`.
+From the Home menu (`Choose a workflow track (60-sec guided setup)`, `See how this works & command guide`, `Check for skill & workflow updates`, `Restore a safety backup`, `Uninstall`), the guided bot (`[ o_o ]`) walks you one calm decision per screen through three steps:
+1. **Step 1 of 3 — Target App & Scope:** Pick `Google Antigravity`, `Claude Code`, `Zed Editor`, or `OpenCode`. Press `Tab` to toggle `Global (all projects)` vs `Specific project folder (<path>)`, or press `e` to set any target project directory path directly (supports `~` expansion and creates the directory if needed).
 2. **Step 2 of 3 — Workflow Track:** Choose `Opinionated Dev Workflow`, `Just the Basics`, `Product & Strategy Flow`, `Copy, Brand & UI Polish`, or `Pick Individual Skills` (press `Space` or `p` on any track to preview its skills, `/slash` commands, and starter prompts).
-3. **Step 3 of 3 — Safety Backup:** Save a timestamped rollback snapshot before writing (or keep an existing `CLAUDE.md` / `GEMINI.md` / `AGENTS.md` untouched), followed by a **60-Second Interactive Tour** of what you can type right away.
+3. **Step 3 of 3 — Config File & Safety Backup:** If your target already has a `CLAUDE.md`, `GEMINI.md`, or `AGENTS.md`, choose whether to **add/update a managed workflow section** inside your existing file (preserving your custom rules), **replace** the file with a clean template (with a timestamped backup), or **keep your existing file untouched** and install skills only.
 
 ### 3. Non-Interactive / Headless Examples
 
@@ -90,15 +91,30 @@ From the Home menu (`Set up skills & workflow`, `See how this works & command gu
 # Install the full opinionated workflow globally for Claude Code (with automatic backup)
 skill-installer -t claude -g --track opinionated --backup -y
 
-# Install the full opinionated workflow globally for Google Antigravity
-skill-installer -t antigravity -g --track opinionated --backup -y
+# Merge workflow rules into an existing global GEMINI.md without overwriting custom rules
+skill-installer -t antigravity -g --track opinionated --merge-config -y
 
-# Install the Basics track into the current project for Zed
-skill-installer -t zed --project --track basics -y
+# Install the Basics track into a specific project directory and merge into its existing CLAUDE.md
+skill-installer -t claude --project-dir ~/code/my-app --track basics --merge-config -y
 
 # Install specific skills for OpenCode globally
 skill-installer -t opencode -g --track custom --skills test-driven-development,systematic-debugging -y
 ```
+
+---
+
+## Supported Harnesses & Cross-Platform Paths
+
+`skill-installer` embeds a unified catalog of **54 skills** (`51` shared across all harnesses + `3` Google Antigravity exclusives) alongside harness-native rules, subagents, slash commands, and context-window safety hooks for four first-class AI coding harnesses:
+
+| Harness (`--target`) | Global Path (macOS / Linux) | Global Path (Windows) | Project Path (`--project` / `--project-dir`) | Installed Artifacts |
+|---|---|---|---|---|
+| **Claude Code** (`claude`) | `~/.claude/` | `%USERPROFILE%\.claude\` | `<repo>/.claude/` & `<repo>/CLAUDE.md` | `CLAUDE.md`, `skills/<name>/`, `commands/`, `agents/` |
+| **Google Antigravity** (`antigravity`) | `~/.gemini/` | `%USERPROFILE%\.gemini\` | `<repo>/.agents/skills/`, `<repo>/.agents/agents/`, `<repo>/GEMINI.md` | `GEMINI.md`, `config/skills/<name>/`, `config/plugins/antigravity-subagents/`, `config/hooks/`, `config/hooks.json` |
+| **Zed** (`zed`) | `~/.agents/skills/` & `~/.config/zed/AGENTS.md` | `%USERPROFILE%\.agents\skills\` & `%APPDATA%\Zed\AGENTS.md` | `<repo>/.agents/skills/` & `<repo>/AGENTS.md` | `.agents/skills/<name>/`, `AGENTS.md` |
+| **OpenCode** (`opencode`) | `~/.config/opencode/` (`$XDG_CONFIG_HOME/opencode/`) | `%USERPROFILE%\.config\opencode\` (`$XDG_CONFIG_HOME\opencode\`) | `<repo>/.opencode/` & `<repo>/AGENTS.md` | `AGENTS.md`, `skills/<name>/`, `agents/`, `commands/` |
+
+> **Windows Compatibility:** On Windows (`GOOS=windows`), `skill-installer` automatically rewrites Antigravity's `hooks.json` command from `autonomous-breaker.sh` to `"C:/Python312/python.exe" "C:/Users/<you>/.gemini/config/hooks/autonomous_breaker.py"` (or `python`/`py -3` if not resolved on `PATH`) so the context-window safety hook works natively without requiring `bash` or WSL.
 
 ---
 
@@ -134,7 +150,7 @@ skill-installer <subcommand> [flags]
 | `skill-installer list [--category <cat>]` | List all 54 embedded skills with categories, commands, descriptions, and starter prompts |
 | `skill-installer update [--check] [--self]` | Pull the latest skills and workflow updates from `main` via `gh` CLI (and optionally self-upgrade the binary) |
 | `skill-installer restore [snapshot-id] [--file <path>]` | Restore a complete pre-install backup snapshot or a single backed-up file |
-| `skill-installer uninstall` | Cleanly remove all files installed by `skill-installer` (preserving co-tenant hooks in `hooks.json`) |
+| `skill-installer uninstall` | Cleanly remove all files installed by `skill-installer` (leaving any other custom hooks in `hooks.json` intact) |
 | `skill-installer init [-o .skill-installer.yaml]` | Generate a starter `.skill-installer.yaml` configuration file |
 | `skill-installer version` | Print the `skill-installer` version (`4.0.0`) |
 
@@ -145,8 +161,12 @@ skill-installer <subcommand> [flags]
 | `--target <harness>` | `-t` | Target harness: `claude`, `antigravity`, `zed`, `opencode` |
 | `--global` | `-g` | Install to user-level global harness directory |
 | `--project` | `-p` | Install to current repository's project directory |
+| `--project-dir <dir>` | `-d` | Install, update, restore, or uninstall in a specific project directory (implies `--project`) |
 | `--track <track>` | | Track preset: `opinionated`, `basics`, `product`, `copy-polish`, `custom` |
 | `--skills <s1,s2,...>` | | Comma-separated skill names (implies `--track custom`) |
+| `--config-mode <mode>` | | How to handle an existing `CLAUDE.md` / `GEMINI.md` / `AGENTS.md`: `merge`, `replace`, or `skip` |
+| `--merge-config` | | Add or update the managed workflow section inside an existing config file (`--config-mode merge`) |
+| `--skip-claude-md` | | Skip updating project/global config file (`--config-mode skip`) |
 | `--backup` | | Back up any existing files before overwriting |
 | `--no-backup` | | Skip pre-install backup |
 | `--force` | `-f` | Overwrite existing files without prompting |
@@ -174,7 +194,7 @@ Whenever `skill-installer` updates or overwrites existing files, it can snapshot
   ```bash
   skill-installer uninstall -t claude -g
   ```
-  Reads `state.json` (or discovers legacy v3.x installations) and removes only the files managed by `skill-installer`. On Antigravity, `uninstall` removes only the `autonomous-circuit-breaker` entry from `~/.gemini/config/hooks.json`, leaving any other custom hooks intact.
+  Reads `state.json` (or discovers legacy v3.x installations) and removes only the files managed by `skill-installer`. If your config file (`CLAUDE.md`, `GEMINI.md`, or `AGENTS.md`) uses a merged workflow section, `skill-installer update` refreshes that block in place and `skill-installer uninstall` strips only the `<!-- BEGIN SKILL-INSTALLER WORKFLOW RULES -->` … `<!-- END SKILL-INSTALLER WORKFLOW RULES -->` block while keeping your custom rules intact. On Antigravity, `uninstall` removes only the `autonomous-circuit-breaker` entry from `~/.gemini/config/hooks.json`, leaving any other custom hooks intact.
 
 ---
 

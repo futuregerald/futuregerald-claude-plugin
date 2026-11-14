@@ -47,37 +47,40 @@ const (
 var content fs.FS = catalog.FS
 
 var (
-	version        = "4.0.0"
-	force          bool
-	dryRun         bool
-	nonInteract    bool
-	targetType     string
-	trackName      string
-	selectedSkills []string
-	backupFlag     = true
-	noBackupFlag   bool
-	backupExplicit bool
-	skipClaude     bool
-	tags           []string
-	languages      []string
-	fromSource     string
-	configFile     string
-	skipAgents     bool
-	skipCommands   bool
-	globalInstall  bool
-	projectInstall bool
-	installMode    string
-	listLong       bool
-	listCategory   string
-	updateCheck    bool
-	updateApply    bool
-	updateSelf     bool
-	updateJSON     bool
-	restoreID      string
-	restoreFile    string
-	restoreConfig  bool
-	initOutput     string
-	updateRunner   updater.Runner
+	version         = "4.0.0"
+	force           bool
+	dryRun          bool
+	nonInteract     bool
+	targetType      string
+	trackName       string
+	selectedSkills  []string
+	backupFlag      = true
+	noBackupFlag    bool
+	backupExplicit  bool
+	skipClaude      bool
+	tags            []string
+	languages       []string
+	fromSource      string
+	configFile      string
+	skipAgents      bool
+	skipCommands    bool
+	globalInstall   bool
+	projectInstall  bool
+	projectDirFlag  string
+	configModeFlag  string
+	mergeConfigFlag bool
+	installMode     string
+	listLong        bool
+	listCategory    string
+	updateCheck     bool
+	updateApply     bool
+	updateSelf      bool
+	updateJSON      bool
+	restoreID       string
+	restoreFile     string
+	restoreConfig   bool
+	initOutput      string
+	updateRunner    updater.Runner
 )
 
 type Target struct {
@@ -201,6 +204,10 @@ Run without flags in a terminal to launch the guided graphical TUI, or pass flag
 	rootCmd.Flags().BoolVar(&noBackupFlag, "no-backup", false, "Skip creating a safety backup snapshot")
 	rootCmd.MarkFlagsMutuallyExclusive("backup", "no-backup")
 	rootCmd.Flags().BoolVar(&skipClaude, "skip-claude-md", false, "Skip updating project/global config file (CLAUDE.md, GEMINI.md, AGENTS.md)")
+	rootCmd.Flags().StringVar(&configModeFlag, "config-mode", "", "How to handle existing config file: merge, replace, skip")
+	rootCmd.Flags().BoolVar(&mergeConfigFlag, "merge-config", false, "Add or update workflow section inside existing config file (shorthand for --config-mode merge)")
+	rootCmd.MarkFlagsMutuallyExclusive("skip-claude-md", "config-mode")
+	rootCmd.MarkFlagsMutuallyExclusive("skip-claude-md", "merge-config")
 	rootCmd.Flags().StringSliceVar(&tags, "tag", nil, "Filter skills by tags")
 	rootCmd.Flags().StringSliceVar(&languages, "lang", nil, "Filter skills by language")
 	rootCmd.Flags().StringVar(&fromSource, "from", "", "Install from external source (local path, git URL, or tarball URL)")
@@ -209,7 +216,9 @@ Run without flags in a terminal to launch the guided graphical TUI, or pass flag
 	rootCmd.Flags().BoolVar(&skipCommands, "skip-commands", false, "Skip installing slash commands")
 	rootCmd.Flags().BoolVarP(&globalInstall, "global", "g", false, "Install to global user-level directory")
 	rootCmd.Flags().BoolVarP(&projectInstall, "project", "p", false, "Install to current repository project directory")
+	rootCmd.Flags().StringVarP(&projectDirFlag, "project-dir", "d", "", "Project directory to install into (implies --project)")
 	rootCmd.MarkFlagsMutuallyExclusive("global", "project")
+	rootCmd.MarkFlagsMutuallyExclusive("global", "project-dir")
 	rootCmd.Flags().StringVarP(&installMode, "mode", "m", "", "Installation mode: full, config-only, agents-only")
 
 	versionCmd := &cobra.Command{
@@ -255,7 +264,9 @@ Run without flags in a terminal to launch the guided graphical TUI, or pass flag
 	updateCmd.Flags().StringVarP(&targetType, "target", "t", "", "Target harness to update (claude, antigravity, zed, opencode)")
 	updateCmd.Flags().BoolVarP(&globalInstall, "global", "g", false, "Update global installation")
 	updateCmd.Flags().BoolVarP(&projectInstall, "project", "p", false, "Update project installation")
+	updateCmd.Flags().StringVarP(&projectDirFlag, "project-dir", "d", "", "Project directory to update (implies --project)")
 	updateCmd.MarkFlagsMutuallyExclusive("global", "project")
+	updateCmd.MarkFlagsMutuallyExclusive("global", "project-dir")
 	updateCmd.Flags().BoolVar(&backupFlag, "backup", true, "Save a safety backup before applying update")
 	updateCmd.Flags().BoolVar(&noBackupFlag, "no-backup", false, "Skip safety backup when updating")
 	updateCmd.MarkFlagsMutuallyExclusive("backup", "no-backup")
@@ -274,7 +285,9 @@ Run without flags in a terminal to launch the guided graphical TUI, or pass flag
 	restoreCmd.Flags().StringVarP(&targetType, "target", "t", "", "Filter snapshots by harness (claude, antigravity, zed, opencode)")
 	restoreCmd.Flags().BoolVarP(&globalInstall, "global", "g", false, "Filter by global scope")
 	restoreCmd.Flags().BoolVarP(&projectInstall, "project", "p", false, "Filter by project scope")
+	restoreCmd.Flags().StringVarP(&projectDirFlag, "project-dir", "d", "", "Filter snapshots by project directory (implies --project)")
 	restoreCmd.MarkFlagsMutuallyExclusive("global", "project")
+	restoreCmd.MarkFlagsMutuallyExclusive("global", "project-dir")
 	restoreCmd.Flags().BoolVarP(&nonInteract, "yes", "y", false, "Restore without interactive prompt")
 	restoreCmd.Flags().BoolVar(&nonInteract, "non-interactive", false, "Restore without interactive prompt")
 
@@ -286,7 +299,9 @@ Run without flags in a terminal to launch the guided graphical TUI, or pass flag
 	uninstallCmd.Flags().StringVarP(&targetType, "target", "t", "", "Target harness to uninstall (claude, antigravity, zed, opencode)")
 	uninstallCmd.Flags().BoolVarP(&globalInstall, "global", "g", false, "Uninstall from global user-level directory")
 	uninstallCmd.Flags().BoolVarP(&projectInstall, "project", "p", false, "Uninstall from current project directory")
+	uninstallCmd.Flags().StringVarP(&projectDirFlag, "project-dir", "d", "", "Project directory to uninstall from (implies --project)")
 	uninstallCmd.MarkFlagsMutuallyExclusive("global", "project")
+	uninstallCmd.MarkFlagsMutuallyExclusive("global", "project-dir")
 	uninstallCmd.Flags().BoolVar(&restoreConfig, "restore-config", false, "Restore pre-install config file from backup if available")
 	uninstallCmd.Flags().BoolVarP(&nonInteract, "yes", "y", false, "Uninstall without interactive confirmation")
 	uninstallCmd.Flags().BoolVar(&nonInteract, "non-interactive", false, "Uninstall without interactive confirmation")
@@ -312,10 +327,51 @@ Run without flags in a terminal to launch the guided graphical TUI, or pass flag
 }
 
 func isInteractiveSession(cmd *cobra.Command) bool {
-	if cmd == nil || nonInteract || dryRun || fromSource != "" || installMode != "" || targetType != "" || trackName != "" || len(selectedSkills) > 0 {
+	if cmd == nil || nonInteract || dryRun || fromSource != "" || installMode != "" || targetType != "" || trackName != "" || len(selectedSkills) > 0 || globalInstall || projectInstall || projectDirFlag != "" || configModeFlag != "" || mergeConfigFlag || skipClaude {
 		return false
 	}
 	return term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd()))
+}
+
+func resolveEffectiveProjectDir(env platform.Env) (string, error) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		cwd = "."
+	}
+	if projectDirFlag != "" {
+		if globalInstall {
+			return "", fmt.Errorf("--global and --project-dir cannot be used together")
+		}
+		projectInstall = true
+		resolved := env.ExpandPath(projectDirFlag, cwd)
+		if err := backup.RejectSymlinkInChain(resolved); err != nil {
+			return "", err
+		}
+		if info, lErr := os.Lstat(resolved); lErr == nil && info.Mode()&os.ModeSymlink != 0 {
+			return "", fmt.Errorf("refusing to use symlinked project directory %s", resolved)
+		}
+		return resolved, nil
+	}
+	return cwd, nil
+}
+
+func resolveConfigModeFlags() (string, error) {
+	if mergeConfigFlag {
+		if configModeFlag != "" && strings.ToLower(strings.TrimSpace(configModeFlag)) != installer.ConfigModeMerge {
+			return "", fmt.Errorf("--merge-config conflicts with --config-mode %s", configModeFlag)
+		}
+		return installer.ConfigModeMerge, nil
+	}
+	if configModeFlag != "" {
+		m := strings.ToLower(strings.TrimSpace(configModeFlag))
+		switch m {
+		case installer.ConfigModeMerge, installer.ConfigModeReplace, installer.ConfigModeSkip:
+			return m, nil
+		default:
+			return "", fmt.Errorf("unknown --config-mode %q (valid: merge, replace, skip)", configModeFlag)
+		}
+	}
+	return "", nil
 }
 
 func renderProjectConfigBytes(baseTemplate []byte, harness string, projectDir string) []byte {
@@ -337,20 +393,40 @@ func runInstall(cmd *cobra.Command, args []string) error {
 	}
 	applyConfig(cfg)
 
+	projDir, err := resolveEffectiveProjectDir(env)
+	if err != nil {
+		return err
+	}
+	if _, err := resolveConfigModeFlags(); err != nil {
+		return err
+	}
+
 	if isInteractiveSession(cmd) {
-		cwd, _ := os.Getwd()
 		m := tui.NewModel(tui.Config{
 			Env:                   env,
 			Catalog:               cat,
 			InitialBackup:         !noBackupFlag && backupFlag,
-			ProjectDir:            cwd,
+			ProjectDir:            projDir,
 			Version:               version,
 			UpdateRunner:          updateRunner,
 			ProjectConfigRenderer: renderProjectConfigBytes,
 		})
 		p := tea.NewProgram(m, tea.WithAltScreen())
-		_, err := p.Run()
-		return err
+		finalModel, err := p.Run()
+		if err != nil {
+			return err
+		}
+		if tm, ok := finalModel.(tui.Model); ok && tm.InstallResult() != nil {
+			res := tm.InstallResult()
+			fmt.Printf("\nInstalled %s (%s) to %s.\n", tui.HarnessDisplayName(res.Harness), res.TrackID, res.Scope)
+			if res.Paths.ConfigFile != "" && res.ConfigAction != "" {
+				fmt.Printf("Config file: %s (%s)\n", res.Paths.ConfigFile, res.ConfigAction)
+			}
+			if prompts := tm.StarterPrompts(1); len(prompts) > 0 {
+				fmt.Printf("Try first:   %s\n", prompts[0].StarterPrompt)
+			}
+		}
+		return nil
 	}
 
 	reader := bufio.NewReader(os.Stdin)
@@ -393,11 +469,15 @@ func runFullInstall(cmd *cobra.Command, reader *bufio.Reader, env platform.Env, 
 		return err
 	}
 
-	cwd, err := os.Getwd()
+	projDir, err := resolveEffectiveProjectDir(env)
 	if err != nil {
-		cwd = "."
+		return err
 	}
-	paths, err := env.ResolvePaths(target.Harness, scope, cwd)
+	explicitCfgMode, err := resolveConfigModeFlags()
+	if err != nil {
+		return err
+	}
+	paths, err := env.ResolvePaths(target.Harness, scope, projDir)
 	if err != nil {
 		return err
 	}
@@ -458,27 +538,66 @@ func runFullInstall(cmd *cobra.Command, reader *bufio.Reader, env platform.Env, 
 
 	skipCfg := skipClaude
 	forceCfg := false
-	if scope == "project" && target.ConfigPath != "" && !skipCfg {
-		updateConfig, uErr := askUpdateConfig(reader, target)
-		if uErr != nil {
-			return uErr
-		}
-		if !updateConfig {
-			skipCfg = true
-		} else if !force && !nonInteract {
+	cfgMode := explicitCfgMode
+	if cfgMode == installer.ConfigModeSkip {
+		skipCfg = true
+	}
+	if target.ConfigPath != "" && !skipCfg {
+		if cfgMode == installer.ConfigModeMerge || cfgMode == installer.ConfigModeReplace {
+			forceCfg = true
+		} else if scope == "project" {
 			exists, isSymlink := pathExistsOrSymlink(paths.ConfigFile)
 			if exists || isSymlink {
-				fmt.Printf("%s already exists. Overwrite? [y/N]: ", target.ConfigPath)
+				if !force && !nonInteract {
+					fmt.Printf("%s already exists. [M]erge workflow section / [R]eplace file / [S]kip [M]: ", target.ConfigPath)
+					input, rErr := reader.ReadString('\n')
+					if rErr != nil && rErr != io.EOF {
+						return rErr
+					}
+					trimmed := strings.TrimSpace(strings.ToLower(input))
+					switch trimmed {
+					case "", "m", "merge":
+						cfgMode = installer.ConfigModeMerge
+						forceCfg = true
+					case "r", "replace", "y", "yes":
+						cfgMode = installer.ConfigModeReplace
+						forceCfg = true
+					default:
+						fmt.Printf("SKIP: %s\n", paths.ConfigFile)
+						skipCfg = true
+						cfgMode = installer.ConfigModeSkip
+					}
+				}
+			} else {
+				updateConfig, uErr := askUpdateConfig(reader, target)
+				if uErr != nil {
+					return uErr
+				}
+				if !updateConfig {
+					skipCfg = true
+					cfgMode = installer.ConfigModeSkip
+				}
+			}
+		} else if scope == "global" && !force && !nonInteract {
+			exists, isSymlink := pathExistsOrSymlink(paths.ConfigFile)
+			if exists || isSymlink {
+				fmt.Printf("%s already exists. [M]erge workflow section / [R]eplace file / [S]kip [M]: ", filepath.Base(paths.ConfigFile))
 				input, rErr := reader.ReadString('\n')
-				if rErr != nil {
+				if rErr != nil && rErr != io.EOF {
 					return rErr
 				}
 				trimmed := strings.TrimSpace(strings.ToLower(input))
-				if trimmed == "y" || trimmed == "yes" {
+				switch trimmed {
+				case "", "m", "merge":
+					cfgMode = installer.ConfigModeMerge
 					forceCfg = true
-				} else {
+				case "r", "replace", "y", "yes":
+					cfgMode = installer.ConfigModeReplace
+					forceCfg = true
+				default:
 					fmt.Printf("SKIP: %s\n", paths.ConfigFile)
 					skipCfg = true
+					cfgMode = installer.ConfigModeSkip
 				}
 			}
 		}
@@ -505,13 +624,14 @@ func runFullInstall(cmd *cobra.Command, reader *bufio.Reader, env platform.Env, 
 		Catalog:               cat,
 		Harness:               target.Harness,
 		Scope:                 scope,
-		ProjectDir:            cwd,
+		ProjectDir:            projDir,
 		TrackID:               chosenTrack,
 		CustomSkills:          allowSkills,
 		Tags:                  tags,
 		Languages:             languages,
 		Mode:                  modeFullInstall,
 		SkipConfig:            skipCfg,
+		ConfigMode:            cfgMode,
 		SkipAgents:            skipAg,
 		SkipCommands:          skipCommands,
 		Backup:                doBackup,
@@ -530,11 +650,11 @@ func runFullInstall(cmd *cobra.Command, reader *bufio.Reader, env platform.Env, 
 	}
 
 	if scope == "project" && !dryRun && target.Harness == installer.HarnessClaude {
-		ensureGitignoreAllowsProjectJSON(reader)
+		ensureGitignoreAllowsProjectJSON(reader, projDir)
 	}
 
 	if !dryRun && target.Harness == installer.HarnessClaude {
-		if err := askCodebaseMemoryMCP(reader, env); err != nil {
+		if err := askCodebaseMemoryMCP(reader, env, projDir); err != nil {
 			fmt.Printf("Warning: Codebase Memory MCP setup skipped: %v\n", err)
 		}
 	}
@@ -543,33 +663,67 @@ func runFullInstall(cmd *cobra.Command, reader *bufio.Reader, env platform.Env, 
 		fmt.Println("\n(dry run - no files were modified)")
 	} else {
 		fmt.Printf("\nDone! %s (%s track) configured for %s.\n", target.Name, track.Name, scope)
+		if res.Paths.ConfigFile != "" && res.ConfigAction != "" {
+			fmt.Printf("Config file: %s (%s)\n", res.Paths.ConfigFile, res.ConfigAction)
+		}
 		if res.BackupID != "" {
 			fmt.Printf("Safety backup saved: %s (restore anytime with `skill-installer restore`)\n", res.BackupID)
 		}
-		fmt.Printf("New to these commands? Run `skill-installer guide -t %s --track %s` for a 60-second tour!\n", target.Harness, chosenTrack)
+		for _, sName := range res.Skills {
+			if sm, ok := cat.SkillMeta(sName); ok && sm.StarterPrompt != "" {
+				fmt.Printf("Try first:   %s\n", sm.StarterPrompt)
+				break
+			}
+		}
+		fmt.Printf("Run `skill-installer guide -t %s --track %s` to see your new commands.\n", target.Harness, chosenTrack)
 	}
 
 	return nil
 }
 
-func generateConfigFile(_ *installer.Installer, target Target, reader *bufio.Reader) error {
-	configPath := filepath.Join(".", target.ConfigPath)
-
-	cwd, err := os.Getwd()
+func generateConfigFile(_ *installer.Installer, target Target, reader *bufio.Reader, projectDirs ...string) error {
+	env := platform.EnvFromOS()
+	projDir, err := resolveEffectiveProjectDir(env)
 	if err != nil {
-		return fmt.Errorf("cannot determine working directory: %w", err)
+		return err
 	}
-	info := detectProject(cwd)
+	if len(projectDirs) > 0 && projectDirs[0] != "" {
+		projDir = projectDirs[0]
+	}
+
+	configPath := filepath.Join(".", target.ConfigPath)
+	if projectDirFlag != "" || len(projectDirs) > 0 {
+		configPath = filepath.Join(projDir, target.ConfigPath)
+	}
+	if err := backup.RejectSymlinkInChain(configPath); err != nil {
+		return err
+	}
+
+	cfgMode, err := resolveConfigModeFlags()
+	if err != nil {
+		return err
+	}
+
+	info := detectProject(projDir)
 	if info.Framework != "" {
 		fmt.Printf("Detected: %s (%s)\n", info.Framework, info.Name)
 	} else {
 		fmt.Printf("Detected: unknown project type (using defaults for %s)\n", info.Name)
 	}
 
+	if cfgMode == installer.ConfigModeSkip {
+		fmt.Printf("SKIP: %s\n", configPath)
+		return nil
+	}
+
 	if dryRun {
 		exists, isSymlink := pathExistsOrSymlink(configPath)
 		if exists || isSymlink {
-			fmt.Printf("WOULD UPDATE: %s\n", configPath)
+			if cfgMode == installer.ConfigModeMerge {
+				fmt.Printf("WOULD MERGE: %s\n", configPath)
+			} else {
+				fmt.Printf("WOULD UPDATE: %s\n", configPath)
+			}
 		} else {
 			fmt.Printf("WOULD CREATE: %s\n", configPath)
 		}
@@ -593,23 +747,39 @@ func generateConfigFile(_ *installer.Installer, target Target, reader *bufio.Rea
 	configContent := applyProjectDetection(baseContent, info, content)
 
 	exists, isSymlink := pathExistsOrSymlink(configPath)
+	action := "CREATED"
 	if exists || isSymlink {
-		if force {
+		if cfgMode == installer.ConfigModeMerge {
+			action = "MERGED"
+		} else if cfgMode == installer.ConfigModeReplace || force {
+			action = "UPDATED"
 		} else if nonInteract {
-			fmt.Printf("SKIP: %s (already exists, use --force to overwrite)\n", configPath)
+			fmt.Printf("SKIP: %s (already exists, use --force to overwrite or --merge-config to merge)\n", configPath)
 			return nil
 		} else {
-			fmt.Printf("%s already exists. Overwrite? [y/N]: ", target.ConfigPath)
+			fmt.Printf("%s already exists. [M]erge workflow section / [R]eplace file / [S]kip [M]: ", target.ConfigPath)
 			input, err := reader.ReadString('\n')
-			if err != nil {
+			if err != nil && err != io.EOF {
 				return err
 			}
 			input = strings.TrimSpace(strings.ToLower(input))
-			if input != "y" && input != "yes" {
+			switch input {
+			case "", "m", "merge":
+				cfgMode = installer.ConfigModeMerge
+				action = "MERGED"
+			case "r", "replace", "y", "yes":
+				cfgMode = installer.ConfigModeReplace
+				action = "UPDATED"
+			default:
 				fmt.Printf("SKIP: %s\n", configPath)
 				return nil
 			}
 		}
+	}
+
+	if cfgMode == installer.ConfigModeMerge {
+		existingBytes, _ := installer.ReadExistingRegularConfigFile(configPath)
+		configContent = installer.MergeConfigContent(existingBytes, configContent)
 	}
 
 	if _, err := installer.UnlinkIfSymlink(configPath, false); err != nil {
@@ -619,7 +789,7 @@ func generateConfigFile(_ *installer.Installer, target Target, reader *bufio.Rea
 	if err := os.WriteFile(configPath, configContent, 0644); err != nil {
 		return err
 	}
-	fmt.Printf("CREATED: %s\n", configPath)
+	fmt.Printf("%s: %s\n", action, configPath)
 	return nil
 }
 
@@ -630,7 +800,13 @@ func loadConfig() (*config.Config, error) {
 	if globalInstall {
 		return &config.Config{}, nil
 	}
-	return config.Load(".")
+	searchDir := "."
+	if projectDirFlag != "" {
+		env := platform.EnvFromOS()
+		cwd, _ := os.Getwd()
+		searchDir = env.ExpandPath(projectDirFlag, cwd)
+	}
+	return config.Load(searchDir)
 }
 
 func applyConfig(cfg *config.Config) {
@@ -656,8 +832,16 @@ func applyConfig(cfg *config.Config) {
 	if len(languages) == 0 && len(cfg.Languages) > 0 {
 		languages = cfg.Languages
 	}
-	if !skipClaude && cfg.SkipClaudeMD {
+	if !skipClaude && configModeFlag == "" && !mergeConfigFlag && cfg.SkipClaudeMD {
 		skipClaude = true
+	}
+	if configModeFlag == "" && !mergeConfigFlag && !skipClaude && cfg.ConfigMode != "" {
+		if configFile != "" || force || !strings.EqualFold(strings.TrimSpace(cfg.ConfigMode), installer.ConfigModeReplace) {
+			configModeFlag = cfg.ConfigMode
+		}
+	}
+	if projectDirFlag == "" && !globalInstall && cfg.ProjectDir != "" && configFile != "" {
+		projectDirFlag = cfg.ProjectDir
 	}
 	if fromSource == "" && cfg.From != "" && configFile != "" {
 		fromSource = cfg.From
@@ -792,7 +976,7 @@ func askScope(reader *bufio.Reader, _ Target) (string, error) {
 	if globalInstall {
 		return "global", nil
 	}
-	if nonInteract {
+	if projectInstall || projectDirFlag != "" || nonInteract {
 		return "project", nil
 	}
 
@@ -857,17 +1041,27 @@ func runConfigOnly(cmd *cobra.Command, reader *bufio.Reader, env platform.Env, c
 	}
 
 	_, _ = resolveBackupChoice(cmd, reader)
+	projDir, err := resolveEffectiveProjectDir(env)
+	if err != nil {
+		return err
+	}
+	cfgMode, err := resolveConfigModeFlags()
+	if err != nil {
+		return err
+	}
 
 	if globalInstall {
-		paths, err := env.ResolvePaths(target.Harness, "global", ".")
+		paths, err := env.ResolvePaths(target.Harness, "global", projDir)
 		if err != nil {
 			return err
 		}
 		fmt.Println("\nInstalling global harness configuration...")
 		if target.Harness == installer.HarnessAntigravity {
 			results, _, _, err := inst.InstallGlobalHarnessAssetsWithOptions(paths.GeminiHome, target.Harness, installer.GlobalAssetOptions{
-				InstallHooks: true,
-				Env:          env,
+				InstallHooks:   true,
+				SkipConfigFile: cfgMode == installer.ConfigModeSkip,
+				ConfigMode:     cfgMode,
+				Env:            env,
 			})
 			if err != nil {
 				return err
@@ -876,20 +1070,64 @@ func runConfigOnly(cmd *cobra.Command, reader *bufio.Reader, env platform.Env, c
 				fmt.Println(r)
 			}
 		} else {
+			if cfgMode == installer.ConfigModeSkip {
+				fmt.Printf("SKIP: %s\n", paths.ConfigFile)
+				return nil
+			}
+			if err := backup.RejectSymlinkInChain(paths.ConfigFile); err != nil {
+				return err
+			}
 			tpl, err := cat.GlobalConfigTemplate(target.Harness, false)
 			if err != nil {
 				return err
 			}
+			exists, isSymlink := pathExistsOrSymlink(paths.ConfigFile)
+			action := "CREATED"
+			if exists || isSymlink {
+				if cfgMode == installer.ConfigModeMerge {
+					action = "MERGED"
+				} else if cfgMode == installer.ConfigModeReplace || force {
+					action = "UPDATED"
+				} else if nonInteract {
+					fmt.Printf("SKIP: %s (already exists, use --force to overwrite or --merge-config to merge)\n", paths.ConfigFile)
+					return nil
+				} else {
+					fmt.Printf("%s already exists. [M]erge workflow section / [R]eplace file / [S]kip [M]: ", filepath.Base(paths.ConfigFile))
+					input, rErr := reader.ReadString('\n')
+					if rErr != nil && rErr != io.EOF {
+						return rErr
+					}
+					trimmed := strings.TrimSpace(strings.ToLower(input))
+					switch trimmed {
+					case "", "m", "merge":
+						cfgMode = installer.ConfigModeMerge
+						action = "MERGED"
+					case "r", "replace", "y", "yes":
+						cfgMode = installer.ConfigModeReplace
+						action = "UPDATED"
+					default:
+						fmt.Printf("SKIP: %s\n", paths.ConfigFile)
+						return nil
+					}
+				}
+			}
+			if cfgMode == installer.ConfigModeMerge {
+				existingBytes, _ := installer.ReadExistingRegularConfigFile(paths.ConfigFile)
+				tpl = installer.MergeConfigContent(existingBytes, tpl)
+			}
 			if !dryRun {
+				if _, err := installer.UnlinkIfSymlink(paths.ConfigFile, false); err != nil {
+					return err
+				}
 				if err := os.MkdirAll(filepath.Dir(paths.ConfigFile), 0755); err != nil {
 					return err
 				}
 				if err := os.WriteFile(paths.ConfigFile, tpl, 0644); err != nil {
 					return err
 				}
-				fmt.Printf("CREATED: %s\n", paths.ConfigFile)
+				fmt.Printf("%s: %s\n", action, paths.ConfigFile)
 			} else {
-				fmt.Printf("WOULD CREATE: %s\n", paths.ConfigFile)
+				fmt.Printf("WOULD %s: %s\n", strings.TrimSuffix(action, "D"), paths.ConfigFile)
 			}
 		}
 		if dryRun {
@@ -901,7 +1139,7 @@ func runConfigOnly(cmd *cobra.Command, reader *bufio.Reader, env platform.Env, c
 	}
 
 	fmt.Printf("\nGenerating %s...\n", target.ConfigPath)
-	if err := generateConfigFile(inst, target, reader); err != nil {
+	if err := generateConfigFile(inst, target, reader, projDir); err != nil {
 		return fmt.Errorf("could not generate %s: %w", target.ConfigPath, err)
 	}
 
@@ -925,8 +1163,11 @@ func runAgentsOnly(cmd *cobra.Command, reader *bufio.Reader, env platform.Env, i
 
 	_, _ = resolveBackupChoice(cmd, reader)
 
-	cwd, _ := os.Getwd()
-	paths, err := env.ResolvePaths(target.Harness, scope, cwd)
+	projDir, err := resolveEffectiveProjectDir(env)
+	if err != nil {
+		return err
+	}
+	paths, err := env.ResolvePaths(target.Harness, scope, projDir)
 	if err != nil {
 		return err
 	}
@@ -1006,8 +1247,11 @@ func askOverwriteAgents(reader *bufio.Reader, agentsDest string) (bool, error) {
 	return input == "y" || input == "yes", nil
 }
 
-func ensureGitignoreAllowsProjectJSON(reader *bufio.Reader) {
+func ensureGitignoreAllowsProjectJSON(reader *bufio.Reader, projectDirs ...string) {
 	gitignorePath := ".gitignore"
+	if len(projectDirs) > 0 && projectDirs[0] != "" {
+		gitignorePath = filepath.Join(projectDirs[0], ".gitignore")
+	}
 	info, err := os.Lstat(gitignorePath)
 	if err != nil || info.Mode()&os.ModeSymlink != 0 || info.IsDir() {
 		return
@@ -1181,7 +1425,10 @@ func runGuide(cmd *cobra.Command, args []string) error {
 
 func resolveReceiptForOperation(env platform.Env, cat *catalog.Catalog) (*state.Receipt, error) {
 	store := state.NewStore(env.StateFilePath())
-	cwd, _ := os.Getwd()
+	projDir, err := resolveEffectiveProjectDir(env)
+	if err != nil {
+		return nil, err
+	}
 	scope := "project"
 	if globalInstall {
 		scope = "global"
@@ -1191,14 +1438,14 @@ func resolveReceiptForOperation(env platform.Env, cat *catalog.Catalog) (*state.
 		if !catalog.IsSupportedHarness(targetType) {
 			return nil, fmt.Errorf("unsupported target %q (supported: claude, antigravity, zed, opencode)", targetType)
 		}
-		paths, err := env.ResolvePaths(targetType, scope, cwd)
+		paths, err := env.ResolvePaths(targetType, scope, projDir)
 		if err != nil {
 			return nil, err
 		}
 		if rec, ok, err := store.Find(targetType, scope, paths.RootDir); err == nil && ok {
 			return rec, nil
 		}
-		if leg, ok := state.DiscoverLegacyReceipt(env, cat, targetType, scope, cwd); ok {
+		if leg, ok := state.DiscoverLegacyReceipt(env, cat, targetType, scope, projDir); ok {
 			return leg, nil
 		}
 		return &state.Receipt{
@@ -1219,7 +1466,7 @@ func resolveReceiptForOperation(env platform.Env, cat *catalog.Catalog) (*state.
 			continue
 		}
 		if !globalInstall && r.Scope == "project" {
-			if p, err := env.ResolvePaths(r.Harness, "project", cwd); err == nil && filepath.Clean(r.RootDir) != filepath.Clean(p.RootDir) {
+			if p, err := env.ResolvePaths(r.Harness, "project", projDir); err == nil && filepath.Clean(r.RootDir) != filepath.Clean(p.RootDir) {
 				continue
 			}
 		}
@@ -1236,11 +1483,11 @@ func resolveReceiptForOperation(env platform.Env, cat *catalog.Catalog) (*state.
 		return nil, fmt.Errorf("multiple installations match (%s); specify --target (-t) and --global (-g) or --project (-p)", strings.Join(names, ", "))
 	}
 	for _, h := range targetOrder {
-		if leg, ok := state.DiscoverLegacyReceipt(env, cat, h, scope, cwd); ok {
+		if leg, ok := state.DiscoverLegacyReceipt(env, cat, h, scope, projDir); ok {
 			return leg, nil
 		}
 	}
-	paths, _ := env.ResolvePaths(installer.HarnessClaude, scope, cwd)
+	paths, _ := env.ResolvePaths(installer.HarnessClaude, scope, projDir)
 	return &state.Receipt{
 		Harness: installer.HarnessClaude,
 		Scope:   scope,
@@ -1346,6 +1593,10 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 
 func runRestore(cmd *cobra.Command, args []string) error {
 	env := platform.EnvFromOS()
+	projDir, err := resolveEffectiveProjectDir(env)
+	if err != nil {
+		return err
+	}
 	mgr := backup.NewManager(env.BackupsDir())
 
 	chosenID := restoreID
@@ -1357,12 +1608,19 @@ func runRestore(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return err
 		}
+		var cleanProjRoot string
+		if projectDirFlag != "" {
+			cleanProjRoot = filepath.Clean(projDir)
+		}
 		var filtered []backup.Manifest
 		for _, s := range snaps {
 			if globalInstall && s.Scope != "global" {
 				continue
 			}
 			if projectInstall && s.Scope != "project" {
+				continue
+			}
+			if cleanProjRoot != "" && filepath.Clean(s.RootDir) != cleanProjRoot {
 				continue
 			}
 			filtered = append(filtered, s)
@@ -1440,7 +1698,9 @@ func runUninstall(cmd *cobra.Command, args []string) error {
 	for _, skipped := range res.SkippedFiles {
 		fmt.Printf("Skipped (symlinked ancestor): %s\n", skipped)
 	}
-	if res.RestoredConfig != "" {
+	if res.StrippedConfig != "" {
+		fmt.Printf("Removed managed workflow section (kept custom rules): %s\n", res.StrippedConfig)
+	} else if res.RestoredConfig != "" {
 		fmt.Printf("Restored pre-install config: %s\n", res.RestoredConfig)
 	}
 	return nil
@@ -1545,9 +1805,13 @@ func truncate(s string, max int) string {
 	return s[:max-3] + "..."
 }
 
-func askCodebaseMemoryMCP(reader *bufio.Reader, env platform.Env) error {
+func askCodebaseMemoryMCP(reader *bufio.Reader, env platform.Env, projectDirs ...string) error {
 	if nonInteract {
 		return nil
+	}
+	projDir := "."
+	if len(projectDirs) > 0 && projectDirs[0] != "" {
+		projDir = projectDirs[0]
 	}
 
 	binName := cbMemBinName
@@ -1557,7 +1821,7 @@ func askCodebaseMemoryMCP(reader *bufio.Reader, env platform.Env) error {
 	binPath := filepath.Join(env.HomeDir, ".local", "bin", binName)
 
 	binaryExists := fileExists(binPath)
-	configExists := mcpServerConfigured(cbMemBinName, env.HomeDir)
+	configExists := mcpServerConfigured(cbMemBinName, env.HomeDir, projDir)
 	if binaryExists && configExists {
 		fmt.Printf("\nCodebase Memory MCP already installed at %s — skipping.\n", binPath)
 		return nil
@@ -1669,7 +1933,7 @@ func askCodebaseMemoryMCP(reader *bufio.Reader, env platform.Env) error {
 		}
 		fmt.Println("Configured: ~/.claude/settings.json (global)")
 	} else {
-		if err := addLocalMCPServer("codebase-memory-mcp", serverConfig); err != nil {
+		if err := addLocalMCPServer("codebase-memory-mcp", serverConfig, projDir); err != nil {
 			return fmt.Errorf("configuring local MCP: %w", err)
 		}
 		fmt.Println("Configured: .mcp.json (local)")
@@ -1695,12 +1959,16 @@ func cbMemPlatform(env platform.Env) string {
 	}
 }
 
-func mcpServerConfigured(name, home string) bool {
+func mcpServerConfigured(name, home string, projectDirs ...string) bool {
 	globalPath := filepath.Join(home, ".claude", "settings.json")
 	if checkMCPConfigFile(globalPath, name) {
 		return true
 	}
-	return checkMCPConfigFile(".mcp.json", name)
+	localPath := ".mcp.json"
+	if len(projectDirs) > 0 && projectDirs[0] != "" {
+		localPath = filepath.Join(projectDirs[0], ".mcp.json")
+	}
+	return checkMCPConfigFile(localPath, name)
 }
 
 func checkMCPConfigFile(path, serverName string) bool {
@@ -1929,8 +2197,17 @@ func addGlobalMCPServer(name string, serverConfig map[string]interface{}, home s
 	return os.WriteFile(settingsPath, append(data, '\n'), 0600)
 }
 
-func addLocalMCPServer(name string, serverConfig map[string]interface{}) error {
+func addLocalMCPServer(name string, serverConfig map[string]interface{}, projectDirs ...string) error {
 	mcpPath := ".mcp.json"
+	if len(projectDirs) > 0 && projectDirs[0] != "" {
+		mcpPath = filepath.Join(projectDirs[0], ".mcp.json")
+	}
+	if err := backup.RejectSymlinkInChain(mcpPath); err != nil {
+		return err
+	}
+	if info, lErr := os.Lstat(mcpPath); lErr == nil && info.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("refusing to modify symlinked %s", mcpPath)
+	}
 
 	var mcpConfig map[string]interface{}
 	if fileExists(mcpPath) {

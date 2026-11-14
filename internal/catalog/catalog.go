@@ -22,6 +22,7 @@ type Track struct {
 	Name              string   `yaml:"name"`
 	Badge             string   `yaml:"badge"`
 	Tagline           string   `yaml:"tagline"`
+	BestWhen          string   `yaml:"best_when"`
 	Description       string   `yaml:"description"`
 	InstallAgents     bool     `yaml:"install_agents"`
 	InstallHooks      bool     `yaml:"install_hooks"`

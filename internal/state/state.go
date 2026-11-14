@@ -43,6 +43,7 @@ type UninstallResult struct {
 	SkippedFiles   []string
 	HooksCleaned   bool
 	RestoredConfig string
+	StrippedConfig string
 }
 
 type Store struct {
@@ -413,6 +414,77 @@ func DiscoverLegacyReceipt(env platform.Env, cat *catalog.Catalog, harness, scop
 	}, true
 }
 
+const (
+	ManagedWorkflowBegin = "<!-- BEGIN SKILL-INSTALLER WORKFLOW RULES -->"
+	ManagedWorkflowEnd   = "<!-- END SKILL-INSTALLER WORKFLOW RULES -->"
+)
+
+func HasManagedWorkflowSection(content []byte) bool {
+	s := string(content)
+	bIdx := strings.Index(s, ManagedWorkflowBegin)
+	if bIdx < 0 {
+		return false
+	}
+	eIdx := strings.Index(s[bIdx+len(ManagedWorkflowBegin):], ManagedWorkflowEnd)
+	return eIdx >= 0
+}
+
+func MergeConfigContent(existing, incoming []byte) []byte {
+	trimmedIncoming := strings.TrimSpace(strings.ReplaceAll(string(incoming), "\r\n", "\n"))
+	block := ManagedWorkflowBegin + "\n" + trimmedIncoming + "\n" + ManagedWorkflowEnd
+	s := strings.ReplaceAll(string(existing), "\r\n", "\n")
+
+	if HasManagedWorkflowSection([]byte(s)) {
+		bIdx := strings.Index(s, ManagedWorkflowBegin)
+		relEnd := strings.Index(s[bIdx+len(ManagedWorkflowBegin):], ManagedWorkflowEnd)
+		eIdx := bIdx + len(ManagedWorkflowBegin) + relEnd + len(ManagedWorkflowEnd)
+		prefix := strings.TrimRight(s[:bIdx], " \t\n")
+		suffix := strings.TrimLeft(s[eIdx:], " \t\n")
+		var out strings.Builder
+		if prefix != "" {
+			out.WriteString(prefix)
+			out.WriteString("\n\n")
+		}
+		out.WriteString(block)
+		if suffix != "" {
+			out.WriteString("\n\n")
+			out.WriteString(strings.TrimRight(suffix, "\n"))
+		}
+		out.WriteString("\n")
+		return []byte(out.String())
+	}
+
+	trimmedExisting := strings.TrimRight(s, " \t\n")
+	if strings.TrimSpace(trimmedExisting) == "" {
+		return []byte(block + "\n")
+	}
+	return []byte(trimmedExisting + "\n\n" + block + "\n")
+}
+
+func StripManagedWorkflowSection(content []byte) ([]byte, bool) {
+	s := strings.ReplaceAll(string(content), "\r\n", "\n")
+	if !HasManagedWorkflowSection([]byte(s)) {
+		return content, false
+	}
+	bIdx := strings.Index(s, ManagedWorkflowBegin)
+	relEnd := strings.Index(s[bIdx+len(ManagedWorkflowBegin):], ManagedWorkflowEnd)
+	eIdx := bIdx + len(ManagedWorkflowBegin) + relEnd + len(ManagedWorkflowEnd)
+	prefix := strings.TrimRight(s[:bIdx], " \t\n")
+	suffix := strings.TrimLeft(s[eIdx:], " \t\n")
+	var combined string
+	if prefix != "" && suffix != "" {
+		combined = prefix + "\n\n" + strings.TrimRight(suffix, "\n")
+	} else if prefix != "" {
+		combined = prefix
+	} else if suffix != "" {
+		combined = strings.TrimRight(suffix, "\n")
+	}
+	if strings.TrimSpace(combined) == "" {
+		return nil, true
+	}
+	return []byte(combined + "\n"), true
+}
+
 func Uninstall(env platform.Env, _ *catalog.Catalog, receipt Receipt, backupMgr *backup.Manager, restoreConfig bool) (*UninstallResult, error) {
 	paths, err := env.ResolvePaths(receipt.Harness, receipt.Scope, receipt.RootDir)
 	if err != nil {
@@ -433,7 +505,25 @@ func Uninstall(env platform.Env, _ *catalog.Catalog, receipt Receipt, backupMgr 
 		cleanHooksJSON = filepath.Clean(paths.HooksJSON)
 	}
 
-	if restoreConfig && backupMgr != nil && receipt.LastBackupID != "" && cleanConfig != "" {
+	strippedEmptyConfig := false
+	if cleanConfig != "" && backup.RejectSymlinkInChain(cleanConfig) == nil {
+		if info, err := os.Lstat(cleanConfig); err == nil && info.Mode().IsRegular() {
+			if curBytes, rErr := os.ReadFile(cleanConfig); rErr == nil && HasManagedWorkflowSection(curBytes) {
+				if stripped, ok := StripManagedWorkflowSection(curBytes); ok {
+					if len(stripped) > 0 {
+						if wErr := os.WriteFile(cleanConfig, stripped, 0644); wErr == nil {
+							res.RestoredConfig = cleanConfig
+							res.StrippedConfig = cleanConfig
+						}
+					} else {
+						strippedEmptyConfig = true
+					}
+				}
+			}
+		}
+	}
+
+	if res.RestoredConfig == "" && restoreConfig && backupMgr != nil && receipt.LastBackupID != "" && cleanConfig != "" {
 		restored, err := backupMgr.RestoreSingleFile(receipt.LastBackupID, cleanConfig)
 		if err == nil && restored {
 			res.RestoredConfig = cleanConfig
@@ -449,7 +539,7 @@ func Uninstall(env platform.Env, _ *catalog.Catalog, receipt Receipt, backupMgr 
 			continue
 		}
 		if cleanConfig != "" && cleanFile == cleanConfig {
-			if res.RestoredConfig != "" || !restoreConfig {
+			if res.RestoredConfig != "" || (!restoreConfig && !strippedEmptyConfig) {
 				continue
 			}
 		}
@@ -461,6 +551,14 @@ func Uninstall(env platform.Env, _ *catalog.Catalog, receipt Receipt, backupMgr 
 			if err := os.Remove(cleanFile); err == nil {
 				res.RemovedFiles = append(res.RemovedFiles, cleanFile)
 				backup.PruneEmptyParents(filepath.Dir(cleanFile), 3)
+			}
+		}
+	}
+
+	if strippedEmptyConfig && res.RestoredConfig == "" && cleanConfig != "" {
+		if _, err := os.Lstat(cleanConfig); err == nil {
+			if err := os.Remove(cleanConfig); err == nil {
+				res.RemovedFiles = append(res.RemovedFiles, cleanConfig)
 			}
 		}
 	}

@@ -447,7 +447,7 @@ func Apply(ctx context.Context, runner Runner, env platform.Env, receipt state.R
 		}
 	}
 
-	skipConfig := shouldSkipConfigOnUpdate(env, receipt, trackID)
+	cfgMode := resolveConfigModeOnUpdate(env, receipt, trackID)
 
 	res, err := inst.ExecutePlan(installer.InstallPlan{
 		Env:                   env,
@@ -458,7 +458,8 @@ func Apply(ctx context.Context, runner Runner, env platform.Env, receipt state.R
 		TrackID:               trackID,
 		CustomSkills:          customSkills,
 		Mode:                  "full",
-		SkipConfig:            skipConfig,
+		ConfigMode:            cfgMode,
+		SkipConfig:            cfgMode == installer.ConfigModeSkip,
 		Backup:                opts.Backup,
 		Force:                 true,
 		Version:               opts.CurrentVersion,
@@ -472,39 +473,55 @@ func Apply(ctx context.Context, runner Runner, env platform.Env, receipt state.R
 	return res, head.SHA, nil
 }
 
-func shouldSkipConfigOnUpdate(env platform.Env, receipt state.Receipt, trackID string) bool {
+func resolveConfigModeOnUpdate(env platform.Env, receipt state.Receipt, trackID string) string {
 	projDir := receipt.RootDir
 	if receipt.Scope == "global" {
 		projDir = "."
 	}
 	paths, err := env.ResolvePaths(receipt.Harness, receipt.Scope, projDir)
 	if err != nil || paths.ConfigFile == "" {
-		return false
+		return installer.ConfigModeReplace
+	}
+	if backup.RejectSymlinkInChain(paths.ConfigFile) != nil {
+		return installer.ConfigModeSkip
+	}
+	info, err := os.Lstat(paths.ConfigFile)
+	if err != nil {
+		if os.IsNotExist(err) && receipt.Scope == "global" {
+			return installer.ConfigModeReplace
+		}
+		return installer.ConfigModeSkip
+	}
+	if !info.Mode().IsRegular() {
+		return installer.ConfigModeSkip
 	}
 	curBytes, err := os.ReadFile(paths.ConfigFile)
 	if err != nil {
-		return false
+		return installer.ConfigModeSkip
+	}
+	if state.HasManagedWorkflowSection(curBytes) {
+		return installer.ConfigModeMerge
 	}
 	if receipt.Scope != "global" {
-		return true
+		return installer.ConfigModeSkip
 	}
 	oldCat, err := catalog.Load(catalog.FS)
 	if err != nil {
-		return true
+		return installer.ConfigModeSkip
 	}
 	if tr, ok := oldCat.TrackByID(trackID); ok {
 		if tpl, tErr := oldCat.GlobalConfigTemplate(receipt.Harness, tr.LightweightConfig); tErr == nil {
 			if bytes.Equal(curBytes, tpl) {
-				return false
+				return installer.ConfigModeReplace
 			}
 		}
 	}
 	for _, lw := range []bool{false, true} {
 		if tpl, tErr := oldCat.GlobalConfigTemplate(receipt.Harness, lw); tErr == nil && bytes.Equal(curBytes, tpl) {
-			return false
+			return installer.ConfigModeReplace
 		}
 	}
-	return true
+	return installer.ConfigModeSkip
 }
 
 func validateReleaseURL(rawURL string, allowTestHost bool) error {

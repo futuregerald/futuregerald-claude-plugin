@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -317,4 +318,56 @@ func SweepStaleExecutable(exePath string) {
 		return
 	}
 	_ = os.Remove(exePath + ".old")
+}
+
+func cleanForOS(goos, p string) string {
+	if p == "" {
+		return ""
+	}
+	if goos == "windows" {
+		slashed := strings.ReplaceAll(p, `\`, `/`)
+		prefix := ""
+		if len(slashed) >= 2 && slashed[1] == ':' {
+			prefix = slashed[:2]
+			slashed = slashed[2:]
+			if slashed == "" {
+				slashed = "/"
+			}
+		}
+		cleaned := path.Clean(slashed)
+		return strings.ReplaceAll(prefix+cleaned, `/`, `\`)
+	}
+	return path.Clean(strings.ReplaceAll(p, `\`, `/`))
+}
+
+func (e Env) ExpandPath(rawPath, baseDir string) string {
+	p := strings.TrimSpace(rawPath)
+	if len(p) >= 2 && ((p[0] == '"' && p[len(p)-1] == '"') || (p[0] == '\'' && p[len(p)-1] == '\'')) {
+		p = strings.TrimSpace(p[1 : len(p)-1])
+	}
+	if p == "" || p == "." {
+		if baseDir != "" {
+			return cleanForOS(e.GOOS, joinForOS(e.GOOS, baseDir))
+		}
+		return "."
+	}
+	if p == "~" {
+		if e.HomeDir != "" {
+			return cleanForOS(e.GOOS, joinForOS(e.GOOS, e.HomeDir))
+		}
+		return p
+	}
+	if strings.HasPrefix(p, "~/") || strings.HasPrefix(p, `~\`) {
+		if e.HomeDir != "" {
+			return cleanForOS(e.GOOS, joinForOS(e.GOOS, e.HomeDir, p[2:]))
+		}
+		return p
+	}
+	if isAbsForOS(p) {
+		return cleanForOS(e.GOOS, joinForOS(e.GOOS, p))
+	}
+	if baseDir != "" {
+		return cleanForOS(e.GOOS, joinForOS(e.GOOS, baseDir, p))
+	}
+	return cleanForOS(e.GOOS, joinForOS(e.GOOS, p))
 }

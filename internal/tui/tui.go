@@ -50,34 +50,38 @@ type Config struct {
 }
 
 type Model struct {
-	cfg              Config
-	screen           screenID
-	prevScreen       screenID
-	width            int
-	height           int
-	botFrame         int
-	homeIdx          int
-	harnessIdx       int
-	scope            string
-	trackIdx         int
-	backupIdx        int
-	doneIdx          int
-	guideTab         int
-	skillCursor      int
-	skillExpanded    map[string]bool
-	customSelected   map[string]bool
-	showAllInGuide   bool
-	installRes       *installer.InstallResult
-	statusMsg        string
-	errMsg           string
-	updateIdx        int
-	updateReport     *updater.CheckReport
-	snapshots        []backup.Manifest
-	restoreIdx       int
-	confirmRestore   bool
-	receipts         []state.Receipt
-	uninstallIdx     int
-	confirmUninstall bool
+	cfg               Config
+	screen            screenID
+	prevScreen        screenID
+	width             int
+	height            int
+	botFrame          int
+	homeIdx           int
+	harnessIdx        int
+	scope             string
+	trackIdx          int
+	backupIdx         int
+	backupTouched     bool
+	doneIdx           int
+	guideTab          int
+	skillCursor       int
+	skillExpanded     map[string]bool
+	customSelected    map[string]bool
+	showAllInGuide    bool
+	installRes        *installer.InstallResult
+	statusMsg         string
+	errMsg            string
+	updateIdx         int
+	updateReport      *updater.CheckReport
+	snapshots         []backup.Manifest
+	restoreIdx        int
+	confirmRestore    bool
+	receipts          []state.Receipt
+	uninstallIdx      int
+	confirmUninstall  bool
+	editingProjectDir bool
+	projectDirInput   string
+	projectDirErr     string
 }
 
 var harnessOrder = []string{
@@ -88,10 +92,10 @@ var harnessOrder = []string{
 }
 
 var harnessTaglines = map[string]string{
-	catalog.HarnessAntigravity: "Installs GEMINI.md, native /slash skills, subagents, and optional circuit-breaker hooks",
-	catalog.HarnessClaude:      "Installs CLAUDE.md, .claude/skills, subagents, and /start, /shape, /write-a-prd slash commands",
-	catalog.HarnessZed:         "Installs AGENTS.md and .agents/skills (automatically exposed as /slash commands in Zed)",
-	catalog.HarnessOpenCode:    "Installs AGENTS.md, .opencode/skills, subagents, and .opencode/commands",
+	catalog.HarnessAntigravity: "Configures GEMINI.md, native /slash skills, review subagents, and context-saving hooks",
+	catalog.HarnessClaude:      "Adds CLAUDE.md, auto-triggered skills, review subagents, and /start, /shape, /write-a-prd commands",
+	catalog.HarnessZed:         "Configures AGENTS.md and .agents/skills (automatically exposed as /slash commands in Zed)",
+	catalog.HarnessOpenCode:    "Sets up AGENTS.md, .opencode/skills, review subagents, and .opencode/commands",
 }
 
 func NewModel(cfg Config) Model {
@@ -266,8 +270,59 @@ func (m Model) existingConfigPresent() bool {
 	if err != nil || paths.ConfigFile == "" {
 		return false
 	}
-	info, err := os.Stat(paths.ConfigFile)
+	info, err := os.Lstat(paths.ConfigFile)
 	return err == nil && !info.IsDir()
+}
+
+func (m *Model) clampBackupIdx() {
+	maxIdx := 1
+	if m.existingConfigPresent() {
+		maxIdx = 3
+	}
+	if !m.cfg.InitialBackup && !m.backupTouched && m.backupIdx == 1 && m.existingConfigPresent() {
+		m.backupIdx = 3
+	}
+	if m.backupIdx > maxIdx {
+		m.backupIdx = 0
+	}
+}
+
+func (m Model) InstallResult() *installer.InstallResult {
+	return m.installRes
+}
+
+func (m Model) StarterPrompts(max int) []catalog.SkillMetadata {
+	all := m.installedOrSelectedSkills()
+	if len(all) == 0 || max <= 0 {
+		return nil
+	}
+	hasStart := false
+	for _, sm := range all {
+		if sm.Name == "start" {
+			hasStart = true
+			break
+		}
+	}
+	var primary []catalog.SkillMetadata
+	var updaterFallback []catalog.SkillMetadata
+	for _, sm := range all {
+		if sm.StarterPrompt == "" {
+			continue
+		}
+		if hasStart && sm.Name == "begin" {
+			continue
+		}
+		if sm.Name == "plugin-updater" {
+			updaterFallback = append(updaterFallback, sm)
+			continue
+		}
+		primary = append(primary, sm)
+	}
+	combined := append(primary, updaterFallback...)
+	if len(combined) > max {
+		return combined[:max]
+	}
+	return combined
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -282,6 +337,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return tickMsg(t)
 		})
 	case tea.KeyMsg:
+		if m.screen == screenHarness && m.editingProjectDir {
+			return m.updateHarnessEditProjectDir(msg)
+		}
 		key := msg.String()
 		if key == "ctrl+c" || key == "q" {
 			return m, tea.Quit
@@ -372,8 +430,74 @@ func (m Model) updateHarness(key string) (tea.Model, tea.Cmd) {
 		} else {
 			m.scope = "global"
 		}
+	case "e", "/":
+		m.editingProjectDir = true
+		m.projectDirInput = m.cfg.ProjectDir
+		m.projectDirErr = ""
 	case "enter":
 		m.screen = screenTrack
+	}
+	return m, nil
+}
+
+func (m Model) updateHarnessEditProjectDir(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.Type {
+	case tea.KeyCtrlC:
+		return m, tea.Quit
+	case tea.KeyEsc:
+		m.editingProjectDir = false
+		m.projectDirErr = ""
+		return m, nil
+	case tea.KeyBackspace, tea.KeyDelete:
+		runes := []rune(m.projectDirInput)
+		if len(runes) > 0 {
+			m.projectDirInput = string(runes[:len(runes)-1])
+		}
+		m.projectDirErr = ""
+		return m, nil
+	case tea.KeyCtrlU:
+		m.projectDirInput = ""
+		m.projectDirErr = ""
+		return m, nil
+	case tea.KeyEnter:
+		if strings.TrimSpace(m.projectDirInput) == "" {
+			m.projectDirErr = "Please enter a valid project folder path."
+			return m, nil
+		}
+		baseDir, err := os.Getwd()
+		if err != nil || baseDir == "" {
+			baseDir = m.cfg.ProjectDir
+		}
+		resolved := m.cfg.Env.ExpandPath(m.projectDirInput, baseDir)
+		if resolved == "" {
+			m.projectDirErr = "Please enter a valid project folder path."
+			return m, nil
+		}
+		if err := backup.RejectSymlinkInChain(resolved); err != nil {
+			m.projectDirErr = fmt.Sprintf("Cannot use symlinked path: %v", err)
+			return m, nil
+		}
+		if linfo, lErr := os.Lstat(resolved); lErr == nil && linfo.Mode()&os.ModeSymlink != 0 {
+			m.projectDirErr = fmt.Sprintf("Cannot use symlinked project folder: %s", resolved)
+			return m, nil
+		}
+		if info, statErr := os.Stat(resolved); statErr == nil && !info.IsDir() {
+			m.projectDirErr = "That path points to a file — please enter a folder path."
+			return m, nil
+		}
+		m.cfg.ProjectDir = resolved
+		m.scope = "project"
+		m.editingProjectDir = false
+		m.projectDirErr = ""
+		return m, nil
+	case tea.KeySpace:
+		m.projectDirInput += " "
+		m.projectDirErr = ""
+		return m, nil
+	case tea.KeyRunes:
+		m.projectDirInput += string(msg.Runes)
+		m.projectDirErr = ""
+		return m, nil
 	}
 	return m, nil
 }
@@ -404,6 +528,7 @@ func (m Model) updateTrack(key string) (tea.Model, tea.Cmd) {
 			m.screen = screenSkillTable
 			return m, nil
 		}
+		m.clampBackupIdx()
 		m.screen = screenBackup
 	}
 	return m, nil
@@ -434,6 +559,7 @@ func (m Model) updateSkillTable(key string) (tea.Model, tea.Cmd) {
 		}
 	case "d", "enter":
 		if key == "enter" && tr.ID == "custom" {
+			m.clampBackupIdx()
 			m.screen = screenBackup
 			return m, nil
 		}
@@ -442,6 +568,7 @@ func (m Model) updateSkillTable(key string) (tea.Model, tea.Cmd) {
 			m.skillExpanded[name] = !m.skillExpanded[name]
 		}
 	case "c":
+		m.clampBackupIdx()
 		m.screen = screenBackup
 	}
 	return m, nil
@@ -450,7 +577,10 @@ func (m Model) updateSkillTable(key string) (tea.Model, tea.Cmd) {
 func (m Model) updateBackup(key string) (tea.Model, tea.Cmd) {
 	maxIdx := 1
 	if m.existingConfigPresent() {
-		maxIdx = 2
+		maxIdx = 3
+	}
+	if m.backupIdx > maxIdx {
+		m.backupIdx = 0
 	}
 	switch key {
 	case "esc", "backspace":
@@ -458,10 +588,12 @@ func (m Model) updateBackup(key string) (tea.Model, tea.Cmd) {
 	case "up", "k", "left":
 		if m.backupIdx > 0 {
 			m.backupIdx--
+			m.backupTouched = true
 		}
 	case "down", "j", "right":
 		if m.backupIdx < maxIdx {
 			m.backupIdx++
+			m.backupTouched = true
 		}
 	case "enter":
 		m.runInstallation()
@@ -486,7 +618,26 @@ func (m *Model) runInstallation() {
 		}
 	}
 
-	skipConfig := m.backupIdx == 1 && m.existingConfigPresent()
+	hasExisting := m.existingConfigPresent()
+	cfgMode := installer.ConfigModeReplace
+	doBackup := m.backupIdx == 0
+	if hasExisting {
+		switch m.backupIdx {
+		case 0:
+			cfgMode = installer.ConfigModeMerge
+			doBackup = true
+		case 1:
+			cfgMode = installer.ConfigModeReplace
+			doBackup = true
+		case 2:
+			cfgMode = installer.ConfigModeSkip
+			doBackup = true
+		case 3:
+			cfgMode = installer.ConfigModeReplace
+			doBackup = false
+		}
+	}
+
 	inst := installer.New(m.cfg.Catalog.FS(), installer.Options{Force: true})
 	res, err := inst.ExecutePlan(installer.InstallPlan{
 		Env:                   m.cfg.Env,
@@ -497,8 +648,9 @@ func (m *Model) runInstallation() {
 		TrackID:               tr.ID,
 		CustomSkills:          customSkills,
 		Mode:                  "full",
-		SkipConfig:            skipConfig,
-		Backup:                m.backupIdx == 0,
+		ConfigMode:            cfgMode,
+		SkipConfig:            cfgMode == installer.ConfigModeSkip,
+		Backup:                doBackup,
 		Force:                 true,
 		Version:               m.cfg.Version,
 		ProjectConfigRenderer: m.cfg.ProjectConfigRenderer,
@@ -821,15 +973,15 @@ func (m Model) renderBotHeader(stepLabel, speech string) string {
 func (m Model) viewHome() string {
 	var b strings.Builder
 	b.WriteString(m.renderBotHeader("WELCOME",
-		"Hey there! I set up curated AI workflows, slash commands, and skills without burying you in 50+ random files.\nPick one thing below — we'll take it one step at a time."))
+		"Set up curated AI workflows, /slash commands, and review agents in three quick steps.\nExisting config files are backed up or merged safely before anything changes."))
 
 	items := []struct {
 		title string
 		sub   string
 	}{
-		{"Set up skills & workflow", "Guided 3-question setup for Antigravity, Claude Code, Zed, or OpenCode"},
+		{"Choose a workflow track (60-sec guided setup)", "Safe by default: backs up, merges, or preserves your existing CLAUDE.md / GEMINI.md"},
 		{"See how this works & command guide", "Plain-English tour of /slash commands, skills, tracks, and starter prompts"},
-		{"Check for updates (gh)", "Pull the latest skills and improvements directly from main"},
+		{"Check for skill & workflow updates", "See what changed on main and update your installed track with automatic backup"},
 		{"Restore a safety backup", "Roll back to a timestamped snapshot if you want a do-over"},
 		{"Uninstall", "Cleanly remove plugin files while keeping your custom skills untouched"},
 	}
@@ -850,7 +1002,7 @@ func (m Model) viewHome() string {
 
 func (m Model) viewHarness() string {
 	var b strings.Builder
-	b.WriteString(m.renderBotHeader("STEP 1 OF 3 · TARGET APP",
+	b.WriteString(m.renderBotHeader("STEP 1 OF 3 · TARGET APP & SCOPE",
 		"Which AI coding or product assistant are we configuring today?"))
 
 	for idx, h := range harnessOrder {
@@ -867,20 +1019,32 @@ func (m Model) viewHarness() string {
 		if selected {
 			paths, _ := m.cfg.Env.ResolvePaths(h, m.scope, m.cfg.ProjectDir)
 			pathHint := fmt.Sprintf("Skills: %s   Config: %s", paths.SkillsDir, paths.ConfigFile)
-			card += "\n  " + StepPillStyle.Render(pathHint)
+			card += "\n  " + StepPillStyle.Render(pathHint) + "\n  " + SubtitleStyle.Render("Safe: backs up or merges existing config before writing")
 		}
 		b.WriteString(m.cardStyle(selected).Render(card) + "\n")
 	}
 
 	scopeGlobal := "[ ] Global (all projects)"
-	scopeProj := "[ ] Current project folder"
+	scopeProj := fmt.Sprintf("[ ] Specific project folder (%s)", m.cfg.ProjectDir)
 	if m.scope == "global" {
 		scopeGlobal = SlashStyle.Render("[x] Global (all projects)")
 	} else {
-		scopeProj = SlashStyle.Render("[x] Current project folder")
+		scopeProj = SlashStyle.Render(fmt.Sprintf("[x] Specific project folder (%s)", m.cfg.ProjectDir))
 	}
-	b.WriteString("\n  Scope (press Tab to switch):   " + scopeGlobal + "     " + scopeProj + "\n")
-	b.WriteString(FooterStyle.Render("Up/Down: choose app  ·  Tab: switch Global/Project  ·  Enter: next  ·  ?: guide  ·  Esc: back"))
+	b.WriteString("\n  Scope (Tab: switch · e: set project folder):   " + scopeGlobal + "     " + scopeProj + "\n")
+
+	if m.editingProjectDir {
+		editBox := fmt.Sprintf("Target project folder: %s█\n  Press Enter to confirm folder (supports ~/...), Ctrl+U to clear, or Esc to cancel.",
+			SlashStyle.Render(m.projectDirInput))
+		if m.projectDirErr != "" {
+			editBox += "\n  " + BadgeStyle.Render(m.projectDirErr)
+		}
+		b.WriteString("\n" + m.cardStyle(true).Render(editBox) + "\n")
+		b.WriteString(FooterStyle.Render("Type folder path  ·  Enter: confirm folder  ·  Ctrl+U: clear  ·  Esc: cancel"))
+		return b.String()
+	}
+
+	b.WriteString(FooterStyle.Render("Up/Down: choose app  ·  Tab: switch Global/Project  ·  e: set project folder  ·  Enter: next  ·  ?: guide  ·  Esc: back"))
 	return b.String()
 }
 
@@ -912,6 +1076,9 @@ func (m Model) viewTrack() string {
 				header,
 				SlashStyle.Render(tr.Tagline),
 			)
+			if tr.BestWhen != "" {
+				card += "\n  " + SubtitleStyle.Render("Best when: "+tr.BestWhen)
+			}
 			if selected && tr.Description != "" {
 				card += "\n  " + SubtitleStyle.Render(tr.Description)
 			}
@@ -928,12 +1095,14 @@ func (m Model) viewSkillTable() string {
 	tr := m.selectedTrack()
 	skills := m.visibleSkills()
 
+	stepLabel := "STEP 2 OF 3 · SKILL PREVIEW"
 	speech := fmt.Sprintf("Here is what's inside %s for %s. Press 'd' or Enter on any skill to read its full description and starter prompt.",
 		tr.Name, HarnessDisplayName(m.selectedHarness()))
 	if tr.ID == "custom" {
+		stepLabel = "STEP 2 OF 3 · CUSTOM SKILL PICKER"
 		speech = "Toggle any skill with Space, press 'd' to expand its long description, and press Enter when your mix is ready."
 	}
-	b.WriteString(m.renderBotHeader("SKILL & COMMAND INSPECTOR", speech))
+	b.WriteString(m.renderBotHeader(stepLabel, speech))
 
 	start := 0
 	pageSize := 10
@@ -1008,10 +1177,10 @@ func (m Model) viewBackup() string {
 
 	speech := "Before writing files, should I save a timestamped safety snapshot so you can roll back anytime with `skill-installer restore`?"
 	if hasExistingCfg {
-		speech = fmt.Sprintf("I detected an existing %s at %s.\nChoose whether to back it up before updating, keep your existing %s untouched, or overwrite without a snapshot.",
+		speech = fmt.Sprintf("I detected an existing %s at %s.\nChoose whether to add/update the workflow section inside your existing %s, replace it with the clean template, or keep it untouched.",
 			cfgName, paths.ConfigFile, cfgName)
 	}
-	b.WriteString(m.renderBotHeader("STEP 3 OF 3 · SAFETY BACKUP", speech))
+	b.WriteString(m.renderBotHeader("STEP 3 OF 3 · CONFIG & SAFETY BACKUP", speech))
 
 	type backupOpt struct {
 		title string
@@ -1021,16 +1190,20 @@ func (m Model) viewBackup() string {
 	if hasExistingCfg {
 		opts = []backupOpt{
 			{
-				"Yes, back up existing files before updating (Recommended)",
-				fmt.Sprintf("Snapshots %s and any existing skills into %s before writing", cfgName, m.cfg.Env.BackupsDir()),
+				fmt.Sprintf("Add / update workflow section in existing %s + save backup (Recommended)", cfgName),
+				fmt.Sprintf("Keeps your current rules in %s and appends/updates a managed workflow section after saving a backup in %s", cfgName, m.cfg.Env.BackupsDir()),
 			},
 			{
-				fmt.Sprintf("Keep my existing %s untouched (install skills only)", cfgName),
-				fmt.Sprintf("Installs skills and commands without modifying your current %s", cfgName),
+				fmt.Sprintf("Replace %s with clean track template + save backup", cfgName),
+				fmt.Sprintf("Snapshots your current %s into %s, then writes the clean track template", cfgName, m.cfg.Env.BackupsDir()),
 			},
 			{
-				"Overwrite without saving a backup",
-				fmt.Sprintf("Replaces %s and existing plugin files without saving a snapshot", cfgName),
+				fmt.Sprintf("Keep my existing %s untouched (install skills & commands only)", cfgName),
+				fmt.Sprintf("Installs skills, subagents, and commands without modifying your current %s", cfgName),
+			},
+			{
+				fmt.Sprintf("Replace %s without saving a backup", cfgName),
+				fmt.Sprintf("Replaces %s and existing plugin files directly without recording a snapshot", cfgName),
 			},
 		}
 	} else {
@@ -1063,7 +1236,7 @@ func (m Model) viewBackup() string {
 func (m Model) viewDone() string {
 	var b strings.Builder
 	if m.errMsg != "" {
-		b.WriteString(m.renderBotHeader("OOPS", fmt.Sprintf("Something went wrong: %s", m.errMsg)))
+		b.WriteString(m.renderBotHeader("INSTALL STOPPED", fmt.Sprintf("Something went wrong: %s", m.errMsg)))
 		b.WriteString(FooterStyle.Render("Press q to exit"))
 		return b.String()
 	}
@@ -1072,14 +1245,29 @@ func (m Model) viewDone() string {
 	appName := HarnessDisplayName(m.selectedHarness())
 	tr := m.selectedTrack()
 
-	b.WriteString(m.renderBotHeader("ALL CONFIGURED!",
-		fmt.Sprintf("%s is ready with the %s track.\nWant a quick 60-second tour of what you can type in your very next chat session?", appName, tr.Name)))
+	b.WriteString(m.renderBotHeader("SETUP COMPLETE",
+		fmt.Sprintf("%s is ready with the %s track.\nCopy one of the starter prompts below into your next session, or open the interactive tour.", appName, tr.Name)))
 
 	if res != nil {
+		cfgSummary := res.Paths.ConfigFile
+		if res.ConfigAction != "" {
+			cfgSummary = fmt.Sprintf("%s (%s)", res.Paths.ConfigFile, res.ConfigAction)
+		}
 		summary := fmt.Sprintf("App & Scope:    %s (%s)\nTrack:          %s (%d skills installed)\nSkills folder:  %s\nConfig file:    %s",
-			appName, res.Scope, tr.Name, len(res.Skills), res.Paths.SkillsDir, res.Paths.ConfigFile)
+			appName, res.Scope, tr.Name, len(res.Skills), res.Paths.SkillsDir, cfgSummary)
 		if res.BackupID != "" {
 			summary += fmt.Sprintf("\nSafety backup:  %s (restore anytime with `skill-installer restore`)", res.BackupID)
+		}
+		starters := m.StarterPrompts(2)
+		if len(starters) > 0 {
+			summary += "\n\nTry typing right now in your next session:"
+			for _, sm := range starters {
+				slash := sm.SlashCommand
+				if slash == "" {
+					slash = sm.Name
+				}
+				summary += fmt.Sprintf("\n  * %s -- %q", SlashStyle.Render(slash), sm.StarterPrompt)
+			}
 		}
 		b.WriteString(m.cardStyle(false).Render(summary) + "\n\n")
 	}
@@ -1233,7 +1421,7 @@ func (m Model) viewGuide() string {
 func (m Model) viewUpdate() string {
 	var b strings.Builder
 	targetReceipt := m.selectTargetReceipt()
-	b.WriteString(m.renderBotHeader("LIVE UPDATER (GITHUB CLI)",
+	b.WriteString(m.renderBotHeader("SKILL & WORKFLOW UPDATES",
 		fmt.Sprintf("Checking futuregerald/futuregerald-claude-plugin on main for %s (%s · %s)...",
 			HarnessDisplayName(targetReceipt.Harness), targetReceipt.Scope, targetReceipt.RootDir)))
 
@@ -1251,7 +1439,7 @@ func (m Model) viewUpdate() string {
 	}
 
 	if m.errMsg != "" {
-		b.WriteString(m.cardStyle(false).Render("Update check note: "+m.errMsg) + "\n")
+		b.WriteString(m.cardStyle(false).Render("Couldn't reach GitHub via gh CLI (run 'gh auth login', or type /plugin-update in chat): "+m.errMsg) + "\n")
 	} else if m.statusMsg != "" {
 		b.WriteString(m.cardStyle(true).Render(SlashStyle.Render(m.statusMsg)) + "\n")
 	} else if m.updateReport != nil {
@@ -1290,7 +1478,7 @@ func (m Model) viewRestore() string {
 			fmt.Sprintf("Confirm restore of snapshot %s? Press Enter/y to confirm, Esc/n to cancel.", snap.ID))) + "\n")
 	}
 	if len(m.snapshots) == 0 {
-		b.WriteString(m.cardStyle(false).Render("No safety backup snapshots found yet.") + "\n")
+		b.WriteString(m.cardStyle(false).Render("No safety backup snapshots found yet. Press Esc and select 'Choose a workflow track (60-sec guided setup)' to install your first track.") + "\n")
 	} else {
 		for idx, s := range m.snapshots {
 			cursor := "  "
@@ -1322,7 +1510,7 @@ func (m Model) viewUninstall() string {
 				HarnessDisplayName(rec.Harness), rec.Scope))) + "\n")
 	}
 	if len(m.receipts) == 0 {
-		b.WriteString(m.cardStyle(false).Render("No tracked installations found.") + "\n")
+		b.WriteString(m.cardStyle(false).Render("No tracked installations found. Press Esc and select 'Choose a workflow track (60-sec guided setup)' to install your first track.") + "\n")
 	} else {
 		for idx, r := range m.receipts {
 			cursor := "  "

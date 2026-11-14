@@ -5,10 +5,12 @@ tracks:
   badge: Recommended for Engineers
   tagline: Full 12-phase engineering lifecycle from shaping & UI prototypes to TDD, adversarial reviews,
     and PR handoff.
-  description: Installs the complete 12-phase engineering workflow (/start, /begin, /lifecycle), product
-    shaping (/shape), 3-direction UI prototyping (/ui-design), TDD & subagent orchestration, adversarial
-    plan/code/SQL reviews, and PR handoff. On Antigravity, also installs peer-pipeline-swarm, baton-pass,
-    and circuit-breaker hooks.
+  best_when: You want phase gates, TDD, and peer reviews enforced on every code change.
+  description: Best for shipping production code end-to-end. Runs shaping (/shape), 3-direction UI prototypes
+    (/ui-design), caller tracing, TDD, and parallel code + security reviews before every PR. On Antigravity,
+    also installs peer-pipeline-swarm (parallel implementer and review subagents), baton-pass, and
+    circuit-breaker hooks (which stop repetitive tool loops and save an ACTIVE_CONTEXT.md handoff before
+    256k token compaction).
   install_agents: true
   install_hooks: true
   lightweight_config: false
@@ -52,11 +54,12 @@ tracks:
 - id: basics
   name: Just the Basics
   badge: Lightweight Starter
-  tagline: 8 essential everyday skills for planning, debugging, TDD, code review, and PRs without heavy
-    lifecycle gates.
+  tagline: 8 everyday skills for planning, debugging, TDD, code review, and PRs—on demand whenever you
+    invoke them, with zero mandatory gates.
+  best_when: You want on-demand skills with full manual control and zero phase gates.
   description: A calm, lightweight pack of 8 everyday engineering skills—brainstorming, writing plans,
-    systematic debugging, TDD, code review, PR descriptions, session handoffs, and live updates—with a
-    concise global/project config and no circuit-breaker hooks.
+    systematic debugging, TDD, code review, PR descriptions, session handoffs, and live updates—invoked
+    only when you ask for them.
   install_agents: false
   install_hooks: false
   lightweight_config: true
@@ -74,6 +77,7 @@ tracks:
   badge: PMs, Founders & Leads
   tagline: Turn rough ideas into point-of-view briefs, interactive UI prototypes, PRDs, clear
     tickets, and team pulse reports.
+  best_when: You are shaping specs, PRDs, UI prototypes, tickets, or team reports.
   description: Designed for product managers, designers, founders, and engineering leads. Covers product
     shaping, decision grilling, PRDs, ticket writing and grooming, 3-direction HTML UI prototyping, visual plan
     pages, copy reviews, research, meeting debriefs, and team pulse/forecasting—with zero code-gate noise.
@@ -108,6 +112,7 @@ tracks:
   badge: Design & Marketing
   tagline: Eliminate AI slop from interfaces and landing pages with behavioral psychology, copywriting,
     motion, and visual craft.
+  best_when: You are auditing or elevating landing copy, visual hierarchy, and motion.
   description: Focused pack for auditing and elevating user-facing pages, landing copy, visual hierarchy,
     and motion. Combines copywriting, 70+ marketing psychology mental models, anti-slop UI rules, high-craft
     frontend polish, and Disney's 12 animation principles.
@@ -128,6 +133,7 @@ tracks:
   name: Pick Individual Skills
   badge: A la Carte Browser
   tagline: Browse all skills by category with plain-English summaries and pick the exact subset you want.
+  best_when: You already know the exact individual skills you want to mix and match.
   description: Interactive skill picker where you can inspect short and long plain-English descriptions,
     slash commands, and starter prompts, and toggle individual skills on or off (with plugin-updater pre-checked
     by default).
