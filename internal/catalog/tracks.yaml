@@ -8,9 +8,9 @@ tracks:
   best_when: You want phase gates, TDD, and peer reviews enforced on every code change.
   description: Best for shipping production code end-to-end. Runs shaping (/shape), 3-direction UI prototypes
     (/ui-design), caller tracing, TDD, and parallel code + security reviews before every PR. On Antigravity,
-    also installs peer-pipeline-swarm (parallel implementer and review subagents), baton-pass, and
-    circuit-breaker hooks (which stop repetitive tool loops and save an ACTIVE_CONTEXT.md handoff before
-    256k token compaction).
+    also installs peer-pipeline-swarm (parallel implementer and review subagents), start-small (/start-small
+    lightweight Argon swarm workflow), baton-pass, and circuit-breaker hooks (which stop repetitive tool
+    loops and save an ACTIVE_CONTEXT.md handoff before 256k token compaction).
   install_agents: true
   install_hooks: true
   lightweight_config: false
@@ -50,6 +50,7 @@ tracks:
   antigravity_skills:
   - antigravity-orchestration
   - peer-pipeline-swarm
+  - start-small
   - baton-pass
 - id: basics
   name: Just the Basics
@@ -552,9 +553,19 @@ skills:
   category: Antigravity Exclusives
   slash_command: /antigravity-orchestration
   short: Antigravity session orchestration, role routing table, and search hierarchy reference.
-  long: Antigravity-exclusive reference covering Argon Medium vs Carbon High model routing, restricted-tool
-    subagent dispatch, Prism memory hooks, code-search hierarchy, and workflow trigger tables.
+  long: Antigravity-exclusive reference covering Carbon Medium default routing, /start-small Argon Medium
+    swarm routing, Carbon High and Opus 5.5 High adversarial reviews, restricted-tool subagent dispatch,
+    Prism memory hooks, code-search hierarchy, and workflow trigger tables.
   starter_prompt: /antigravity-orchestration Check the model routing rules for Phase 4 and Phase 8
+  antigravity_only: true
+- name: start-small
+  category: Antigravity Exclusives
+  slash_command: /start-small
+  short: Lightweight Antigravity 12-phase workflow using Argon Medium swarm implementation and Carbon High reviews.
+  long: Antigravity-exclusive 12-phase workflow tuned for smaller, well-bounded code changes and bug fixes
+    directly inside a Carbon Medium session—running an Argon Medium (1x) share implementer with Carbon High
+    peer reviewers (preserving weekly Anthropic Opus quota) or an inline fast-path for <=2-file micro-fixes.
+  starter_prompt: /start-small Fix the pagination off-by-one bug in the activity feed
   antigravity_only: true
 - name: peer-pipeline-swarm
   category: Antigravity Exclusives

@@ -76,7 +76,7 @@ func IsSupportedHarness(harness string) bool {
 
 func IsAntigravityOnlySkill(skillName string) bool {
 	switch skillName {
-	case "antigravity-orchestration", "peer-pipeline-swarm", "baton-pass":
+	case "antigravity-orchestration", "peer-pipeline-swarm", "start-small", "baton-pass":
 		return true
 	default:
 		return false

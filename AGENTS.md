@@ -23,7 +23,7 @@
 
 ### The Core Opinionated 12-Phase Workflow
 Only these skills form the mandatory lifecycle gates in `CLAUDE-BASE.md`, `CLAUDE-GLOBAL.md`, `GEMINI.md`, `GEMINI-BASE.md`, `AGENTS-ZED.md`, `AGENTS-OPENCODE.md`, `AGENTS-GLOBAL.md`, and `lifecycle/SKILL.md`:
-- **Entry & Orchestration:** `start` (`/start`), `begin` (`/begin`), `lifecycle` (`/lifecycle`), `subagent-driven-development`, `future-model-router` (plus Antigravity-only `antigravity-orchestration`, `peer-pipeline-swarm`, and `baton-pass`)
+- **Entry & Orchestration:** `start` (`/start`), `begin` (`/begin`), `lifecycle` (`/lifecycle`), `subagent-driven-development`, `future-model-router` (plus Antigravity-only `antigravity-orchestration`, `peer-pipeline-swarm`, `start-small`, and `baton-pass`)
 - **Phase 0 (Shape):** `shape` (`/shape`), `craftsmans-wisdom`, `future-grilling`, `future-wayfinder`, `grilling-page`, `write-a-prd`, `brainstorming`
 - **Phase 0½ (UI Design):** `ui-design` (`/ui-design`), `huashu-design`, `no-slop-ui`
 - **Phases 3 & 3½ (Plan & Plan Review):** `future-writing-plans`, `plan-review` (`/plan-review`), `review-lens`
@@ -62,7 +62,7 @@ internal/catalog/
     hooks.json                   # PreToolUse hook registration (ANTIGRAVITY ONLY)
     plugins/antigravity-subagents/
     rules/org.example.md
-    skills/                      # Antigravity-exclusive skills (baton-pass, antigravity-orchestration, peer-pipeline-swarm) + Antigravity skill overrides
+    skills/                      # Antigravity-exclusive skills (baton-pass, antigravity-orchestration, peer-pipeline-swarm, start-small) + Antigravity skill overrides
     templates/GEMINI-BASE.md     # Project GEMINI.md template
   zed/
     AGENTS-GLOBAL.md             # Global Zed AGENTS.md (~/.config/zed/AGENTS.md or %APPDATA%\Zed\AGENTS.md)
@@ -75,7 +75,7 @@ internal/catalog/
 ```
 
 ### Mandatory Asset Invariants
-1. **`baton-pass` and circuit-breaker hooks are ANTIGRAVITY-ONLY:** Never place `baton-pass`, `antigravity-orchestration`, `peer-pipeline-swarm`, or circuit-breaker hooks in `shared/`, `claude/`, `zed/`, or `opencode/`, and never reference `baton-pass` in Claude, Zed, or OpenCode templates.
+1. **`baton-pass`, `start-small`, and circuit-breaker hooks are ANTIGRAVITY-ONLY:** Never place `baton-pass`, `antigravity-orchestration`, `peer-pipeline-swarm`, `start-small`, or circuit-breaker hooks in `shared/`, `claude/`, `zed/`, or `opencode/`, and never reference `baton-pass` or `start-small` in Claude, Zed, or OpenCode templates.
 2. **Distinct harness configs:** Never copy-paste identical `CLAUDE.md` boilerplate across `zed` and `opencode`. Each harness template must reflect that tool's actual directory layout, subagent support, and slash-command mechanics.
 3. **Register every skill in `tracks.yaml`:** Whenever you add or rename a skill directory under `internal/catalog/shared/skills/` or `internal/catalog/antigravity/skills/`, add its `category`, `slash_command`, `short` (1-line plain English), `long` (2–3 sentences plain English), and `starter_prompt` to `internal/catalog/tracks.yaml`.
 4. **Track dependency closure (C4):** If a skill in a curated track (`opinionated`, `basics`, `product`, `copy-polish`) links to `../<other-skill>/SKILL.md`, `<other-skill>` must either be included in that same track or explicitly marked `(when installed)` / `(optional)` on that line.

@@ -2,7 +2,7 @@
 name: peer-pipeline-swarm
 description: >-
   Antigravity-only Phases 4–9 execution and peer-review swarm. Spawns an isolated
-  Argon Medium implementer (workspace: share), cross-family high-deliberation
+  Carbon Medium implementer (workspace: share), cross-family high-deliberation
   peer reviewers (Claude Opus 5.5 High code-quality + Gemini 4 Carbon High
   security/SQL), and a cheap Hydrogen Low stall monitor so build, test, review,
   and fix rounds resolve peer-to-peer before waking the Coordinator once when
@@ -25,17 +25,17 @@ Runs TDD implementation, fast checks, simplification, and adversarial code/secur
 | Trivial change (`<5` turns, `≤2` files already in context, obvious blast radius) | Implement inline in Coordinator + run lightweight `invoke_subagent` review (`Model: "inherit"`, `tools: [read_file]`) |
 | Standard 1-stream or multi-stream code change (`≥3` files or `>3` tool calls, or `/start`) | **Peer-Pipeline Swarm** (below) |
 
-## Pinned Role Roster
+## Pinned Role Roster (`/start` Default vs. `/start-small` Lightweight)
 
 Never omit `model` on `swarm{action: "add"}` — omitting `model` copies the UI dropdown onto every worker and cron tick.
 
-| Worker Name (suffix `-2`, `-3` on later phases) | `model` | `workspace` | Role |
-|---|---|---|---|
-| `impl` *(or `impl-<stream>`)* | `gemini-4-argon-medium` | `share` *(or `inherit` inside `<target-repo>/.worktrees/<stream>` when `<active-workspace>` != `<target-repo>`)* | TDD (`RED → GREEN → REFACTOR`), scoped fast unit/lint gates, `/code-simplifier` pass, `git commit` on `share` branch, join point for peer reviews |
-| `code-rev` *(or `code-rev-<stream>`)* | `claude-opus-5-5-high` *(fallback: `gemini-4-carbon-high` if Anthropic quota is 0%)* | `inherit` | Read-only Staff Code Quality Reviewer (`agents/code-quality-reviewer.md`) |
-| `sec-rev` *(or `sec-rev-<stream>`)* | `gemini-4-carbon-high` *(fallback: `claude-opus-5-5-high` if Google quota is 0%)* | `inherit` | Read-only Principal Security Reviewer (`agents/security-reviewer.md`) |
-| `sql-rev` *(only when SQL/ORM/migrations change)* | `gemini-4-carbon-high` | `inherit` | Read-only SQL Reviewer (`agents/sql-reviewer.md`) |
-| `monitor` *(one per conversation)* | `gemini-4-hydrogen-low` *(fallback: `gemini-3.8-flash-low`)* | `inherit` | `swarm_monitor` `*/3 * * * *` stall & quota watchdog |
+| Worker Name (suffix `-2`, `-3` on later phases) | `/start` (`Carbon` Default) | `/start-small` (`Argon` Lightweight) | `workspace` | Role |
+|---|---|---|---|---|
+| `impl` *(or `impl-<stream>`)* | `gemini-4-carbon-medium` | `gemini-4-argon-medium` | `share` *(or `inherit` inside `<target-repo>/.worktrees/<stream>` when `<active-workspace>` != `<target-repo>`)* | TDD (`RED → GREEN → REFACTOR`), scoped fast unit/lint gates, `/code-simplifier` pass, `git commit` on `share` branch, join point for peer reviews |
+| `code-rev` *(or `code-rev-<stream>`)* | `claude-opus-5-5-high` *(fallback: `gemini-4-carbon-high`)* | `gemini-4-carbon-high` *(saves weekly Opus quota)* | `inherit` | Read-only Staff Code Quality Reviewer (`agents/code-quality-reviewer.md`) |
+| `sec-rev` *(or `sec-rev-<stream>`)* | `gemini-4-carbon-high` *(fallback: `claude-opus-5-5-high`)* | `gemini-4-carbon-high` | `inherit` | Read-only Principal Security Reviewer (`agents/security-reviewer.md`) |
+| `sql-rev` *(only when SQL/ORM/migrations change)* | `gemini-4-carbon-high` | `gemini-4-carbon-high` | `inherit` | Read-only SQL Reviewer (`agents/sql-reviewer.md`) |
+| `monitor` *(one per conversation)* | `gemini-4-hydrogen-low` *(fallback: `gemini-3.8-flash-low`)* | `gemini-4-hydrogen-low` | `inherit` | `swarm_monitor` `*/3 * * * *` stall & quota watchdog |
 
 ## Step-by-Step Execution
 
@@ -55,13 +55,13 @@ If `2+` independent streams run in parallel and `swarm` supports `action: "chann
 
 Board tools (`read_board`, `post_message`, `swarm_wait`) appear one turn *after* the first `swarm{action: "add"}`. Spawn all workers for the phase in a **single turn**, then **end your turn immediately** (show the Swarm board link if returned by `add`):
 
-1. **`impl` (`gemini-4-argon-medium`, `workspace: "share"`):**
+1. **`impl` (`gemini-4-carbon-medium`, `workspace: "share"`):**
    ```text
    Read ~/.gemini/config/plugins/antigravity-subagents/agents/implementer.md, /tmp/plan-<project>-<stream>.md, and /tmp/subagent-context-<project>-<stream>.md first.
    1. Immediately append `SHARE_ROOT=$(pwd)` and `BRANCH=$(git rev-parse --abbrev-ref HEAD)` to /tmp/subagent-context-<project>-<stream>.md before editing files so your share checkout path is recorded even if context caps later. Then execute all TDD tasks (RED -> GREEN -> REFACTOR) with zero code comments. Do NOT run version-bump scripts or E2E suites.
    2. Run scoped fast unit tests and lint/typecheck/wording gates (filtering output to /tmp/t.log; if a CLI fails twice, read Makefile/package.json/vitest.config.* immediately). Perform a self-simplification pass while keeping tests green.
    3. Stage and commit your changes on your share branch (`git rev-parse --abbrev-ref HEAD` and `git rev-parse HEAD`).
-   4. Append `COMMIT_SHA`, your 4-section handoff, passing gate exit codes, and `git diff -U5 <base>...HEAD` to /tmp/subagent-context-<project>-<stream>.md.
+   4. Append `COMMIT_SHA`, your 5-section handoff, passing gate exit codes, and `git diff -U5 <base>...HEAD` to /tmp/subagent-context-<project>-<stream>.md.
    5. Tag `@code-rev @sec-rev` (and `@sql-rev` if present) with a <=5-line pointer (SHARE_ROOT, SHA, context file path — NEVER paste diffs or logs on the board), then `swarm_wait` for ALL assigned reviewers to reply before acting.
    6. If any reviewer replies `[changes-requested]`, fix all findings in one pass, re-run fast gates, commit a new SHA, append the fix diff to the context file, and tag ONLY the reviewer(s) who requested changes (plus `@sec-rev` if auth/input/SQL/network changed) for a 1-turn fix-check. Cap at 2 fix rounds; escalate `@coordinator [blocked]` if unresolved.
    7. Once EVERY assigned reviewer has replied `[approved]` on the current SHA, post ONE <=5-line message: `@coordinator [green] SHARE_ROOT=<path> BRANCH=<branch> SHA=<sha> Context=/tmp/subagent-context-<project>-<stream>.md`.
@@ -125,7 +125,7 @@ Once `@coordinator [green]` arrives for every stream in the phase:
 
 | Do | Don't |
 |---|---|
-| Pin `impl` to `gemini-4-argon-medium` with `workspace: "share"` | Leave `model` blank on `swarm{action: "add"}` (copies Carbon across workers and `monitor`) |
+| Pin `impl` explicitly (`gemini-4-carbon-medium` under `/start`, `gemini-4-argon-medium` under `/start-small`) with `workspace: "share"` | Leave `model` blank on `swarm{action: "add"}` (copies UI model across `monitor` and reviewers) |
 | Copy untracked `PLAN.md` to `/tmp/plan-<project>-<stream>.md` and write `SHARE_ROOT` into the context file | Point `inherit` reviewers at relative repo paths (they will read pre-edit Coordinator files) |
 | Have `code-rev` and `sec-rev` reply to `@impl`, waking `@coordinator` once on `[green]` | Have reviewers tag `@coordinator` individually (wakes Coordinator mid-fix and inflates context) |
 | Merge/cherry-pick from `SHARE_ROOT` **before** calling `swarm{action: "kill"}` | Call `kill` before landing the `share` branch (`kill` deletes the `share` repo immediately) |

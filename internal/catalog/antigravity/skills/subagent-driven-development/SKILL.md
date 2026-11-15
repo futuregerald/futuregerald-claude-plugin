@@ -42,13 +42,13 @@ invoke_subagent({
 })
 ```
 
-- **Model routing (`GEMINI.md` §0.9):** Always pass `Model: "inherit"` (runs **Argon Medium** `1×` by default, or Carbon Medium if the UI is on Carbon). Never pass `Model: "pro"` on Argon or Carbon sessions. Reserve `Model: "flash"` strictly for `<50` LOC single-file mechanical boilerplate/renames with zero error-handling, concurrency, or security judgment.
+- **Model routing (`GEMINI.md` §0.9):** Always pass `Model: "inherit"` (runs **Carbon Medium** by default, or **Argon Medium** if you switched the UI to Argon for a simple task). Never pass `Model: "pro"` on Argon or Carbon sessions. Reserve `Model: "flash"` strictly for `<50` LOC single-file mechanical boilerplate/renames with zero error-handling, concurrency, or security judgment.
 - **Cap warm reuse at 1 phase (+ its fix round):** Never reuse a warm implementer across more than 1 roadmap phase (`~80k–100k` context). Spawn a fresh subagent for the next phase rather than re-billing a `150k–200k` history across `30+` tool calls.
 - **End your turn immediately** after `invoke_subagent` if waiting asynchronously; never poll `manage_subagents` in a loop.
 
 ### 3. Coordinator Fast Gates & Simplification (Phases 5–7)
 
-When the implementer returns its 4-section handoff:
+When the implementer returns its 5-section handoff:
 1. Run the scoped fast unit tests (Phase 5) and linter/typecheck (Phase 6) in the Coordinator's shell and verify exit code `0`.
 2. Run `code-simplifier` (Phase 7) on the modified files if needed, re-verifying fast tests and lint.
 3. Append the passing test/lint output and `git diff -U3` to `/tmp/subagent-context-<project>-<stream>.md`.
@@ -56,8 +56,8 @@ When the implementer returns its 4-section handoff:
 ### 4. Adversarial Review (`comprehensive-code-review` & `fix-check` — Phases 8–9)
 
 Follow [`comprehensive-code-review`](../comprehensive-code-review/SKILL.md):
-- **On Argon UI sessions (pre-PR review):** Stage uncommitted edits and spawn parallel one-shot `gemini-4-carbon-high` `swarm` workers (`code-rev` + `sec-rev`, plus `sql-rev` if SQL/migrations changed; `workspace: "inherit"`, no `monitor`, read-only by brief forbidding git/tree mutations, immediate `kill`).
-- **When UI is on Carbon, on Gemini CLI, or for small changes:** Dispatch parallel read-only subagents via `invoke_subagent` (`TypeName: "code-quality-reviewer"` and `TypeName: "security-reviewer"`, plus `TypeName: "sql-reviewer"` if SQL changed; `Model: "inherit"`, `tools: [read_file]`, **zero spikes / zero `run_command`**).
+- **When UI is not `Carbon High` (default `Carbon Medium` or `Argon` — pre-PR review):** Stage uncommitted edits and spawn parallel one-shot `gemini-4-carbon-high` `swarm` workers (`code-rev` + `sec-rev`, plus `sql-rev` if SQL/migrations changed; `workspace: "inherit"`, no `monitor`, read-only by brief forbidding git/tree mutations, immediate `kill`).
+- **When UI is on `Carbon High`, on Gemini CLI, or for small changes:** Dispatch parallel read-only subagents via `invoke_subagent` (`TypeName: "code-quality-reviewer"` and `TypeName: "security-reviewer"`, plus `TypeName: "sql-reviewer"` if SQL changed; `Model: "inherit"`, `tools: [read_file]`, **zero spikes / zero `run_command`**).
 - If CRITICAL or IMPORTANT findings are raised, fix them and verify via [`fix-check`](../fix-check/SKILL.md) (`invoke_subagent` `TypeName: "code-quality-reviewer"`, `Model: "inherit"` — never re-run a full review).
 - Once approved, delete `/tmp/subagent-context-<project>-<stream>.md`.
 

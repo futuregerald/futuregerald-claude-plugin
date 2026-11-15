@@ -173,6 +173,9 @@ func TestEndToEnd_4HarnessesBackupRestoreUninstallGuideAndUpdate(t *testing.T) {
 			if _, err := os.Stat(filepath.Join(skillsDir, "baton-pass", "SKILL.md")); !os.IsNotExist(err) {
 				t.Errorf("%s install must never include antigravity-only baton-pass", h)
 			}
+			if _, err := os.Stat(filepath.Join(skillsDir, "start-small", "SKILL.md")); !os.IsNotExist(err) {
+				t.Errorf("%s install must never include antigravity-only start-small", h)
+			}
 		}
 	}
 
@@ -196,6 +199,18 @@ func TestEndToEnd_4HarnessesBackupRestoreUninstallGuideAndUpdate(t *testing.T) {
 
 	if _, err := os.Stat(filepath.Join(tmpHome, ".gemini", "config", "skills", "baton-pass", "SKILL.md")); err != nil {
 		t.Errorf("global antigravity missing baton-pass/SKILL.md: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(tmpHome, ".gemini", "config", "skills", "start-small", "SKILL.md")); err != nil {
+		t.Errorf("global antigravity missing start-small/SKILL.md: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(tmpHome, ".claude", "skills", "start-small", "SKILL.md")); !os.IsNotExist(err) {
+		t.Errorf("global claude must never include antigravity-only start-small")
+	}
+	if _, err := os.Stat(filepath.Join(tmpHome, ".agents", "skills", "start-small", "SKILL.md")); !os.IsNotExist(err) {
+		t.Errorf("global zed must never include antigravity-only start-small")
+	}
+	if _, err := os.Stat(filepath.Join(tmpHome, ".xdg", "opencode", "skills", "start-small", "SKILL.md")); !os.IsNotExist(err) {
+		t.Errorf("global opencode must never include antigravity-only start-small")
 	}
 	if _, err := os.Stat(filepath.Join(tmpHome, ".gemini", "config", "hooks.json")); err != nil {
 		t.Errorf("global antigravity opinionated missing hooks.json: %v", err)

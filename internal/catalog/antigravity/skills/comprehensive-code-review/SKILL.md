@@ -26,9 +26,9 @@ Choose the dispatch mode matching your session (`GEMINI.md` §0.9):
 
 `code-rev` (`claude-opus-5-5-high`) and `sec-rev` (`gemini-4-carbon-high`) are already spawned in the pipeline and review `@impl`'s committed `share` branch directly against the Acceptance Criteria, Brief, and Approved UI Design. See [`peer-pipeline-swarm`](../peer-pipeline-swarm/SKILL.md) (when installed).
 
-### 2. Standalone Argon UI Session (Pre-PR Review)
+### 2. Standalone Session Where UI Is Not `Carbon High` (Default `Carbon Medium` or `Argon` — Pre-PR Review)
 
-Stage or checkpoint uncommitted edits first, then spawn two one-shot `gemini-4-carbon-high` `swarm` workers in a **single turn** (no `monitor` or `narrator`):
+Stage or checkpoint uncommitted edits first, then spawn two one-shot `gemini-4-carbon-high` `swarm` workers in a **single turn** (no `monitor` or `narrator`) so reviewers run at `Carbon High` rather than downgrading to `Medium` via `Model: "inherit"`:
 
 ```text
 swarm({
@@ -49,7 +49,7 @@ swarm({
 
 End your turn immediately; once both have posted (`swarm_wait{since: N}` if needed), read the board and **immediately `swarm{action: "kill"}` both workers** (suffix `-2`, `-3` on later streams).
 
-### 3. Carbon UI Session, Small Change, or Gemini CLI
+### 3. `Carbon High` UI Session, Small Change, or Gemini CLI
 
 Dispatch both harness-enforced read-only subagents (`tools: [read_file]`) in parallel in one turn:
 

@@ -162,7 +162,7 @@ When stopping for approval, offer the execution choice:
 
 **"Plan complete, reviewed, and saved to `docs/plans/<filename>.md`. Ready to proceed once you approve — or let me know if you want any adjustments:**
 
-**1. Peer-Pipeline Swarm (`/start` / `peer-pipeline-swarm`)** - Spawns an isolated `gemini-4-argon-medium` share-workspace implementer + cross-family high-deliberation peer reviewers (`claude-opus-5-5-high` `code-rev` + `gemini-4-carbon-high` `sec-rev`) + `gemini-4-hydrogen-low` stall monitor for hands-off Phases 4–9
+**1. Peer-Pipeline Swarm (`/start` default, or `/start-small` for bounded changes)** - Spawns an isolated `gemini-4-carbon-medium` share-workspace implementer + cross-family high-deliberation peer reviewers (`claude-opus-5-5-high` `code-rev` + `gemini-4-carbon-high` `sec-rev`) + `gemini-4-hydrogen-low` stall monitor for hands-off Phases 4–9 (or `gemini-4-argon-medium` `impl` + `gemini-4-carbon-high` reviewers under `/start-small`)
 
 **2. Subagent-Driven (`subagent-driven-development`)** - Dispatches fresh `invoke_subagent` (`TypeName: "implementer"`, `Model: "inherit"`) per task/phase with Coordinator gates between tasks
 

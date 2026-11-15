@@ -38,12 +38,12 @@ invoke_subagent({
 })
 ```
 
-### Option B: Major User-Facing Launch on an Argon UI Session
+### Option B: Major User-Facing Launch When UI Is Not `Carbon High` (Default `Carbon Medium` or `Argon`)
 
 Spawn a one-shot `gemini-4-carbon-high` `swarm` worker (`name: "editor-rev"`, `workspace: "inherit"`, no `monitor`, read-only by brief reading `~/.gemini/config/plugins/antigravity-subagents/agents/editor-pass-reviewer.md` and `/tmp/subagent-context-<project>-editor.md`, posting once to `@coordinator`, then immediately killed via `swarm{action: "kill", name: "editor-rev"}`).
 
 ## Applying the Crit Sheet
 
-1. Apply every high-leverage fix from the crit sheet directly.
+1. Apply every high-leverage fix from the crit sheet: if fixes touch `>1` file or `>15` LOC, delegate them to an `implementer` subagent (`Model: "inherit"`) and run `fix-check` rather than coding inline on a warm Coordinator context.
 2. If code or UI files changed, re-run fast unit/lint gates (and Phase 10 `Blast-radius verify`) before committing.
 3. Delete `/tmp/subagent-context-<project>-editor.md`.

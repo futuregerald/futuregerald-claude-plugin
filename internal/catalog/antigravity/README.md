@@ -6,10 +6,10 @@ Personal, team, tracker and repository specifics never live in these rules, skil
 
 | Here | Live path | Purpose |
 |---|---|---|
-| `GEMINI.md` | `~/.gemini/GEMINI.md` | Always-on global rules: execution discipline, check-in vs authorized runs, lifecycle tiers, Carbon/Argon role routing |
+| `GEMINI.md` | `~/.gemini/GEMINI.md` | Always-on global rules: execution discipline, check-in vs authorized runs, lifecycle tiers, `Carbon Medium` default / `Argon Medium` (`/start-small`) role routing |
 | `rules/org.example.md` | `~/.gemini/config/rules/<org>.local.md` (git-ignored) | Template for organization, tracker and repo rules |
 | `skills/antigravity-orchestration/SKILL.md` | `~/.gemini/config/skills/antigravity-orchestration/SKILL.md` | On-demand reference: memory signatures, search hierarchy, Carbon/Argon & Peer-Pipeline Swarm routing, breaker rules, baton-pass mechanics |
-| `skills/{peer-pipeline-swarm,start,begin}/` | `~/.gemini/config/skills/{peer-pipeline-swarm,start,begin}/` | Antigravity-only `/start` and `/begin` 12-phase lifecycle and Phases 4–9 Peer-Pipeline Swarm (`impl` + `code-rev` + `sec-rev` + `monitor`) |
+| `skills/{peer-pipeline-swarm,start,start-small,begin}/` | `~/.gemini/config/skills/{peer-pipeline-swarm,start,start-small,begin}/` | Antigravity-only `/start`, `/begin` (`Carbon Medium`), and `/start-small` (`Argon Medium`) 12-phase lifecycles and Phases 4–9 Peer-Pipeline Swarm (`impl` + `code-rev` + `sec-rev` + `monitor`) |
 | `skills/{lifecycle,subagent-driven-development,future-writing-plans,plan-review,comprehensive-code-review,fix-check,editor-pass,baton-pass,future-model-router}/` | `~/.gemini/config/skills/<skill>/` | Antigravity-native overrides for the core workflow skills |
 | `skills/antigravity-orchestration/references/config.example.md` | `~/.gemini/config/skills/antigravity-orchestration/references/config.md` (git-ignored) | Template for local tool paths and org names (e.g. `review-lens`) |
 | `plugins/antigravity-subagents/` | `~/.gemini/config/plugins/antigravity-subagents/` | Dedicated lifecycle subagents (`plan-reviewer`, `code-quality-reviewer`, `security-reviewer`, `sql-reviewer`, `editor-pass-reviewer`, `implementer`) with explicit `tools:` grants |

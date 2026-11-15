@@ -22,7 +22,7 @@ Dumping 50+ skills into your AI agent all at once backfires: every loaded skill 
 
 | Without `skill-installer` | With `skill-installer` |
 |---|---|
-| **Context bloat:** Loading 50+ skills at once crowds out code context and degrades instruction-following | **Role-matched tracks:** Pick a curated track (`8` to `35` skills) built for how you actually work |
+| **Context bloat:** Loading 50+ skills at once crowds out code context and degrades instruction-following | **Role-matched tracks:** Pick a curated track (`8` to `36` skills) built for how you actually work |
 | **Fragile manual setup:** Copying files between `~/.claude/`, `~/.gemini/`, `.agents/`, and `.opencode/` by hand | **One 60-second wizard:** Installs the right layout for **Claude Code**, **Claude Desktop**, **Antigravity**, **Zed**, or **OpenCode** |
 | **Clobbered config files:** Template scripts overwrite your personal or repo `CLAUDE.md` / `GEMINI.md` | **Non-destructive merge + 1-command rollback:** Updates a delimited section inside your existing config after saving a backup |
 | **"Wait, what did that install?":** Digging through Markdown files to remember command names | **Built-in interactive guide (`skill-installer guide`):** Browse every skill, `/slash` command, and copy-ready starter prompt in your terminal |
@@ -70,11 +70,11 @@ Every loaded skill competes for your AI agent's context window. Instead of insta
 
 | Track | Best For | Skills Installed | Key `/slash` Commands & Capabilities | Starter Prompt to Try Immediately |
 |---|---|---|---|---|
-| **Opinionated Dev Workflow** (`--track=opinionated`) | Software engineers shipping production code with high rigor | **32** (Claude / Zed / OpenCode)<br>**35** (Antigravity) | `/start`, `/begin`, `/lifecycle`, `/shape`, `/ui-design`, `/plan-review`, `/fix-check`, `/copy-edit` — full 12-phase lifecycle with 3-direction HTML UI prototyping, caller tracing, TDD, parallel code & security review, and blast-radius verification | `"/start Add passwordless magic-link sign-in to the auth service"` |
+| **Opinionated Dev Workflow** (`--track=opinionated`) | Software engineers shipping production code with high rigor | **32** (Claude / Zed / OpenCode)<br>**36** (Antigravity) | `/start`, `/start-small` (Antigravity), `/begin`, `/lifecycle`, `/shape`, `/ui-design`, `/plan-review`, `/fix-check`, `/copy-edit` — full 12-phase lifecycle with 3-direction HTML UI prototyping, caller tracing, TDD, parallel code & security review, and blast-radius verification | `"/start Add passwordless magic-link sign-in to the auth service"` |
 | **Just the Basics** (`--track=basics`) | Developers who want everyday tools without strict phase gates or hooks | **8** | `/brainstorming`, `/future-writing-plans`, `/systematic-debugging`, `/test-driven-development`, `/comprehensive-code-review`, `/pull-request-description`, `/handoff`, `/plugin-update` | `"/brainstorming Let's design a webhook retry queue with exponential backoff"` |
 | **Product & Strategy Flow** (`--track=product`) | PMs, designers, founders, and engineering managers | **22** | `/shape`, `/craftsmans-wisdom`, `/future-grilling`, `/future-wayfinder`, `/grilling-page`, `/write-a-prd`, `/writing-tickets`, `/ticket-grooming`, `/ui-design`, `/visualize-plan`, `/copy-edit`, `/editor-pass`, `/meeting-debrief`, `/team-pulse` | `"/shape We want to redesign customer onboarding so teams activate in under 5 minutes"` |
 | **Copy, Brand & UI Polish** (`--track=copy-polish`) | Auditing and elevating landing pages, product UI, copy, and motion | **9** | `/copy-edit`, `/copywriting`, `/marketing-psychology`, `/editor-pass`, `/impeccable`, `/no-slop-ui`, `/huashu-design`, `/animation-principles`, `/plugin-update` | `"/copy-edit Audit our pricing page for clarity, conversion friction, and visual hierarchy"` |
-| **Pick Individual Skills** (`--track=custom`) | Power users building a custom à la carte toolkit | **Any subset of 48** (Claude / Zed / OpenCode)<br>**or 51** (Antigravity) | Interactive skill browser with `[x]` multi-select, category badges, and plain-English descriptions | Any starter prompt from your chosen skills |
+| **Pick Individual Skills** (`--track=custom`) | Power users building a custom à la carte toolkit | **Any subset of 51** (Claude / Zed / OpenCode)<br>**or 55** (Antigravity) | Interactive skill browser with `[x]` multi-select, category badges, and plain-English descriptions | Any starter prompt from your chosen skills |
 
 ---
 
@@ -139,7 +139,7 @@ Run `skill-installer guide` at any time (or open it directly from the **Setup Co
 
 - **Tab 1 (`1. What You Can Type Now`):** Plain-English breakdown of `/slash` commands vs. auto-loaded skills for your specific harness, plus copy-ready prompts.
 - **Tab 2 (`2. How This Toolkit Works`):** Explains why curated tracks protect your context window, how skills vs. subagents vs. rules fit together, and how rollback backups work.
-- **Tab 3 (`3. Skill & Command Explorer`):** Searchable browser of your track's skills (press **`a`** to toggle between your installed track and all 51 catalog skills) with category badges, `/slash` triggers, full descriptions, and starter prompts.
+- **Tab 3 (`3. Skill & Command Explorer`):** Searchable browser of your track's skills (press **`a`** to toggle between your installed track and all 55 catalog skills) with category badges, `/slash` triggers, full descriptions, and starter prompts.
 
 <p align="center">
   <img src="docs/assets/tui-guide.png" alt="skill-installer guide Interactive 3-Tab Command and Skill Explorer" width="860">

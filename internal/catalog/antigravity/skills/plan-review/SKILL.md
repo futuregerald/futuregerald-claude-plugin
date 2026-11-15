@@ -22,9 +22,9 @@ One fresh-context adversarial pass over an implementation plan before any code i
 
 Never review a plan in the same context that wrote it. Choose the dispatch mode matching your active session (`GEMINI.md` §0.9):
 
-### Option A: Antigravity Argon UI Session (Default for Non-Trivial Plans)
+### Option A: Antigravity Default (`Carbon Medium` or `Argon` UI — Non-Trivial Plans)
 
-Spawn a one-shot **`gemini-4-carbon-high`** `swarm` worker (`workspace: "inherit"`, **no `monitor` or `narrator`**):
+Whenever the UI is not already set to **`Carbon High`**, spawn a one-shot **`gemini-4-carbon-high`** `swarm` worker (`workspace: "inherit"`, **no `monitor` or `narrator`**) so the plan gets full `Carbon High` deliberation rather than downgrading to `Medium` via `Model: "inherit"`:
 
 ```text
 swarm({
@@ -39,7 +39,7 @@ swarm({
 - **End your turn immediately** after `swarm{action: "add"}`.
 - On wakeup, call `read_board`, then **immediately terminate** the worker with `swarm{action: "kill", name: "plan-rev"}` (use `plan-rev-2`, `plan-rev-3` on subsequent plans in the same conversation, because killed worker names cannot be reused).
 
-### Option B: Antigravity Carbon UI Session, Small/Routine Plan, or Gemini CLI
+### Option B: Antigravity `Carbon High` UI Session, Small/Routine Plan, or Gemini CLI
 
 Dispatch the harness-enforced read-only `plan-reviewer` subagent (`tools: [read_file]`, ~31k schema floor, **zero `run_command`**):
 
