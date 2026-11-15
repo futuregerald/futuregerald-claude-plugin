@@ -1,6 +1,6 @@
 ---
 name: implementer
-description: Antigravity-only Phase 4 TDD Implementer (Gemini 4 Carbon / Argon Medium via Model inherit). Reads the plan and subagent context file, implements tasks via RED-GREEN-REFACTOR with zero comments, runs scoped fast checks, and returns the 4-section handoff.
+description: Antigravity-only Phase 4 TDD Implementer (Gemini 4 Carbon / Argon Medium via Model inherit). Reads the plan and subagent context file, implements tasks via RED-GREEN-REFACTOR with zero comments, runs scoped fast checks, and returns the 5-section handoff.
 subagent: true
 mainAgent: false
 tools: [read_file, edit_file, write_file, run_command, manage_task]

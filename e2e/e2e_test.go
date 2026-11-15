@@ -266,13 +266,13 @@ func runVerifyAllHarnessesInSandbox(t *testing.T, binPath string, requireRealCLI
 			t.Fatalf("skill-installer list --long missing %q", requiredSkill)
 		}
 	}
-	if strings.Contains(listOut, "baton-pass") {
-		t.Fatal("default claude skill-installer list --long must not include antigravity-only baton-pass")
+	if strings.Contains(listOut, "baton-pass") || strings.Contains(listOut, "start-small") {
+		t.Fatal("default claude skill-installer list --long must not include antigravity-only baton-pass or start-small")
 	}
 
 	agListOut := mustRunCLIInSandbox(t, binPath, sandboxHome, sandboxHome, xdgConfig, "list", "-t", "antigravity", "--long")
-	if !strings.Contains(agListOut, "baton-pass") {
-		t.Fatal("skill-installer list -t antigravity --long missing baton-pass")
+	if !strings.Contains(agListOut, "baton-pass") || !strings.Contains(agListOut, "start-small") {
+		t.Fatal("skill-installer list -t antigravity --long missing baton-pass or start-small")
 	}
 
 	guideOut := mustRunCLIInSandbox(t, binPath, sandboxHome, sandboxHome, xdgConfig, "guide", "-t", "antigravity", "--track", "opinionated", "-y")
@@ -358,8 +358,8 @@ func verifyClaudeDesktopAndCLI(t *testing.T, binPath, sandboxHome, xdgConfig str
 	if !strings.Contains(mergedClaudeMD, "<!-- BEGIN SKILL-INSTALLER WORKFLOW RULES -->") {
 		t.Fatal("merged global CLAUDE.md missing managed workflow block")
 	}
-	if strings.Contains(mergedClaudeMD, "baton-pass") {
-		t.Fatal("Claude global CLAUDE.md must never reference Antigravity-only baton-pass")
+	if strings.Contains(mergedClaudeMD, "baton-pass") || strings.Contains(mergedClaudeMD, "start-small") {
+		t.Fatal("Claude global CLAUDE.md must never reference Antigravity-only baton-pass or start-small")
 	}
 
 	for _, skill := range []string{"start", "begin", "lifecycle", "test-driven-development", "comprehensive-code-review", "plugin-updater"} {
@@ -368,6 +368,7 @@ func verifyClaudeDesktopAndCLI(t *testing.T, binPath, sandboxHome, xdgConfig str
 	mustNotExist(t, filepath.Join(claudeRoot, "skills", "baton-pass", "SKILL.md"))
 	mustNotExist(t, filepath.Join(claudeRoot, "skills", "antigravity-orchestration", "SKILL.md"))
 	mustNotExist(t, filepath.Join(claudeRoot, "skills", "peer-pipeline-swarm", "SKILL.md"))
+	mustNotExist(t, filepath.Join(claudeRoot, "skills", "start-small", "SKILL.md"))
 
 	for _, agent := range []string{"implementer.md", "code-quality-reviewer.md", "security-reviewer.md", "adversarial-plan-reviewer.md"} {
 		agentBytes := mustExistFile(t, filepath.Join(claudeRoot, "agents", agent))
@@ -494,7 +495,7 @@ func verifyAntigravityDesktopAndLiveBreakerHook(t *testing.T, binPath, sandboxHo
 		assertNoFrontmatterModelOrEffort(t, agentPath, agentData)
 	}
 
-	for _, agExclusive := range []string{"baton-pass", "antigravity-orchestration", "peer-pipeline-swarm"} {
+	for _, agExclusive := range []string{"baton-pass", "antigravity-orchestration", "peer-pipeline-swarm", "start-small"} {
 		skillPath := filepath.Join(geminiConfigDir, "skills", agExclusive, "SKILL.md")
 		data := mustExistFile(t, skillPath)
 		assertNoFrontmatterModelOrEffort(t, skillPath, data)
@@ -720,8 +721,8 @@ func verifyZedDesktop(t *testing.T, binPath, sandboxHome, xdgConfig string) {
 
 	zedAgentsMD := mustExistFile(t, filepath.Join(zedConfigDir, "AGENTS.md"))
 	assertNoRawTemplatePlaceholders(t, "zed/AGENTS.md", zedAgentsMD)
-	if strings.Contains(string(zedAgentsMD), "baton-pass") {
-		t.Fatal("Zed AGENTS.md must not reference Antigravity-only baton-pass")
+	if strings.Contains(string(zedAgentsMD), "baton-pass") || strings.Contains(string(zedAgentsMD), "start-small") {
+		t.Fatal("Zed AGENTS.md must not reference Antigravity-only baton-pass or start-small")
 	}
 
 	zedSkillsDir := filepath.Join(sandboxHome, ".agents", "skills")
@@ -731,6 +732,7 @@ func verifyZedDesktop(t *testing.T, binPath, sandboxHome, xdgConfig string) {
 		assertNoFrontmatterModelOrEffort(t, sPath, sBytes)
 	}
 	mustNotExist(t, filepath.Join(zedSkillsDir, "baton-pass", "SKILL.md"))
+	mustNotExist(t, filepath.Join(zedSkillsDir, "start-small", "SKILL.md"))
 
 	if _, err := runCLIInSandbox(t, binPath, sandboxHome, sandboxHome, xdgConfig,
 		"-t", "zed", "-g", "--mode", "agents-only", "-y"); err == nil {
@@ -775,11 +777,12 @@ func verifyOpenCodeCLI(t *testing.T, binPath, sandboxHome, xdgConfig string, req
 			"-t", "opencode", "-g", "--track", track, backupArg, "--force", "-y")
 		agentsMD := mustExistFile(t, filepath.Join(ocRoot, "AGENTS.md"))
 		assertNoRawTemplatePlaceholders(t, "opencode/AGENTS.md", agentsMD)
-		if strings.Contains(string(agentsMD), "baton-pass") {
-			t.Fatalf("OpenCode AGENTS.md leaked baton-pass on track %s", track)
+		if strings.Contains(string(agentsMD), "baton-pass") || strings.Contains(string(agentsMD), "start-small") {
+			t.Fatalf("OpenCode AGENTS.md leaked baton-pass or start-small on track %s", track)
 		}
 		mustExistFile(t, filepath.Join(ocRoot, "skills", "plugin-updater", "SKILL.md"))
 		mustNotExist(t, filepath.Join(ocRoot, "skills", "baton-pass", "SKILL.md"))
+		mustNotExist(t, filepath.Join(ocRoot, "skills", "start-small", "SKILL.md"))
 		if track == "opinionated" {
 			for _, ag := range []string{"implementer.md", "code-quality-reviewer.md", "security-reviewer.md"} {
 				p := filepath.Join(ocRoot, "agents", ag)
@@ -1092,12 +1095,14 @@ func verifyInteractivePTYTUIJourneys(t *testing.T, binPath, sandboxHome, xdgConf
 	mustExistFile(t, filepath.Join(geminiRoot, "config", "hooks", "autonomous-breaker.sh"))
 	mustExistFile(t, filepath.Join(geminiRoot, "config", "plugins", "antigravity-subagents", "plugin.json"))
 	mustExistFile(t, filepath.Join(geminiRoot, "config", "skills", "baton-pass", "SKILL.md"))
+	mustExistFile(t, filepath.Join(geminiRoot, "config", "skills", "start-small", "SKILL.md"))
 
 	mustRunCLIInSandbox(t, binPath, tuiWorkDir, sandboxHome, xdgConfig,
 		"uninstall", "-t", "antigravity", "-g", "--restore-config", "-y")
 	mustNotExist(t, filepath.Join(geminiRoot, "GEMINI.md"))
 	mustNotExist(t, filepath.Join(geminiRoot, "config", "hooks", "autonomous-breaker.sh"))
 	mustNotExist(t, filepath.Join(geminiRoot, "config", "skills", "baton-pass", "SKILL.md"))
+	mustNotExist(t, filepath.Join(geminiRoot, "config", "skills", "start-small", "SKILL.md"))
 
 	customProj := t.TempDir()
 	preSeededHeader := "Existing Custom Project Header\n\nKeep me intact.\n"

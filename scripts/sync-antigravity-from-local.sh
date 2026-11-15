@@ -23,13 +23,13 @@ fi
 rm -f "$dest/rules/skills-and-delegation.md"
 [ -f "$src/config/skills/antigravity-orchestration/references/config.example.md" ] && cp "$src/config/skills/antigravity-orchestration/references/config.example.md" "$dest/skills/antigravity-orchestration/references/config.example.md"
 
-for skill in antigravity-orchestration peer-pipeline-swarm start begin lifecycle subagent-driven-development \
+for skill in antigravity-orchestration peer-pipeline-swarm start start-small begin lifecycle subagent-driven-development \
              future-writing-plans plan-review comprehensive-code-review fix-check editor-pass baton-pass future-model-router; do
   if [ -d "$src/config/skills/$skill" ]; then
     mkdir -p "$dest/skills/$skill"
     [ -f "$src/config/skills/$skill/SKILL.md" ] && cp "$src/config/skills/$skill/SKILL.md" "$dest/skills/$skill/SKILL.md"
     [ -f "$src/config/skills/$skill/LICENSE.txt" ] && cp "$src/config/skills/$skill/LICENSE.txt" "$dest/skills/$skill/LICENSE.txt"
-    if [ -d "$src/config/skills/$skill/references" ]; then
+    if [ -d "$src/config/skills/$skill/references" ] && { [ "$skill" = "future-model-router" ] || [ ! -d "$dest/../shared/skills/$skill/references" ]; }; then
       mkdir -p "$dest/skills/$skill/references"
       for ref in "$src/config/skills/$skill/references/"*.md; do
         [ -f "$ref" ] || continue

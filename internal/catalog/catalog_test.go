@@ -38,8 +38,8 @@ func TestLoadFromDirFS(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load(os.DirFS(.)) failed: %v", err)
 	}
-	if len(cat.Skills) != 54 {
-		t.Errorf("expected exactly 54 skills in catalog, got %d", len(cat.Skills))
+	if len(cat.Skills) != 55 {
+		t.Errorf("expected exactly 55 skills in catalog, got %d", len(cat.Skills))
 	}
 }
 
@@ -164,6 +164,7 @@ func TestSupportedHarnessesAndBatonPassExclusivity(t *testing.T) {
 		hasBaton := false
 		hasOrch := false
 		hasSwarm := false
+		hasStartSmall := false
 		hasUpdater := false
 		for _, s := range skills {
 			switch s {
@@ -173,6 +174,8 @@ func TestSupportedHarnessesAndBatonPassExclusivity(t *testing.T) {
 				hasOrch = true
 			case "peer-pipeline-swarm":
 				hasSwarm = true
+			case "start-small":
+				hasStartSmall = true
 			case "plugin-updater":
 				hasUpdater = true
 			}
@@ -181,12 +184,12 @@ func TestSupportedHarnessesAndBatonPassExclusivity(t *testing.T) {
 			t.Errorf("harness %s opinionated track missing plugin-updater", h)
 		}
 		if h == HarnessAntigravity {
-			if !hasBaton || !hasOrch || !hasSwarm {
-				t.Errorf("antigravity opinionated track missing exclusive skills: baton=%v orch=%v swarm=%v", hasBaton, hasOrch, hasSwarm)
+			if !hasBaton || !hasOrch || !hasSwarm || !hasStartSmall {
+				t.Errorf("antigravity opinionated track missing exclusive skills: baton=%v orch=%v swarm=%v start-small=%v", hasBaton, hasOrch, hasSwarm, hasStartSmall)
 			}
 		} else {
-			if hasBaton || hasOrch || hasSwarm {
-				t.Errorf("harness %s leaked antigravity-only skill: baton=%v orch=%v swarm=%v", h, hasBaton, hasOrch, hasSwarm)
+			if hasBaton || hasOrch || hasSwarm || hasStartSmall {
+				t.Errorf("harness %s leaked antigravity-only skill: baton=%v orch=%v swarm=%v start-small=%v", h, hasBaton, hasOrch, hasSwarm, hasStartSmall)
 			}
 		}
 	}
@@ -213,7 +216,7 @@ func TestEveryCatalogSkillDirectoryHasCompleteMetadata(t *testing.T) {
 		if !entry.IsDir() || strings.HasPrefix(entry.Name(), "codebase-memory-") {
 			continue
 		}
-		if entry.Name() == "baton-pass" || entry.Name() == "antigravity-orchestration" || entry.Name() == "peer-pipeline-swarm" {
+		if entry.Name() == "baton-pass" || entry.Name() == "antigravity-orchestration" || entry.Name() == "peer-pipeline-swarm" || entry.Name() == "start-small" {
 			t.Errorf("antigravity-only skill %q must not exist in shared/skills", entry.Name())
 		}
 		meta, ok := cat.SkillMeta(entry.Name())
@@ -315,8 +318,8 @@ func TestHarnessTemplatesDistinctAndBatonFreeOutsideAntigravity(t *testing.T) {
 				t.Fatalf("GlobalConfigTemplate(%s, light=%v) is empty", h, light)
 			}
 			if h != HarnessAntigravity {
-				if strings.Contains(gStr, "baton-pass") || strings.Contains(gStr, "autonomous-circuit-breaker") {
-					t.Errorf("GlobalConfigTemplate(%s, light=%v) leaked baton-pass or circuit-breaker", h, light)
+				if strings.Contains(gStr, "baton-pass") || strings.Contains(gStr, "autonomous-circuit-breaker") || strings.Contains(gStr, "start-small") {
+					t.Errorf("GlobalConfigTemplate(%s, light=%v) leaked baton-pass, circuit-breaker, or start-small", h, light)
 				}
 			}
 			if !light {
@@ -338,8 +341,8 @@ func TestHarnessTemplatesDistinctAndBatonFreeOutsideAntigravity(t *testing.T) {
 			t.Errorf("ProjectConfigTemplate(%s) missing placeholders", h)
 		}
 		if h != HarnessAntigravity {
-			if strings.Contains(pStr, "baton-pass") || strings.Contains(pStr, "autonomous-circuit-breaker") {
-				t.Errorf("ProjectConfigTemplate(%s) leaked baton-pass or circuit-breaker", h)
+			if strings.Contains(pStr, "baton-pass") || strings.Contains(pStr, "autonomous-circuit-breaker") || strings.Contains(pStr, "start-small") {
+				t.Errorf("ProjectConfigTemplate(%s) leaked baton-pass, circuit-breaker, or start-small", h)
 			}
 		}
 		for prevH, prevContent := range seenProject {
@@ -484,5 +487,56 @@ func TestAntigravityDualModeBatonPassCatalogInvariants(t *testing.T) {
 	}
 	if strings.Contains(readmeStr, "transcript bytes since the last compaction") {
 		t.Errorf("antigravity/README.md still contains stale bytes-only BATON description")
+	}
+}
+
+func TestAntigravityCarbonMediumDefaultAndStartSmallCatalogInvariants(t *testing.T) {
+	t.Parallel()
+
+	if !IsAntigravityOnlySkill("start-small") {
+		t.Errorf("expected IsAntigravityOnlySkill(\"start-small\") to be true")
+	}
+
+	cat, err := Load(FS)
+	if err != nil {
+		t.Fatalf("Load(FS) failed: %v", err)
+	}
+	meta, ok := cat.SkillMeta("start-small")
+	if !ok {
+		t.Fatalf("expected start-small in catalog SkillMeta")
+	}
+	if !meta.AntigravityOnly || meta.SlashCommand != "/start-small" || meta.Category == "" || meta.Short == "" || meta.Long == "" || meta.StarterPrompt == "" {
+		t.Errorf("start-small metadata incomplete or not antigravity_only: %+v", meta)
+	}
+	for _, h := range []string{HarnessClaude, HarnessZed, HarnessOpenCode} {
+		for _, sm := range cat.SkillsForHarness(h) {
+			if sm.Name == "start-small" {
+				t.Errorf("SkillsForHarness(%s) leaked antigravity-only start-small", h)
+			}
+		}
+	}
+
+	startSmallBytes, err := fs.ReadFile(FS, "antigravity/skills/start-small/SKILL.md")
+	if err != nil {
+		t.Fatalf("reading antigravity/skills/start-small/SKILL.md: %v", err)
+	}
+	startSmallStr := string(startSmallBytes)
+	for _, needle := range []string{"gemini-4-argon-medium", "gemini-4-carbon-high"} {
+		if !strings.Contains(startSmallStr, needle) {
+			t.Errorf("antigravity/skills/start-small/SKILL.md missing %q", needle)
+		}
+	}
+
+	for _, cfgPath := range []string{"antigravity/GEMINI.md", "antigravity/templates/GEMINI-BASE.md"} {
+		cfgBytes, rErr := fs.ReadFile(FS, cfgPath)
+		if rErr != nil {
+			t.Fatalf("reading %s: %v", cfgPath, rErr)
+		}
+		cfgStr := string(cfgBytes)
+		for _, needle := range []string{"Carbon Medium", "/start-small"} {
+			if !strings.Contains(cfgStr, needle) {
+				t.Errorf("%s missing %q", cfgPath, needle)
+			}
+		}
 	}
 }
