@@ -255,5 +255,12 @@ class TestBreakerRulesNew(unittest.TestCase):
         self.assertAlmostEqual(read_coverage((10, 60), [(None, None)]), 1.0)
         self.assertTrue(is_re_read((10, 60), [(None, None)]))
 
+        self.assertEqual(read_coverage((1, 700, 46080), [(1, 700, 0), (1, 700, 23040)]), 0.0)
+        self.assertFalse(is_re_read((1, 700, 46080), [(1, 700, 0), (1, 700, 23040)]))
+        self.assertAlmostEqual(read_coverage((1, 700, 46080), [(1, 700, 46080)]), 1.0)
+        self.assertTrue(is_re_read((1, 700, 46080), [(1, 700, 46080)]))
+        self.assertAlmostEqual(read_coverage((1, 700, 0), [(1, 700)]), 1.0)
+        self.assertTrue(is_re_read((1, 700, None), [(1, 700, 0)]))
+
 if __name__ == "__main__":
     unittest.main()

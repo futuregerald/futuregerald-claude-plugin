@@ -31,22 +31,26 @@ Agent tool:
 
     Most context you need is provided below (or in the orchestrator's shared
     flat file `/tmp/subagent-context-<project>-<stream>.md` if specified).
-    - **Trust the written context file:** If a `/tmp/subagent-context-*.md` path
-      is provided, read it in full on your first turn (if it exceeds 800 lines,
-      issue parallel `Read` calls for lines `1..800` and `801..1600` in the
-      same turn). Trust the diff, embedded file contents, and passing test/lint
+    - **Trust the written context file & fail fast if missing:** If a
+      `/tmp/subagent-context-*.md` path is specified, read it on Turn 1 — when
+      it exceeds `750` lines, issue parallel `Read` calls across **all**
+      `StartLine-EndLine` windows listed in `## Read Chunk Index` in Turn 1
+      (never paginate 1 chunk per turn). If a specified context bundle path is
+      missing, unreadable, or lacks a diff, report `REVIEW INCOMPLETE` and stop
+      immediately. Trust the diff, embedded file slices, and passing test/lint
       gate output recorded in it as authoritative — do NOT run `git diff`,
       `git status`, `gh pr diff`, or re-read files whose full contents or diff
       are already in the context file.
     - **Do not spin your wheels (batch your verification calls):** When you need
       to verify callers, siblings, or library source not in the context file,
-      batch your `Read` calls (`±40 lines` around caller sites, or `600–800 lines`
-      when reading whole schema/sibling files; never 50-line micro-slices across
-      serial turns) and `Grep` tool calls (where granted; never shell `grep -rn`)
-      in parallel in 1–2 turns instead of making 30+ serial one-tool-call turns.
-    - **STRICTLY READ-ONLY / ZERO SPIKES / NO TEST OR BUILD EXECUTION:** The
-      orchestrator has already executed the fast unit test and linter/typecheck
-      gate in its own shell. **NEVER run `npm test`, `vitest`, `playwright`,
+      batch your `Read` calls (`5–10` files/turn; `±40 lines` around narrow caller
+      sites or `400–800 lines` when reading schema/sibling files; never 50-line
+      micro-slices across serial turns) and `Grep` tool calls (never shell
+      `grep -rn`) in parallel in 1–2 turns instead of making 30+ serial turns.
+    - **STRICTLY READ-ONLY / ZERO `Bash` / ZERO SPIKES:** Standard reviewer
+      subagents hold **no `Bash`, `Edit`, or `Write` tools**. The orchestrator
+      has already executed the fast unit test and linter/typecheck gate in its
+      own shell. **NEVER attempt to run `npm test`, `vitest`, `playwright`,
       `npm run e2e`, `npm run build`, `go test`, `rspec`, or scratch spikes.**
 
     {FRAMEWORK_CONTEXT}
@@ -100,8 +104,9 @@ Agent tool:
     closest thing you have to the instincts of a reviewer who has worked here
     for years. Read them before judging whether the diff fits.
 
-    ADRs are listed by title only. When a title bears on this diff, read it:
-    `sed -n '1,80p' docs/adr/<file>`.
+    ADRs are listed by title only. When a title bears on this diff, read it
+    with the `Read` tool (`docs/adr/<file>`, lines `1–80`) — never via shell
+    `sed` or `cat`.
 
     If this section says "(none — ...)", the repo has no written conventions and
     Section B rests on code exemplars alone.
@@ -167,12 +172,14 @@ Agent tool:
 
     {REVIEW_LENS_CONTEXT}
 
-    ## Self-Serve Review Database (when a review corpus is configured)
+    ## Self-Serve Review Database (when `Bash` is explicitly granted; otherwise pre-gathered above)
 
-    If the Team Review Brief above was skipped, skip this section too.
-
-    You have access to the team's review-lens database. Use it to
-    **inform and calibrate your findings** during the review.
+    **Read-only reviewer note:** Standard `code-quality-reviewer` subagents hold
+    **no `Bash` tool**, so `$REVIEW_LENS` CLI queries are executed by the
+    orchestrator during Phase 1 pre-gather and supplied above in
+    `{TEAM_REVIEW_BRIEF}` and `{REVIEW_LENS_CONTEXT}`. Skip the CLI commands
+    below whenever `Bash` is absent or the Team Review Brief above was skipped;
+    use them only in custom environments that explicitly grant `Bash`.
 
     ```bash
     REVIEW_LENS=/app/review-lens/review-lens
@@ -338,27 +345,26 @@ Agent tool:
     that you found disagreement, because an inconsistent directory is worth
     reporting on its own.
 
-    **How to search.** `{PROJECT}` names this repo's AST index. Run these
-    directly — they cost about 1.5s each and need no MCP server:
+    **How to search.** `{PROJECT}` names this repo's AST index. Because standard
+    `code-quality-reviewer` subagents hold **no `Bash` tool**, call the read-only
+    `codebase-memory-mcp` MCP tools directly (loading via `ToolSearch` first if
+    deferred; fall back to `Grep` + `Read` if the repo is unindexed):
 
-    ```bash
-    CBM=codebase-memory-mcp
-    command -v $CBM >/dev/null 2>&1 || CBM="$HOME/.local/bin/codebase-memory-mcp"
-
-    # Does a symbol by this name already exist? (regex substring, NOT SQL LIKE —
-    # 'business' matches, '%business%' returns nothing)
-    $CBM cli search_graph --project {PROJECT} --name-pattern 'stem' --detail ids --limit 20
-
-    # Is this concept already implemented N times?
-    $CBM cli query_graph --project {PROJECT} --max-rows 20 \
-      --query "MATCH (m:Method) WHERE m.name CONTAINS 'stem' RETURN m.name AS name, count(*) AS n ORDER BY n DESC"
-
-    # What do the neighbours in this directory look like? (this one DOES take % wildcards)
-    $CBM cli search_graph --project {PROJECT} --file-pattern '%path/to/dir%' --label Method --limit 25
-
-    # Read a candidate before claiming it is equivalent
-    $CBM cli get_code_snippet --project {PROJECT} --qualified-name '<qn from the rows above>'
-    ```
+    - **Does a symbol by this name already exist?** Call
+      `mcp__codebase-memory-mcp__search_graph` with `project: "{PROJECT}"`,
+      `name_pattern: "stem"` (regex substring, NOT SQL `LIKE` — `"business"`
+      matches, `"%business%"` returns nothing), `limit: 20`.
+    - **Is this concept already implemented N times?** Call
+      `mcp__codebase-memory-mcp__query_graph` with `project: "{PROJECT}"` and
+      `query: "MATCH (m:Method) WHERE m.name CONTAINS 'stem' RETURN m.name AS name, count(*) AS n ORDER BY n DESC LIMIT 20"`.
+    - **What do the neighbours in this directory look like?** Call
+      `mcp__codebase-memory-mcp__search_graph` with `project: "{PROJECT}"`,
+      `file_pattern: "%path/to/dir%"` (this parameter DOES accept `%` wildcards),
+      `label: "Method"`, `limit: 25`, or use `mcp__codebase-memory-mcp__search_code`.
+    - **Read a candidate before claiming it is equivalent:** Call
+      `mcp__codebase-memory-mcp__get_code_snippet` with `project: "{PROJECT}"`
+      and `qualified_name: "<qn from the rows above>"`, or read the file range
+      with `Read`.
 
     **Search the body, not just the name.** A duplicate is usually named
     differently. Pull distinctive tokens out of the new method's body — constants,

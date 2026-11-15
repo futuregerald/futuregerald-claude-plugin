@@ -38,17 +38,20 @@ The orchestrator precomputes ALL context (including the `git diff` and the orche
 **CRITICAL — Reviewers Trust the Context File & Are Strictly Read-Only (No Spikes, Test, Build, or E2E Execution):**
 - The orchestrator has *already* gathered the authoritative `git diff`, changed files, and passing fast unit test and linter/typecheck gate output in `/tmp/subagent-context-<project>-<stream>.md`.
 - Review sub-agents (`code-quality-reviewer` and `security-reviewer`) **MUST trust the written `/tmp/subagent-context-<project>-<stream>.md` file** — never re-running `git diff`/`git status`, never re-reading files already embedded in the context file, and **MUST NEVER run spikes, test suites (`npm test`, `vitest`, `go test`, `rspec`), builds (`npm run build`), linters, or E2E suites (`playwright test`, `npm run e2e`)**.
-- When verifying callers, siblings, or library contracts not included in the context file, reviewers must batch their file-read calls (`Read`) in parallel turns (`±40 lines` around caller sites, or `600–800 lines` when reading whole schema/sibling files; using the `Grep` tool where granted, never shell `grep -rn`) rather than spinning wheels in 30+ serial one-call turns.
+- **Turn-1 Parallel Chunk Reading & Follow-Up Read Batching:** When `/tmp/subagent-context-<project>-<stream>.md` exceeds `750` lines, reviewers MUST read all `StartLine-EndLine` windows listed in `## Read Chunk Index` in parallel on Turn 1 (never paginating 1 chunk per turn). When verifying callers, siblings, or library contracts not included in the context bundle, reviewers must batch `Read` calls (`5–10` files per turn, `400–800` lines per read; using `Grep` where granted, never shell `grep -rn`, and zero 1-file-per-turn micro-slices).
 - At the end of the review run (once the stream is `APPROVED`), the orchestrator **deletes `/tmp/subagent-context-<project>-<stream>.md`** (`rm -f /tmp/subagent-context-<project>-<stream>.md`).
 
 ```bash
 BASE_SHA=$(git merge-base origin/main HEAD)
 HEAD_SHA=$(git rev-parse HEAD)
-DIFF=$(git diff $BASE_SHA..$HEAD_SHA)
-FILE_LIST=$(git diff --name-only $BASE_SHA..$HEAD_SHA)
-COMMITS=$(git log --oneline $BASE_SHA..$HEAD_SHA)
-# Write all gathered context, DIFF, and passing fast-test gate output to /tmp/subagent-context-<project>-<stream>.md
+python3 ~/.claude/skills/subagent-driven-development/scripts/build_subagent_context.py post-code \
+  --output /tmp/subagent-context-<project>-<stream>.md \
+  --base "$BASE_SHA" \
+  --head "$HEAD_SHA" \
+  --gate-log /tmp/gate.log
 ```
+
+*(When reviewing uncommitted working-tree changes before committing, omit `--head "$HEAD_SHA"` so `build_subagent_context.py post-code` bundles `git diff -U3 "$BASE_SHA"` directly.)*
 
 For PR reviews, also fetch PR metadata via `gh` CLI or GitHub API.
 

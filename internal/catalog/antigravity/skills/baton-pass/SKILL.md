@@ -66,9 +66,10 @@ Keep the file under 200 lines of dense, verifiable facts (no conversational fill
 
 ### Without Swarm (`subagent` / `inline`)
 
-1. Read `/tmp/subagent-context-<project>-<stream>.md` if an `invoke_subagent` helper wrote findings or diffs there (`read_file` on `/tmp/*.md` remains exempt even at `>=235k`).
-2. Write `~/.gemini/handoffs/<project-key>/<YYYY-MM-DD-HHMMSS>-<slug>-ACTIVE_CONTEXT.md` with `Execution Mode: subagent` (or `inline`) and mirror to `<appDataDir>/brain/<conversation-id>/ACTIVE_CONTEXT.md`. Writing `ACTIVE_CONTEXT.md` unlocks `+50k` tokens for any final git status/commit cleanup in Session A.
-3. If Prism MCP is configured, call `session_save_handoff` with the current state and next steps.
+1. If a standalone persistent sleeping `ops` worker (`ops`, `ops-2`, ...) was spawned on `gemini-4-hydrogen-high` (`workspace: "inherit"`) for mechanical scouting/test/build/CI work, read any final `/tmp/*.md` pointer it wrote and terminate it with `swarm{action: "kill", name: "ops"}` (`swarm{action: "status"|"kill"}` and `/tmp/*.md` reads remain exempt at `>=235k`).
+2. Read `/tmp/subagent-context-<project>-<stream>.md` if an `invoke_subagent` helper wrote findings or diffs there (`read_file` on `/tmp/*.md` remains exempt even at `>=235k`).
+3. Write `~/.gemini/handoffs/<project-key>/<YYYY-MM-DD-HHMMSS>-<slug>-ACTIVE_CONTEXT.md` with `Execution Mode: subagent` (or `inline`) and mirror to `<appDataDir>/brain/<conversation-id>/ACTIVE_CONTEXT.md`. Writing `ACTIVE_CONTEXT.md` unlocks `+50k` tokens for any final git status/commit cleanup in Session A.
+4. If Prism MCP is configured, call `session_save_handoff` with the current state and next steps.
 
 ### With Swarm (`peer-pipeline-swarm` / native `swarm`)
 
@@ -79,7 +80,7 @@ Keep the file under 200 lines of dense, verifiable facts (no conversational fill
    git fetch "<SHARE_ROOT>" "<SHA>" && git rev-parse --verify "<SHA>^{commit}"
    ```
    Merge onto your feature branch if `[green]`, or anchor WIP with `git branch -f "baton/<stream>" "<SHA>"` if mid-phase.
-4. **Kill all workers & finalize snapshot:** Call `swarm{action: "kill"}` on every worker **including `monitor`**, update `ACTIVE_CONTEXT.md` (`Execution Mode: swarm`, `Anchored WIP Ref / Swarm Wind-Down` with the verified SHA and worker termination status), and call Prism `session_save_handoff` if configured.
+4. **Kill all workers (including `monitor` & `ops`) & finalize snapshot:** Call `swarm{action: "kill"}` on **every** active or sleeping worker — **including `monitor` and any persistent sleeping `ops` (`ops-N`) worker** — update `ACTIVE_CONTEXT.md` (`Execution Mode: swarm`, `Anchored WIP Ref / Swarm Wind-Down` with the verified SHA and worker termination status), and call Prism `session_save_handoff` if configured.
 
 ### Emit the Session B Prompt (Both Modes)
 
@@ -96,4 +97,4 @@ When the user starts a session with `Ingest ~/.gemini/handoffs/...-ACTIVE_CONTEX
 1. Read `ACTIVE_CONTEXT.md` (and `PLAN.md` if referenced) on Turn 1. Trust `Active Files & Contracts` and `Decisions, Evidence & Test Results` — **do not** re-read codebase files already summarized there unless you are about to edit them.
 2. Create `task.md` from `Pending Steps`.
 3. **Without Swarm (`subagent` / `inline`):** Seed `/tmp/subagent-context-<project>-<stream>.md` from `ACTIVE_CONTEXT.md` if delegating, and immediately execute Pending Step 1 inline or via `invoke_subagent` (`Model: "inherit"`).
-4. **With Swarm (`peer-pipeline-swarm` / native `swarm`):** Verify the anchored branch or `baton/<stream>` SHA (`git rev-parse --verify`), write a fresh `/tmp/subagent-context-<project>-<stream>.md` (and `/tmp/plan-<project>-<stream>.md` if `PLAN.md` is untracked), and spawn the pipeline in one turn. Because Session B is a new conversation, worker names start fresh (`impl`, `code-rev`, `sec-rev`, plus a fresh `monitor` — no `-2` suffix needed on Turn 1).
+4. **With Swarm (`peer-pipeline-swarm` / native `swarm`):** Verify the anchored branch or `baton/<stream>` SHA (`git rev-parse --verify`), write a fresh `/tmp/subagent-context-<project>-<stream>.md` (and `/tmp/plan-<project>-<stream>.md` if `PLAN.md` is untracked), and spawn the pipeline in one turn. Because Session B is a new conversation, worker names start fresh (`impl`, `code-rev`, `sec-rev`, `monitor`, and optional sleeping `ops` — no `-2` suffix needed on Turn 1).

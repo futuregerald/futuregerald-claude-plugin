@@ -54,8 +54,43 @@ for f in autonomous-breaker.sh autonomous_breaker.py breaker_rules.py replay_bre
   [ -f "$src/config/hooks/$f" ] && cp "$src/config/hooks/$f" "$dest/hooks/$f"
 done
 
-if grep -rnE "geraldonyango|[Cc]obalt|zombie|0d3ebe47|[Mm]olly|DL-[0-9X]|cobalthq|futuregerald|/Users/[a-ce-zA-Z]|/Users/d[^e]" "$dest" --exclude=sync-from-local.sh --exclude=LICENSE.txt --exclude-dir=__pycache__ --exclude-dir=.pytest_cache; then
-  echo "error: personal or org-specific data found in tracked files; move it to a local referenced file" >&2
-  exit 1
-fi
+python3 - "$dest" <<'PY'
+import os
+import re
+import sys
+
+dest = sys.argv[1]
+allowed = (
+    "author: Jesse Vincent, Gerald Onyango",
+    "Forked by Gerald Onyango",
+    "zombie UI",
+    "zombie buildings",
+)
+pat = re.compile(
+    r"[Gg]erald|[Oo]nyango|[Cc]obalt|zombie|0d3ebe47|[Mm]olly"
+    r"|(?:DL|CPTX|TRIAGE|PRODIDEA|LEADZ)-[0-9X]+"
+    r"|cobalthq|futuregerald"
+    r"|/Users/[a-ce-zA-Z]|/Users/d[^e]|/home/[a-zA-Z]"
+    r"|AIza[0-9A-Za-z_-]{20,}|sk-ant-|ghp_[0-9A-Za-z]{20,}|github_pat_|xox[baprs]-|AKIA[0-9A-Z]{16}"
+)
+hits = []
+for root, dirs, files in os.walk(dest):
+    dirs[:] = [d for d in dirs if d not in ("__pycache__", ".pytest_cache")]
+    for fname in sorted(files):
+        if fname in ("sync-from-local.sh", "LICENSE.txt") or fname.endswith(".pyc"):
+            continue
+        fpath = os.path.join(root, fname)
+        with open(fpath, "r", encoding="utf-8", errors="replace") as fh:
+            for lineno, raw in enumerate(fh, 1):
+                cleaned = raw
+                for phrase in allowed:
+                    cleaned = cleaned.replace(phrase, "")
+                if pat.search(cleaned):
+                    hits.append(f"{fpath}:{lineno}:{raw.rstrip()}")
+if hits:
+    for h in hits:
+        print(h, file=sys.stderr)
+    print("error: personal, org-specific, or secret data found in tracked files; move it to a local referenced file", file=sys.stderr)
+    sys.exit(1)
+PY
 echo "synced to $dest"

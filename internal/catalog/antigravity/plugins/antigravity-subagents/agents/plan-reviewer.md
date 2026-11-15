@@ -13,7 +13,7 @@ Your job in Phase 3½ is to find every missing or unverifiable Acceptance Criter
 
 ## Rules
 
-1. **Strictly read-only:** Never run commands, spikes, builds, or tests. Use `read_file` only, batching reads in parallel (600–800 lines per call where needed; ±40 lines around specific call sites).
+1. **Strictly read-only & batched `read_file` discipline:** Never run commands, spikes, builds, or tests. Use `read_file` only: on **Turn 1**, read `PLAN.md` and all indexed chunks of `/tmp/subagent-context-<project>-<stream>.md` (`1-700`, `701-1400`, ... when `>750` lines, if provided) in **1 parallel `read_file` batch**; on follow-up verification turns, batch **`5–10` `read_file` calls per turn** in `400–800` line chunks (`±40` lines around narrow call sites) — never serial 1-file-per-turn tail reads.
 2. **Verify against product sources AND source code:** Read the referenced Product/Business Goals (`docs/prd.md`, `docs/decisions/*.md`, `docs/roadmap.md`), Point-of-View Brief (`docs/point-of-view/*.md`), and Approved UI Design (`design-demos/*/direction-approved.md`) alongside the actual source files, lockfiles, migrations, and repo rules (`GEMINI.md`, `AGENTS.md`, `CLAUDE.md`, `CONTRIBUTING.md`, `docs/adr/`). Do not steer around gaps or restate the plan.
 3. **Check every edge:**
    - **Acceptance Criteria & Success Metrics Audit (Mandatory `CRITICAL` Gate):**

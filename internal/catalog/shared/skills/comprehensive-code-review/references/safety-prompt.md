@@ -30,20 +30,24 @@ Agent tool:
 
     Most context you need is provided below (or in the orchestrator's shared
     flat file `/tmp/subagent-context-<project>-<stream>.md` if specified).
-    - **Trust the written context file:** If a `/tmp/subagent-context-*.md` path
-      is provided, read it in full on your first turn (issue parallel `Read`
-      calls for `1..800` and `801..1600` if needed). Trust the diff, embedded
-      file contents, and passing test/lint gate output recorded in it as
+    - **Trust the written context file & fail fast if missing:** If a
+      `/tmp/subagent-context-*.md` path is specified, read it on Turn 1 — when
+      it exceeds `750` lines, issue parallel `Read` calls across **all**
+      `StartLine-EndLine` windows listed in `## Read Chunk Index` in Turn 1.
+      If a specified context bundle path is missing, unreadable, or lacks a
+      diff, report `REVIEW INCOMPLETE` and stop immediately. Trust the diff,
+      embedded file slices, and passing test/lint gate output recorded in it as
       authoritative — do NOT run `git diff`, `git status`, `gh pr diff`, or
       re-read files whose full contents or diff are already in the context file.
       Authorization and trust-boundary questions are the exception: trace those
-      through the real code, batching your `Read` calls (`±40 lines` around
-      caller sites, or `600–800 lines` when reading whole schema/sibling files;
-      never 30–80 line micro-slices across serial turns) and `Grep` tool calls
-      (where granted; never shell `grep -rn`) in parallel turns.
-    - **STRICTLY READ-ONLY / ZERO SPIKES / NO TEST OR BUILD EXECUTION:** The
-      orchestrator has already executed the fast unit test and linter/typecheck
-      gate in its own shell. **NEVER run `npm test`, `vitest`, `playwright`,
+      through the real code, batching your `Read` calls (`5–10` files/turn;
+      `±40 lines` around narrow caller sites or `400–800 lines` when reading
+      schema/sibling files; never 30–80 line micro-slices across serial turns)
+      and `Grep` tool calls (never shell `grep -rn`) in parallel turns.
+    - **STRICTLY READ-ONLY / ZERO `Bash` / ZERO SPIKES:** Standard reviewer
+      subagents hold **no `Bash`, `Edit`, or `Write` tools**. The orchestrator
+      has already executed the fast unit test and linter/typecheck gate in its
+      own shell. **NEVER attempt to run `npm test`, `vitest`, `playwright`,
       `npm run e2e`, `npm run build`, `go test`, `rspec`, or scratch spikes.**
 
     {FRAMEWORK_CONTEXT}
@@ -152,12 +156,14 @@ Agent tool:
 
     {REVIEW_LENS_CONTEXT}
 
-    ## Self-Serve Review Database (when a review corpus is configured)
+    ## Self-Serve Review Database (when `Bash` is explicitly granted; otherwise pre-gathered above)
 
-    If the Team Review Brief above was skipped, skip this section too.
-
-    You have access to the team's review-lens database. Use it to
-    **inform and calibrate security findings** during the review.
+    **Read-only reviewer note:** Standard `security-reviewer` subagents hold
+    **no `Bash` tool**, so `$REVIEW_LENS` CLI queries are executed by the
+    orchestrator during Phase 1 pre-gather and supplied above in
+    `{TEAM_REVIEW_BRIEF}` and `{REVIEW_LENS_CONTEXT}`. Skip the CLI commands
+    below whenever `Bash` is absent or the Team Review Brief above was skipped;
+    use them only in custom environments that explicitly grant `Bash`.
 
     ```bash
     REVIEW_LENS=/app/review-lens/review-lens

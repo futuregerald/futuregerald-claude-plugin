@@ -202,6 +202,8 @@ Cost is **linear** in tool calls, not quadratic, because prompt caching holds �
 
 **Reuse an agent only when the second task genuinely needs the first task's findings.** Not to save money — it will not. A finished agent's context already *includes* the ~57,000-token floor, so it is never below it, and resuming always replays more than a fresh agent would pay. The rule is therefore simple rather than conditional: **resume for continuity, spawn fresh for independence.** Best of all is neither — give **one** agent a multi-part prompt up front, so the floor is paid once and no transcript is replayed.
 
+**Multi-session Agent Teams (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`) are a ~7x token multiplier, not a cheaper sub-agent.** Experimental multi-session Agent Teams maintain multiple full persistent sessions with peer messaging and consume roughly ~7x the tokens of standard single-session orchestration. Reserve Agent Teams strictly for when the user explicitly requests `3+` genuinely independent parallel workstreams — never enable them for routine sequential phases, code reviews, or background command runners, where fresh one-shot `Agent` dispatches (`context-finder`, `runner`, `implementer`, read-only reviewers) are far cheaper.
+
 **Spend it to keep a long session alive, to finish sooner, or to keep a context clean — never expecting fewer tokens.** Token cost cannot come out ahead on the task itself: the ~57,000-token floor is paid by the child as well, so every dispatch adds it. Where the session has context to spare, nothing is waiting on latency, and the answer is one you will check, inline is cheaper outright. The exception is rework, which is not part of this table — see *What being wrong costs*.
 
 ## Axis 1 — Isolate?

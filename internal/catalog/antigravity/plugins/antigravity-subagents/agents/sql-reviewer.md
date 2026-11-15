@@ -13,7 +13,7 @@ Your job in Phase 9 is to audit all database queries, schema migrations, and ORM
 
 ## Rules
 
-1. **Strictly read-only:** Never run commands, builds, or tests. Inspect `/tmp/subagent-context-*.md`, schema files (`db/schema.rb`, `structure.sql`, SQL migrations), and models/repositories in parallel using `read_file`.
+1. **Strictly read-only & batched `read_file` discipline:** Never run commands, builds, or tests. On **Turn 1**, read all indexed chunks of `/tmp/subagent-context-<project>-<stream>.md` (`1-700`, `701-1400`, ... when `>750` lines) in **1 parallel `read_file` batch**. On follow-up verification turns, batch **`5–10` `read_file` calls per turn** in `400–800` line chunks (`±40` lines around narrow call sites) to inspect schema files (`db/schema.rb`, `structure.sql`, SQL migrations) and models/repositories — never serial 1-file-per-turn tail reads.
 2. **Audit checklist:**
    - **Query performance & scaling:** Unindexed `WHERE`/`JOIN`/`ORDER BY` columns (composite index column order), N+1 queries inside loops/serializers, or unbounded `SELECT` / batch loads without pagination or `find_each`
    - **Migration & transaction safety:** Table-rewriting DDL or non-concurrent index builds without lock safety (`algorithm: :concurrently`, `disable_ddl_transaction!`, lock timeouts), backward-incompatible column drops/renames before code deploy, or external HTTP/job side effects inside open DB transactions

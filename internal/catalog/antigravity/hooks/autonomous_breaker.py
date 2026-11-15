@@ -409,7 +409,7 @@ def _run_breaker(payload, stop_on_enforce=True, collector=None):
         strikes_max = int(os.environ.get("BREAKER_TEST_STRIKES_MAX", 4))
         if consecutive_test_failures >= strikes_max and (in_c_name in ("run_command", "EDIT_FILE")):
             target = f"{tool_name}:{consecutive_test_failures}/{strikes_max}"
-            reason = "CIRCUIT BREAKER (4-Strike Test-Fix Escalation): Tests have failed 4 consecutive times in this subagent. Stop editing code or re-running tests. Immediately write your 4-section handoff (including the failing test output and diff) using write_file / write_to_file and return control to the Lead Orchestrator for root-cause escalation."
+            reason = "CIRCUIT BREAKER (4-Strike Test-Fix Escalation): Tests have failed 4 consecutive times in this subagent. Stop editing code or re-running tests. Immediately write your 5-section handoff (including the failing test output and diff) using write_file / write_to_file and return control to the Lead Orchestrator for root-cause escalation."
             check_and_handle_trigger("STRIKES", target, reason, tool_name, step_idx, conv_id, is_subagent, collector=collector, stop_on_enforce=stop_on_enforce)
 
         step_max = int(os.environ.get("BREAKER_SUBAGENT_STEP_MAX", 0))
@@ -422,7 +422,7 @@ def _run_breaker(payload, stop_on_enforce=True, collector=None):
                 )
                 if tool_name not in ("send_message", "post_message", "read_board", "swarm_wait") and not is_handoff_write:
                     target = f"planner_turns:{planner_count}/{step_max}"
-                    reason = f"CIRCUIT BREAKER (Subagent Step Cap): {planner_count}/{step_max} planner turns used: write your 4-section handoff and return via send_message"
+                    reason = f"CIRCUIT BREAKER (Subagent Step Cap): {planner_count}/{step_max} planner turns used: write your 5-section handoff and return via send_message"
                     check_and_handle_trigger("H2", target, reason, tool_name, step_idx, conv_id, is_subagent, collector=collector, stop_on_enforce=stop_on_enforce)
 
     last_user_idx = -1
@@ -610,6 +610,7 @@ def _run_breaker(payload, stop_on_enforce=True, collector=None):
         norm_read_path = os.path.abspath(os.path.expanduser(read_path)) if read_path else ""
         s_line = in_c_args.get("StartLine")
         e_line = in_c_args.get("EndLine")
+        b_off = in_c_args.get("ByteOffset")
         try:
             s_line = int(s_line) if s_line is not None else None
         except Exception:
@@ -618,7 +619,11 @@ def _run_breaker(payload, stop_on_enforce=True, collector=None):
             e_line = int(e_line) if e_line is not None else None
         except Exception:
             e_line = None
-        in_rng = (s_line, e_line)
+        try:
+            b_off = int(b_off) if b_off is not None else 0
+        except Exception:
+            b_off = 0
+        in_rng = (s_line, e_line, b_off)
 
         trueloop_window = int(os.environ.get("BREAKER_TRUELOOP_WINDOW", 20))
         planner_steps = [(i, s) for i, s in enumerate(segment_steps) if s.get("type") == "PLANNER_RESPONSE"]
@@ -642,6 +647,7 @@ def _run_breaker(payload, stop_on_enforce=True, collector=None):
                     if c_p and norm_read_path and os.path.abspath(os.path.expanduser(c_p)) == norm_read_path:
                         c_s = c_args.get("StartLine")
                         c_e = c_args.get("EndLine")
+                        c_bo = c_args.get("ByteOffset")
                         try:
                             c_s = int(c_s) if c_s is not None else None
                         except Exception:
@@ -650,7 +656,11 @@ def _run_breaker(payload, stop_on_enforce=True, collector=None):
                             c_e = int(c_e) if c_e is not None else None
                         except Exception:
                             c_e = None
-                        prior_reads.append((c_s, c_e))
+                        try:
+                            c_bo = int(c_bo) if c_bo is not None else 0
+                        except Exception:
+                            c_bo = 0
+                        prior_reads.append((c_s, c_e, c_bo))
 
         qualifying_read_count = sum(1 for c_rng in prior_reads if is_re_read(in_rng, [c_rng]))
         if qualifying_read_count + 1 >= 3:

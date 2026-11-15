@@ -8,6 +8,7 @@ description: >-
   so the orchestrator must re-run that itself. Holds Bash, so it CAN mutate the tree —
   dispatch it against a committed SHA and name the prohibitions in the prompt.
 model: sonnet
+effort: low
 tools: ToolSearch, Read, Grep, Glob, Bash
 ---
 

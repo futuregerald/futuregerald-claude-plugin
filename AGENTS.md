@@ -96,6 +96,7 @@ PYTHONDONTWRITEBYTECODE=1 pytest -p no:cacheprovider -q \
   internal/catalog/shared/skills/editor-pass/scripts \
   internal/catalog/shared/skills/future-skill-creator/scripts \
   internal/catalog/shared/skills/grilling-page/scripts \
+  internal/catalog/shared/skills/subagent-driven-development/scripts \
   internal/catalog/shared/skills/team-pulse/scripts \
   internal/catalog/shared/skills/visualize-plan/scripts \
   internal/catalog/antigravity/hooks
