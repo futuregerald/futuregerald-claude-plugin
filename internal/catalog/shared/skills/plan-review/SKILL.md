@@ -52,8 +52,9 @@ Agent tool:
 ```
 
 That is the entire prompt. The agent carries its own methodology — do not restate it. That
-includes its cost rule: it reviews strictly by reading the plan and cited files (**zero spikes, zero builds or test runs**), so a plan that
-contains full function bodies is already too expensive to review (see `future-writing-plans`).
+includes its cost and batching rules:
+- It reviews strictly by reading the plan, product/brief/design sources, and cited code files (**zero spikes, zero builds or test runs**), so a plan that contains full function bodies is already too expensive to review (see `future-writing-plans`).
+- On Turn 1 it reads the plan file (and any linked Point-of-View Brief, PRD, or Approved UI Design docs) in parallel, then batches code/caller verification reads (`5–10` files per turn, `400–800` lines per read, zero 1-file-per-turn micro-slices). If a pre-built `/tmp/subagent-context-<project>-<stream>.md` bundle is supplied and exceeds `750` lines, it reads all `## Read Chunk Index` windows in parallel on Turn 1.
 
 **Do not steer it.** No suspicions, no "areas of concern", no "please check X". A reviewer
 pointed at your worries inherits your blind spots, which defeats the point of dispatching a

@@ -6,13 +6,13 @@ Personal, team, tracker and repository specifics never live in these rules, skil
 
 | Here | Live path | Purpose |
 |---|---|---|
-| `GEMINI.md` | `~/.gemini/GEMINI.md` | Always-on global rules: execution discipline, check-in vs authorized runs, lifecycle tiers, `Carbon Medium` default / `Argon Medium` (`/start-small`) role routing |
+| `GEMINI.md` | `~/.gemini/GEMINI.md` | Always-on global rules: parallel read/edit batching, check-in vs authorized runs, lifecycle tiers, `Carbon Medium` default / `Argon Medium` (`/start-small`) role routing, and optional sleeping `Hydrogen` (`0.2x`) `ops` worker (`cum_turns=<N>` rotation) |
 | `rules/org.example.md` | `~/.gemini/config/rules/<org>.local.md` (git-ignored) | Template for organization, tracker and repo rules |
-| `skills/antigravity-orchestration/SKILL.md` | `~/.gemini/config/skills/antigravity-orchestration/SKILL.md` | On-demand reference: memory signatures, search hierarchy, Carbon/Argon & Peer-Pipeline Swarm routing, breaker rules, baton-pass mechanics |
+| `skills/antigravity-orchestration/SKILL.md` | `~/.gemini/config/skills/antigravity-orchestration/SKILL.md` | On-demand reference: memory signatures, search hierarchy, Carbon/Argon/Hydrogen `ops` & Peer-Pipeline Swarm routing, observed Turn-1 floors (`22.7k`/`24.8k`/`29.3k`/`45.0k`), breaker rules, baton-pass mechanics |
 | `skills/{peer-pipeline-swarm,start,start-small,begin}/` | `~/.gemini/config/skills/{peer-pipeline-swarm,start,start-small,begin}/` | Antigravity-only `/start`, `/begin` (`Carbon Medium`), and `/start-small` (`Argon Medium`) 12-phase lifecycles and Phases 4–9 Peer-Pipeline Swarm (`impl` + `code-rev` + `sec-rev` + `monitor`) |
-| `skills/{lifecycle,subagent-driven-development,future-writing-plans,plan-review,comprehensive-code-review,fix-check,editor-pass,baton-pass,future-model-router}/` | `~/.gemini/config/skills/<skill>/` | Antigravity-native overrides for the core workflow skills |
+| `skills/{lifecycle,subagent-driven-development,future-writing-plans,plan-review,comprehensive-code-review,fix-check,editor-pass,baton-pass,future-model-router}/` | `~/.gemini/config/skills/<skill>/` | Antigravity-native overrides for core workflow skills (consuming pre-packed `build_subagent_context.py` slice/diff chunks and tearing down sleeping `ops` workers during `baton-pass`) |
 | `skills/antigravity-orchestration/references/config.example.md` | `~/.gemini/config/skills/antigravity-orchestration/references/config.md` (git-ignored) | Template for local tool paths and org names (e.g. `review-lens`) |
-| `plugins/antigravity-subagents/` | `~/.gemini/config/plugins/antigravity-subagents/` | Dedicated lifecycle subagents (`plan-reviewer`, `code-quality-reviewer`, `security-reviewer`, `sql-reviewer`, `editor-pass-reviewer`, `implementer`) with explicit `tools:` grants |
+| `plugins/antigravity-subagents/` | `~/.gemini/config/plugins/antigravity-subagents/` | Dedicated lifecycle subagents (`plan-reviewer`, `code-quality-reviewer`, `security-reviewer`, `sql-reviewer`, `editor-pass-reviewer`, `implementer`) with explicit `tools:` grants, `<185k` implementer peak-context guard, and parallel Turn-1 chunk reading |
 | `hooks.json` | `~/.gemini/config/hooks.json` | PreToolUse registration of the circuit breaker on 21 tools (including `swarm`, `read_board`, `post_message`, and `swarm_wait`) |
 | `hooks/` | `~/.gemini/config/hooks/` | Circuit breaker (`autonomous-breaker.sh` → `autonomous_breaker.py`), shared rules (`breaker_rules.py`), offline tools (`session_metrics.py`, `replay_breaker.py`) and tests |
 
@@ -25,7 +25,7 @@ Personal, team, tracker and repository specifics never live in these rules, skil
 | STRIKES | 4 consecutive test failures | enforce |
 | BATON | context estimate (`input_tokens + cache_read_tokens + output_tokens` + trailing bytes ÷ 4 since the last compaction) reaches 205k (Coordinator warn) or 235k (Coordinator block with +50k `ACTIVE_CONTEXT.md` unlock; swarm-worker cap with +25k `/tmp/*.md` WIP unlock) | enforce |
 | PROBE | 3rd inline `python3 -c` probe of the same file | enforce |
-| TRUELOOP | 3rd re-read of mostly already-read lines, or the same command, within 20 planner steps | enforce |
+| TRUELOOP | 3rd re-read of mostly already-read lines (tracking distinct `ByteOffset` pagination windows on `read_file`), or the same command, within 20 planner steps | enforce |
 | H1 | an authorized main session makes a 7th code edit without dispatching a helper | enforce |
 | H2 | a helper agent reaches `BREAKER_SUBAGENT_STEP_MAX` planner turns (opt-in; default `0` / disabled) | enforce (when cap > 0) |
 
@@ -37,7 +37,7 @@ Rules overridden with `BREAKER_<RULE>_MODE=log` write would-deny lines to `~/.ge
 ./scripts/sync-antigravity-from-local.sh
 ```
 
-Copies the live files verbatim (without the git-ignored local config files) and fails if any personal or org-specific string was accidentally written into a tracked file.
+Copies the live files verbatim (without the git-ignored local config files) and fails if any personal, org-specific, or secret string was accidentally written into a tracked file.
 
 ## Tests
 

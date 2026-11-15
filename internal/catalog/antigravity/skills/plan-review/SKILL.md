@@ -24,7 +24,7 @@ Never review a plan in the same context that wrote it. Choose the dispatch mode 
 
 ### Option A: Antigravity Default (`Carbon Medium` or `Argon` UI — Non-Trivial Plans)
 
-Whenever the UI is not already set to **`Carbon High`**, spawn a one-shot **`gemini-4-carbon-high`** `swarm` worker (`workspace: "inherit"`, **no `monitor` or `narrator`**) so the plan gets full `Carbon High` deliberation rather than downgrading to `Medium` via `Model: "inherit"`:
+Whenever the UI is not already set to **`Carbon High`**, spawn a one-shot **`gemini-4-carbon-high`** `swarm` worker (`29.3k` Turn-1 floor, `workspace: "inherit"`, **no `monitor` or `narrator`**) so the plan gets full `Carbon High` deliberation rather than downgrading to `Medium` via `Model: "inherit"`:
 
 ```text
 swarm({
@@ -32,7 +32,7 @@ swarm({
   name: "plan-rev",
   model: "gemini-4-carbon-high",
   workspace: "inherit",
-  brief: "Read ~/.gemini/config/plugins/antigravity-subagents/agents/plan-reviewer.md and the plan at <plan-path> (plus referenced brief/PRD/design-demos files and /tmp/subagent-context-<project>-<stream>.md if present). STRICTLY READ-ONLY: use ONLY read_file and post_message. NEVER call run_command, edit_file, write_file, or swarm, and never run spikes or mutate git/files. Verify that every Product/Brief/Design goal and phase commitment is captured in the plan's Acceptance Criteria & Success Metrics table with a wired runtime entry point, and verify every premise, file path, contract, and Affected Callers entry against the repo using read_file. Post your structured CRITICAL / IMPORTANT / MINOR findings and Verdict once to @coordinator."
+  brief: "On Turn 1, read ~/.gemini/config/plugins/antigravity-subagents/agents/plan-reviewer.md, the plan at <plan-path>, referenced brief/PRD/design-demos files, and all indexed chunks of /tmp/subagent-context-<project>-<stream>.md (if present) in 1 parallel read_file batch; on follow-up turns, batch 5-10 read_file calls per turn in 400-800 line chunks (+-40 lines around narrow call sites; zero 1-file tail reads). STRICTLY READ-ONLY: use ONLY read_file and post_message. NEVER call run_command, edit_file, write_file, or swarm, and never run spikes or mutate git/files. Verify that every Product/Brief/Design goal and phase commitment is captured in the plan's Acceptance Criteria & Success Metrics table with a wired runtime entry point, and verify every premise, file path, contract, and Affected Callers entry against the repo using read_file. Post your structured CRITICAL / IMPORTANT / MINOR findings and Verdict once to @coordinator."
 })
 ```
 
@@ -41,14 +41,14 @@ swarm({
 
 ### Option B: Antigravity `Carbon High` UI Session, Small/Routine Plan, or Gemini CLI
 
-Dispatch the harness-enforced read-only `plan-reviewer` subagent (`tools: [read_file]`, ~31k schema floor, **zero `run_command`**):
+Dispatch the harness-enforced read-only `plan-reviewer` subagent (`tools: [read_file]`, `22.7k` Turn-1 floor, **zero `run_command`**):
 
 ```text
 invoke_subagent({
   TypeName: "plan-reviewer",
   Role: "Adversarial Plan Reviewer",
   Model: "inherit",
-  Prompt: "Review the implementation plan at <plan-path> (and read its referenced Point-of-View Brief, PRD/Decisions, and Approved UI Design files). Verify that every phase goal and design commitment has a measurable row in Acceptance Criteria & Success Metrics wired to a mounted runtime entry point, and check every premise, file path, signature, Affected Callers row, and test gate against the codebase using read_file only (zero spikes, zero shell commands). Return CRITICAL, IMPORTANT, and MINOR findings with exact file:line citations and a Verdict (APPROVED or REVISE PLAN)."
+  Prompt: "On Turn 1, read the implementation plan at <plan-path>, its referenced Point-of-View Brief, PRD/Decisions, and Approved UI Design files, and any /tmp/subagent-context-<project>-<stream>.md chunks in 1 parallel read_file batch; on follow-up turns, batch 5-10 read_file calls per turn in 400-800 line chunks (+-40 lines around narrow call sites; zero 1-file tail reads). Verify that every phase goal and design commitment has a measurable row in Acceptance Criteria & Success Metrics wired to a mounted runtime entry point, and check every premise, file path, signature, Affected Callers row, and test gate against the codebase using read_file only (zero spikes, zero shell commands). Return CRITICAL, IMPORTANT, and MINOR findings with exact file:line citations and a Verdict (APPROVED or REVISE PLAN)."
 })
 ```
 

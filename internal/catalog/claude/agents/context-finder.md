@@ -8,6 +8,7 @@ description: >-
   greps last, then returns synthesized findings with file:line plus any relevant prior
   context. Runs on a cheaper model so the orchestrator stays the verifier.
 model: sonnet
+effort: low
 tools: ToolSearch, Read, Grep, Glob, mcp__codebase-memory-mcp__index_status, mcp__codebase-memory-mcp__list_projects, mcp__codebase-memory-mcp__search_code, mcp__codebase-memory-mcp__search_graph, mcp__codebase-memory-mcp__query_graph, mcp__codebase-memory-mcp__get_architecture, mcp__codebase-memory-mcp__get_code_snippet, mcp__prism__knowledge_search, mcp__prism__session_search_memory
 ---
 

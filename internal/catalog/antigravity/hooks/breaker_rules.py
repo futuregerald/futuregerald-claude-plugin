@@ -42,20 +42,34 @@ def is_authorized(user_text: str, conversation_id: str | None = None, state_dir:
             return True
     return False
 
-def read_ranges_overlap(a: tuple[int | None, int | None], b: tuple[int | None, int | None]) -> bool:
+ReadRange = tuple[int | None, int | None] | tuple[int | None, int | None, int | None]
+
+def _norm_byte_offset(rng: ReadRange) -> int:
+    if len(rng) < 3 or rng[2] is None:
+        return 0
+    try:
+        return int(rng[2])
+    except Exception:
+        return 0
+
+def read_ranges_overlap(a: ReadRange, b: ReadRange) -> bool:
+    if _norm_byte_offset(a) != _norm_byte_offset(b):
+        return False
     start_a = 1 if a[0] is None else a[0]
     end_a = float("inf") if a[1] is None else a[1]
     start_b = 1 if b[0] is None else b[0]
     end_b = float("inf") if b[1] is None else b[1]
     return max(start_a, start_b) <= min(end_a, end_b)
 
-def read_coverage(incoming_rng: tuple[int | None, int | None], prior_ranges: list[tuple[int | None, int | None]]) -> float:
+def read_coverage(incoming_rng: ReadRange, prior_ranges: list[ReadRange]) -> float:
     s = 1 if incoming_rng[0] is None else incoming_rng[0]
     e = float("inf") if incoming_rng[1] is None else incoming_rng[1]
+    in_bo = _norm_byte_offset(incoming_rng)
+    matching_priors = [pr for pr in prior_ranges if _norm_byte_offset(pr) == in_bo]
     if e == float("inf"):
-        for ps, pe in prior_ranges:
-            p_start = 1 if ps is None else ps
-            p_end = float("inf") if pe is None else pe
+        for pr in matching_priors:
+            p_start = 1 if pr[0] is None else pr[0]
+            p_end = float("inf") if pr[1] is None else pr[1]
             if p_start <= 1 and p_end == float("inf"):
                 return 1.0
         return 0.0
@@ -63,9 +77,9 @@ def read_coverage(incoming_rng: tuple[int | None, int | None], prior_ranges: lis
     if total_lines <= 0:
         return 0.0
     intervals = []
-    for ps, pe in prior_ranges:
-        p_start = 1 if ps is None else ps
-        p_end = float("inf") if pe is None else pe
+    for pr in matching_priors:
+        p_start = 1 if pr[0] is None else pr[0]
+        p_end = float("inf") if pr[1] is None else pr[1]
         ov_s = max(s, p_start)
         ov_e = min(e, p_end)
         if ov_s <= ov_e:
@@ -82,7 +96,7 @@ def read_coverage(incoming_rng: tuple[int | None, int | None], prior_ranges: lis
     covered_lines = sum(min(end, e) - max(start, s) + 1 for start, end in merged)
     return covered_lines / total_lines
 
-def is_re_read(incoming_rng: tuple[int | None, int | None], prior_ranges: list[tuple[int | None, int | None]], threshold: float = 0.5) -> bool:
+def is_re_read(incoming_rng: ReadRange, prior_ranges: list[ReadRange], threshold: float = 0.5) -> bool:
     return read_coverage(incoming_rng, prior_ranges) >= threshold
 
 def normalize_command(cmd: str) -> str:

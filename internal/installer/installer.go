@@ -425,6 +425,15 @@ func (i *Installer) InstallSkillsForHarness(destDir, harness string, isGlobal bo
 	return i.InstallSelectedSkillsForHarness(destDir, harness, isGlobal, nil, tags, languages)
 }
 
+func skillFileMode(relPath string) os.FileMode {
+	slashed := filepath.ToSlash(relPath)
+	inScripts := strings.HasPrefix(slashed, "scripts/") || strings.Contains(slashed, "/scripts/")
+	if inScripts && (strings.HasSuffix(slashed, ".py") || strings.HasSuffix(slashed, ".sh")) {
+		return 0755
+	}
+	return 0644
+}
+
 func (i *Installer) InstallSelectedSkillsForHarness(destDir, harness string, isGlobal bool, allowlist, tags, languages []string) ([]string, error) {
 	var results []string
 
@@ -533,7 +542,7 @@ func (i *Installer) InstallSelectedSkillsForHarness(destDir, harness string, isG
 					}
 				}
 				targetPath := filepath.Join(destDir, filepath.FromSlash(relPath))
-				result, err := i.writeFileWithRoot(destDir, targetPath, fileContent, 0644)
+				result, err := i.writeFileWithRoot(destDir, targetPath, fileContent, skillFileMode(relPath))
 				if err != nil {
 					return nil, err
 				}
@@ -556,7 +565,7 @@ func (i *Installer) InstallSelectedSkillsForHarness(destDir, harness string, isG
 					}
 				}
 				targetPath := filepath.Join(destDir, filepath.FromSlash(relPath))
-				result, err := i.writeFileWithRoot(destDir, targetPath, fileContent, 0644)
+				result, err := i.writeFileWithRoot(destDir, targetPath, fileContent, skillFileMode(relPath))
 				if err != nil {
 					return nil, err
 				}
@@ -1484,7 +1493,7 @@ func (i *Installer) InstallFromLocal(srcDir, destDir string) ([]string, error) {
 
 		targetPath := filepath.Join(destDir, relPath)
 
-		result, err := i.writeFileWithRoot(destDir, targetPath, content, 0644)
+		result, err := i.writeFileWithRoot(destDir, targetPath, content, skillFileMode(relPath))
 		if err != nil {
 			return err
 		}

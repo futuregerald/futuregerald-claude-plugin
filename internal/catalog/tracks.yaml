@@ -7,10 +7,12 @@ tracks:
     and PR handoff.
   best_when: You want phase gates, TDD, and peer reviews enforced on every code change.
   description: Best for shipping production code end-to-end. Runs shaping (/shape), 3-direction UI prototypes
-    (/ui-design), caller tracing, TDD, and parallel code + security reviews before every PR. On Antigravity,
+    (/ui-design), caller tracing, byte-bounded subagent context bundling (build_subagent_context.py), parallel
+    read/edit batching, TDD, and explicit read-only code + security reviews before every PR. On Antigravity,
     also installs peer-pipeline-swarm (parallel implementer and review subagents), start-small (/start-small
-    lightweight Argon swarm workflow), baton-pass, and circuit-breaker hooks (which stop repetitive tool
-    loops and save an ACTIVE_CONTEXT.md handoff before 256k token compaction).
+    lightweight Argon swarm workflow), optional sleeping Hydrogen (0.2x) ops routing, baton-pass, and
+    circuit-breaker hooks (which stop repetitive tool loops and save an ACTIVE_CONTEXT.md handoff before
+    256k token compaction).
   install_agents: true
   install_hooks: true
   lightweight_config: false
@@ -384,10 +386,11 @@ skills:
 - name: subagent-driven-development
   category: Engineering & TDD
   slash_command: /subagent-driven-development
-  short: Execute multi-stream implementation plans using isolated subagents and adversarial review.
-  long: Coordinates multi-step implementation plans by passing scoped context files to fresh implementer
-    subagents, verifying fast unit/lint gates in the orchestrator shell, and running independent code-quality
-    and security reviewers.
+  short: Execute multi-stream implementation plans using pre-packed context slices, isolated subagents, and adversarial review.
+  long: Coordinates multi-step implementation plans by bundling exact file:start-end target slices and byte-bounded
+    unified diff chunks via build_subagent_context.py, dispatching fresh implementer subagents with parallel
+    read/edit batching and a 5-section handoff, running fast unit/lint gates, and launching independent read-only
+    code-quality and security reviewers.
   starter_prompt: /subagent-driven-development Execute the approved plan streams with fresh subagents
 - name: systematic-debugging
   category: Engineering & TDD
@@ -428,10 +431,10 @@ skills:
 - name: comprehensive-code-review
   category: Review, Security & QA
   slash_command: /comprehensive-code-review
-  short: Orchestrate parallel read-only code-quality and security reviews on a branch or PR.
-  long: Dispatches fresh, independent code-quality and security reviewers (plus SQL review when queries
-    change) to audit your diff for logic bugs, broken callers, injection/path-traversal risks, and missing
-    tests.
+  short: Orchestrate parallel read-only code-quality and security reviews over pre-packed diff chunks.
+  long: Bundles your branch diff into byte- and line-bounded chunks via build_subagent_context.py and dispatches
+    fresh, strictly read-only code-quality and security reviewers (plus SQL review when queries change) to
+    audit logic bugs, broken callers, injection/path-traversal risks, and missing tests in parallel batches.
   starter_prompt: /comprehensive-code-review Run a full code quality and security review on this branch
 - name: fix-check
   category: Review, Security & QA
@@ -529,10 +532,10 @@ skills:
 - name: future-model-router
   category: Research, Browser & Meta
   slash_command: /future-model-router
-  short: Empirical benchmarks for when to run work inline vs subagents vs multi-model swarms.
+  short: Empirical benchmarks for inline vs fresh subagents, tool-schema floors, and model-tier routing.
   long: Reference guide backed by token and pass-rate measurements explaining when to keep work inline,
-    when to dispatch a subagent, how restricted tool schemas cut startup cost by 45%, and which model
-    tier fits each phase.
+    when to dispatch a fresh one-shot subagent (vs replay/multi-session overhead), how explicit read-only
+    tool allowlists cut startup cost, and which model/effort tier fits each phase.
   starter_prompt: /future-model-router Should I run this refactor inline or dispatch subagents?
 - name: future-skill-creator
   category: Research, Browser & Meta
@@ -552,10 +555,11 @@ skills:
 - name: antigravity-orchestration
   category: Antigravity Exclusives
   slash_command: /antigravity-orchestration
-  short: Antigravity session orchestration, role routing table, and search hierarchy reference.
+  short: Antigravity session orchestration, role routing table, sleeping Hydrogen ops worker, and search hierarchy.
   long: Antigravity-exclusive reference covering Carbon Medium default routing, /start-small Argon Medium
-    swarm routing, Carbon High and Opus 5.5 High adversarial reviews, restricted-tool subagent dispatch,
-    Prism memory hooks, code-search hierarchy, and workflow trigger tables.
+    swarm routing, optional sleeping Hydrogen (0.2x) ops worker (cum_turns=<N> rotation for heavy tests,
+    builds, CI, and wide caller sweeps), Carbon High and Opus 5.5 High adversarial reviews, observed Turn-1
+    schema floors, Prism memory hooks, and workflow trigger tables.
   starter_prompt: /antigravity-orchestration Check the model routing rules for Phase 4 and Phase 8
   antigravity_only: true
 - name: start-small
@@ -579,9 +583,9 @@ skills:
 - name: baton-pass
   category: Antigravity Exclusives
   slash_command: /baton-pass
-  short: Deterministic ACTIVE_CONTEXT.md snapshot before Antigravity context compaction hits.
+  short: Deterministic ACTIVE_CONTEXT.md snapshot and swarm/ops wind-down before Antigravity context compaction.
   long: Antigravity-exclusive context handoff skill triggered when the circuit-breaker hook warns at ~205k
-    tokens (before the ~235k block), writing a complete ACTIVE_CONTEXT.md snapshot so a fresh session
-    resumes with zero re-reading.
+    tokens (before the ~235k block), anchoring share-workspace commits, terminating active/sleeping swarm
+    and ops workers, and writing an ACTIVE_CONTEXT.md snapshot so a fresh session resumes with zero re-reading.
   starter_prompt: /baton-pass Save an ACTIVE_CONTEXT.md snapshot so I can continue in a fresh session
   antigravity_only: true

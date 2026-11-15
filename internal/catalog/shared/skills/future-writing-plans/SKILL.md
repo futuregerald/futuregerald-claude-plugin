@@ -105,7 +105,7 @@ Each step is one action, 2–5 minutes:
 ```markdown
 # [Feature Name] Implementation Plan
 
-> **For Claude / Antigravity:** REQUIRED SUB-SKILL: Use `subagent-driven-development` or `/start` (`peer-pipeline-swarm`) to implement this plan.
+> **For Claude / Antigravity:** REQUIRED SUB-SKILL: Use `subagent-driven-development` or `/start` to implement this plan.
 
 **Goal:** [One sentence describing what this builds and why it matters to the user/product]
 
@@ -174,7 +174,7 @@ line numbers still hold after the earlier ones have run.
 
 After saving the plan and completing the `plan-review` gate, you **MUST** present the proposed plan (including the `Acceptance Criteria & Success Metrics` table and a summary of the tasks) to the user in chat and **STOP calling tools to wait for the user's approval** before continuing with development — **unless** the user explicitly told you to *"just work"*, *"work autonomously"*, *"keep going"*, or invoked `/goal`.
 
-**"Plan complete, reviewed, and saved to `docs/plans/<filename>.md`. Ready to execute using `subagent-driven-development` (or `/start` `peer-pipeline-swarm`) once you approve — or let me know if you want any adjustments."**
+**"Plan complete, reviewed, and saved to `docs/plans/<filename>.md`. Ready to execute using `subagent-driven-development` (or `/start`) once you approve — or let me know if you want any adjustments."**
 
 ---
 

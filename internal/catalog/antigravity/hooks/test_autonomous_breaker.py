@@ -990,6 +990,56 @@ class TestAutonomousBreaker(unittest.TestCase):
             self.assertIn("CIRCUIT BREAKER (True-Loop Tripwire)", data.get("reason", ""))
             self.assertIn("3rd overlapping read of /tmp/source.py", data.get("reason", ""))
 
+    def test_true_loop_byte_offset_pagination_allows_distinct_offsets_and_blocks_same_offset(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            t_path = Path(tmpdir) / "transcript.jsonl"
+            self.write_jsonl(t_path, [
+                {"step_index": 0, "source": "USER_EXPLICIT", "type": "USER_INPUT", "content": "paginate huge line"},
+                {"step_index": 1, "source": "MODEL", "type": "PLANNER_RESPONSE", "tool_calls": [
+                    {"name": "read_file", "args": {"Path": "/tmp/huge.json", "StartLine": 1, "EndLine": 700}}
+                ]},
+                {"step_index": 2, "source": "MODEL", "type": "PLANNER_RESPONSE", "tool_calls": [
+                    {"name": "read_file", "args": {"Path": "/tmp/huge.json", "StartLine": 1, "EndLine": 700, "ByteOffset": 46080}}
+                ]},
+            ])
+            payload_distinct = {
+                "conversationId": "test-byte-offset-pagination",
+                "transcriptPath": str(t_path),
+                "stepIdx": 4,
+                "toolCall": {
+                    "name": "read_file",
+                    "args": {"Path": "/tmp/huge.json", "StartLine": 1, "EndLine": 700, "ByteOffset": 92160}
+                }
+            }
+            res_distinct = self.execute_breaker(payload_distinct, env={"BREAKER_TRUELOOP_MODE": "enforce", "BREAKER_DUP_MODE": "enforce"})
+            self.assertEqual(res_distinct.returncode, 0)
+            self.assertEqual(res_distinct.stdout, "")
+
+            t_same_path = Path(tmpdir) / "transcript_same_offset.jsonl"
+            self.write_jsonl(t_same_path, [
+                {"step_index": 0, "source": "USER_EXPLICIT", "type": "USER_INPUT", "content": "repeat same offset"},
+                {"step_index": 1, "source": "MODEL", "type": "PLANNER_RESPONSE", "tool_calls": [
+                    {"name": "read_file", "args": {"Path": "/tmp/huge.json", "StartLine": 1, "EndLine": 700, "ByteOffset": 46080}}
+                ]},
+                {"step_index": 2, "source": "MODEL", "type": "PLANNER_RESPONSE", "tool_calls": [
+                    {"name": "read_file", "args": {"Path": "/tmp/huge.json", "StartLine": 10, "EndLine": 700, "ByteOffset": 46080}}
+                ]},
+            ])
+            payload_same = {
+                "conversationId": "test-byte-offset-same",
+                "transcriptPath": str(t_same_path),
+                "stepIdx": 4,
+                "toolCall": {
+                    "name": "read_file",
+                    "args": {"Path": "/tmp/huge.json", "StartLine": 10, "EndLine": 700, "ByteOffset": 46080}
+                }
+            }
+            res_same = self.execute_breaker(payload_same, env={"BREAKER_TRUELOOP_MODE": "enforce", "BREAKER_DUP_MODE": "off"})
+            self.assertEqual(res_same.returncode, 0)
+            data_same = json.loads(res_same.stdout)
+            self.assertEqual(data_same.get("decision"), "deny")
+            self.assertIn("CIRCUIT BREAKER (True-Loop Tripwire)", data_same.get("reason", ""))
+
     def test_true_loop_edit_resets_overlapping_reads(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             t_path = Path(tmpdir) / "transcript.jsonl"
@@ -1626,7 +1676,7 @@ class TestAutonomousBreaker(unittest.TestCase):
             self.assertEqual(res_130_cmd.returncode, 0)
             data_130 = json.loads(res_130_cmd.stdout)
             self.assertEqual(data_130.get("decision"), "deny")
-            self.assertIn("130/130 planner turns used: write your 4-section handoff and return via send_message", data_130.get("reason", ""))
+            self.assertIn("130/130 planner turns used: write your 5-section handoff and return via send_message", data_130.get("reason", ""))
 
             payload_130_send = {
                 "conversationId": "test-h2-helper",

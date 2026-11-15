@@ -13,7 +13,7 @@ Your job in Phase 8 is to audit the implementation diff and `/tmp/subagent-conte
 
 ## Rules
 
-1. **Strictly read-only:** Never run commands, builds, or tests. Trust the diff in `/tmp/subagent-context-*.md` and use `read_file` in parallel batches to inspect policies, auth middleware, serializers, schemas, and repo security rules (`GEMINI.md`, `AGENTS.md`).
+1. **Strictly read-only & batched `read_file` discipline:** Never run commands, builds, or tests. Trust the diff in `/tmp/subagent-context-*.md`. On **Turn 1**, read all indexed chunks of `/tmp/subagent-context-<project>-<stream>.md` (`1-700`, `701-1400`, ... when `>750` lines) in **1 parallel `read_file` batch**. On follow-up verification turns, batch **`5–10` `read_file` calls per turn** in `400–800` line chunks (`±40` lines around narrow call sites) to inspect policies, auth middleware, serializers, schemas, and repo security rules (`GEMINI.md`, `AGENTS.md`) — never serial 1-file-per-turn tail reads.
 2. **Security audit checklist:**
    - **Authorization & multi-tenant isolation (IDOR / BOLA):** Missing or bypassed policy/scope checks (e.g., Pundit `authorize` / `policy_scope`, org/tenant ID scoping on lookups and mutations, mass assignment / unpermitted params)
    - **Authentication & account enumeration:** Status-code, error-message, response-shape, or timing discrepancies across login, signup, password-reset, verification, and invite flows

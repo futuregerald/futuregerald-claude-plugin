@@ -549,3 +549,74 @@ func TestExecutePlan_ConfigModeMergeReplaceSkipAndUninstallStrip(t *testing.T) {
 		t.Errorf("expected ConfigAction=created on fresh global GEMINI.md, got %q", resGlobalMerge.ConfigAction)
 	}
 }
+
+func TestSkillScriptsInstalledExecutable0755(t *testing.T) {
+	testFS := fstest.MapFS{
+		"shared/skills/ctx-skill/SKILL.md": &fstest.MapFile{
+			Data: []byte("---\nname: ctx-skill\ndescription: Context bundler\n---\n# Context\n"),
+		},
+		"shared/skills/ctx-skill/scripts/build_subagent_context.py": &fstest.MapFile{
+			Data: []byte("#!/usr/bin/env python3\nprint('ok')\n"),
+		},
+		"shared/skills/ctx-skill/scripts/run_helper.sh": &fstest.MapFile{
+			Data: []byte("#!/usr/bin/env bash\necho ok\n"),
+		},
+		"shared/skills/ctx-skill/references/notes.md": &fstest.MapFile{
+			Data: []byte("# Notes\n"),
+		},
+		"antigravity/skills/ctx-skill/SKILL.md": &fstest.MapFile{
+			Data: []byte("---\nname: ctx-skill\ndescription: Antigravity context bundler\n---\n# Context\n"),
+		},
+		"antigravity/skills/ctx-skill/scripts/agy_only.sh": &fstest.MapFile{
+			Data: []byte("#!/usr/bin/env bash\necho agy\n"),
+		},
+	}
+
+	destDir := filepath.Join(t.TempDir(), "skills")
+	inst := New(testFS, Options{Force: true})
+	if _, err := inst.InstallSkillsForHarness(destDir, HarnessAntigravity, true, nil, nil); err != nil {
+		t.Fatalf("InstallSkillsForHarness error: %v", err)
+	}
+
+	for _, execRel := range []string{
+		filepath.Join("ctx-skill", "scripts", "build_subagent_context.py"),
+		filepath.Join("ctx-skill", "scripts", "run_helper.sh"),
+		filepath.Join("ctx-skill", "scripts", "agy_only.sh"),
+	} {
+		info, err := os.Stat(filepath.Join(destDir, execRel))
+		if err != nil {
+			t.Fatalf("stat %s: %v", execRel, err)
+		}
+		if info.Mode().Perm()&0111 == 0 {
+			t.Errorf("expected %s installed executable (0755), got mode %o", execRel, info.Mode().Perm())
+		}
+	}
+
+	notesInfo, err := os.Stat(filepath.Join(destDir, "ctx-skill", "references", "notes.md"))
+	if err != nil {
+		t.Fatalf("stat notes.md: %v", err)
+	}
+	if notesInfo.Mode().Perm()&0111 != 0 {
+		t.Errorf("expected non-script notes.md non-executable (0644), got mode %o", notesInfo.Mode().Perm())
+	}
+
+	localSrc := t.TempDir()
+	localScript := filepath.Join(localSrc, "ctx-skill", "scripts", "local_tool.py")
+	if err := os.MkdirAll(filepath.Dir(localScript), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(localScript, []byte("#!/usr/bin/env python3\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	localDest := filepath.Join(t.TempDir(), "local-dest")
+	if _, err := inst.InstallFromLocal(localSrc, localDest); err != nil {
+		t.Fatalf("InstallFromLocal error: %v", err)
+	}
+	localInfo, err := os.Stat(filepath.Join(localDest, "ctx-skill", "scripts", "local_tool.py"))
+	if err != nil {
+		t.Fatalf("stat local_tool.py: %v", err)
+	}
+	if localInfo.Mode().Perm()&0111 == 0 {
+		t.Errorf("expected InstallFromLocal script executable (0755), got mode %o", localInfo.Mode().Perm())
+	}
+}
