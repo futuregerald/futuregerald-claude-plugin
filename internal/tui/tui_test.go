@@ -184,11 +184,11 @@ func TestRestoreUninstallConfirmAndCustomDeselect(t *testing.T) {
 
 	m.customSelected = map[string]bool{}
 	m.customSelected["brainstorming"] = true
-	m.customSelected["writing-plans"] = true
+	m.customSelected["future-writing-plans"] = true
 	if m.selectedCustomCount() != 2 {
 		t.Fatalf("expected 2 custom skills selected, got %d", m.selectedCustomCount())
 	}
-	m.customSelected["writing-plans"] = false
+	m.customSelected["future-writing-plans"] = false
 	if m.selectedCustomCount() != 1 {
 		t.Fatalf("expected 1 custom skill selected after setting false, got %d", m.selectedCustomCount())
 	}

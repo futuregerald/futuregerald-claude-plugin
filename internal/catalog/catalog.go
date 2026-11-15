@@ -241,7 +241,7 @@ func (c *Catalog) CommandsForSkills(harness string, installedSkills []string) []
 			}
 			return nil
 		}
-		if installedSkills == nil || skillSet["start"] || skillSet["writing-plans"] {
+		if installedSkills == nil || skillSet["start"] || skillSet["future-writing-plans"] || skillSet["writing-plans"] {
 			matched = append(matched, rel)
 		}
 		return nil

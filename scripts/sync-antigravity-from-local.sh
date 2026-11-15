@@ -24,17 +24,18 @@ rm -f "$dest/rules/skills-and-delegation.md"
 [ -f "$src/config/skills/antigravity-orchestration/references/config.example.md" ] && cp "$src/config/skills/antigravity-orchestration/references/config.example.md" "$dest/skills/antigravity-orchestration/references/config.example.md"
 
 for skill in antigravity-orchestration peer-pipeline-swarm start begin lifecycle subagent-driven-development \
-             writing-plans plan-review comprehensive-code-review fix-check editor-pass baton-pass future-model-router; do
+             future-writing-plans plan-review comprehensive-code-review fix-check editor-pass baton-pass future-model-router; do
   if [ -d "$src/config/skills/$skill" ]; then
     mkdir -p "$dest/skills/$skill"
     [ -f "$src/config/skills/$skill/SKILL.md" ] && cp "$src/config/skills/$skill/SKILL.md" "$dest/skills/$skill/SKILL.md"
+    [ -f "$src/config/skills/$skill/LICENSE.txt" ] && cp "$src/config/skills/$skill/LICENSE.txt" "$dest/skills/$skill/LICENSE.txt"
     if [ -d "$src/config/skills/$skill/references" ]; then
       mkdir -p "$dest/skills/$skill/references"
       for ref in "$src/config/skills/$skill/references/"*.md; do
         [ -f "$ref" ] || continue
         base="$(basename "$ref")"
         case "$base" in
-          config.md|*.local.md) continue ;;
+          config.md|cobalt-org.md|*.local.md) continue ;;
         esac
         cp "$ref" "$dest/skills/$skill/references/$base"
       done
@@ -53,7 +54,7 @@ for f in autonomous-breaker.sh autonomous_breaker.py breaker_rules.py replay_bre
   [ -f "$src/config/hooks/$f" ] && cp "$src/config/hooks/$f" "$dest/hooks/$f"
 done
 
-if grep -rnE "geraldonyango|Gerald|[Cc]obalt|zombie|0d3ebe47|[Mm]olly|DL-[0-9X]|cobalthq|futuregerald|/Users/[a-ce-zA-Z]|/Users/d[^e]" "$dest" --exclude=sync-from-local.sh --exclude-dir=__pycache__ --exclude-dir=.pytest_cache; then
+if grep -rnE "geraldonyango|[Cc]obalt|zombie|0d3ebe47|[Mm]olly|DL-[0-9X]|cobalthq|futuregerald|/Users/[a-ce-zA-Z]|/Users/d[^e]" "$dest" --exclude=sync-from-local.sh --exclude=LICENSE.txt --exclude-dir=__pycache__ --exclude-dir=.pytest_cache; then
   echo "error: personal or org-specific data found in tracked files; move it to a local referenced file" >&2
   exit 1
 fi

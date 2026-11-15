@@ -52,6 +52,11 @@ Task N from plan: [plan file path or inline requirements]
 
 Check for:
 
+**Acceptance Criteria, Product Goals & Design Target Audit (First Priority — Critical if Unmet):**
+- Verify every `AC-N` row from the plan's `Acceptance Criteria & Success Metrics` table, the Point-of-View Brief (`docs/point-of-view/*.md`), PRD/Decisions (`docs/prd.md`, `docs/decisions/*.md`), and Approved UI Design (`design-demos/*/direction-approved.md`) against the **actual mounted/wired runtime code** (`file:line`).
+- Flag **"test-only / dead-wiring theater"** as **Critical** if a helper function, animation calculator, or hook is unit-tested in isolation but never imported and wired into the mounted component tree or active runtime entry point.
+- Flag responsive breakpoint omissions (e.g., missing phone `<600dp` header or wrapping bottom navigation bars), unbound animations, or truncated SVG/icon paths as **Critical**.
+
 **Architecture:**
 - Controllers/handlers are thin (business logic in services/models)
 - Proper separation of concerns

@@ -43,6 +43,8 @@ Never omit `model` on `swarm{action: "add"}` — omitting `model` copies the UI 
 
 Before calling `swarm`, write `/tmp/subagent-context-<project>-<stream>.md` containing:
 - Exact path to `PLAN.md` (copy `PLAN.md` into `/tmp/plan-<project>-<stream>.md` as well if `PLAN.md` is untracked in the repo, because `workspace: "share"` clones committed repo state)
+- `## Product & Design Sources` (paths and non-negotiable targets from `docs/prd.md`, `docs/decisions/product-scope.md`, `docs/point-of-view/*.md`, and `design-demos/*/direction-approved.md`)
+- `## Acceptance Criteria & Success Metrics` (copied verbatim from `PLAN.md` — every `AC-N` row with its required runtime behavior, measurable target, and mounted entry point `file:Symbol`)
 - `## Known Facts` (entry-point `file:line` ranges, sibling exemplar `file:line`, exact scoped fast test & lint commands, repo gate commands)
 - `## Affected Callers` (from Phase 2/3)
 - `## Hypotheses to Falsify` (if any)

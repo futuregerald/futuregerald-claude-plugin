@@ -36,13 +36,13 @@
 | 0½. UI DESIGN | For net-new pages, new apps, major/non-trivial changes to existing UI pages, or anytime requested: run `/ui-design` (`huashu-design`) to generate 3 distinct high-fidelity interactive prototypes of the same thing on a single HTML comparison page (`design-demos/index.html`) and open it in the browser so the user can pick a direction before planning | 3-prototype HTML page opened and direction selected (or skipped for non-UI / minor UI work) |
 | 1. RECEIVE | Understand the task; create a todo list (`TaskCreate`) for anything non-trivial | Task understood |
 | 2. TRACE | Trace the call chain, up and down, of every symbol the change touches. See **Trace Before You Touch** | Chain traced; affected and untested callers identified |
-| 3. PLAN | Write the plan for all work with `writing-plans`. Never commit it | Plan exists and has an Affected Callers section |
-| 3½. PLAN REVIEW | `plan-review` in a **fresh** sub-agent, once (skipped only for trivial changes with an obvious, self-contained blast radius). Fix every CRITICAL and IMPORTANT before implementing | Review run; findings fixed (or skipped for trivial change) |
-| 4. IMPLEMENT | TDD (`test-driven-development`): RED → GREEN → REFACTOR. Run the reuse check first (**Reuse Before You Build**) | Fast tests exist and pass; nothing duplicates an existing symbol |
+| 3. PLAN | Write the plan for all work with `future-writing-plans` (including `Acceptance Criteria & Success Metrics` mapped to mounted `file:Symbol` and `Affected Callers`). Present the proposed plan in chat and **STOP to wait for user approval** before writing code (unless user explicitly requested autonomous execution). Never commit it | Plan exists with Acceptance Criteria & Affected Callers, and is approved by user |
+| 3½. PLAN REVIEW | `plan-review` in a **fresh** sub-agent, once (skipped only for trivial changes with an obvious, self-contained blast radius), verifying both code premises and `Acceptance Criteria & Success Metrics`. Fix every CRITICAL and IMPORTANT before implementing | Review run; findings fixed (or skipped for trivial change) |
+| 4. IMPLEMENT | TDD (`test-driven-development`): RED → GREEN → REFACTOR. Run the reuse check first (**Reuse Before You Build**) | Fast tests exist and pass; all Acceptance Criteria wired in runtime code; nothing duplicates an existing symbol |
 | 5. TEST | `{{TEST_COMMAND}}`, fast unit tests for the affected code only. Never run E2E suites or multi-build `pretest` steps between changes | Zero failures |
 | 6. LINT | The project's typecheck and linter (see Quick Reference and the language section) | Zero offenses |
 | 7. SIMPLIFY | `code-simplifier` agent; implement only approved simplifications, then re-run tests | Simplified |
-| 8. CODE REVIEW | `comprehensive-code-review` in fresh, read-only sub-agents (code quality, patterns, SQL, security, simplification). One review per stream; fix rounds verified with `fix-check` | Review passes |
+| 8. CODE REVIEW | `comprehensive-code-review` in fresh, read-only sub-agents (auditing `Acceptance Criteria & Success Metrics`, Brief, Approved UI Design, code quality, patterns, SQL, security, simplification). One review per stream; fix rounds verified with `fix-check` | 100% of Acceptance Criteria PASS & review passes |
 | 9. SQL REVIEW | If database queries or mutations changed: `sql-reviewer` agent (`sql-optimization-patterns`) | SQL reviewed |
 | 10. BLAST-RADIUS VERIFY | Walk the Affected Callers list, plus the callers of every symbol the final diff touches that the plan did not list. **Runs last, after every code-mutating phase** | Every caller verified with evidence |
 | 11. COMMIT | `git commit`, conventional format | Commit created |
@@ -75,7 +75,7 @@
 **Every code change gets a written plan, including one-line fixes.** It records what was considered, and BLAST-RADIUS VERIFY consumes its Affected Callers section.
 
 - **Never commit a plan.** Add its path to `.git/info/exclude` if it is not ignored already.
-- **Sections:** Goal · **Affected Callers** · Approach · step-by-step TDD tasks with exact file paths · Risks · Rollback · Out of scope.
+- **Sections:** Goal · **Product & Design Sources** · **Acceptance Criteria & Success Metrics** · **Affected Callers** · Approach · step-by-step TDD tasks with exact file paths · Risks · Rollback · Out of scope. Every Acceptance Criterion names its mounted/wired runtime entry point (`file:Symbol`) and measurable target. Always present the proposed plan to the user in chat and wait for approval before starting Phase 4 (unless the user explicitly requested autonomous execution).
 - **Tasks give signatures, test cases and gates, not function bodies.** Code is written once, in IMPLEMENT, where tests and review check it. Write literal code only where the text is the decision: a regex, a lint rule, a migration, a data format.
 - **Affected Callers** records only callers the change breaks (with the consequence) plus callers it does not break that have no test. It is not an inventory of everything touched.
 - **Keep the plan current, in every phase.** When a task finishes, a sub-agent reports a flawed assumption, a measurement settles a number, a review finding changes a task, or the scope changes, edit the plan in the same turn: a Status table, "as built" notes, measured numbers, and each departure with its reason. The handoff summarises; the plan is the working truth.
@@ -193,7 +193,7 @@ Never write: what the code does · how the language or library works · your rea
 | Before planning new or user-facing work (feature, product, page) | `/shape`, `/craftsmans-wisdom`, then `/future-grilling` if the user wants the details stress-tested (for internal technical work, ask once per session whether to skip) |
 | Net-new pages, new apps, major/non-trivial changes to existing UI pages, or when requested (Phase 0½) | `/ui-design` (`huashu-design`): generates 3 distinct high-fidelity prototypes of the same thing on one HTML comparison page (`design-demos/index.html`) and opens it in the browser before planning |
 | New feature or significant work, before planning | `/write-a-prd` |
-| Any code change (PLAN) | `/writing-plans` (required for all work) |
+| Any code change (PLAN) | `/future-writing-plans` (required for all work) |
 | Every non-trivial plan, before implementing | `/plan-review`, in a fresh sub-agent (skipped only for trivial changes with an obvious, self-contained blast radius) |
 | Three or more questions for the user | `/grilling-page`: one page with each question's context, options and a recommendation. One or two questions: ask in chat |
 | Bug investigation | `/systematic-debugging` |

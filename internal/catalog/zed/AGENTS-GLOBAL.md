@@ -8,7 +8,7 @@ In Zed's Agent Panel, type `/<skill-name>` (for example `/start`, `/shape`, `/ui
 ## Core Working Rules
 
 1. **Trace before editing:** Before changing code, trace callers upward and side effects downward with `git grep -n`.
-2. **Plan before coding:** Write an uncommitted plan (`writing-plans`) with an `Affected Callers` section before modifying source files.
+2. **Plan before coding:** Write an uncommitted plan (`future-writing-plans`) with an `Affected Callers` section before modifying source files.
 3. **Test-Driven Development:** Follow RED -> GREEN -> REFACTOR (`test-driven-development`) and run fast, scoped unit tests (`<15s`) rather than full E2E suites during iteration.
 4. **No code comments:** Write no code comments unless explicitly asked by the user. Prefer self-explanatory names and focused functions.
 5. **Verify before completion:** Run tests and linters in this turn and read their exit codes before claiming work is complete.

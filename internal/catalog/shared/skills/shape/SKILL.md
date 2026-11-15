@@ -1,13 +1,13 @@
 ---
 name: shape
-description: Run Phase 0 (Shape) of the Development Lifecycle before planning — interviews the user with craftsmans-wisdom to produce a confirmed point-of-view brief, offers future-grilling to walk the decision tree in dependency order, and hands the brief to write-a-prd, brainstorming, or writing-plans. Use when the user invokes /shape or before planning new or user-facing work.
+description: Run Phase 0 (Shape) of the Development Lifecycle before planning — interviews the user with craftsmans-wisdom to produce a confirmed point-of-view brief, offers future-grilling to walk the decision tree in dependency order, and hands the brief to write-a-prd, brainstorming, or future-writing-plans. Use when the user invokes /shape or before planning new or user-facing work.
 disable-model-invocation: true
 tags: [planning, design, quality, interview, workflow]
 ---
 
 # Phase 0: Shape (`/shape`)
 
-Run **Phase 0 (Shape)** of the Development Lifecycle before writing an implementation plan (`writing-plans`).
+Run **Phase 0 (Shape)** of the Development Lifecycle before writing an implementation plan (`future-writing-plans`).
 
 ## Steps
 
@@ -32,4 +32,4 @@ Run **Phase 0 (Shape)** of the Development Lifecycle before writing an implement
    - If the decisions won't fit one session (they need research, prototypes or several sittings), run [`../future-wayfinder/SKILL.md`](../future-wayfinder/SKILL.md) with the brief instead; it hands off to step 4 when its map is clear.
 
 4. **Hand off to planning:**
-   - Pass the confirmed brief and settled decision list into `write-a-prd`, `brainstorming`, or Phase 3 (`writing-plans`), instructing it not to re-ask what the brief and grilling already settled.
+   - Pass the confirmed brief and settled decision list into `write-a-prd`, `brainstorming`, or Phase 3 (`future-writing-plans`), instructing it not to re-ask what the brief and grilling already settled.

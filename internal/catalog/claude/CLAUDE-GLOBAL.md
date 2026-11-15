@@ -16,13 +16,13 @@ Every code change follows this 12-phase workflow. Only pure doc updates and `git
 | 0½. UI DESIGN | For net-new pages, new apps, or major UI changes: generate 3 interactive HTML prototypes on `design-demos/index.html` | `/ui-design` (`huashu-design`) | Direction chosen in browser |
 | 1. RECEIVE | Understand the task and create a task list (`TaskCreate`) | — | Task understood |
 | 2. TRACE | Trace callers upward and side effects downward (`git grep -n`) | — | Every caller named with contract expectations |
-| 3. PLAN | Write the uncommitted plan (`writing-plans`) with `Affected Callers`, sibling exemplar `file:line`, and test gates | `writing-plans` | Plan file exists |
-| 3½. PLAN REVIEW | Run one-shot adversarial review in a fresh `adversarial-plan-reviewer` sub-agent | `/plan-review` | CRITICAL & IMPORTANT findings fixed |
-| 4. IMPLEMENT | Strict TDD (`test-driven-development`): RED -> GREEN -> REFACTOR. Check existing helpers first (`Reuse Before You Build`) | `test-driven-development`, `subagent-driven-development` | Fast unit tests pass; zero new comments |
+| 3. PLAN | Write the uncommitted plan (`future-writing-plans`) with `Acceptance Criteria & Success Metrics` (mapped to mounted `file:Symbol`), `Affected Callers`, sibling exemplar `file:line`, and test gates, then **STOP and present the proposed plan to the user for approval** before writing code (unless user explicitly requested autonomous execution) | `future-writing-plans` | Plan file exists & approved by user |
+| 3½. PLAN REVIEW | Run one-shot adversarial review in a fresh `adversarial-plan-reviewer` sub-agent verifying both code premises and `Acceptance Criteria & Success Metrics` coverage | `/plan-review` | CRITICAL & IMPORTANT findings fixed |
+| 4. IMPLEMENT | Strict TDD (`test-driven-development`): RED -> GREEN -> REFACTOR. Check existing helpers first (`Reuse Before You Build`) | `test-driven-development`, `subagent-driven-development` | Fast unit tests pass; all Acceptance Criteria wired in runtime code; zero new comments |
 | 5. TEST | Run fast unit tests scoped to affected specs only | — | Zero failures (`exit code 0`) |
 | 6. LINT | Run project linter and typecheck | — | Zero offenses (`exit code 0`) |
 | 7. SIMPLIFY | Refine recently changed code (`code-simplifier`), then re-run scoped tests | `code-simplifier` | Simplified |
-| 8. CODE REVIEW | Parallel read-only `code-quality-reviewer` and `security-reviewer` sub-agents; verify fixes with `/fix-check` | `comprehensive-code-review`, `/fix-check` | Approved |
+| 8. CODE REVIEW | Parallel read-only `code-quality-reviewer` (auditing `Acceptance Criteria & Success Metrics`, Brief, and Approved UI Design against mounted runtime code) and `security-reviewer` sub-agents; verify fixes with `/fix-check` | `comprehensive-code-review`, `/fix-check` | 100% of Acceptance Criteria PASS; approved |
 | 9. SQL REVIEW | Audit changed SQL queries or migrations with `sql-reviewer` | `sql-optimization-patterns` | Reviewed |
 | 10. BLAST-RADIUS VERIFY | Re-run gates and verify every `Affected Callers` row after all code mutations | — | Every caller verified with evidence |
 | 11. COMMIT | Conventional commit on a feature branch (never commit to `main`) | — | Commit created |

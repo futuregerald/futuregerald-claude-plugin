@@ -54,8 +54,11 @@ Agent tool:
     ## PR Description
     {PR_DESCRIPTION}
 
-    ## Requirements/Plan
+    ## Requirements, Plan & Acceptance Criteria
     {PLAN_OR_REQUIREMENTS}
+
+    ## Product, Point-of-View Brief & Approved UI Design Context
+    {PRODUCT_AND_DESIGN_CONTEXT}
 
     ## Failure Semantics Context
 
@@ -225,6 +228,19 @@ Agent tool:
     </review-comments>
 
     ---
+
+    ## Section 0 — Acceptance Criteria, Product Goals & Design Target Audit (MANDATORY FIRST PASS — CRITICAL IF UNMET)
+
+    Before checking line-level code style or micro-optimizations, verify whether the implementation actually achieves the goals set for this phase across `{PLAN_OR_REQUIREMENTS}` and `{PRODUCT_AND_DESIGN_CONTEXT}`:
+
+    1. **Produce an `### Acceptance Criteria & Design Target Audit` table at the top of your output:**
+       - For every `AC-N` row in the plan's `Acceptance Criteria & Success Metrics` table (and every commitment in the Point-of-View Brief, PRD/Decisions, and Approved UI Design `direction-approved.md`), record `PASS` or `FAIL` with the exact **mounted/wired runtime `file:line`** where the behavior executes.
+    2. **Flag "Test-Only / Dead-Wiring Theater" as `CRITICAL`:**
+       - If a helper function, animation/motion calculator (e.g., `computeCardPressScale`, `computeFilterTransitionDelta`), state hook, or component is exported and unit-tested in `*.test.*`, but is **never imported and wired into the live rendered component tree or runtime entry point** (`<Animated.View>`, `App.tsx`, screen component, or active route handler), flag it immediately as `CRITICAL`. Passing unit tests on unwired code do not satisfy an Acceptance Criterion.
+    3. **Flag Responsive & Breakpoint Omissions as `CRITICAL`:**
+       - When UI is touched, verify both phone portrait (`<600dp`, `360dp–412dp`) and tablet/desktop (`>=600dp`) code paths in the mounted root/screens. Flag as `CRITICAL` if a top brand header, theme/action control, or navigation bar is gated behind `if (layout.isTablet)` when phones also require a header, or if a bottom navigation bar puts too many buttons in a `flexWrap: "wrap"` row causing multi-row wrapping on phones instead of equal-width (`flex: 1`) single-row tabs.
+    4. **Flag Missing Animations & Truncated Assets as `CRITICAL`:**
+       - When tactile press springs, animated search/filter list transitions (FLIP rank glide + stagger), or custom SVG icons are in scope, verify that `<Animated.View>` / `LayoutAnimation` / CSS transforms are actually bound to mounted component styles and that every SVG `<Path d="..." />` string is complete and un-truncated.
 
     ## Section A — Code Quality
 

@@ -39,16 +39,18 @@ Before starting Phase 0, create and maintain the session's `task.md` artifact (`
 - **Gate:** Every caller named, with what it expects.
 
 ### Phase 3: Plan
-- **Action:** Follow `writing-plans`. Write the plan (`PLAN.md`, never committed) covering all work, including:
-  - **Goal**
+- **Action:** Follow `future-writing-plans`. Write the plan (`PLAN.md`, never committed) covering all work, including:
+  - **Goal & Product/Design Sources** (links to `docs/prd.md`, `docs/decisions/product-scope.md`, `docs/point-of-view/*.md`, and `design-demos/*/direction-approved.md`)
+  - **Acceptance Criteria & Success Metrics** (required table mapping every promised phase deliverable, brief commitment, responsive layout breakpoint, animation, and design target to a measurable metric, a mounted/wired runtime entry point `file:Symbol`, and a verification check)
   - **Affected Callers** (callers the change breaks with consequence, plus unbroken callers with no test)
   - **Approach** (reusing existing helpers and matching the newest sibling file's pattern, citing `file:line`)
   - **TDD tasks** with exact file paths, signatures, test cases, and gate commands — never function bodies
   - **Risks**, **Rollback**, **Out of scope**
-- **Gate:** Plan file exists on disk with `Affected Callers` and repo lint/wording gate invariants.
+- **Mandatory Stop for Plan Approval in Chat:** Always present (1) what root causes or facts you uncovered in Phase 2 (Trace), (2) the Acceptance Criteria & Success Metrics for this phase, and (3) the proposed changes in `PLAN.md` to the user in chat, and **STOP calling tools at the end of Phase 3 to wait for the user's go-ahead** before continuing with development — **unless** the user has explicitly told you to *"just work"*, *"work autonomously"*, *"keep going"*, or invoked `/goal`.
+- **Gate:** Plan file exists on disk with `Acceptance Criteria & Success Metrics`, `Affected Callers`, and repo lint/wording gate invariants, and the user has approved the proposed plan in chat (unless running in explicit autonomous mode).
 
 ### Phase 3½: Plan Review
-- **Action:** Follow `plan-review`. On Antigravity Argon UI sessions, spawn a one-shot `gemini-4-carbon-high` `swarm` worker (`plan-rev`, `workspace: "inherit"`, no `monitor`, read-only by brief forbidding git/tree mutations, immediate `kill`); when UI is already on Carbon or on Gemini CLI / small plans, dispatch `invoke_subagent` (`TypeName: "plan-reviewer"`, `Model: "inherit"`, `tools: [read_file]`) for a single adversarial review pass (**zero spikes / zero shell commands**). Where configured for the repo, also run the `review-lens` corpus check (`--code` and `--concept`). Fix all CRITICAL and IMPORTANT findings in the plan; never send the plan back for a second review.
+- **Action:** Follow `plan-review`. On Antigravity Argon UI sessions, spawn a one-shot `gemini-4-carbon-high` `swarm` worker (`plan-rev`, `workspace: "inherit"`, no `monitor`, read-only by brief forbidding git/tree mutations, immediate `kill`); when UI is already on Carbon or on Gemini CLI / small plans, dispatch `invoke_subagent` (`TypeName: "plan-reviewer"`, `Model: "inherit"`, `tools: [read_file]`) for a single adversarial review pass (**zero spikes / zero shell commands**) verifying both codebase premises and that every Product/Brief/Design goal is represented in `Acceptance Criteria & Success Metrics` with a wired runtime entry point. Where configured for the repo, also run the `review-lens` corpus check (`--code` and `--concept`). Fix all CRITICAL and IMPORTANT findings in the plan; never send the plan back for a second review. Post a brief visible chat update noting any significant plan adjustments before starting Phase 4.
 - **Exemption:** Skip only for a trivial change with an obvious, self-contained blast radius.
 - **Gate:** All CRITICAL and IMPORTANT plan findings fixed (or skipped for trivial change).
 

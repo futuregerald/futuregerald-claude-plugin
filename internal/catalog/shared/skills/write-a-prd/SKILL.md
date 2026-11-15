@@ -27,7 +27,7 @@ Check with the user that these modules match their expectations. Check with the 
 - If neither is configured: ask the user where to submit
 - When posting to Jira, always set `contentFormat: "markdown"` for the description
 
-6. **The PRD and the roadmap change together.** When the stories ship over more than one plan, `writing-plans` keeps the phases in `docs/roadmap.md`, and the PRD's Delivery section links it. A new or changed story gets a phase in the roadmap; a change of strategy in the roadmap is reflected in the PRD. When either changes, update the other in the same pass.
+6. **The PRD and the roadmap change together.** When the stories ship over more than one plan, `future-writing-plans` keeps the phases in `docs/roadmap.md`, and the PRD's Delivery section links it. A new or changed story gets a phase in the roadmap; a change of strategy in the roadmap is reflected in the PRD. When either changes, update the other in the same pass.
 
 <prd-template>
 
@@ -89,7 +89,7 @@ A list of testing decisions that were made. Include:
 
 ## Delivery
 
-A link to the roadmap by its full repository URL (a relative `docs/roadmap.md` does not resolve inside an issue). Which phase delivers which story lives only in the roadmap, so it cannot drift here. If the roadmap does not exist yet, say so; `writing-plans` writes it before the first phase plan. For work that fits in one plan, say so in one line.
+A link to the roadmap by its full repository URL (a relative `docs/roadmap.md` does not resolve inside an issue). Which phase delivers which story lives only in the roadmap, so it cannot drift here. If the roadmap does not exist yet, say so; `future-writing-plans` writes it before the first phase plan. For work that fits in one plan, say so in one line.
 
 ## Out of Scope
 

@@ -10,9 +10,11 @@ Orchestrates two fresh, read-only adversarial reviewers in parallel — **Code Q
 ## Pre-Flight: Prepare `/tmp/subagent-context-<project>-<stream>.md`
 
 Because reviewers are strictly read-only (`tools: [read_file]`) and never run `git diff` or shell commands, write `/tmp/subagent-context-<project>-<stream>.md` before dispatching:
-- Goal and summary of changes
+- **Product & Business Goals:** What user/product outcome this phase delivers (and links to `docs/prd.md`, `docs/decisions/product-scope.md`, `docs/roadmap.md`)
+- **Point-of-View Brief & Approved UI Design:** Exact paths and non-negotiable commitments from `docs/point-of-view/*.md` and `design-demos/*/direction-approved.md` (including responsive breakpoints for phone `<600dp` vs. tablet/desktop, top header & bottom navigation bar layout rules, tactile animations/filtering, and icon/asset fidelity)
+- **Acceptance Criteria & Success Metrics Table:** Copied verbatim from `PLAN.md` (`AC-1`, `AC-2`, ...) with the required runtime behavior, measurable target, and mounted entry point (`file:Symbol`)
 - `Affected Callers` from `PLAN.md`
-- Passing fast test and lint exit codes
+- Passing fast test and lint exit codes (plus emulator/browser visual verification status when UI is touched)
 - Full unified diff (`git diff -U3` or `git diff <base>...HEAD -U3`) and `file:startLine-endLine` hit ranges
 - If reviewing a `workspace: "share"` or isolated worktree branch, include `SHARE_ROOT=<abs-path>` so reviewers inspect `$SHARE_ROOT/<file>` when reading ±40 lines around changed callers.
 
@@ -22,7 +24,7 @@ Choose the dispatch mode matching your session (`GEMINI.md` §0.9):
 
 ### 1. Inside `/start` / `peer-pipeline-swarm`
 
-`code-rev` (`claude-opus-5-5-high`) and `sec-rev` (`gemini-4-carbon-high`) are already spawned in the pipeline and review `@impl`'s committed `share` branch directly. See [`peer-pipeline-swarm`](../peer-pipeline-swarm/SKILL.md) (when installed).
+`code-rev` (`claude-opus-5-5-high`) and `sec-rev` (`gemini-4-carbon-high`) are already spawned in the pipeline and review `@impl`'s committed `share` branch directly against the Acceptance Criteria, Brief, and Approved UI Design. See [`peer-pipeline-swarm`](../peer-pipeline-swarm/SKILL.md) (when installed).
 
 ### 2. Standalone Argon UI Session (Pre-PR Review)
 
@@ -34,7 +36,7 @@ swarm({
   name: "code-rev",
   model: "gemini-4-carbon-high",
   workspace: "inherit",
-  brief: "Read ~/.gemini/config/plugins/antigravity-subagents/agents/code-quality-reviewer.md and /tmp/subagent-context-<project>-<stream>.md. STRICTLY READ-ONLY: use ONLY read_file and post_message. NEVER call run_command, edit_file, write_file, or swarm, and never mutate git or files. Read at most +-40 lines around changed callers via read_file. Post your CRITICAL / IMPORTANT / MINOR findings and Verdict once to @coordinator."
+  brief: "Read ~/.gemini/config/plugins/antigravity-subagents/agents/code-quality-reviewer.md and /tmp/subagent-context-<project>-<stream>.md (plus the referenced Point-of-View Brief, PRD/Decisions, and Approved UI Design files). STRICTLY READ-ONLY: use ONLY read_file and post_message. NEVER call run_command, edit_file, write_file, or swarm, and never mutate git or files. Verify every row of the Acceptance Criteria & Success Metrics table against the actual mounted/wired runtime code (flagging unwired test-only helpers, missing phone/tablet header or nav parity, missing animations, or truncated SVG/assets as CRITICAL), then audit logic, callers, and conventions. Post your Acceptance Criteria Audit table, CRITICAL / IMPORTANT / MINOR findings, and Verdict once to @coordinator."
 })
 swarm({
   action: "add",
@@ -56,7 +58,7 @@ invoke_subagent({
   TypeName: "code-quality-reviewer",
   Role: "Staff Code Quality Reviewer",
   Model: "inherit",
-  Prompt: "Read /tmp/subagent-context-<project>-<stream>.md and audit the embedded git diff for logic/edge-case bugs, caller contract breaks, error handling, test quality, and maintainability using read_file only. Return CRITICAL, IMPORTANT, and MINOR findings with file:line citations and a Verdict."
+  Prompt: "Read /tmp/subagent-context-<project>-<stream>.md (and the referenced Point-of-View Brief, PRD/Decisions, and Approved UI Design files). First audit every Acceptance Criterion & Success Metric against the actual mounted/wired runtime code (flagging unwired test-only helpers, missing responsive header/nav parity, missing animations, or broken assets as CRITICAL), then audit logic/edge-case bugs, caller contract breaks, error handling, test quality, and maintainability using read_file only. Return an Acceptance Criteria Audit table, CRITICAL / IMPORTANT / MINOR findings with file:line citations, and a Verdict."
 })
 invoke_subagent({
   TypeName: "security-reviewer",

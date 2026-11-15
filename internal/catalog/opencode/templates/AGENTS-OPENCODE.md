@@ -26,7 +26,7 @@
 | 0½. UI DESIGN | Generate 3 interactive HTML UI prototypes in `design-demos/index.html` | `/ui-design` (`huashu-design`) | Direction selected |
 | 1. RECEIVE | Understand task and constraints | — | Task understood |
 | 2. TRACE | Trace callers upward and side effects downward (`git grep -n`) | — | Callers & contracts mapped |
-| 3. PLAN | Write uncommitted plan with `Affected Callers` and test gates | `writing-plans` | Plan file exists |
+| 3. PLAN | Write uncommitted plan with `Affected Callers` and test gates | `future-writing-plans` | Plan file exists |
 | 3½. PLAN REVIEW | One-shot review in fresh `adversarial-plan-reviewer` subagent | `/plan-review` | CRITICAL & IMPORTANT fixed |
 | 4. IMPLEMENT | TDD (RED -> GREEN -> REFACTOR); check existing helpers first | `test-driven-development`, `implementer` | Fast unit tests pass; zero new comments |
 | 5. TEST | Run fast unit tests scoped to affected specs | — | Zero failures (`exit code 0`) |

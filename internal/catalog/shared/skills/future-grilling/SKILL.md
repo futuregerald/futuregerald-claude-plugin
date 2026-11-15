@@ -51,7 +51,7 @@ ask which applies.
 ## Ending
 
 List the decisions made, each with its reasoning. If a plan or PRD comes next, hand the
-list and the brief to `writing-plans` or `write-a-prd` as settled, and tell it not to
+list and the brief to `future-writing-plans` or `write-a-prd` as settled, and tell it not to
 re-ask what they cover. Otherwise stop at the list.
 
 ---
