@@ -71,7 +71,7 @@ Every loaded skill competes for your AI agent's context window. Instead of insta
 | Track | Best For | Skills Installed | Key `/slash` Commands & Capabilities | Starter Prompt to Try Immediately |
 |---|---|---|---|---|
 | **Opinionated Dev Workflow** (`--track=opinionated`) | Software engineers shipping production code with high rigor | **32** (Claude / Zed / OpenCode)<br>**35** (Antigravity) | `/start`, `/begin`, `/lifecycle`, `/shape`, `/ui-design`, `/plan-review`, `/fix-check`, `/copy-edit` — full 12-phase lifecycle with 3-direction HTML UI prototyping, caller tracing, TDD, parallel code & security review, and blast-radius verification | `"/start Add passwordless magic-link sign-in to the auth service"` |
-| **Just the Basics** (`--track=basics`) | Developers who want everyday tools without strict phase gates or hooks | **8** | `/brainstorming`, `/writing-plans`, `/systematic-debugging`, `/test-driven-development`, `/comprehensive-code-review`, `/pull-request-description`, `/handoff`, `/plugin-update` | `"/brainstorming Let's design a webhook retry queue with exponential backoff"` |
+| **Just the Basics** (`--track=basics`) | Developers who want everyday tools without strict phase gates or hooks | **8** | `/brainstorming`, `/future-writing-plans`, `/systematic-debugging`, `/test-driven-development`, `/comprehensive-code-review`, `/pull-request-description`, `/handoff`, `/plugin-update` | `"/brainstorming Let's design a webhook retry queue with exponential backoff"` |
 | **Product & Strategy Flow** (`--track=product`) | PMs, designers, founders, and engineering managers | **22** | `/shape`, `/craftsmans-wisdom`, `/future-grilling`, `/future-wayfinder`, `/grilling-page`, `/write-a-prd`, `/writing-tickets`, `/ticket-grooming`, `/ui-design`, `/visualize-plan`, `/copy-edit`, `/editor-pass`, `/meeting-debrief`, `/team-pulse` | `"/shape We want to redesign customer onboarding so teams activate in under 5 minutes"` |
 | **Copy, Brand & UI Polish** (`--track=copy-polish`) | Auditing and elevating landing pages, product UI, copy, and motion | **9** | `/copy-edit`, `/copywriting`, `/marketing-psychology`, `/editor-pass`, `/impeccable`, `/no-slop-ui`, `/huashu-design`, `/animation-principles`, `/plugin-update` | `"/copy-edit Audit our pricing page for clarity, conversion friction, and visual hierarchy"` |
 | **Pick Individual Skills** (`--track=custom`) | Power users building a custom à la carte toolkit | **Any subset of 48** (Claude / Zed / OpenCode)<br>**or 51** (Antigravity) | Interactive skill browser with `[x]` multi-select, category badges, and plain-English descriptions | Any starter prompt from your chosen skills |
@@ -184,7 +184,7 @@ skill-installer --target=claude --project=/path/to/repo --track=product --yes
 
 # Install a custom subset of skills for Zed Editor
 skill-installer --target=zed --global --track=custom \
-  --skills=brainstorming,writing-plans,test-driven-development,comprehensive-code-review --yes
+  --skills=brainstorming,future-writing-plans,test-driven-development,comprehensive-code-review --yes
 
 # List all tracks and catalog skills (or filter by --target / --track)
 skill-installer list --target=claude

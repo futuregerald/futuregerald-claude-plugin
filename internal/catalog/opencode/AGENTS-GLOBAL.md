@@ -9,7 +9,7 @@
 ## Core Discipline
 
 1. **Filter bulky shell output:** `cmd > /tmp/out.log 2>&1; rc=$?; tail -20 /tmp/out.log; echo $rc`.
-2. **Trace & Plan before touching code:** Map callers upward and side effects downward with `git grep -n`, then write an uncommitted plan (`writing-plans`) including `Affected Callers`.
+2. **Trace & Plan before touching code:** Map callers upward and side effects downward with `git grep -n`, then write an uncommitted plan (`future-writing-plans`) including `Affected Callers`.
 3. **Fresh review context:** Run `/plan-review` (`adversarial-plan-reviewer`) and `comprehensive-code-review` (`code-quality-reviewer`, `security-reviewer`, `sql-reviewer`) in fresh subagents, and verify fixes with `/fix-check`.
 4. **Strict TDD & zero comments:** Follow RED -> GREEN -> REFACTOR (`test-driven-development`) and write no code comments unless explicitly asked.
 5. **Verify before completion:** Run fast scoped tests and linters in the current turn before claiming work is done.

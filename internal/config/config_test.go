@@ -16,7 +16,7 @@ func TestLoadAndExists(t *testing.T) {
 		t.Fatalf("expected nil, nil in empty dir; got %v, %v", cfg, err)
 	}
 
-	yamlText := "target: antigravity\ntrack: opinionated\nbackup: false\nskills:\n  - start\n  - writing-plans\n"
+	yamlText := "target: antigravity\ntrack: opinionated\nbackup: false\nskills:\n  - start\n  - future-writing-plans\n"
 	cfgPath := filepath.Join(dir, ".skill-installer.yaml")
 	if err := os.WriteFile(cfgPath, []byte(yamlText), 0644); err != nil {
 		t.Fatal(err)

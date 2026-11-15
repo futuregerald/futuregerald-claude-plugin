@@ -141,7 +141,7 @@ brief already exists, update it in place.
     sittings): offer `future-wayfinder` with the brief's path instead.
   - **No:** go to whatever builds next (below).
   - Either way, hand the brief — and any decisions grilling settled — to whatever builds
-    next: `writing-plans`, `write-a-prd`, `impeccable` (fold it into PRODUCT.md),
+    next: `future-writing-plans`, `write-a-prd`, `impeccable` (fold it into PRODUCT.md),
     `huashu-design` or `brainstorming`. Tell it not to re-ask what they cover, so the
     brief steers the build instead of the user being interviewed again.
 - **A draft exists:** offer `editor-pass` against the brief.

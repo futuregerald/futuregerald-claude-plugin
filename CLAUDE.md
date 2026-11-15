@@ -46,7 +46,7 @@
 | 0½. UI DESIGN | For net-new pages, new apps, major/non-trivial changes to existing UI pages, or anytime requested: generate 3 distinct high-fidelity interactive prototypes of the same thing on a single HTML comparison page (`design-demos/index.html`) and open it in the browser so the user can pick a direction before planning | `/ui-design`, `/huashu-design` | 3-prototype HTML page opened and direction selected (or skipped for non-UI / minor UI work) |
 | 1. RECEIVE | Understand task, create todo list | `TaskCreate` | Todo list exists |
 | 2. TRACE | Trace the call chain — up and down — of every symbol the change touches | See **System Thinking** below | Callers, callees, contract, coverage recorded |
-| 3. PLAN | Write implementation plan (always required for all work, including one-line fixes) | `/writing-plans` | Plan file exists and contains the Affected Callers / Impact Analysis |
+| 3. PLAN | Write implementation plan (always required for all work, including one-line fixes) | `/future-writing-plans` | Plan file exists and contains the Affected Callers / Impact Analysis |
 | 3½. PLAN REVIEW | Adversarial review in a fresh read-only sub-agent (skipped only for trivial changes with an obvious, self-contained blast radius) | `/plan-review` | All CRITICAL/IMPORTANT findings fixed (or skipped for trivial change) |
 | 4. IMPLEMENT | Write code following TDD in an implementer sub-agent reading `/tmp/subagent-context-<project>-<stream>.md` | `/test-driven-development`, `/subagent-driven-development` | Tests exist and pass |
 | 5. TEST | `go test ./...` (or scoped fast test command) | — | Zero failures |
@@ -214,7 +214,7 @@ Sub-agents work in the current working directory on the active feature branch. N
 
 | Trigger | Skill |
 |---------|-------|
-| **Any code change, before writing code (PLAN)** | `writing-plans` — always required, including one-line fixes. Must contain the Impact Analysis |
+| **Any code change, before writing code (PLAN)** | `future-writing-plans` — always required, including one-line fixes. Must contain the Impact Analysis |
 | Code review before commit (CODE REVIEW) | `comprehensive-code-review` — parallel correctness + safety sub-agents |
 | Bug investigation | `systematic-debugging` |
 | New feature | `test-driven-development` (RED→GREEN→REFACTOR) |

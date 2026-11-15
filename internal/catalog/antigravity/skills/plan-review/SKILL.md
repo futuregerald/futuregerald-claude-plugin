@@ -15,7 +15,7 @@ description: >-
 
 One fresh-context adversarial pass over an implementation plan before any code is written, plus one pass over the remaining phases at each phase boundary of a multi-phase plan.
 
-- **What good looks like:** Every premise in the plan is checked against the actual codebase (`file:line`), missing callers or unverified assumptions are caught before Phase 4 starts, and the Reviewer never runs shell commands, spikes, or git mutations.
+- **What good looks like:** Every premise in the plan is checked against the actual codebase (`file:line`) AND against the Product/Business Goals, Point-of-View Brief, PRD/Decisions, and Approved UI Design (`direction-approved.md`); missing or unverified Acceptance Criteria & Success Metrics, unwired helper-only tests, missing callers, or unverified assumptions are caught before Phase 4 starts; and the Reviewer never runs shell commands, spikes, or git mutations.
 - **When to skip:** Only for trivial changes with an obvious, self-contained blast radius.
 
 ## How to Dispatch
@@ -32,7 +32,7 @@ swarm({
   name: "plan-rev",
   model: "gemini-4-carbon-high",
   workspace: "inherit",
-  brief: "Read ~/.gemini/config/plugins/antigravity-subagents/agents/plan-reviewer.md and the plan at <plan-path> (plus /tmp/subagent-context-<project>-<stream>.md if present). STRICTLY READ-ONLY: use ONLY read_file and post_message. NEVER call run_command, edit_file, write_file, or swarm, and never run spikes or mutate git/files. Verify every premise, file path, contract, and Affected Callers entry against the repo using read_file, then post your structured CRITICAL / IMPORTANT / MINOR findings and Verdict once to @coordinator."
+  brief: "Read ~/.gemini/config/plugins/antigravity-subagents/agents/plan-reviewer.md and the plan at <plan-path> (plus referenced brief/PRD/design-demos files and /tmp/subagent-context-<project>-<stream>.md if present). STRICTLY READ-ONLY: use ONLY read_file and post_message. NEVER call run_command, edit_file, write_file, or swarm, and never run spikes or mutate git/files. Verify that every Product/Brief/Design goal and phase commitment is captured in the plan's Acceptance Criteria & Success Metrics table with a wired runtime entry point, and verify every premise, file path, contract, and Affected Callers entry against the repo using read_file. Post your structured CRITICAL / IMPORTANT / MINOR findings and Verdict once to @coordinator."
 })
 ```
 
@@ -48,7 +48,7 @@ invoke_subagent({
   TypeName: "plan-reviewer",
   Role: "Adversarial Plan Reviewer",
   Model: "inherit",
-  Prompt: "Review the implementation plan at <plan-path>. Verify every premise, file path, signature, Affected Callers row, and test gate against the codebase using read_file only (zero spikes, zero shell commands). Return CRITICAL, IMPORTANT, and MINOR findings with exact file:line citations and a Verdict (APPROVED or REVISE PLAN)."
+  Prompt: "Review the implementation plan at <plan-path> (and read its referenced Point-of-View Brief, PRD/Decisions, and Approved UI Design files). Verify that every phase goal and design commitment has a measurable row in Acceptance Criteria & Success Metrics wired to a mounted runtime entry point, and check every premise, file path, signature, Affected Callers row, and test gate against the codebase using read_file only (zero spikes, zero shell commands). Return CRITICAL, IMPORTANT, and MINOR findings with exact file:line citations and a Verdict (APPROVED or REVISE PLAN)."
 })
 ```
 

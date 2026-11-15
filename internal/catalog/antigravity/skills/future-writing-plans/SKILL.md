@@ -1,9 +1,14 @@
 ---
-name: writing-plans
-description: Use when you have a spec or requirements for a multi-step task, before touching code. Also writes and keeps current the committed roadmap (docs/roadmap.md) when the work spans more than one plan - phases, an initiative, or a PRD whose stories ship over more than one plan.
+name: future-writing-plans
+description: Use when you have a spec or requirements for a multi-step task, before touching code. Writes a structured implementation plan with required Acceptance Criteria & Success Metrics traced to product/brief/design sources, Affected Callers, and TDD gates, and keeps current the committed roadmap (docs/roadmap.md) when the work spans more than one plan.
+author: Jesse Vincent, Gerald Onyango
+tags: [planning, workflow]
+license: MIT, see LICENSE.txt
+model: inherit
+effort: medium
 ---
 
-# Writing Plans
+# Future Writing Plans
 
 ## Overview
 
@@ -11,7 +16,7 @@ Write comprehensive implementation plans assuming the engineer has zero context 
 
 Assume they are a skilled developer, but know almost nothing about our toolset or problem domain. Assume they don't know good test design very well.
 
-**Announce at start:** "I'm using the writing-plans skill to create the implementation plan."
+**Announce at start:** "I'm using the future-writing-plans skill to create the implementation plan."
 
 **Context:** This should be run in a dedicated worktree (created by brainstorming skill) or on a feature branch before any source file is edited.
 
@@ -71,22 +76,35 @@ Anything deliberately pushed out of scope or waiting on a future phase.
 - "Run the tests and make sure they pass" - step
 - "Commit" - step
 
-## Plan Document Header
+## Plan Document Header & Acceptance Criteria
 
-**Every plan MUST start with this header:**
+**Every plan MUST start with this header and an explicit `Acceptance Criteria & Success Metrics` section:**
 
 ```markdown
 # [Feature Name] Implementation Plan
 
 > **For Antigravity / Gemini:** REQUIRED SUB-SKILL: Use `/start` (`peer-pipeline-swarm`) or `subagent-driven-development` (`invoke_subagent` with `TypeName: "implementer"`, `Model: "inherit"`) to implement this plan.
 
-**Goal:** [One sentence describing what this builds]
+**Goal:** [One sentence describing what this builds and why it matters to the user/product]
 
-**Roadmap:** `docs/roadmap.md` — Phase N of M *(include when part of multi-plan work; omit for single-plan work)*
+**Product & Design Sources:**
+- **PRD / Decisions:** `docs/prd.md`, `docs/decisions/product-scope.md` *(or tracker ticket)*
+- **Point-of-View Brief:** `docs/point-of-view/<slug>.md` *(or `~/.gemini/point-of-view/<slug>.md`, or N/A if internal technical work)*
+- **Approved UI Design:** `design-demos/<slug>/direction-approved.md` *(or N/A if no UI touched)*
+- **Roadmap:** `docs/roadmap.md` — Phase N of M *(include when part of multi-plan work; omit for single-plan work)*
 
 **Architecture:** [2-3 sentences about approach]
 
 **Tech Stack:** [Key technologies/libraries]
+
+## Acceptance Criteria & Success Metrics (Required Gate)
+
+Every commitment made to the user for this phase — from the Product/Business Goals, Point-of-View Brief, PRD/Decisions, and Approved UI Design (including responsive breakpoints, header/navigation parity, interactive animations/filtering, and visual assets) — MUST be listed here as a required, testable criterion before any tasks are written. A unit test on an isolated helper function does NOT satisfy a user-facing or runtime criterion; the criterion must name the mounted/wired entry point where the behavior runs.
+
+| ID | Source (Goal / Brief / PRD / Design) | Required Runtime Behavior | Success Metric / Measurable Target | Mounted / Wired Entry Point (`file:Symbol`) | Verification (Unit Test + Runtime/Emulator Check) |
+|----|--------------------------------------|---------------------------|------------------------------------|---------------------------------------------|---------------------------------------------------|
+| AC-1 | Brief §1 / Design (`direction-approved.md`) | Phone (`<600dp`) and Tablet (`>=600dp`) both render the top brand header and non-wrapping navigation | 100% of breakpoints render `top-brand-header`; bottom nav stays single-row (`flex: 1` per tab, `0` wrapped rows at `360dp–412dp`) | `src/App.tsx:AppShell` | `screens.test.ts` + Android Emulator screenshot check |
+| AC-2 | Phase Goal / Extension Parity | Search filtering animates rank transitions and new-item stagger in the mounted list | Existing cards glide via FLIP delta (`computeFilterTransitionDelta` wired into `<Animated.View>`); new matches stagger at `18ms/row` | `src/components/TactileCard.tsx:TactileCard`, `src/screens/SearchScreen.tsx:SearchScreen` | `screens.test.ts` + live filter interaction |
 
 **Affected Callers:**
 - Breaking callers (with consequence): ...
@@ -119,8 +137,9 @@ Plans specify **interfaces, cases, and gates — never function bodies**. A plan
 
 ## Remember
 - Exact file paths always, with `file:line` references to existing patterns to follow
+- Every task must trace to one or more `AC-N` rows in `## Acceptance Criteria & Success Metrics`, and every `AC-N` row must be wired into the real mounted/runtime entry point (never satisfied by exporting an unused helper just for a unit test)
 - Signatures, test cases, and gate commands — never pasted function or test bodies
-- Exact commands with expected output
+- Exact commands with expected output (plus live emulator/browser verification gates whenever UI, layout, or animations are touched)
 - Reference relevant skills
 - DRY, YAGNI, TDD, frequent commits
 - Include `Risks`, `Rollback`, and `Out of scope` sections
@@ -135,14 +154,20 @@ Before handing the plan off for implementation — and before asking the user ho
 
 For a multi-phase plan, re-run `plan-review` on the **remaining** phases at each phase boundary before starting the next phase.
 
-## Execution Handoff
+## Execution Handoff (Mandatory Stop for User Approval)
 
-After saving the plan and completing the `plan-review` gate, offer execution choice:
+After saving the plan and completing the `plan-review` gate, you **MUST** present the proposed plan (including the `Acceptance Criteria & Success Metrics` table and a summary of the tasks) to the user in chat and **STOP calling tools to wait for the user's approval** before continuing with development — **unless** the user explicitly told you to *"just work"*, *"work autonomously"*, *"keep going"*, or invoked `/goal`.
 
-**"Plan complete, reviewed, and saved to `docs/plans/<filename>.md`. Two execution options:**
+When stopping for approval, offer the execution choice:
+
+**"Plan complete, reviewed, and saved to `docs/plans/<filename>.md`. Ready to proceed once you approve — or let me know if you want any adjustments:**
 
 **1. Peer-Pipeline Swarm (`/start` / `peer-pipeline-swarm`)** - Spawns an isolated `gemini-4-argon-medium` share-workspace implementer + cross-family high-deliberation peer reviewers (`claude-opus-5-5-high` `code-rev` + `gemini-4-carbon-high` `sec-rev`) + `gemini-4-hydrogen-low` stall monitor for hands-off Phases 4–9
 
 **2. Subagent-Driven (`subagent-driven-development`)** - Dispatches fresh `invoke_subagent` (`TypeName: "implementer"`, `Model: "inherit"`) per task/phase with Coordinator gates between tasks
 
 **Which approach?"**
+
+---
+
+Forked by Gerald Onyango from `writing-plans` in Jesse Vincent's `superpowers` (MIT, see LICENSE.txt) — https://github.com/obra/superpowers

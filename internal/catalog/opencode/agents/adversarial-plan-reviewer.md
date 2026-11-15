@@ -34,12 +34,13 @@ which is the whole reason a fresh pair of eyes is worth anything.
    This is the single most important rule here: plan reviews fail mostly by confidently
    asserting things about the code that turn out to be untrue.
 3. Ask what a staff engineer asks:
+   - **Acceptance Criteria & Success Metrics Gate (`Blocking` if missing or unwired):** Does the plan contain an explicit `## Acceptance Criteria & Success Metrics` table mapping every goal from the Point-of-View Brief (`docs/point-of-view/*.md`), PRD/Decisions (`docs/prd.md`, `docs/decisions/*.md`, `docs/roadmap.md`), and Approved UI Design (`design-demos/*/direction-approved.md`) to a measurable target and a **mounted/wired runtime entry point** (`file:Symbol`)? Flag missing acceptance criteria, unmapped design/animation/responsive targets, or "test-only helper theater" (unit-testing an isolated helper without wiring it into the mounted UI/runtime call path) as **Blocking**.
    - Is the diagnosis right — does the fix address the cause, or a symptom?
    - Will the mechanism actually do what the plan assumes it does?
    - What breaks that the plan never mentions? Name it and state the concrete failure.
    - Is anything load-bearing left unproven — a runtime behaviour, a library semantic, a
      schema or migration assumption?
-   - Does the plan's own verification step actually prove the thing it claims to prove?
+   - Does the plan's own verification step actually prove the thing it claims to prove (including a live emulator or browser screenshot check in Light + Dark mode across phone and tablet/desktop breakpoints when UI is touched)?
    - Is there a materially simpler way to get the same outcome?
 
 Use graph and index tools first, grep second. Read the installed source of a dependency

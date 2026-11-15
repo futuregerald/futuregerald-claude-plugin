@@ -60,7 +60,8 @@ For PR reviews, also fetch PR metadata via `gh` CLI or GitHub API.
 | `{FAST_TEST_GATE_OUTPUT}` | Passing fast unit test & linter/typecheck output from the orchestrator's shell |
 | `{PR_DESCRIPTION}` | PR body from `gh pr view --json body` or user-provided context |
 | `{FILE_LIST}`, `{BASE_SHA}`, `{HEAD_SHA}`, `{PR_URL}` | Git commands or PR metadata |
-| `{PLAN_OR_REQUIREMENTS}` | See Requirements Resolution below |
+| `{PLAN_OR_REQUIREMENTS}` | See Requirements Resolution below (includes `PLAN.md` and its `Acceptance Criteria & Success Metrics` table) |
+| `{PRODUCT_AND_DESIGN_CONTEXT}` | Point-of-View Brief (`docs/point-of-view/*.md`), PRD/Decisions (`docs/prd.md`, `docs/decisions/*.md`, `docs/roadmap.md`), and Approved UI Design (`design-demos/*/direction-approved.md`) |
 | `{CODEBASE_CONTEXT}` | See [references/codebase-intelligence.md](references/codebase-intelligence.md) Part 1 — **must contain actual content** |
 | `{CONVENTIONS_CONTEXT}` | See [references/codebase-intelligence.md](references/codebase-intelligence.md) Part 2 — the repo's own ADRs and guideline docs |
 | `{PROJECT}` | Index project name, from `codebase-memory-mcp cli list_projects`. `"(unavailable)"` if there is no index |
@@ -77,11 +78,14 @@ For PR reviews, also fetch PR metadata via `gh` CLI or GitHub API.
 
 Detect from project files: `Gemfile` (Rails), `package.json` (Next/React/Express), `go.mod` (Go), `pyproject.toml` (Django). Set `{FRAMEWORK_CONTEXT}` per [references/framework-rules.md](references/framework-rules.md). Include in BOTH sub-agent prompts.
 
-### Requirements Resolution
+### Requirements, Product Brief & Design Resolution
 
-1. **Jira ticket** — key in branch name or PR body, fetch via `getJiraIssue`
-2. **GitHub issue** — linked in PR body (`Closes #N`, `Fixes #N`)
-3. **Plan doc** — if PR body references a plan file, read it
+1. **Plan doc & Acceptance Criteria (`{PLAN_OR_REQUIREMENTS}`)** — Read `PLAN.md` or `docs/plans/*.md` and include its `## Acceptance Criteria & Success Metrics` table (`AC-1`, `AC-2`, … with required runtime behavior, measurable target, and mounted `file:Symbol` entry point) verbatim.
+2. **Product, Point-of-View Brief & Approved UI Design (`{PRODUCT_AND_DESIGN_CONTEXT}`)** — Resolve and include paths/commitments from:
+   - Point-of-View Brief (`docs/point-of-view/*.md` or `~/.claude/point-of-view/*.md`)
+   - PRD & Product Decisions (`docs/prd.md`, `docs/decisions/*.md`, `docs/roadmap.md`)
+   - Approved UI Design (`design-demos/*/direction-approved.md`, including phone `<600dp` vs. tablet/desktop breakpoints, header/navigation parity, interactive animations/filtering, and icon/asset specs)
+3. **Jira ticket / GitHub issue** — key in branch name or PR body (`Closes #N`, `Fixes #N`), fetch via `getJiraIssue` or `gh issue view`.
 
 Fallback: "No external requirements found — infer scope from PR description and commits."
 

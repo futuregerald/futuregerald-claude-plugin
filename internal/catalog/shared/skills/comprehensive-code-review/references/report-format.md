@@ -9,6 +9,12 @@ Use this template for the consolidated report in Phase 4.
 
 **PR:** {PR_URL or branch name} | **Reviewed:** {DATE} | **Range:** {BASE_SHA}..{HEAD_SHA} | **Files:** {COUNT}
 
+## Acceptance Criteria & Design Target Audit
+
+| ID | Requirement / Target (Plan / Brief / Design) | Status | Mounted Runtime Evidence (`file:line`) |
+|----|----------------------------------------------|--------|----------------------------------------|
+| AC-1 | {Required runtime behavior & success metric} | {PASS | FAIL} | `path/to/mounted_file:line` |
+
 ## CRITICAL ({count})
 ### 1. [Short title]
 - **File:** `path/to/file:line_number` | **Dimension:** {Correctness | Safety}

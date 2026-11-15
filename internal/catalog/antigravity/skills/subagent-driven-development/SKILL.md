@@ -11,7 +11,7 @@ Execute an implementation plan by dispatching fresh implementer subagents (`invo
 
 ## When to Use
 
-- You have an approved `PLAN.md` from Phase 3 (`writing-plans`) and Phase 3½ (`plan-review`).
+- You have an approved `PLAN.md` from Phase 3 (`future-writing-plans`) and Phase 3½ (`plan-review`).
 - The implementation touches `≥3` files or requires `>3` tool calls (for trivial `<5`-turn, `≤2`-file changes where all traced files are already in context, implement inline in the Coordinator).
 - **In Antigravity:** Prefer [`peer-pipeline-swarm`](../peer-pipeline-swarm/SKILL.md) (`/start`, `/begin`) when you want Phases 4–9 (TDD implementation, fast tests, lint, simplification, and parallel `code-rev` + `sec-rev` peer review) to resolve peer-to-peer before waking the Coordinator once on `@coordinator [green]`. Use direct `invoke_subagent` (`TypeName: "implementer"`, `Model: "inherit"`) below when orchestrating step-by-step from the Coordinator or when running in Gemini CLI.
 
@@ -22,6 +22,8 @@ Execute an implementation plan by dispatching fresh implementer subagents (`invo
 Before dispatching any subagent:
 - Read `PLAN.md` once and extract the task specification, acceptance criteria, `Affected Callers`, and exact file ranges.
 - Write `/tmp/subagent-context-<project>-<stream>.md` containing:
+  - `## Product & Design Sources`: paths and key targets from `docs/prd.md`, `docs/decisions/product-scope.md`, `docs/point-of-view/*.md`, and `design-demos/*/direction-approved.md`.
+  - `## Acceptance Criteria & Success Metrics`: copied verbatim from `PLAN.md` (`AC-1`, `AC-2`, ...) with required runtime behavior, measurable target, and mounted entry point (`file:Symbol`).
   - `## Known Facts`: entry-point `file:line` ranges, newest sibling exemplar `file:line`, exact scoped fast test command (`go test ./<pkg> -run <AffectedTests> -race`, `npx vitest run <spec>`, `bundle exec rspec <spec>`), and repo lint/wording gate commands.
   - `## Affected Callers`: from Phase 2/3.
   - `## Hypotheses to Falsify`: any unproven assumptions.
@@ -36,7 +38,7 @@ invoke_subagent({
   TypeName: "implementer",
   Role: "Phase 4 TDD Implementer",
   Model: "inherit",
-  Prompt: "Read /tmp/subagent-context-<project>-<stream>.md and PLAN.md first. Execute Task N via strict TDD (RED -> GREEN -> REFACTOR) with zero code comments. Run only the scoped fast test and lint commands listed in the context file (if a CLI fails twice consecutively, read Makefile/package.json/vitest.config.* immediately). Return the mandatory 4-section handoff: Changes Made, Flawed Assumptions, Carried Risks, Verification Evidence."
+  Prompt: "Read /tmp/subagent-context-<project>-<stream>.md and PLAN.md first. Execute Task N via strict TDD (RED -> GREEN -> REFACTOR) with zero code comments, wiring every Acceptance Criterion (AC-N) into the real mounted runtime entry point (never test-only dead helpers). Run only the scoped fast test and lint commands listed in the context file (if a CLI fails twice consecutively, read Makefile/package.json/vitest.config.* immediately). Return the mandatory 5-section handoff: Changes Made, Acceptance Criteria & Success Metrics Met, Flawed Assumptions, Carried Risks, Verification Evidence."
 })
 ```
 

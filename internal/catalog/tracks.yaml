@@ -28,7 +28,7 @@ tracks:
   - ui-design
   - huashu-design
   - no-slop-ui
-  - writing-plans
+  - future-writing-plans
   - plan-review
   - review-lens
   - test-driven-development
@@ -65,7 +65,7 @@ tracks:
   lightweight_config: true
   skills:
   - brainstorming
-  - writing-plans
+  - future-writing-plans
   - systematic-debugging
   - test-driven-development
   - comprehensive-code-review
@@ -352,14 +352,12 @@ skills:
   long: Traces bitmap images into crisp, scalable SVG vector art using vtracer (color) or potrace (line
     art), with optional background removal, svgo optimization, and visual verification.
   starter_prompt: /vectorize Convert assets/logo.png into a clean optimized SVG
-- name: writing-plans
+- name: future-writing-plans
   category: Planning & Architecture
-  slash_command: /writing-plans
-  short: Write structured TDD implementation plans with Affected Callers, exemplars, and test gates.
-  long: Produces an uncommitted engineering plan containing the Goal, Affected Callers (breaking callers
-    + untested callers), sibling exemplar citations, step-by-step TDD tasks with exact file paths and
-    signatures, risks, and rollback plan.
-  starter_prompt: /writing-plans Write an implementation plan for adding webhook signature rotation
+  slash_command: /future-writing-plans
+  short: Write structured TDD implementation plans with Acceptance Criteria & Success Metrics, Affected Callers, and test gates.
+  long: Produces an uncommitted engineering plan containing the Goal, Product & Design Sources, Acceptance Criteria & Success Metrics table (mapped to mounted runtime entry points), Affected Callers (breaking callers + untested callers), sibling exemplar citations, step-by-step TDD tasks with exact file paths and signatures, risks, and rollback plan, then pauses for user approval before execution.
+  starter_prompt: /future-writing-plans Write an implementation plan for adding webhook signature rotation
 - name: plan-review
   category: Planning & Architecture
   slash_command: /plan-review

@@ -1,6 +1,6 @@
 ---
 name: future-wayfinder
-description: Phase 0 branch for work too big and unclear for one grilling session — takes the confirmed craftsmans-wisdom brief as the destination, charts the open decisions as a map of blocking decision tickets, resolves one per session, and hands off to write-a-prd and the writing-plans roadmap once nothing is left to decide. Use when the user invokes /future-wayfinder, names a wayfinder map, or when Phase 0 grilling finds decisions that need research, prototypes or more than one session.
+description: Phase 0 branch for work too big and unclear for one grilling session — takes the confirmed craftsmans-wisdom brief as the destination, charts the open decisions as a map of blocking decision tickets, resolves one per session, and hands off to write-a-prd and the future-writing-plans roadmap once nothing is left to decide. Use when the user invokes /future-wayfinder, names a wayfinder map, or when Phase 0 grilling finds decisions that need research, prototypes or more than one session.
 author: Gerald Onyango
 tags: [planning, workflow, interview]
 license: MIT, see LICENSE.txt
@@ -16,13 +16,13 @@ This is an optional branch of **Phase 0 (Shape)** of the Development Lifecycle, 
 
 ```
 craftsmans-wisdom brief (confirmed)
-   ├─ decisions fit one session → future-grilling → write-a-prd / writing-plans
-   └─ they don't               → future-wayfinder → write-a-prd + docs/roadmap.md (writing-plans)
+   ├─ decisions fit one session → future-grilling → write-a-prd / future-writing-plans
+   └─ they don't               → future-wayfinder → write-a-prd + docs/roadmap.md (future-writing-plans)
 ```
 
 - **Before:** a confirmed `craftsmans-wisdom` brief. The brief is the destination. With no confirmed brief, run `craftsmans-wisdom` first.
 - **Use it when** the open decisions need research, prototypes or outside work before they can be settled, or simply won't fit one session. Most work fits one `future-grilling` session; then don't use this.
-- **After:** when the frontier is empty, hand off. Product decisions go into `write-a-prd`; the phasing goes into the roadmap that `writing-plans` keeps at `docs/roadmap.md`. Both link the map. Phase 1 onwards then runs as usual, one plan at a time.
+- **After:** when the frontier is empty, hand off. Product decisions go into `write-a-prd`; the phasing goes into the roadmap that `future-writing-plans` keeps at `docs/roadmap.md`. Both link the map. Phase 1 onwards then runs as usual, one plan at a time.
 
 ## Plan, don't do
 
@@ -137,7 +137,7 @@ Two modes. Either way, **never resolve more than one ticket per session** — wi
 User invokes with a loose idea.
 
 1. **Take the destination from the brief.** Read the confirmed `craftsmans-wisdom` brief and state the destination from it in one or two lines; don't re-interview what the brief settles. No confirmed brief: run `craftsmans-wisdom` first. Ask only what the brief leaves open about the destination itself, via `/future-grilling`.
-2. **Map the frontier.** Grill **breadth-first** with `/future-grilling`: fan out across the whole space rather than deep on any one thread, surfacing the open decisions and the first steps takeable now. **If this surfaces no fog** — the way to the destination is already clear, the whole journey small enough for one session — you don't need a map. Say so and continue on the normal Phase 0 path (`future-grilling`, then `write-a-prd` or `writing-plans`).
+2. **Map the frontier.** Grill **breadth-first** with `/future-grilling`: fan out across the whole space rather than deep on any one thread, surfacing the open decisions and the first steps takeable now. **If this surfaces no fog** — the way to the destination is already clear, the whole journey small enough for one session — you don't need a map. Say so and continue on the normal Phase 0 path (`future-grilling`, then `write-a-prd` or `future-writing-plans`).
 3. **Create the map** (label `wayfinder:map`): Destination and Notes filled in, Decisions-so-far empty, the fog sketched into **Not yet specified**.
 4. **Create the tickets you can specify now** as child issues of the map — then wire blocking edges in a **second pass** (issues need ids before they can reference each other). Wiring sorts them into the frontier and the blocked; everything you can't yet specify stays in the fog — the **Not yet specified** section.
 5. **Fire the research subagents.** For each `research` ticket you just created, spin up a `/research` subagent to resolve it in parallel, capturing its findings on a throwaway `research/<name>` branch with a context pointer from the ticket.
@@ -153,7 +153,7 @@ User invokes with a map (URL or number). A ticket is **optional** — without on
 4. Record the resolution: post the answer as a **resolution comment**, **close** the issue, and **append a context pointer** to the map's Decisions-so-far.
 5. Add newly-surfaced tickets (create-then-wire); graduate any fog the answer has made specifiable, clearing each graduated patch from **Not yet specified** so it lives only as its new ticket. If the answer reveals a ticket — this one or another — sits beyond the destination, **rule it out of scope** rather than resolving it on the route. If the decision invalidates other parts of the map, update or delete those tickets.
 
-6. **Frontier empty and no fog left:** the way is clear. Hand off as **Where it fits** says — `write-a-prd` and the `writing-plans` roadmap, both linking the map — and stop.
+6. **Frontier empty and no fog left:** the way is clear. Hand off as **Where it fits** says — `write-a-prd` and the `future-writing-plans` roadmap, both linking the map — and stop.
 
 The user may run unblocked tickets in parallel, so expect other sessions to be editing the tracker concurrently.
 

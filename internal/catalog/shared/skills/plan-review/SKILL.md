@@ -23,16 +23,16 @@ which cost more than the defects it caught were worth.
 
 ## When to use
 
-- After writing any non-trivial implementation plan (`writing-plans`) and before writing any code — invoke it yourself without waiting to be asked
+- After writing any non-trivial implementation plan (`future-writing-plans`) and before writing any code — invoke it yourself without waiting to be asked
 - When the user asks to review, sanity-check, grill, or poke holes in a plan
 - At each phase boundary of a multi-phase plan, on the remaining tasks
 
-**When to skip:** only for a trivial change with an obvious, self-contained blast radius (e.g., a one-line fix or config tweak that does not alter any contract other callers depend on). Every change still gets a written plan (`writing-plans`); only the `plan-review` sub-agent dispatch is skipped for trivial changes.
+**When to skip:** only for a trivial change with an obvious, self-contained blast radius (e.g., a one-line fix or config tweak that does not alter any contract other callers depend on). Every change still gets a written plan (`future-writing-plans`); only the `plan-review` sub-agent dispatch is skipped for trivial changes.
 
 ## Preconditions
 
 A plan file must exist. If the plan is still an idea in the conversation, write it down
-first (`writing-plans`) — there is nothing to review otherwise.
+first (`future-writing-plans`) — there is nothing to review otherwise.
 
 ## Dispatch
 
@@ -53,7 +53,7 @@ Agent tool:
 
 That is the entire prompt. The agent carries its own methodology — do not restate it. That
 includes its cost rule: it reviews strictly by reading the plan and cited files (**zero spikes, zero builds or test runs**), so a plan that
-contains full function bodies is already too expensive to review (see `writing-plans`).
+contains full function bodies is already too expensive to review (see `future-writing-plans`).
 
 **Do not steer it.** No suspicions, no "areas of concern", no "please check X". A reviewer
 pointed at your worries inherits your blind spots, which defeats the point of dispatching a

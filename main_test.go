@@ -261,7 +261,7 @@ func TestEndToEnd_4HarnessesBackupRestoreUninstallGuideAndUpdate(t *testing.T) {
 			if rErr != nil {
 				t.Fatalf("reading %s: %v", p, rErr)
 			}
-			sanitized := strings.NewReplacer("zombie UI", "", "zombie buildings", "").Replace(string(b))
+			sanitized := strings.NewReplacer("zombie UI", "", "zombie buildings", "", "author: Jesse Vincent, Gerald Onyango", "", "Forked by Gerald Onyango", "").Replace(string(b))
 			if loc := globalPIIRe.FindString(sanitized); loc != "" {
 				t.Errorf("embedded %s matched forbidden PII pattern %q", p, loc)
 			}

@@ -20,7 +20,7 @@ Invoke any skill in Zed's Agent Panel with `/<skill-name>`:
 | Full 12-phase engineering workflow (`Shape` -> `Handoff`) | `/start`, `/begin`, `/lifecycle` |
 | Shape product/feature point-of-view brief & grill decisions | `/shape`, `/craftsmans-wisdom`, `/future-grilling`, `/grilling-page`, `/write-a-prd` |
 | 3-direction interactive HTML UI prototypes (`design-demos/index.html`) | `/ui-design` (`/huashu-design`, `/no-slop-ui`) |
-| Write & review implementation plans | `/writing-plans`, `/plan-review` |
+| Write & review implementation plans | `/future-writing-plans`, `/plan-review` |
 | TDD implementation & debugging | `/test-driven-development`, `/systematic-debugging`, `/code-simplifier` |
 | Code review, SQL audit & fix verification | `/comprehensive-code-review`, `/sql-optimization-patterns`, `/fix-check` |
 | Final quality critique, copy audit & PR description | `/editor-pass`, `/copy-edit`, `/pull-request-description`, `/handoff` |

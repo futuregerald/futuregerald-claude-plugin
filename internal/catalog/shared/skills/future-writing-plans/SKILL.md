@@ -1,12 +1,14 @@
 ---
-name: writing-plans
-description: Use when you have a spec or requirements for a multi-step task, before touching code. Also writes and keeps current the committed roadmap (docs/roadmap.md) when the work spans more than one plan - phases, an initiative, or a PRD whose stories ship over more than one plan.
-tags: [workflow]
+name: future-writing-plans
+description: Use when you have a spec or requirements for a multi-step task, before touching code. Writes a structured implementation plan with required Acceptance Criteria & Success Metrics traced to product/brief/design sources, Affected Callers, and TDD gates, and keeps current the committed roadmap (docs/roadmap.md) when the work spans more than one plan.
+author: Jesse Vincent, Gerald Onyango
+tags: [planning, workflow]
+license: MIT, see LICENSE.txt
 model: inherit
 effort: medium
 ---
 
-# Writing Plans
+# Future Writing Plans
 
 ## Overview
 
@@ -25,7 +27,7 @@ whole plan as bite-sized tasks. DRY. YAGNI. TDD. Frequent commits.
 Assume they are a skilled developer who knows almost nothing about our toolset or problem
 domain, and does not know good test design well.
 
-**Announce at start:** "I'm using the writing-plans skill to create the implementation plan."
+**Announce at start:** "I'm using the future-writing-plans skill to create the implementation plan."
 
 **Context:** run this in a dedicated worktree (created by the brainstorming skill).
 
@@ -75,9 +77,11 @@ Keep it current:
 
 ## Required sections
 
-Goal · **Impact Analysis** · Approach · Step-by-step TDD tasks · Risks · Rollback · Out of scope.
+Goal · **Product & Design Sources** · **Acceptance Criteria & Success Metrics** · **Impact Analysis (Affected Callers)** · Approach · Step-by-step TDD tasks · Risks · Rollback · Out of scope.
 
-**Every plan MUST contain an Impact Analysis** — the call chain, up and down, of every symbol
+**Every plan MUST contain an `Acceptance Criteria & Success Metrics` table** before any tasks are written. Every commitment made for the phase — from the Product/Business Goals, Point-of-View Brief (`docs/point-of-view/*.md`), PRD/Decisions (`docs/prd.md`, `docs/decisions/*.md`), and Approved UI Design (`design-demos/*/direction-approved.md`, including responsive breakpoints, header/navigation parity, interactive animations/filtering, and visual assets) — must map to a concrete `AC-N` row naming the **mounted/wired runtime entry point** (`file:Symbol`) and a measurable verification gate. A unit test on an isolated, unwired helper function never satisfies a user-facing or runtime acceptance criterion.
+
+**Every plan MUST contain an Impact Analysis (Affected Callers)** — the call chain, up and down, of every symbol
 the change touches. See *System Thinking: Trace Before You Touch* in CLAUDE.md. BLAST-RADIUS
 VERIFY walks this list before COMMIT, so a plan without one leaves that phase nothing to check.
 
@@ -96,14 +100,20 @@ Each step is one action, 2–5 minutes:
 - Run the tests and watch them pass
 - Commit
 
-## Plan document header
+## Plan document header & Acceptance Criteria
 
 ```markdown
 # [Feature Name] Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development to implement this plan task-by-task.
+> **For Claude / Antigravity:** REQUIRED SUB-SKILL: Use `subagent-driven-development` or `/start` (`peer-pipeline-swarm`) to implement this plan.
 
-**Goal:** [One sentence describing what this builds]
+**Goal:** [One sentence describing what this builds and why it matters to the user/product]
+
+**Product & Design Sources:**
+- **PRD / Decisions:** `docs/prd.md`, `docs/decisions/product-scope.md` *(or tracker ticket)*
+- **Point-of-View Brief:** `docs/point-of-view/<slug>.md` *(or `~/.claude/point-of-view/<slug>.md`, or N/A if internal technical work)*
+- **Approved UI Design:** `design-demos/<slug>/direction-approved.md` *(or N/A if no UI touched)*
+- **Roadmap:** [`docs/roadmap.md`, phase N — omit for a single-plan change]
 
 **Architecture:** [2-3 sentences about approach]
 
@@ -111,7 +121,16 @@ Each step is one action, 2–5 minutes:
 
 **Base SHA:** [git rev-parse HEAD]
 
-**Roadmap:** [`docs/roadmap.md`, phase N — omit for a single-plan change]
+## Acceptance Criteria & Success Metrics (Required Gate)
+
+| ID | Source (Goal / Brief / PRD / Design) | Required Runtime Behavior | Success Metric / Measurable Target | Mounted / Wired Entry Point (`file:Symbol`) | Verification (Unit Test + Runtime/Emulator Check) |
+|----|--------------------------------------|---------------------------|------------------------------------|---------------------------------------------|---------------------------------------------------|
+| AC-1 | Brief §1 / Design (`direction-approved.md`) | Phone (`<600dp`) and Tablet (`>=600dp`) both render the top brand header and non-wrapping navigation | 100% of breakpoints render `top-brand-header`; bottom nav stays single-row (`flex: 1` per tab, `0` wrapped rows at `360dp–412dp`) | `src/App.tsx:AppShell` | `screens.test.ts` + live browser/emulator screenshot check |
+| AC-2 | Phase Goal / Extension Parity | Search filtering animates rank transitions and new-item stagger in the mounted list | Existing cards glide via FLIP delta (`computeFilterTransitionDelta` wired into `<Animated.View>`); new matches stagger at `18ms/row` | `src/components/TactileCard.tsx:TactileCard`, `src/screens/SearchScreen.tsx:SearchScreen` | `screens.test.ts` + live filter interaction |
+
+## Affected Callers (Impact Analysis)
+- Breaking callers (with consequence): ...
+- Untested unbroken callers: ...
 
 ---
 ```
@@ -145,15 +164,18 @@ line numbers still hold after the earlier ones have run.
 ## Remember
 
 - Exact file paths always
+- Every task must trace to one or more `AC-N` rows in `## Acceptance Criteria & Success Metrics`, and every `AC-N` row must be wired into the real mounted/runtime entry point (never satisfied by exporting an unused helper just for a unit test)
 - Exact signatures and test cases, not "add validation"; literal code only where the text is the decision
-- Exact commands with expected output
+- Exact commands with expected output (plus live browser/emulator verification gates whenever UI, layout, or animations are touched)
 - State what your test suite does **not** prove, so nobody cites a green run as evidence
 - DRY, YAGNI, TDD, frequent commits
 
-## Execution handoff
+## Execution handoff (Mandatory Stop for User Approval)
 
-After saving the plan, proceed to execution:
+After saving the plan and completing the `plan-review` gate, you **MUST** present the proposed plan (including the `Acceptance Criteria & Success Metrics` table and a summary of the tasks) to the user in chat and **STOP calling tools to wait for the user's approval** before continuing with development — **unless** the user explicitly told you to *"just work"*, *"work autonomously"*, *"keep going"*, or invoked `/goal`.
 
-**"Plan complete, saved to `docs/plans/<filename>.md`. Ready to execute using `subagent-driven-development` — I will dispatch a fresh subagent per task, with two-stage review between tasks."**
+**"Plan complete, reviewed, and saved to `docs/plans/<filename>.md`. Ready to execute using `subagent-driven-development` (or `/start` `peer-pipeline-swarm`) once you approve — or let me know if you want any adjustments."**
 
-Use `superpowers:subagent-driven-development` to execute: stay in this session, fresh subagent per task plus code review.
+---
+
+Forked by Gerald Onyango from `writing-plans` in Jesse Vincent's `superpowers` (MIT, see LICENSE.txt) — https://github.com/obra/superpowers
