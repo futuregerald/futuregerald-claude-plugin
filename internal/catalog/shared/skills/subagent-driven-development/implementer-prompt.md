@@ -17,7 +17,7 @@ Agent tool:
 
     ## Execution & Batching Rules (Mandatory)
 
-    1. **Turn 1 Parallel Context Load:** Read `/tmp/subagent-context-<project>-<stream>.md` (whenever `>750` lines, issue parallel `Read` calls across every `StartLine-EndLine` window in `## Read Chunk Index`) and `<plan_path>` in parallel on Turn 1 before searching or editing. Do NOT re-search or re-read unchanged slices already covered in the context bundle.
+    1. **Turn 1 Parallel Context & Manifest Load:** Read `/tmp/subagent-context-<project>-<stream>.md` (whenever `>750` lines, issue parallel `Read` calls across every `StartLine-EndLine` window in `## Read Chunk Index`), `<plan_path>`, and every `- Doc:` and `- Skill (...):` path listed in `## Turn-1 Parallel Read Manifest` in parallel on Turn 1 before searching or editing. Do NOT re-search or re-read unchanged slices already covered in the context bundle.
     2. **Parallel `Read` Batching:** Batch additional file reads (`5–10` files per turn, `400–800` lines per read). Never inspect files in `30–50` line micro-slices or serial 1-file tail loops. Match the newest sibling file's conventions.
     3. **Distinct-File vs. Single-File `Edit` Batching:** Batch `Edit`/`Write` calls across **distinct files** in parallel (`4–8` files/turn). On any **single file**, apply `1` contiguous `Edit` block (or a full `Write` when `<300` lines) — never issue `3+` separate `Edit` calls against the same file in one turn, and never mutate source or test files with inline `node -e` or `python3 -c` regex one-liners.
     4. **Before You Begin:** If anything in the requirements, acceptance criteria, or contracts is unclear or contradicted by the codebase, pause and ask before guessing.

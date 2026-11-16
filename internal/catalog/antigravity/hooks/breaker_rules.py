@@ -131,20 +131,40 @@ def is_complaint(user_text: str) -> bool:
         return False
     return bool(COMPLAINT_PATTERN.search(user_text))
 
+SWARM_SYSTEM_HEADER_PATTERN = re.compile(
+    r"\A(?:(?:The following is a <SYSTEM_MESSAGE>[^\n]*\n+\s*)?<SYSTEM_MESSAGE>\s*)?"
+    r"(?:\[Message\](?:(?!\bcontent=)[^\n])*\bcontent=)?"
+    r"(?:"
+    r"\[swarm\]\s+new board message #\d+\b"
+    r"|You have just started\.\s+Your assignment \(recorded on the board as #\d+ for @[a-z0-9-]+\):"
+    r"|\[board\]\s+the latest message is #\d+\b"
+    r")"
+)
+
 def classify_swarm_steps(
     steps: list[dict],
     inflight_name: str = "",
     inflight_args: dict | None = None,
     tool_calls_extractor=None,
 ) -> tuple[bool, bool]:
+    has_user_input = False
     last_user_content = ""
     for s in steps:
         if isinstance(s, dict) and s.get("type") == "USER_INPUT":
+            has_user_input = True
             last_user_content = s.get("content") or ""
     has_prior_swarm_add = False
     has_prior_worker_board_calls = False
     for idx, s in enumerate(steps):
-        if isinstance(s, dict) and s.get("type") == "PLANNER_RESPONSE":
+        if not isinstance(s, dict):
+            continue
+        s_type = s.get("type")
+        if s_type == "SYSTEM_MESSAGE":
+            if not has_user_input and not has_prior_swarm_add:
+                sys_content = str(s.get("content") or "").lstrip()
+                if SWARM_SYSTEM_HEADER_PATTERN.search(sys_content):
+                    has_prior_worker_board_calls = True
+        elif s_type == "PLANNER_RESPONSE":
             t_calls = tool_calls_extractor(idx, s) if tool_calls_extractor is not None else (s.get("tool_calls") or [])
             for c in t_calls:
                 if not isinstance(c, dict):

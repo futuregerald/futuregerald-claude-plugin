@@ -32,14 +32,14 @@ Before starting Phase 0, create and maintain the session's `task.md` artifact (`
 - **Gate:** Task and constraints understood; `task.md` created; feature branch checked out.
 
 ### Phase 2: Trace
-- **Action:** Map the call chain both ways before planning or editing:
+- **Action:** Run `1–3` inline `git grep -n` entry-point lookups first. Keep `1–2` file traces inline in the Root Supervisor; for `3+`-file, cross-package, or unknown-blast-radius work, dispatch `invoke_subagent` (`TypeName: "planner"`, `Model: "inherit"`, `24.8k` floor; `SUBAGENT_TOKEN_CAP=200000`) to map the call chain both ways before editing:
   - **Upward:** Every caller out to the controller, job, CLI command, rake task, or API endpoint, and what each caller expects.
   - **Downward:** Side effects, transactions, external calls, and what raises or returns errors.
   - **Invisible edges:** Grep for dynamic dispatch (`send`, `constantize`, serializers, callbacks, string-named jobs) and cross-package E2E suites where applicable.
 - **Gate:** Every caller named, with what it expects.
 
 ### Phase 3: Plan
-- **Action:** Follow `future-writing-plans`. Write the plan (`PLAN.md`, never committed) covering all work, including:
+- **Action:** Follow `future-writing-plans` (inline on `1–2` file tasks, or via the Stage-1 `planner` subagent writing git-ignored `docs/plans/<slug>.md` + `/tmp/plan-<project>-<stream>.md` and running `build_subagent_context.py pre-code --touch ...` to emit `## Turn-1 Parallel Read Manifest`; `planner` never edits source/test files or guesses UX ambiguity, returning `### Open Questions for User` if any). Write the uncommitted plan covering all work, including:
   - **Goal & Product/Design Sources** (links to `docs/prd.md`, `docs/decisions/product-scope.md`, `docs/point-of-view/*.md`, and `design-demos/*/direction-approved.md`)
   - **Acceptance Criteria & Success Metrics** (required table mapping every promised phase deliverable, brief commitment, responsive layout breakpoint, animation, and design target to a measurable metric, a mounted/wired runtime entry point `file:Symbol`, and a verification check)
   - **Affected Callers** (callers the change breaks with consequence, plus unbroken callers with no test)
@@ -82,7 +82,7 @@ Before starting Phase 0, create and maintain the session's `task.md` artifact (`
 - **Gate:** SQL reviewed and approved, or N/A if no queries/migrations changed.
 
 ### Phase 10: Blast-Radius Verify
-- **Action:** **Runs last before commit.** Any code edit made during Phase 7 (Simplify) or Phase 8/9 fix rounds re-opens Phase 10. Run repo version bump once if applicable (`node scripts/version.mjs bump patch|minor && make version-check`), re-run scoped fast unit tests and lint in the Coordinator's shell, and walk every row in `Affected Callers` plus callers of any symbol touched in the final diff that the plan did not list, verifying each with concrete evidence.
+- **Action:** **Runs last before commit.** Any code edit made during Phase 7 (Simplify) or Phase 8/9 fix rounds re-opens Phase 10. Run repo version bump once if applicable (`node scripts/version.mjs bump patch|minor && make version-check`) and re-run `<15s` scoped fast unit tests and lint in the Coordinator's shell (`exit 0`). Apply the **Stage-3 `~120k` Hybrid Wrap-Up Rule**: when Root is **lean (`<~120k` tokens:** single-feature chat, `<25` Coordinator turns, `<5` untouched caller files), walk `Affected Callers` inline; when Root is **warm (`>=~120k` tokens, or proxies:** `2+` feature phases/streams in one chat, post-compaction/baton resume, `>=25` Coordinator turns, or `5+` untouched caller files), offload untouched-caller inspection to a fresh read-only `code-quality-reviewer` (`22.7k` floor) and heavy suites / emulator capture to sleeping `ops` (`0.2×`).
 - **Gate:** Every affected caller verified with evidence; fast tests and lint green on the final tree.
 
 ### Phase 11: Commit
@@ -92,6 +92,6 @@ Before starting Phase 0, create and maintain the session's `task.md` artifact (`
 ### Phase 12: Handoff
 - **Action:**
   - For user-facing work, run `editor-pass` against the Phase 0 brief before shipping (delegate any `editor-pass` code fixes touching `>1` file or `>15` LOC to `implementer` and run `fix-check` + Phase 10 rather than coding inline in the Coordinator).
-  - On repos configured for auto-PR, push the branch, open the PR using `pull-request-description`, immediately ask whether the user wants to run `/copy-edit` while CI is running (`gh pr checks <pr> --watch`) so any copy-edit changes land on the same PR before merge, and watch CI until every check is green. Never auto-merge.
+  - On repos configured for auto-PR, push the branch and open the PR in the user's voice (`pull-request-description` stays in Root), immediately ask whether the user wants to run `/copy-edit` while CI is running (`gh pr checks <pr> --watch` — offload CI watch and bundle/artifact sync to sleeping `ops` whenever Root is `>=~120k` or multi-stream), watch CI until green, and kill any active/waiting `ops` or `monitor` workers. Never auto-merge.
   - Present a concise summary of what changed, verification evidence, and the PR/commit link.
 - **Gate:** All `task.md` items checked off; user acknowledges (and CI is green on auto-PR repos).

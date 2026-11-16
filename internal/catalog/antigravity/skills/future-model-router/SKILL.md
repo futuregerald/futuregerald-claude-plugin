@@ -26,11 +26,13 @@ The per-turn habits live in `~/.gemini/GEMINI.md` (§0.9) and project `GEMINI.md
 3. **Preserve `Carbon High` + Cross-Family `Opus 5.5 High` on Adversarial Reviews:**
    - Under `/start`, pin `code-rev` to **`claude-opus-5-5-high`** and `plan-rev` / `sec-rev` / `sql-rev` / `editor-rev` to **`gemini-4-carbon-high`**. On a `Carbon Medium` UI session, spawn one-shot `gemini-4-carbon-high` `swarm` workers for non-trivial `plan-review` and standalone pre-PR reviews (`Model: "inherit"` on `Carbon Medium` downgrades reviewers to `Medium`). Under `/start-small`, pin `code-rev` + `sec-rev` to `gemini-4-carbon-high` on 5-hour Google quota to preserve 7-day Anthropic Opus quota.
 
-4. **Observed 7-Day Turn-1 Floors, Restricted `tools:` Grants & Lean Coordinator Rule:**
-   - Observed 7-day Turn-1 floors are `22.7k` tokens for `invoke_subagent` read-only reviewers (`tools: [read_file]`), `24.8k` for `invoke_subagent` `implementer`, `29.3k` for Gemini 4 `swarm` workers (`Carbon`, `Argon`, `Hydrogen`), and `45.0k` for Claude Opus `swarm` workers (`claude-opus-5-5-high`) (`~133k` total 4-worker `/start` swarm boot floor; `~117k` 4-worker `/start-small` Gemini-only swarm boot floor). Never let a `Carbon Medium` Coordinator code multi-file (`>1` file / `>15` LOC) post-review or Phase 12 `editor-pass` fixes inline on its warm context—delegate them to `implementer` + `fix-check`.
+4. **Observed 7-Day Turn-1 Floors, Thin Root Supervisor (`planner` + `~120k` Hybrid Wrap-Up) & Restricted `tools:` Grants:**
+   - Observed 7-day Turn-1 floors are `22.7k` tokens for `invoke_subagent` read-only reviewers (`tools: [read_file]`), `24.8k` for `invoke_subagent` `implementer` and `planner`, `29.3k` for Gemini 4 `swarm` workers (`Carbon`, `Argon`, `Hydrogen`), and `45.0k` for Claude Opus `swarm` workers (`claude-opus-5-5-high`) (`~133k` total 4-worker `/start` swarm boot floor; `~117k` 4-worker `/start-small` Gemini-only swarm boot floor).
+   - **Stage-1 `planner` (`24.8k` floor):** Keep `1–2` file (`<5`-turn) tasks inline in Root; for `3+`-file, cross-package, or unknown-blast-radius tasks, run `1–3` `git grep -n` lookups inline and offload Phase 2–3 caller tracing, git-ignored `docs/plans/<slug>.md` + `/tmp/plan-<project>-<stream>.md` drafting, and `build_subagent_context.py pre-code --touch ...` (`## Turn-1 Parallel Read Manifest`) to `invoke_subagent` (`TypeName: "planner"`, `Model: "inherit"`).
+   - **Stage-3 `~120k` Hybrid Wrap-Up:** When Root is lean (`<~120k`: single-feature chat, `<25` Coordinator turns, `<5` untouched caller files), run `<15s` fast gates, caller verify, commit, and user-voice PR inline. When Root is warm (`>=~120k`, or proxies: `2+` feature phases/streams in one chat, post-compaction/baton resume, `>=25` Coordinator turns, or `5+` untouched caller files), offload untouched-caller checks to read-only `code-quality-reviewer` (`22.7k`), heavy/CI/sync runs to sleeping `ops` (`0.2×`), and `>1`-file / `>15` LOC post-review or `editor-pass` fixes to `implementer` + `fix-check`.
 
-5. **Warm Subagent Context Ceiling (~80k–100k tokens) & `<185k` Implementer Compaction Guard:**
-   - Reusing the same `implementer` across multiple roadmap phases re-bills a `150k–200k` history across `30+` tool calls (`5–8×` more expensive than spawning a fresh implementer per phase), and crossing `256k` triggers auto-compaction (`25+` wasted re-discovery turns). Cap warm reuse at **1 roadmap phase (+ its fix round)** and pre-pack exact `file:start-end` slices via `python3 ~/.gemini/config/skills/subagent-driven-development/scripts/build_subagent_context.py` so `implementer` stays **`<185k` peak context**.
+5. **Warm Subagent Context Ceiling (~80k–100k tokens), `SUBAGENT_TOKEN_CAP=200000` & `<185k` Compaction Guard:**
+   - Reusing the same `implementer` across multiple roadmap phases re-bills a `150k–200k` history across `30+` tool calls (`5–8×` more expensive than spawning a fresh implementer per phase), and crossing `256k` triggers auto-compaction (`25+` wasted re-discovery turns). Cap warm reuse at **1 roadmap phase (+ its fix round)**, pre-pack exact `file:start-end` slices + `## Turn-1 Parallel Read Manifest` via `build_subagent_context.py pre-code --touch ...` so subagents stay **`<185k` peak context**, and rely on `autonomous_breaker.py`'s `SUBAGENT_TOKEN_CAP=200000` guard (allowing only wrap-up `.md` writes + `send_message` at `>=200k`, while keeping `swarm` workers on their `235k` cap).
 
 6. **Persistent Sleeping Hydrogen `ops` Worker (`gemini-4-hydrogen-high`, `0.2×`, `workspace: "inherit"`):**
    - Parking `ops` on `swarm_wait{mentions_only: true, since: <last_seq>}` costs `0` tokens while `waiting`, saving `~300k` Argon-eq per reused wakeup vs. repeated Carbon (`2.0×`) Coordinator `swarm add` + `swarm kill` turns.
@@ -52,8 +54,12 @@ Is this a code change?
 └── Yes (12-phase Development Lifecycle)
     ├── Mechanical multi-turn ops (>=8-query caller scout, heavy/E2E suite & failure distillation, standalone APK/emulator run, post-PR CI watch & sync)?
     │   └── Persistent sleeping ops swarm worker (gemini-4-hydrogen-high 0.2x, mentions_only: true, rotate at cum_turns >= 12 / 2 medium / 1 heavy; <15s fast gates stay inline)
-    ├── Phases 0–3 (Shape, Trace, Plan) & Phases 10–12 (Blast-Radius, Commit, Handoff)
-    │   └── Run inline in Coordinator (Carbon Medium 2x default; Argon Medium 1x optional for simple tasks)
+    ├── Phases 2–3 (Trace & Plan)
+    │   ├── Bounded 1–2 file fix -> Run inline in Root Supervisor (Carbon Medium 2x default)
+    │   └── 3+ files, cross-package, or unknown blast radius -> 1–3 inline git grep -n lookups + invoke_subagent(TypeName: "planner", Model: "inherit", 24.8k floor; SUBAGENT_TOKEN_CAP=200000)
+    ├── Phases 10–12 (Blast-Radius, Commit, Handoff — Stage-3 ~120k Hybrid)
+    │   ├── Lean Root (<~120k, single stream, <25 turns, <5 untouched callers) -> Fast gate, caller verify, commit & user-voice PR inline
+    │   └── Warm Root (>=~120k or 2+ streams / >=25 turns / post-compaction / 5+ untouched callers) -> code-quality-reviewer (22.7k) for untouched callers + sleeping ops (0.2x) for heavy/CI/sync + Root for <15s gate, commit & user-voice PR
     ├── Phase 3½ (Plan Review)
     │   ├── /start + UI not on Carbon High -> one-shot swarm worker (gemini-4-carbon-high, 29.3k floor, immediate kill)
     │   └── /start-small, Carbon High UI, small plan, or Gemini CLI -> invoke_subagent(TypeName: "plan-reviewer", Model: "inherit", 22.7k floor)

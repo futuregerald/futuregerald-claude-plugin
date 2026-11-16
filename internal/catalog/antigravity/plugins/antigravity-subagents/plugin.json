@@ -1,6 +1,6 @@
 {
   "name": "antigravity-subagents",
   "displayName": "Antigravity Lifecycle Subagents",
-  "description": "Dedicated Antigravity subagents for the 12-phase Development Lifecycle (inheriting Gemini 4 Carbon or Argon via Model: inherit): read-only adversarial plan, code-quality, security, SQL, and editor-pass reviewers, plus a scoped TDD implementer.",
-  "version": "1.2.0"
+  "description": "Dedicated Antigravity subagents for the 12-phase Development Lifecycle (inheriting Gemini 4 Carbon or Argon via Model: inherit): Stage-1 Phase 2-3 planner, read-only adversarial plan, code-quality, security, SQL, and editor-pass reviewers, plus a scoped Phase 4 TDD implementer.",
+  "version": "1.3.0"
 }
