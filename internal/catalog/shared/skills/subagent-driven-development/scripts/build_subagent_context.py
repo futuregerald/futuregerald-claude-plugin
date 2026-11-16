@@ -1,14 +1,103 @@
 #!/usr/bin/env python3
 import argparse
 import os
+import re
 import subprocess
 import sys
 import tempfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 
 POST_CODE_MARKER = "## Post-Code Verification & Diff"
 INDEX_MARKER = "## Read Chunk Index"
+MANIFEST_MARKER = "## Turn-1 Parallel Read Manifest"
+
+RETIRED_V3_SKILLS = frozenset(
+    {
+        "to-spec",
+        "to-tickets",
+        "implement",
+        "domain-modeling",
+        "grill-with-docs",
+        "architecture-decision-records",
+        "javascript-testing-patterns",
+        "improve-codebase-architecture",
+        "codebase-design",
+    }
+)
+
+ORCHESTRATION_AND_META_SKILLS = frozenset(
+    {
+        "begin",
+        "brainstorming",
+        "code-simplifier",
+        "comprehensive-code-review",
+        "craftsmans-wisdom",
+        "dispatching-parallel-agents",
+        "editor-pass",
+        "fix-check",
+        "future-grilling",
+        "future-model-router",
+        "future-wayfinder",
+        "future-writing-plans",
+        "grilling-page",
+        "handoff",
+        "huashu-design",
+        "lifecycle",
+        "meeting-debrief",
+        "plan-review",
+        "plugin-updater",
+        "prototype",
+        "pull-request-description",
+        "qa-verification",
+        "research",
+        "review-lens",
+        "start",
+        "subagent-driven-development",
+        "teach",
+        "team-pulse",
+        "ticket-grooming",
+        "ui-design",
+        "using-git-worktrees",
+        "visualize-plan",
+        "write-a-prd",
+        "writing-tickets",
+    }
+)
+META_SKILL_PREFIXES = ("baton-", "start-")
+META_SKILL_SUFFIXES = ("-orchestration", "-swarm")
+
+MAX_DECISION_DOCS = 4
+
+SKILL_SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
+EXPLICIT_SKILL_MD_RE = re.compile(r"(?:^|/)([a-z0-9][a-z0-9-]{0,63})/SKILL\.md$")
+UI_EXTENSIONS = frozenset({".tsx", ".jsx", ".html", ".css", ".scss", ".vue", ".svelte"})
+CODE_EXTENSIONS = frozenset(
+    {
+        ".py",
+        ".go",
+        ".ts",
+        ".tsx",
+        ".js",
+        ".jsx",
+        ".mjs",
+        ".cjs",
+        ".rb",
+        ".rs",
+        ".java",
+        ".kt",
+        ".swift",
+        ".c",
+        ".cc",
+        ".cpp",
+        ".h",
+        ".sh",
+        ".sql",
+        ".vue",
+        ".svelte",
+    }
+)
+MOTION_TOKENS = ("anim", "motion", "transition", "spring", "keyframe", "rive", "gsap")
 
 
 def fail(message: str) -> int:
@@ -413,6 +502,353 @@ def split_unified_diff(
     return parts if parts else [["(no diff changes)"]]
 
 
+def _safe_in_root_regular_file(cand: Path, root_real: Path) -> Path | None:
+    try:
+        rel = cand.relative_to(root_real)
+    except ValueError:
+        return None
+    cur = root_real
+    for part in rel.parts:
+        cur = cur / part
+        if cur.is_symlink():
+            return None
+    try:
+        real_p = cur.resolve(strict=True)
+    except OSError:
+        return None
+    if not real_p.is_relative_to(root_real) or not real_p.is_file():
+        return None
+    return real_p
+
+
+def validate_touch_path(raw_touch: str, root: Path) -> str:
+    if not isinstance(raw_touch, str) or not raw_touch.strip():
+        raise ValueError("empty --touch path")
+    s = raw_touch.strip()
+    norm_slashes = s.replace("\\", "/")
+    if ".." in re.split(r"[\\/]+", s) or ".." in PurePosixPath(norm_slashes).parts:
+        raise ValueError(f"--touch path '{raw_touch}' must not contain '..'")
+    try:
+        root_real = root.resolve(strict=True)
+    except OSError as exc:
+        raise ValueError(f"invalid root directory '{root}': {exc}") from exc
+
+    raw_p = Path(s)
+    if not raw_p.is_absolute():
+        cur = root_real
+        for pt in PurePosixPath(norm_slashes).parts:
+            if pt in ("", "."):
+                continue
+            cur = cur / pt
+            if cur.is_symlink():
+                try:
+                    lt = cur.resolve(strict=True)
+                except OSError as exc:
+                    raise ValueError(f"--touch symlink does not resolve: {raw_touch}") from exc
+                if not lt.is_relative_to(root_real):
+                    raise ValueError(f"--touch path '{raw_touch}' escapes root '{root_real}'")
+        candidate = root_real / raw_p
+    else:
+        candidate = raw_p
+        anc = candidate
+        while not anc.exists() and not anc.is_symlink() and anc.parent != anc:
+            anc = anc.parent
+        if anc.is_symlink():
+            try:
+                anc_real = anc.resolve(strict=True)
+            except OSError as exc:
+                raise ValueError(f"--touch symlink ancestor invalid: {raw_touch}") from exc
+            if not anc_real.is_relative_to(root_real) and not root_real.is_relative_to(anc_real):
+                raise ValueError(f"--touch path '{raw_touch}' escapes root '{root_real}'")
+
+    resolved = candidate.resolve(strict=False)
+    if not resolved.is_relative_to(root_real) or resolved == root_real:
+        raise ValueError(f"--touch path '{raw_touch}' escapes root '{root_real}'")
+
+    cur_check = root_real
+    for pt in resolved.relative_to(root_real).parts:
+        cur_check = cur_check / pt
+        if cur_check.is_symlink():
+            try:
+                lt2 = cur_check.resolve(strict=True)
+            except OSError as exc:
+                raise ValueError(f"--touch symlink does not resolve: {raw_touch}") from exc
+            if not lt2.is_relative_to(root_real):
+                raise ValueError(f"--touch path '{raw_touch}' escapes root '{root_real}'")
+
+    return resolved.relative_to(root_real).as_posix()
+
+
+def extract_plan_paths_and_skills(plan_text: str, root: Path) -> tuple[list[str], list[str]]:
+    try:
+        root_real = root.resolve(strict=True)
+    except OSError:
+        return [], []
+
+    plan_paths: list[str] = []
+    seen_paths: set[str] = set()
+    skill_tokens: list[str] = []
+    seen_skills: set[str] = set()
+
+    for raw_span in re.findall(r"`([^`\n]+)`", plan_text):
+        tok = raw_span.strip()
+        if not tok:
+            continue
+
+        m_skill_md = EXPLICIT_SKILL_MD_RE.search(tok)
+        if m_skill_md:
+            explicit_tok = f"{m_skill_md.group(1)}/SKILL.md"
+            if explicit_tok not in seen_skills:
+                seen_skills.add(explicit_tok)
+                skill_tokens.append(explicit_tok)
+
+        if SKILL_SLUG_RE.match(tok) and tok not in seen_skills:
+            seen_skills.add(tok)
+            skill_tokens.append(tok)
+
+        path_cand = tok.split(":", 1)[0].strip()
+        while path_cand.startswith("./"):
+            path_cand = path_cand[2:]
+        if (
+            not path_cand
+            or path_cand.startswith(("/", "~", "-"))
+            or ".." in re.split(r"[\\/]+", path_cand)
+        ):
+            continue
+        safe_p = _safe_in_root_regular_file(root_real / path_cand, root_real)
+        if safe_p is not None:
+            rel_posix = safe_p.relative_to(root_real).as_posix()
+            if rel_posix not in seen_paths:
+                seen_paths.add(rel_posix)
+                plan_paths.append(rel_posix)
+
+    return plan_paths, skill_tokens
+
+
+def _is_ui_or_frontend_path(rel_path: str) -> bool:
+    low = rel_path.lower().replace("\\", "/")
+    pp = PurePosixPath(low)
+    if pp.suffix in UI_EXTENSIONS:
+        return True
+    ui_dirs = {"mobile", "web", "frontend", "ui", "extension", "components", "screens", "pages", "design-demos"}
+    return any(part in ui_dirs for part in pp.parts[:-1])
+
+
+def discover_product_and_design_docs(
+    root: Path, touched_paths: list[str], plan_text: str
+) -> list[Path]:
+    try:
+        root_real = root.resolve(strict=True)
+    except OSError:
+        return []
+
+    candidates: list[Path] = [root_real / "docs" / "prd.md"]
+    docs_dir = root_real / "docs"
+    if not docs_dir.is_symlink() and docs_dir.is_dir():
+        decisions_dir = docs_dir / "decisions"
+        if not decisions_dir.is_symlink() and decisions_dir.is_dir():
+            safe_decisions = [
+                sd
+                for p in sorted(decisions_dir.glob("*.md"))
+                if (sd := _safe_in_root_regular_file(p, root_real)) is not None
+            ]
+            prioritized: list[Path] = []
+            seen_dec: set[str] = set()
+            for sd in safe_decisions:
+                if sd.name == "product-scope.md" or sd.name in plan_text:
+                    prioritized.append(sd)
+                    seen_dec.add(sd.as_posix())
+            for sd in safe_decisions:
+                if len(prioritized) >= MAX_DECISION_DOCS:
+                    break
+                if sd.as_posix() not in seen_dec:
+                    prioritized.append(sd)
+                    seen_dec.add(sd.as_posix())
+            candidates.extend(prioritized[:MAX_DECISION_DOCS])
+
+        pov_dir = docs_dir / "point-of-view"
+        if not pov_dir.is_symlink() and pov_dir.is_dir():
+            candidates.extend(sorted(pov_dir.glob("*.md")))
+
+    include_design = "direction-approved.md" in plan_text or any(
+        _is_ui_or_frontend_path(p) for p in touched_paths
+    )
+    if include_design:
+        demos_dir = root_real / "design-demos"
+        if not demos_dir.is_symlink() and demos_dir.is_dir():
+            candidates.append(demos_dir / "direction-approved.md")
+            for child in sorted(demos_dir.iterdir()):
+                if not child.is_symlink() and child.is_dir():
+                    candidates.append(child / "direction-approved.md")
+
+    found: dict[str, Path] = {}
+    for cand in candidates:
+        safe_doc = _safe_in_root_regular_file(cand, root_real)
+        if safe_doc is not None:
+            found[safe_doc.as_posix()] = safe_doc
+    return [found[k] for k in sorted(found)]
+
+
+def resolve_skills_dirs(explicit_dirs: list[str]) -> list[Path]:
+    resolved_dirs: list[Path] = []
+    seen: set[str] = set()
+    if explicit_dirs:
+        for raw in explicit_dirs:
+            if not isinstance(raw, str) or not raw.strip():
+                raise ValueError("empty --skills-dir path")
+            try:
+                real_d = Path(raw.strip()).resolve(strict=True)
+            except OSError as exc:
+                raise ValueError(f"skills-dir does not exist: {raw}") from exc
+            if not real_d.is_dir():
+                raise ValueError(f"skills-dir is not a directory: {raw}")
+            key = real_d.as_posix()
+            if key not in seen:
+                seen.add(key)
+                resolved_dirs.append(real_d)
+        return resolved_dirs
+
+    home_dir = Path.home()
+    for default_cand in (
+        home_dir / ".gemini" / "config" / "skills",
+        home_dir / ".claude" / "skills",
+    ):
+        if not default_cand.is_dir():
+            continue
+        try:
+            real_d = default_cand.resolve(strict=True)
+        except OSError:
+            continue
+        if real_d.is_dir():
+            key = real_d.as_posix()
+            if key not in seen:
+                seen.add(key)
+                resolved_dirs.append(real_d)
+    return resolved_dirs
+
+
+def resolve_turn1_skills(
+    touched_paths: list[str], plan_skill_tokens: list[str], skills_dirs: list[Path]
+) -> list[tuple[str, Path]]:
+    if not skills_dirs:
+        return []
+
+    wanted: list[str] = []
+    seen_wanted: set[str] = set()
+
+    def add_candidate(slug: str) -> None:
+        if slug in RETIRED_V3_SKILLS or slug in seen_wanted:
+            return
+        if not SKILL_SLUG_RE.match(slug):
+            return
+        seen_wanted.add(slug)
+        wanted.append(slug)
+
+    has_go = False
+    has_ui = False
+    has_motion = False
+    has_sql = False
+    has_skill_md = False
+    has_datadog = False
+    has_code = False
+
+    for raw_p in touched_paths:
+        norm_p = raw_p.replace("\\", "/")
+        low = norm_p.lower()
+        pp = PurePosixPath(norm_p)
+        ext = pp.suffix.lower()
+        if ext == ".go":
+            has_go = True
+        if ext in UI_EXTENSIONS:
+            has_ui = True
+        if any(tok in low for tok in MOTION_TOKENS):
+            has_motion = True
+        if ext == ".sql" or "migrations/" in low or low.startswith("migrations/") or "db/migrate/" in low or low.startswith("db/migrate/"):
+            has_sql = True
+        if pp.name == "SKILL.md":
+            has_skill_md = True
+        if "datadog" in low or ("dashboard" in low and ext == ".json"):
+            has_datadog = True
+        if ext in CODE_EXTENSIONS:
+            has_code = True
+
+    if any(any(tok in st.lower() for tok in MOTION_TOKENS) for st in plan_skill_tokens):
+        has_motion = True
+
+    if has_go:
+        add_candidate("go-api-structure")
+    if has_ui:
+        add_candidate("impeccable")
+        add_candidate("no-slop-ui")
+        if has_motion:
+            add_candidate("animation-principles")
+    if has_sql:
+        add_candidate("sql-optimization-patterns")
+    if has_skill_md:
+        add_candidate("future-skill-creator")
+        add_candidate("skill-reviewer")
+    if has_datadog:
+        add_candidate("datadog-dashboards")
+    if has_code:
+        add_candidate("test-driven-development")
+
+    for tok in plan_skill_tokens:
+        if tok.endswith("/SKILL.md"):
+            slug = tok[: -len("/SKILL.md")]
+            add_candidate(slug)
+        else:
+            if (
+                tok in ORCHESTRATION_AND_META_SKILLS
+                or tok.startswith(META_SKILL_PREFIXES)
+                or tok.endswith(META_SKILL_SUFFIXES)
+            ):
+                continue
+            add_candidate(tok)
+
+    resolved: list[tuple[str, Path]] = []
+    for slug in wanted:
+        for s_dir in skills_dirs:
+            try:
+                dir_real = s_dir.resolve(strict=True)
+            except OSError:
+                continue
+            skill_dir = dir_real / slug
+            skill_md = skill_dir / "SKILL.md"
+            if skill_dir.is_symlink() or not skill_dir.is_dir():
+                continue
+            if skill_md.is_symlink() or not skill_md.is_file():
+                continue
+            try:
+                md_real = skill_md.resolve(strict=True)
+            except OSError:
+                continue
+            if md_real.is_relative_to(dir_real) and md_real.is_file():
+                resolved.append((slug, md_real))
+                break
+    return resolved
+
+
+def render_turn1_manifest(
+    args_plan: str,
+    plan_abs: Path,
+    doc_paths: list[Path],
+    resolved_skills: list[tuple[str, Path]],
+) -> tuple[list[str], list[str]]:
+    manifest_body = [
+        MANIFEST_MARKER,
+        f"- Plan: {args_plan}",
+        *[f"- Doc: {doc_p.as_posix()}" for doc_p in doc_paths],
+        *[f"- Skill ({name}): {md_p.as_posix()}" for name, md_p in resolved_skills],
+    ]
+    stdout_lines = [
+        "TURN1_READ_MANIFEST:",
+        f"- {plan_abs.as_posix()}",
+        *[f"- {doc_p.as_posix()}" for doc_p in doc_paths],
+        *[f"- {md_p.as_posix()}" for _, md_p in resolved_skills],
+    ]
+    return manifest_body, stdout_lines
+
+
 def run_pre_code(args: argparse.Namespace) -> int:
     if args.max_chunk_lines < 25:
         return fail("--max-chunk-lines must be >= 25")
@@ -435,10 +871,41 @@ def run_pre_code(args: argparse.Namespace) -> int:
         except ValueError as exc:
             return fail(str(exc))
 
+    explicit_touches: list[str] = []
+    for raw_touch in args.touch or []:
+        try:
+            explicit_touches.append(validate_touch_path(raw_touch, root_dir))
+        except ValueError as exc:
+            return fail(str(exc))
+
+    try:
+        skills_dirs = resolve_skills_dirs(args.skills_dir or [])
+        plan_abs = plan_path.resolve(strict=True)
+    except (OSError, ValueError) as exc:
+        return fail(str(exc))
+
     plan_text = plan_path.read_text(encoding="utf-8", errors="replace")
     ac_lines = extract_acceptance_criteria(plan_text)
+    plan_paths, plan_skill_tokens = extract_plan_paths_and_skills(plan_text, root_dir)
 
-    body: list[str] = [f"- Plan: {args.plan}"]
+    touched_paths: list[str] = []
+    seen_touched: set[str] = set()
+    for rel_p in [
+        *(s[0] for s in parsed_slices),
+        *explicit_touches,
+        *plan_paths,
+    ]:
+        if rel_p not in seen_touched:
+            seen_touched.add(rel_p)
+            touched_paths.append(rel_p)
+
+    doc_paths = discover_product_and_design_docs(root_dir, touched_paths, plan_text)
+    resolved_skills = resolve_turn1_skills(touched_paths, plan_skill_tokens, skills_dirs)
+    manifest_lines, stdout_lines = render_turn1_manifest(
+        args.plan, plan_abs, doc_paths, resolved_skills
+    )
+
+    body: list[str] = list(manifest_lines)
     if args.gate_cmd:
         body.extend(["", "## Gate Commands"])
         for cmd in args.gate_cmd:
@@ -476,6 +943,7 @@ def run_pre_code(args: argparse.Namespace) -> int:
         atomic_write_private(out_path, rendered)
     except (OSError, ValueError) as exc:
         return fail(str(exc))
+    sys.stdout.write("\n".join(stdout_lines) + "\n")
     return 0
 
 
@@ -603,16 +1071,18 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="subcommand", required=True)
 
     pre = subparsers.add_parser("pre-code")
-    pre.add_argument("--output", required=True)
+    pre.add_argument("--output", "--context", dest="output", required=True)
     pre.add_argument("--plan", required=True)
     pre.add_argument("--slice", action="append", default=[])
+    pre.add_argument("--touch", action="append", default=[])
+    pre.add_argument("--skills-dir", action="append", default=[])
     pre.add_argument("--gate-cmd", action="append", default=[])
     pre.add_argument("--root", default=".")
     pre.add_argument("--max-chunk-lines", type=int, default=700)
     pre.add_argument("--max-chunk-bytes", type=int, default=38000)
 
     post = subparsers.add_parser("post-code")
-    post.add_argument("--output", required=True)
+    post.add_argument("--output", "--context", dest="output", required=True)
     post.add_argument("--base", required=True)
     post.add_argument("--head", default=None)
     post.add_argument("--share-root", default=".")

@@ -227,6 +227,46 @@ class TestReplayBreaker(unittest.TestCase):
         self.assertEqual(res["rules"]["BATON"]["main_triggers"], 0)
         self.assertEqual(res["longest_4_authorized_sessions"], [])
 
+    def test_subagent_200k_cap_counts_as_helper_block_in_replay(self):
+        root = Path(self.test_tmpdir) / "brain"
+        conv_id = "test-subagent-cap-replay"
+        logs_dir = root / conv_id / ".system_generated" / "logs"
+        t_path = logs_dir / "transcript.jsonl"
+        t_full_path = logs_dir / "transcript_full.jsonl"
+        steps = [
+            {"step_index": 0, "source": "SYSTEM", "type": "SYSTEM_MESSAGE", "content": "subagent start"},
+            {
+                "step_index": 1,
+                "source": "MODEL",
+                "type": "PLANNER_RESPONSE",
+                "input_tokens": 10000,
+                "cache_read_tokens": 185000,
+                "output_tokens": 500,
+                "content": "reading under cap",
+                "tool_calls": [{"name": "read_file", "args": {"Path": "/repo/a.go"}}],
+            },
+            {"step_index": 2, "source": "TOOL", "type": "GENERIC", "content": "ok"},
+            {
+                "step_index": 3,
+                "source": "MODEL",
+                "type": "PLANNER_RESPONSE",
+                "input_tokens": 10000,
+                "cache_read_tokens": 195000,
+                "output_tokens": 500,
+                "content": "over cap read",
+                "tool_calls": [{"name": "read_file", "args": {"Path": "/repo/b.go"}}],
+            },
+            {"step_index": 4, "source": "MODEL", "type": "PLANNER_RESPONSE", "content": "wrapup", "tool_calls": [{"name": "write_file", "args": {"Path": "PLAN.md", "Content": "plan"}}]},
+        ]
+        self.write_jsonl(t_path, steps)
+        self.write_jsonl(t_full_path, steps)
+        out_path = Path(self.test_tmpdir) / "out_sub.json"
+        res = replay_breaker.run_replay(root=str(root), last_n=10, out_path=str(out_path))
+        self.assertEqual(res["baton"]["total_warns"], 0)
+        self.assertEqual(res["baton"]["total_blocks"], 1)
+        self.assertEqual(res["rules"]["BATON"]["helper_triggers"], 1)
+        self.assertEqual(res["rules"]["BATON"]["main_triggers"], 0)
+
 
 
 

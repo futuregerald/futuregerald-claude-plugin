@@ -40,15 +40,14 @@ Never omit `model` on `swarm{action: "add"}` — omitting `model` copies the UI 
 
 ## Step-by-Step Execution
 
-### 1. Pre-Flight Context File (Coordinator)
+### 1. Pre-Flight Context File (Coordinator or Stage-1 `planner`)
 
-Before calling `swarm`, generate `/tmp/subagent-context-<project>-<stream>.md` (using `python3 ~/.gemini/config/skills/subagent-driven-development/scripts/build_subagent_context.py pre-code` for exact `file:start-end` target slices) containing:
-- Exact path to `PLAN.md` (copy `PLAN.md` into `/tmp/plan-<project>-<stream>.md` as well if `PLAN.md` is untracked in the repo, because `workspace: "share"` clones committed repo state)
-- `## Product & Design Sources` (paths and non-negotiable targets from `docs/prd.md`, `docs/decisions/product-scope.md`, `docs/point-of-view/*.md`, and `design-demos/*/direction-approved.md`)
-- `## Acceptance Criteria & Success Metrics` (copied verbatim from `PLAN.md` — every `AC-N` row with its required runtime behavior, measurable target, and mounted entry point `file:Symbol`)
-- `## Known Facts` (numbered entry-point `file:start-end` slices, sibling exemplar `file:line`, exact scoped `<15s` fast test & lint commands, repo gate commands)
-- `## Affected Callers` (from Phase 2/3)
-- `## Hypotheses to Falsify` (if any)
+Before calling `swarm`, ensure `/tmp/plan-<project>-<stream>.md` and `/tmp/subagent-context-<project>-<stream>.md` are built (for `3+`-file tasks, the Stage-1 `planner` subagent generates both via `python3 ~/.gemini/config/skills/subagent-driven-development/scripts/build_subagent_context.py pre-code --touch ...`) containing:
+- `## Turn-1 Parallel Read Manifest` (auto-emitted by `pre-code`: `- Plan:` plus canonical absolute `- Doc:` paths for in-root `docs/prd.md`, `docs/decisions/*.md`, `docs/point-of-view/*.md`, `design-demos/*/direction-approved.md` and `- Skill (<name>):` paths for resolved `SKILL.md` files so `share`-workspace workers read uncommitted Phase 0/0½ docs and active skills on Turn 1)
+- Exact path to `/tmp/plan-<project>-<stream>.md` (mirrored from git-ignored `docs/plans/<slug>.md`, because `workspace: "share"` clones committed repo state)
+- `## Acceptance Criteria & Success Metrics` (extracted verbatim from the plan — every `AC-N` row with its required runtime behavior, measurable target, and mounted entry point `file:Symbol`)
+- `## Known Facts` / `## Code Slices` (numbered entry-point `file:start-end` slices, sibling exemplar `file:line`, exact scoped `<15s` fast test & lint commands, repo gate commands)
+- `## Affected Callers` & `## Hypotheses to Falsify` (if any)
 
 If `2+` independent streams run in parallel and `swarm` supports `action: "channel"`, create one channel per stream (`swarm{action: "channel", op: "create", channel: "<stream>", topic: "..."}`) before adding workers so each `impl + reviewers` group stays silent in `main`.
 
@@ -58,7 +57,7 @@ Board tools (`read_board`, `post_message`, `swarm_wait`) appear one turn *after*
 
 1. **`impl` (`gemini-4-carbon-medium`, `workspace: "share"`):**
    ```text
-   Read ~/.gemini/config/plugins/antigravity-subagents/agents/implementer.md, /tmp/plan-<project>-<stream>.md, and /tmp/subagent-context-<project>-<stream>.md in 1 parallel Turn-1 batch (<185k peak-context guard).
+   Read ~/.gemini/config/plugins/antigravity-subagents/agents/implementer.md, /tmp/plan-<project>-<stream>.md, /tmp/subagent-context-<project>-<stream>.md, and every - Doc: / - Skill (...): path listed in ## Turn-1 Parallel Read Manifest in 1 parallel Turn-1 batch (<185k peak-context guard).
    1. Immediately append `SHARE_ROOT=$(pwd)` and `BRANCH=$(git rev-parse --abbrev-ref HEAD)` to /tmp/subagent-context-<project>-<stream>.md before editing files so your share checkout path is recorded even if context caps later. Execute all TDD tasks (RED -> GREEN -> REFACTOR) with zero code comments, batching edit_file across 4-8 distinct files per turn (1 contiguous edit_file per single file; no node -e / python3 -c source regex edits). Do NOT run version-bump scripts or E2E suites.
    2. Run 1 combined fast scoped verification gate (unit tests + lint/typecheck/wording filtered to /tmp/t.log; if a CLI fails twice, read Makefile/package.json/vitest.config.* immediately). Perform a self-simplification pass while keeping tests green.
    3. Stage and commit your changes on your share branch (`git rev-parse --abbrev-ref HEAD` and `git rev-parse HEAD`).
@@ -103,10 +102,11 @@ Once `@coordinator [green]` arrives for every stream in the phase:
    - Post `[done] <phase/stream> landed` (with **no `@`**) if more roadmap phases remain in this session so `monitor` goes dormant, or `swarm{action: "kill", name: "monitor"}` (and any active/waiting `ops` / `ops-N` worker once post-PR CI/sync finishes) when all swarm work for the session is finished.
    - Immediately `swarm{action: "kill"}` `impl`, `code-rev`, `sec-rev` (and `sql-rev`). Suffix `-2`, `-3` on the next roadmap phase (killed names cannot be reused).
    - Remove `/tmp/subagent-context-<project>-<stream>.md`, `/tmp/plan-<project>-<stream>.md`, and `/tmp/review-*-<stream>.md`.
-4. **Coordinator Inline Completion Gates (`<15s` fast gates never delegated to `ops`):**
+4. **Stage-3 `~120k` Hybrid Completion Gates (`<15s` fast gates never delegated to `ops`):**
    - Run repo version bump **once** if applicable (e.g., `node scripts/version.mjs bump patch|minor && make version-check`).
-   - Run scoped `<15s` fast unit tests and linter/typecheck directly in the Coordinator's shell and inspect exit codes (`0`). (Delegate heavy multi-suite/E2E runs, standalone APK + emulator capture, and post-PR `gh pr checks --watch` + artifact sync to sleeping `ops` on `gemini-4-hydrogen-high`, rotating `ops` -> `ops-2` at `2` medium tasks, `1` heavy run, or `cum_turns >= 12`.)
-   - Execute **Phase 10 (Blast-radius verify)** across all `Affected Callers` plus any symbols touched during review fixes, then proceed to **Phase 11 (Commit)** and **Phase 12 (Handoff)**.
+   - Run scoped `<15s` fast unit tests and linter/typecheck directly in the Coordinator's shell and inspect exit codes (`0`).
+   - **Lean Root (`<~120k` tokens:** single-feature chat, `<25` Coordinator turns, `<5` untouched caller files): walk **Phase 10 (Blast-radius verify)** inline, commit (Phase 11), and author user-voice PR (Phase 12) inline (using sleeping `ops` for heavy suites, emulator capture, or artifact sync).
+   - **Warm Root (`>=~120k` tokens, or proxies:** `2+` feature phases/streams in one chat, post-compaction/baton resume, `>=25` Coordinator turns, or `5+` untouched caller files): offload untouched-caller inspection to a fresh read-only `code-quality-reviewer` (`22.7k` floor) and heavy/CI/sync tasks to sleeping `ops` (`0.2×`, rotating `ops` -> `ops-2` at `2` medium tasks, `1` heavy run, or `cum_turns >= 12`), keeping ONLY the final `<15s` gate, `git commit`, and user-voice PR synthesis in Root.
 
 ### 5. Baton-Pass Mid-Swarm or Between Phases
 

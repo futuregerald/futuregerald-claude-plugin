@@ -18,9 +18,9 @@ Assume they are a skilled developer, but know almost nothing about our toolset o
 
 **Announce at start:** "I'm using the future-writing-plans skill to create the implementation plan."
 
-**Context:** This should be run in a dedicated worktree (created by brainstorming skill) or on a feature branch before any source file is edited.
+**Context:** Run in a dedicated worktree or on a feature branch before any source file is edited. Keep `1–2` file bounded plans inline in the Root Supervisor; for `3+`-file, cross-package, or unknown-blast-radius tasks, offload Phase 2–3 caller tracing and plan drafting to the Stage-1 `planner` subagent (`invoke_subagent` with `TypeName: "planner"`, `Model: "inherit"`, `24.8k` floor; never edits source/test files and returns `### Open Questions for User` instead of guessing UX/product ambiguity).
 
-**Save plans to:** `docs/plans/YYYY-MM-DD-<feature-name>.md` or `PLAN.md` (uncommitted, per `GEMINI.md` Phase 3).
+**Save plans to:** `docs/plans/YYYY-MM-DD-<feature-name>.md` (git-ignored, mirrored to `/tmp/plan-<project>-<stream>.md` for `share`-workspace workers; never leave an untracked `PLAN.md` in repos that do not ignore it, and never `git add` temporary plans), then run `python3 ~/.gemini/config/skills/subagent-driven-development/scripts/build_subagent_context.py pre-code --output /tmp/subagent-context-<project>-<stream>.md --plan /tmp/plan-<project>-<stream>.md --root <repo_root> [--slice <file:start-end> ...] [--touch <planned_path> ...]` to generate `## Turn-1 Parallel Read Manifest` (`TURN1_READ_MANIFEST:`).
 
 ## The Roadmap (`docs/roadmap.md`)
 

@@ -19,12 +19,13 @@ Authoritative model IDs, relative token costs, and dispatch syntax for Antigravi
 
 | `TypeName` | `tools:` Grant | Observed Turn-1 Floor | `Model` Argument | Purpose |
 |---|---|---|---|---|
+| `planner` | `[read_file, write_file, edit_file, run_command]` | `24.8k` | `"inherit"` | Stage-1 Phase 2–3 caller trace, git-ignored `docs/plans/<slug>.md` + `/tmp/plan-<project>-<stream>.md` plan authoring, and `build_subagent_context.py pre-code` (`Turn-1 Parallel Read Manifest`) for `3+`-file tasks (`SUBAGENT_TOKEN_CAP=200000`; zero source/test edits; returns `Open Questions for User` on ambiguity) |
 | `plan-reviewer` | `[read_file]` | `22.7k` | `"inherit"` | Phase 3½ read-only adversarial plan audit (zero spikes, zero `run_command`) |
-| `code-quality-reviewer` | `[read_file]` | `22.7k` | `"inherit"` | Phase 8 read-only Staff Code-Quality audit and `fix-check` verification |
+| `code-quality-reviewer` | `[read_file]` | `22.7k` | `"inherit"` | Phase 8 read-only Staff Code-Quality audit, `fix-check`, and warm-Root (`>=~120k`) Phase 10 untouched-caller check |
 | `security-reviewer` | `[read_file]` | `22.7k` | `"inherit"` | Phase 8 read-only Principal Security (OWASP) audit |
 | `sql-reviewer` | `[read_file]` | `22.7k` | `"inherit"` | Phase 9 read-only SQL performance, indexing, and injection audit |
 | `editor-pass-reviewer` | `[read_file]` | `22.7k` | `"inherit"` | Phase 12 read-only post-build quality audit against the point-of-view brief |
-| `implementer` | `[read_file, edit_file, write_file, run_command, manage_task]` | `24.8k` | `"inherit"` | Phase 4 TDD implementer (`<185k` peak-context guard; runs 1 combined fast unit/lint gate and returns 5-section handoff) |
+| `implementer` | `[read_file, edit_file, write_file, run_command, manage_task]` | `24.8k` | `"inherit"` | Phase 4 TDD implementer (`<185k` peak-context guard / `200k` hard cap; batch-reads `Turn-1 Parallel Read Manifest`, runs 1 combined fast unit/lint gate, and returns 5-section handoff) |
 
 ## 3. Dispatch Examples
 

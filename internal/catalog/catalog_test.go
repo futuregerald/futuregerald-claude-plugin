@@ -540,3 +540,127 @@ func TestAntigravityCarbonMediumDefaultAndStartSmallCatalogInvariants(t *testing
 		}
 	}
 }
+
+func TestAntigravityThinSupervisorPlannerAndManifestCatalogInvariants(t *testing.T) {
+	t.Parallel()
+
+	pluginBytes, err := fs.ReadFile(FS, "antigravity/plugins/antigravity-subagents/plugin.json")
+	if err != nil {
+		t.Fatalf("reading plugin.json: %v", err)
+	}
+	pluginStr := string(pluginBytes)
+	for _, needle := range []string{`"version": "1.3.0"`, "planner"} {
+		if !strings.Contains(pluginStr, needle) {
+			t.Errorf("plugin.json missing %q", needle)
+		}
+	}
+
+	plannerFM, plannerBody := parseAgentFrontmatter(t, "antigravity/plugins/antigravity-subagents/agents/planner.md")
+	if plannerFM["name"] != "planner" || plannerFM["subagent"] != "true" || plannerFM["mainAgent"] != "false" {
+		t.Errorf("unexpected planner.md frontmatter: %+v", plannerFM)
+	}
+	if _, hasModel := plannerFM["model"]; hasModel {
+		t.Errorf("planner.md must not set frontmatter model:")
+	}
+	if _, hasEffort := plannerFM["effort"]; hasEffort {
+		t.Errorf("planner.md must not set frontmatter effort:")
+	}
+	if plannerFM["tools"] != "[read_file, write_file, edit_file, run_command]" {
+		t.Errorf("planner.md tools = %q, want [read_file, write_file, edit_file, run_command]", plannerFM["tools"])
+	}
+	for _, needle := range []string{
+		"Open Questions for User",
+		"docs/plans/",
+		"/tmp/plan-",
+		"build_subagent_context.py pre-code",
+		"TURN1_READ_MANIFEST",
+	} {
+		if !strings.Contains(plannerBody, needle) {
+			t.Errorf("planner.md missing %q", needle)
+		}
+	}
+
+	for _, implPath := range []string{
+		"antigravity/plugins/antigravity-subagents/agents/implementer.md",
+		"claude/agents/implementer.md",
+		"opencode/agents/implementer.md",
+		"shared/skills/subagent-driven-development/SKILL.md",
+		"shared/skills/subagent-driven-development/implementer-prompt.md",
+	} {
+		b, rErr := fs.ReadFile(FS, implPath)
+		if rErr != nil {
+			t.Fatalf("reading %s: %v", implPath, rErr)
+		}
+		if !strings.Contains(string(b), "Turn-1 Parallel Read Manifest") {
+			t.Errorf("%s missing Turn-1 Parallel Read Manifest instruction", implPath)
+		}
+	}
+
+	bundlerBytes, err := fs.ReadFile(FS, "shared/skills/subagent-driven-development/scripts/build_subagent_context.py")
+	if err != nil {
+		t.Fatalf("reading build_subagent_context.py: %v", err)
+	}
+	for _, needle := range []string{
+		"Turn-1 Parallel Read Manifest",
+		"TURN1_READ_MANIFEST:",
+		"--touch",
+		"--skills-dir",
+	} {
+		if !strings.Contains(string(bundlerBytes), needle) {
+			t.Errorf("build_subagent_context.py missing %q", needle)
+		}
+	}
+
+	for _, cfgPath := range []string{
+		"antigravity/GEMINI.md",
+		"antigravity/templates/GEMINI-BASE.md",
+		"antigravity/skills/start/SKILL.md",
+		"antigravity/skills/start-small/SKILL.md",
+		"antigravity/skills/lifecycle/SKILL.md",
+		"antigravity/skills/peer-pipeline-swarm/SKILL.md",
+		"antigravity/skills/antigravity-orchestration/SKILL.md",
+		"antigravity/skills/future-model-router/SKILL.md",
+	} {
+		b, rErr := fs.ReadFile(FS, cfgPath)
+		if rErr != nil {
+			t.Fatalf("reading %s: %v", cfgPath, rErr)
+		}
+		s := string(b)
+		for _, needle := range []string{"planner", "120k"} {
+			if !strings.Contains(s, needle) {
+				t.Errorf("%s missing %q", cfgPath, needle)
+			}
+		}
+	}
+
+	breakerBytes, err := fs.ReadFile(FS, "antigravity/hooks/autonomous_breaker.py")
+	if err != nil {
+		t.Fatalf("reading autonomous_breaker.py: %v", err)
+	}
+	if !strings.Contains(string(breakerBytes), "SUBAGENT_TOKEN_CAP") {
+		t.Errorf("autonomous_breaker.py missing SUBAGENT_TOKEN_CAP")
+	}
+
+	hookEntries, err := fs.ReadDir(FS, "antigravity/hooks")
+	if err != nil {
+		t.Fatalf("reading antigravity/hooks: %v", err)
+	}
+	for _, entry := range hookEntries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".py") {
+			continue
+		}
+		p := path.Join("antigravity/hooks", entry.Name())
+		b, rErr := fs.ReadFile(FS, p)
+		if rErr != nil {
+			t.Fatalf("reading %s: %v", p, rErr)
+		}
+		for idx, line := range strings.Split(string(b), "\n") {
+			if idx == 0 && strings.HasPrefix(line, "#!") {
+				continue
+			}
+			if strings.HasPrefix(strings.TrimSpace(line), "#") {
+				t.Errorf("%s:%d starts with forbidden # comment: %q", p, idx+1, line)
+			}
+		}
+	}
+}

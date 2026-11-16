@@ -20,11 +20,9 @@ Execute an implementation plan by dispatching fresh implementer subagents (`invo
 ### 1. Prepare Pre-Packed Context (`/tmp/subagent-context-<project>-<stream>.md`)
 
 Before dispatching any subagent:
-- Run `python3 ~/.gemini/config/skills/subagent-driven-development/scripts/build_subagent_context.py pre-code --output /tmp/subagent-context-<project>-<stream>.md --plan <plan_path> [--slice <file:start-end> ...] [--gate-cmd "<cmd>" ...]` to bundle `## Acceptance Criteria` and exact numbered `file:start-end` target slices cleanly without dumping 2,000-line files.
+- Run `python3 ~/.gemini/config/skills/subagent-driven-development/scripts/build_subagent_context.py pre-code --output /tmp/subagent-context-<project>-<stream>.md --plan <plan_path> --root <repo_root> [--slice <file:start-end> ...] [--touch <planned_path> ...] [--gate-cmd "<cmd>" ...]` (for `3+`-file tasks, the Stage-1 `planner` subagent runs this during Phase 3) to bundle `## Turn-1 Parallel Read Manifest` (canonical absolute paths to the plan, in-root `docs/prd.md` / `docs/decisions/*.md` / `docs/point-of-view/*.md` / `design-demos/*/direction-approved.md`, and resolved `SKILL.md` files), `## Acceptance Criteria`, and numbered `file:start-end` target slices cleanly without dumping 2,000-line files.
 - Append or include concise context notes as needed:
-  - `## Product & Design Sources`: paths and key targets from `docs/prd.md`, `docs/decisions/product-scope.md`, `docs/point-of-view/*.md`, and `design-demos/*/direction-approved.md`.
-  - `## Acceptance Criteria & Success Metrics`: every `AC-N` row from `PLAN.md` with required runtime behavior, measurable target, and mounted entry point (`file:Symbol`).
-  - `## Known Facts`: numbered entry-point `file:start-end` slices, newest sibling exemplar `file:line`, and 1 combined fast scoped verification gate command.
+  - `## Known Facts`: sibling exemplar `file:line` and verified codebase invariants.
   - `## Affected Callers` & `## Hypotheses to Falsify`.
 - Update `<appDataDir>/brain/<conversation-id>/task.md` with the tasks to execute.
 
@@ -37,7 +35,7 @@ invoke_subagent({
   TypeName: "implementer",
   Role: "Phase 4 TDD Implementer",
   Model: "inherit",
-  Prompt: "On Turn 1, read /tmp/subagent-context-<project>-<stream>.md and PLAN.md in 1 parallel read_file batch, and trust the embedded file:start-end slices rather than reading untouched neighbor files (<185k peak-context guard; git grep -n -> +-40 lines only, 5-12 files/turn when extra reads are required). Execute Task N via strict TDD (RED -> GREEN -> REFACTOR) with zero code comments, batching edit_file across 4-8 distinct files per turn (1 contiguous edit_file or write_file on <300-line files; never run node -e or python3 -c regex source edits), and wire every Acceptance Criterion (AC-N) into the real mounted runtime entry point. Run 1 combined fast scoped verification gate at the end (if a CLI fails twice consecutively, read Makefile/package.json/vitest.config.* immediately). Return the mandatory 5-section handoff: Changes Made, Acceptance Criteria & Success Metrics Met, Flawed Assumptions, Carried Risks, Verification Evidence."
+  Prompt: "On Turn 1, read /tmp/subagent-context-<project>-<stream>.md, PLAN.md, and every - Doc: / - Skill (...): path in ## Turn-1 Parallel Read Manifest in 1 parallel read_file batch, and trust the embedded file:start-end slices rather than reading untouched neighbor files (<185k peak-context guard; 200k SUBAGENT_TOKEN_CAP; git grep -n -> +-40 lines only, 5-12 files/turn when extra reads are required). Execute Task N via strict TDD (RED -> GREEN -> REFACTOR) with zero code comments, batching edit_file across 4-8 distinct files per turn (1 contiguous edit_file or write_file on <300-line files; never run node -e or python3 -c regex source edits), and wire every Acceptance Criterion (AC-N) into the real mounted runtime entry point. Run 1 combined fast scoped verification gate at the end (if a CLI fails twice consecutively, read Makefile/package.json/vitest.config.* immediately). Return the mandatory 5-section handoff: Changes Made, Acceptance Criteria & Success Metrics Met, Flawed Assumptions, Carried Risks, Verification Evidence."
 })
 ```
 
@@ -61,10 +59,10 @@ Follow [`comprehensive-code-review`](../comprehensive-code-review/SKILL.md):
 - If CRITICAL or IMPORTANT findings are raised, fix them and verify via [`fix-check`](../fix-check/SKILL.md) (when installed; `invoke_subagent` `TypeName: "code-quality-reviewer"`, `Model: "inherit"` — never re-run a full review).
 - Once approved, delete `/tmp/subagent-context-<project>-<stream>.md`.
 
-### 5. Blast-Radius Verify, Commit & Handoff (Phases 10–12)
+### 5. Blast-Radius Verify, Commit & Handoff (Phases 10–12 — Stage-3 `~120k` Hybrid Wrap-Up)
 
-- Walk every row in `Affected Callers` plus callers of any symbol touched in review fixes (Phase 10).
-- Commit on the feature branch (Phase 11) and complete handoff / PR checks (Phase 12), marking all items complete in `task.md`.
+- Run `<15s` fast unit/lint gates directly in the Coordinator's shell (`exit 0`). When Root is **lean (`<~120k` tokens:** single-feature chat, `<25` Coordinator turns, `<5` untouched caller files), walk `Affected Callers` inline; when Root is **warm (`>=~120k` tokens, or proxies:** `2+` feature phases/streams in one chat, post-compaction/baton resume, `>=25` Coordinator turns, or `5+` untouched caller files), offload untouched-caller checks to read-only `code-quality-reviewer` (`22.7k` floor) and heavy/CI/sync checks to sleeping `ops` (`0.2×`).
+- Commit on the feature branch (Phase 11) and complete user-voice PR / handoff checks in Root (Phase 12), marking all items complete in `task.md`.
 
 ## Red Flags
 

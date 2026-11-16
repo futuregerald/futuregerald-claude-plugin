@@ -34,6 +34,7 @@ func sandboxEnv(sandboxHome, xdgConfig string) []string {
 		"BREAKER_MODE=",
 		"BREAKER_RULE_",
 		"BATON_",
+		"SUBAGENT_TOKEN_CAP=",
 		"NO_COLOR=",
 		"CI=",
 	}
@@ -489,7 +490,15 @@ func verifyAntigravityDesktopAndLiveBreakerHook(t *testing.T, binPath, sandboxHo
 	}
 
 	mustExistFile(t, filepath.Join(geminiConfigDir, "plugins", "antigravity-subagents", "plugin.json"))
-	for _, agent := range []string{"implementer.md", "code-quality-reviewer.md", "security-reviewer.md", "plan-reviewer.md"} {
+	for _, agent := range []string{
+		"implementer.md",
+		"planner.md",
+		"code-quality-reviewer.md",
+		"security-reviewer.md",
+		"plan-reviewer.md",
+		"sql-reviewer.md",
+		"editor-pass-reviewer.md",
+	} {
 		agentPath := filepath.Join(geminiConfigDir, "plugins", "antigravity-subagents", "agents", agent)
 		agentData := mustExistFile(t, agentPath)
 		assertNoFrontmatterModelOrEffort(t, agentPath, agentData)
@@ -692,6 +701,44 @@ func executeLiveBreakerScenarios(t *testing.T, hookShPath, sandboxHome, xdgConfi
 	})
 	if outAfterUnlock != "" {
 		t.Fatalf("expected run_command within +50k handoff unlock window to pass through, got %q", outAfterUnlock)
+	}
+
+	subDir := filepath.Join(sandboxHome, ".gemini", "antigravity", "brain", "conv-subagent", ".system_generated", "logs")
+	if err := os.MkdirAll(subDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	tSub := filepath.Join(subDir, "transcript.jsonl")
+	subLines := "{\"type\":\"SYSTEM_MESSAGE\",\"content\":\"subagent assignment\"}\n{\"type\":\"PLANNER_RESPONSE\",\"input_tokens\":205000,\"output_tokens\":0}\n"
+	if err := os.WriteFile(tSub, []byte(subLines), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	outSubDeny := invokeHook(map[string]any{
+		"conversationId": "conv-subagent",
+		"transcriptPath": tSub,
+		"toolCall": map[string]any{
+			"name": "run_command",
+			"args": map[string]any{"CommandLine": "git grep foo"},
+		},
+	})
+	var subDecision map[string]string
+	if err := json.Unmarshal([]byte(outSubDeny), &subDecision); err != nil {
+		t.Fatalf("expected JSON deny on >=200k subagent run_command, got %q (err=%v)", outSubDeny, err)
+	}
+	if subDecision["decision"] != "deny" || !strings.Contains(subDecision["reason"], "Subagent Context Cap") {
+		t.Fatalf("unexpected subagent cap decision: %+v", subDecision)
+	}
+
+	outSubPlanAllow := invokeHook(map[string]any{
+		"conversationId": "conv-subagent",
+		"transcriptPath": tSub,
+		"toolCall": map[string]any{
+			"name": "write_file",
+			"args": map[string]any{"Path": filepath.Join(sandboxHome, "PLAN.md"), "Content": "# Plan"},
+		},
+	})
+	if outSubPlanAllow != "" {
+		t.Fatalf("expected PLAN.md write_file to pass through at >=200k subagent cap, got %q", outSubPlanAllow)
 	}
 }
 

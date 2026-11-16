@@ -23,17 +23,18 @@ Shared skills name **abstract roles** (`Lead / Planner`, `Implementer`, `Adversa
 ### Deterministic Context Bundler (`build_subagent_context.py`), Turn Batching & Fast-Test Rules
 
 To eliminate duplicate file reads, redundant searches, micro-slice tail loops, and $O(N^2)$ token re-billing across subagents:
-1. **Build Pre-Code Context Bundle (`pre-code`):** After initial triage (`git grep -n`, ≤3 inline calls) and plan approval, pack exact target slices (`file:start-end`), extracted `## Acceptance Criteria`, and fast gate commands into `/tmp/subagent-context-<project>-<stream>.md`:
+1. **Build Pre-Code Context Bundle (`pre-code`):** After initial triage (`git grep -n`, ≤3 inline calls) and plan approval, pack exact target slices (`file:start-end`), planned new/modified paths (`--touch <relpath>`), resolved `## Turn-1 Parallel Read Manifest` paths (canonical absolute `SKILL.md` and in-root product/design docs), extracted `## Acceptance Criteria`, and fast gate commands into `/tmp/subagent-context-<project>-<stream>.md`:
    ```bash
    python3 ~/.claude/skills/subagent-driven-development/scripts/build_subagent_context.py pre-code \
      --output /tmp/subagent-context-<project>-<stream>.md \
      --plan <plan_path> \
      --slice <file:start-end> \
+     --touch <planned_new_or_modified_file> \
      --gate-cmd "<fast_gate_cmd>"
    ```
    Append any extra verified `file:line` facts under `## Known Facts` (never unverified guesses; put unproven ideas under `## Hypotheses to Falsify`).
-2. **Turn-1 Parallel Context Read & Turn Batching Rules (Mandatory for All Subagents):**
-   - **Turn 1:** Read `/tmp/subagent-context-<project>-<stream>.md` (when `>750` lines, issue parallel `Read` calls across every `StartLine-EndLine` window listed in `## Read Chunk Index`) and `<plan_path>` on Turn 1. Never re-search or re-read unchanged slices already embedded in the context bundle.
+2. **Turn-1 Parallel Context & Manifest Read + Turn Batching Rules (Mandatory for All Subagents):**
+   - **Turn 1:** Read `/tmp/subagent-context-<project>-<stream>.md` (when `>750` lines, issue parallel `Read` calls across every `StartLine-EndLine` window listed in `## Read Chunk Index`), `<plan_path>`, and every `- Doc:` and `- Skill (...):` path listed in `## Turn-1 Parallel Read Manifest` in parallel on Turn 1. Never re-search or re-read unchanged slices already embedded in the context bundle.
    - **Parallel File Reads:** Batch additional file reads (`5–12` files per turn, `400–800` lines per read). Never read files in `30–50` line micro-slices or serial 1-file tail loops.
    - **Distinct-File vs. Single-File Edit Batching:** Batch edits across **distinct files** in parallel (`4–8` files/turn). On a **single file**, prefer 1 contiguous `Edit` replacement (or a full `Write` when `<300` lines) — never issue `3+` separate `Edit` calls against the same file in a single turn.
    - **Ban Ad-Hoc Regex Source Mutations:** Never mutate source or test files with inline `node -e` or `python3 -c` regex scripts; use structured `Edit`/`Write` calls or deterministic, tested repo scripts.

@@ -2165,7 +2165,7 @@ class TestAutonomousBreaker(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             t_path = Path(tmpdir) / "transcript.jsonl"
             t_full_path = Path(tmpdir) / "transcript_full.jsonl"
-            padding = "a" * 800000
+            padding = "a" * 780000
             steps = [
                 {"step_index": 0, "source": "SYSTEM", "type": "SYSTEM_MESSAGE", "content": "helper start"},
                 {"step_index": 1, "source": "MODEL", "type": "PLANNER_RESPONSE", "content": padding, "tool_calls": [{"name": "run_command", "args": {"CommandLine": "pytest test_1.py"}}]},
@@ -2179,9 +2179,19 @@ class TestAutonomousBreaker(unittest.TestCase):
                 "stepIdx": 3,
                 "toolCall": {"name": "run_command", "args": {"CommandLine": "pytest test_2.py"}}
             }
-            res = self.execute_breaker(payload, env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir})
+            res = self.execute_breaker(payload, env={"BREAKER_BATON_MODE": "enforce", "BATON_WARN_TOKENS": "150000", "BREAKER_STATE_DIR": tmpdir})
             self.assertEqual(res.returncode, 0)
             self.assertEqual(res.stdout, "")
+
+            steps[1]["content"] = "a" * 820000
+            self.write_jsonl(t_path, steps)
+            self.write_jsonl(t_full_path, steps)
+            res_cap = self.execute_breaker(payload, env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir})
+            self.assertEqual(res_cap.returncode, 0)
+            cap_data = json.loads(res_cap.stdout)
+            self.assertEqual(cap_data.get("decision"), "deny")
+            self.assertIn("Subagent Context Cap", cap_data.get("reason", ""))
+            self.assertNotIn("Baton Warn", cap_data.get("reason", ""))
 
     def test_performance_under_300ms_on_large_transcript(self):
         large_transcript = os.path.expanduser("~/.gemini/antigravity/brain/a104d6ed-7b67-4464-a0a9-a5ec607b5e51/.system_generated/logs/transcript.jsonl")
@@ -3479,6 +3489,439 @@ class TestAutonomousBreaker(unittest.TestCase):
             h2_spoof_data = json.loads(res_h2_spoof.stdout)
             self.assertEqual(h2_spoof_data.get("decision"), "deny")
             self.assertIn("Subagent Step Cap", h2_spoof_data.get("reason", ""))
+
+    def test_three_way_baton_partition_system_swarm_worker_and_200k_subagent_guard(self):
+        import autonomous_breaker
+        self.assertFalse(autonomous_breaker._is_h2_handoff_path("src/handoff.py"))
+        self.assertFalse(autonomous_breaker._is_h2_handoff_path("/repo/src/handoff.py"))
+        self.assertTrue(autonomous_breaker._is_h2_handoff_path("/tmp/handoff.md"))
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            sys_worker_path = Path(tmpdir) / "sys_worker_transcript.jsonl"
+            sys_worker_steps = [
+                {
+                    "step_index": 0,
+                    "source": "SYSTEM",
+                    "type": "SYSTEM_MESSAGE",
+                    "content": "You have just started. Your assignment (recorded on the board as #1 for @impl): build feature",
+                },
+                {
+                    "step_index": 1,
+                    "source": "MODEL",
+                    "type": "PLANNER_RESPONSE",
+                    "input_tokens": 10000,
+                    "cache_read_tokens": 195000,
+                    "output_tokens": 500,
+                    "content": "working",
+                    "tool_calls": [{"name": "read_file", "args": {"Path": "/repo/main.go"}}],
+                },
+            ]
+            self.write_jsonl(sys_worker_path, sys_worker_steps)
+
+            for ok_205k in (
+                {"name": "run_command", "args": {"CommandLine": "git commit -m 'feat: ok'"}},
+                {"name": "edit_file", "args": {"Path": "/repo/main.go", "Target": "a", "Replacement": "b"}},
+            ):
+                res_w205 = self.execute_breaker(
+                    {
+                        "conversationId": "test-sys-swarm-worker",
+                        "transcriptPath": str(sys_worker_path),
+                        "stepIdx": 3,
+                        "toolCall": ok_205k,
+                    },
+                    env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
+                )
+                self.assertEqual(res_w205.returncode, 0)
+                self.assertEqual(res_w205.stdout, "")
+
+            sys_worker_steps[1]["cache_read_tokens"] = 230000
+            self.write_jsonl(sys_worker_path, sys_worker_steps)
+            res_w240_deny = self.execute_breaker(
+                {
+                    "conversationId": "test-sys-swarm-worker",
+                    "transcriptPath": str(sys_worker_path),
+                    "stepIdx": 4,
+                    "toolCall": {"name": "run_command", "args": {"CommandLine": "git status"}},
+                },
+                env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
+            )
+            self.assertEqual(res_w240_deny.returncode, 0)
+            w240_data = json.loads(res_w240_deny.stdout)
+            self.assertEqual(w240_data.get("decision"), "deny")
+            self.assertIn("Swarm Worker Context Cap", w240_data.get("reason", ""))
+
+            res_w240_unlock = self.execute_breaker(
+                {
+                    "conversationId": "test-sys-swarm-worker",
+                    "transcriptPath": str(sys_worker_path),
+                    "stepIdx": 5,
+                    "toolCall": {"name": "write_file", "args": {"Path": "/tmp/subagent-context-sysw.md", "Content": "wip"}},
+                },
+                env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
+            )
+            self.assertEqual(res_w240_unlock.returncode, 0)
+            self.assertEqual(res_w240_unlock.stdout, "")
+
+            res_w240_commit = self.execute_breaker(
+                {
+                    "conversationId": "test-sys-swarm-worker",
+                    "transcriptPath": str(sys_worker_path),
+                    "stepIdx": 6,
+                    "toolCall": {"name": "run_command", "args": {"CommandLine": "git commit -am wip"}},
+                },
+                env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
+            )
+            self.assertEqual(res_w240_commit.returncode, 0)
+            self.assertEqual(res_w240_commit.stdout, "")
+
+            sub_path = Path(tmpdir) / "subagent_transcript.jsonl"
+            sub_steps = [
+                {"step_index": 0, "source": "SYSTEM", "type": "SYSTEM_MESSAGE", "content": "subagent assignment"},
+                {
+                    "step_index": 1,
+                    "source": "MODEL",
+                    "type": "PLANNER_RESPONSE",
+                    "input_tokens": 9000,
+                    "cache_read_tokens": 189500,
+                    "output_tokens": 400,
+                    "content": "planning",
+                    "tool_calls": [{"name": "read_file", "args": {"Path": "/repo/pkg.go"}}],
+                },
+            ]
+            self.write_jsonl(sub_path, sub_steps)
+            res_sub_199k = self.execute_breaker(
+                {
+                    "conversationId": "test-subagent-cap",
+                    "transcriptPath": str(sub_path),
+                    "stepIdx": 3,
+                    "toolCall": {"name": "read_file", "args": {"Path": "/repo/other.go"}},
+                },
+                env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
+            )
+            self.assertEqual(res_sub_199k.returncode, 0)
+            self.assertEqual(res_sub_199k.stdout, "")
+
+            sub_steps[1]["cache_read_tokens"] = 196000
+            self.write_jsonl(sub_path, sub_steps)
+
+            victim_py = Path(tmpdir) / "app.py"
+            victim_py.write_text("x = 1\n", encoding="utf-8")
+            evil_md_link = Path(tmpdir) / "evil.md"
+            evil_md_link.symlink_to(victim_py)
+            outside_repo = Path(tmpdir) / "outside_repo"
+            outside_repo.mkdir(parents=True, exist_ok=True)
+            evil_plans_parent = Path(tmpdir) / "repo_sym" / "docs"
+            evil_plans_parent.mkdir(parents=True, exist_ok=True)
+            (evil_plans_parent / "plans").symlink_to(outside_repo)
+
+            for blocked_sub_call in (
+                {"name": "read_file", "args": {"Path": "/repo/other.go"}},
+                {"name": "run_command", "args": {"CommandLine": "git grep foo"}},
+                {"name": "call_mcp_tool", "args": {"ServerName": "prism", "ToolName": "session_load_context"}},
+                {"name": "write_file", "args": {"Path": "/repo/src/app.py", "Content": "x = 2"}},
+                {"name": "write_file", "args": {"Path": "src/handoff.py", "Content": "x = 2"}},
+                {"name": "write_file", "args": {"Path": "/repo/docs/plans/../../PLAN.md", "Content": "escape"}},
+                {"name": "write_file", "args": {"Path": str(evil_md_link), "Content": "clobber"}},
+                {"name": "write_file", "args": {"Path": str(evil_plans_parent / "plans" / "feat.md"), "Content": "clobber"}},
+            ):
+                res_sub_blk = self.execute_breaker(
+                    {
+                        "conversationId": "test-subagent-cap",
+                        "transcriptPath": str(sub_path),
+                        "stepIdx": 4,
+                        "toolCall": blocked_sub_call,
+                    },
+                    env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir, "SUBAGENT_TOKEN_CAP": ""},
+                )
+                self.assertEqual(res_sub_blk.returncode, 0)
+                blk_data = json.loads(res_sub_blk.stdout)
+                self.assertEqual(blk_data.get("decision"), "deny", f"expected deny for {blocked_sub_call}")
+                self.assertIn("Subagent Context Cap", blk_data.get("reason", ""))
+
+            real_plans_dir = Path(tmpdir) / "repo" / "docs" / "plans"
+            real_plans_dir.mkdir(parents=True, exist_ok=True)
+            for allowed_sub_call in (
+                {"name": "write_file", "args": {"Path": "PLAN.md", "Content": "plan"}},
+                {"name": "write_file", "args": {"Path": str(real_plans_dir / "feat.md"), "Content": "plan"}},
+                {"name": "edit_file", "args": {"Path": "/tmp/subagent-context-x.md", "Target": "a", "Replacement": "b"}},
+                {"name": "write_file", "args": {"Path": "/tmp/handoff-proj.md", "Content": "handoff"}},
+                {"name": "write_file", "args": {"Path": "~/.gemini/antigravity/brain/conv-1/summary.md", "Content": "summary"}},
+                {"name": "send_message", "args": {"Recipient": "parent", "Message": "done"}},
+            ):
+                res_sub_ok = self.execute_breaker(
+                    {
+                        "conversationId": "test-subagent-cap",
+                        "transcriptPath": str(sub_path),
+                        "stepIdx": 5,
+                        "toolCall": allowed_sub_call,
+                    },
+                    env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
+                )
+                self.assertEqual(res_sub_ok.returncode, 0)
+                self.assertEqual(res_sub_ok.stdout, "", f"expected allow for {allowed_sub_call}")
+
+            res_disabled = self.execute_breaker(
+                {
+                    "conversationId": "test-subagent-cap",
+                    "transcriptPath": str(sub_path),
+                    "stepIdx": 6,
+                    "toolCall": {"name": "read_file", "args": {"Path": "/repo/other.go"}},
+                },
+                env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir, "SUBAGENT_TOKEN_CAP": "0"},
+            )
+            self.assertEqual(res_disabled.returncode, 0)
+            self.assertEqual(res_disabled.stdout, "")
+
+            log_path = Path(tmpdir) / "baton_log.jsonl"
+            res_log_mode = self.execute_breaker(
+                {
+                    "conversationId": "test-subagent-cap",
+                    "transcriptPath": str(sub_path),
+                    "stepIdx": 7,
+                    "toolCall": {"name": "read_file", "args": {"Path": "/repo/other.go"}},
+                },
+                env={"BREAKER_BATON_MODE": "log", "BREAKER_LOG_PATH": str(log_path), "BREAKER_STATE_DIR": tmpdir},
+            )
+            self.assertEqual(res_log_mode.returncode, 0)
+            self.assertEqual(res_log_mode.stdout, "")
+            logged = [json.loads(ln) for ln in log_path.read_text(encoding="utf-8").splitlines() if ln.strip()]
+            self.assertEqual(len(logged), 1)
+            self.assertEqual(logged[0]["rule"], "BATON")
+            self.assertTrue(logged[0]["target"].startswith("subagent_estimate:"))
+
+            strikes_path = Path(tmpdir) / "strikes_wrapup.jsonl"
+            strikes_steps = [{"step_index": 0, "source": "SYSTEM", "type": "SYSTEM_MESSAGE", "content": "subagent"}]
+            s_i = 1
+            for _ in range(4):
+                strikes_steps.append({
+                    "step_index": s_i, "source": "MODEL", "type": "PLANNER_RESPONSE",
+                    "tool_calls": [{"name": "run_command", "args": {"CommandLine": "pytest tests/test_x.py"}}],
+                })
+                s_i += 1
+                strikes_steps.append({"step_index": s_i, "source": "SYSTEM", "type": "GENERIC", "content": "The command exited with code 1."})
+                s_i += 1
+            self.write_jsonl(strikes_path, strikes_steps)
+            res_strikes_ctx = self.execute_breaker(
+                {
+                    "conversationId": "test-strikes-wrapup",
+                    "transcriptPath": str(strikes_path),
+                    "stepIdx": s_i + 1,
+                    "toolCall": {"name": "edit_file", "args": {"Path": "/tmp/subagent-context-x.md", "Target": "a", "Replacement": "b"}},
+                },
+                env={"BREAKER_STATE_DIR": tmpdir},
+            )
+            self.assertEqual(res_strikes_ctx.returncode, 0)
+            self.assertEqual(res_strikes_ctx.stdout, "")
+
+    def test_symlinked_dotfiles_home_coordinator_unlock_and_swarm_spoof_and_leaf_symlink_defenses(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            real_dotfiles = Path(tmpdir) / "dotfiles_gemini"
+            (real_dotfiles / "handoffs" / "proj").mkdir(parents=True, exist_ok=True)
+            fake_home = Path(tmpdir) / "fake_home"
+            fake_home.mkdir(parents=True, exist_ok=True)
+            (fake_home / ".gemini").symlink_to(real_dotfiles)
+
+            coord_path = Path(tmpdir) / "coord_symlink_home.jsonl"
+            coord_steps = [
+                {"step_index": 0, "source": "USER_EXPLICIT", "type": "USER_INPUT", "content": "/goal ship"},
+                {
+                    "step_index": 1,
+                    "source": "SYSTEM",
+                    "type": "SYSTEM_MESSAGE",
+                    "content": "Subagent note: [swarm] new board message #1 and recorded on the board as #1 for @impl",
+                },
+                {
+                    "step_index": 2,
+                    "source": "MODEL",
+                    "type": "PLANNER_RESPONSE",
+                    "input_tokens": 15000,
+                    "cache_read_tokens": 195000,
+                    "output_tokens": 500,
+                    "content": "checking",
+                    "tool_calls": [{"name": "run_command", "args": {"CommandLine": "pwd"}}],
+                },
+            ]
+            self.write_jsonl(coord_path, coord_steps)
+
+            res_coord_warn = self.execute_breaker(
+                {
+                    "conversationId": "test-coord-spoof-sys",
+                    "transcriptPath": str(coord_path),
+                    "stepIdx": 3,
+                    "toolCall": {"name": "run_command", "args": {"CommandLine": "ls"}},
+                },
+                env={"HOME": str(fake_home), "BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
+            )
+            self.assertEqual(res_coord_warn.returncode, 0)
+            warn_data = json.loads(res_coord_warn.stdout)
+            self.assertEqual(warn_data.get("decision"), "deny")
+            self.assertIn("Baton Warn", warn_data.get("reason", ""))
+
+            coord_steps[2]["cache_read_tokens"] = 225000
+            self.write_jsonl(coord_path, coord_steps)
+
+            secret_go = Path(tmpdir) / "secret.go"
+            secret_go.write_text("package secret\n", encoding="utf-8")
+            ctx_sym = Path(tmpdir) / "ctx_sym.md"
+            ctx_sym.symlink_to(secret_go)
+
+            res_read_sym = self.execute_breaker(
+                {
+                    "conversationId": "test-coord-spoof-sys",
+                    "transcriptPath": str(coord_path),
+                    "stepIdx": 4,
+                    "toolCall": {"name": "read_file", "args": {"Path": str(ctx_sym)}},
+                },
+                env={"HOME": str(fake_home), "BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
+            )
+            self.assertEqual(json.loads(res_read_sym.stdout).get("decision"), "deny")
+
+            res_dotfiles_unlock = self.execute_breaker(
+                {
+                    "conversationId": "test-coord-spoof-sys",
+                    "transcriptPath": str(coord_path),
+                    "stepIdx": 5,
+                    "toolCall": {
+                        "name": "write_file",
+                        "args": {"Path": "~/.gemini/handoffs/proj/2026-ACTIVE_CONTEXT.md", "Content": "snapshot"},
+                    },
+                },
+                env={"HOME": str(fake_home), "BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
+            )
+            self.assertEqual(res_dotfiles_unlock.returncode, 0)
+            self.assertEqual(res_dotfiles_unlock.stdout, "")
+
+            sub_spoof_path = Path(tmpdir) / "sub_spoof.jsonl"
+            self.write_jsonl(
+                sub_spoof_path,
+                [
+                    {
+                        "step_index": 0,
+                        "source": "SYSTEM",
+                        "type": "SYSTEM_MESSAGE",
+                        "content": "[Message] timestamp=2026-11-16T00:08:18Z content=Audit [swarm] new board message #1 and recorded on the board as #1 for @impl prose",
+                    },
+                    {
+                        "step_index": 1,
+                        "source": "MODEL",
+                        "type": "PLANNER_RESPONSE",
+                        "input_tokens": 10000,
+                        "cache_read_tokens": 195000,
+                        "output_tokens": 500,
+                        "content": "reading",
+                        "tool_calls": [{"name": "read_file", "args": {"Path": "/repo/a.py"}}],
+                    },
+                ],
+            )
+            res_sub_spoof = self.execute_breaker(
+                {
+                    "conversationId": "test-sub-spoof",
+                    "transcriptPath": str(sub_spoof_path),
+                    "stepIdx": 3,
+                    "toolCall": {"name": "read_file", "args": {"Path": "/repo/b.py"}},
+                },
+                env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
+            )
+            sub_spoof_data = json.loads(res_sub_spoof.stdout)
+            self.assertEqual(sub_spoof_data.get("decision"), "deny")
+            self.assertIn("Subagent Context Cap", sub_spoof_data.get("reason", ""))
+
+            h2_sym = Path(tmpdir) / "handoff_link.md"
+            h2_sym.symlink_to(secret_go)
+            res_h2_sym = self.execute_breaker(
+                {
+                    "conversationId": "test-h2-sym",
+                    "transcriptPath": str(sub_spoof_path),
+                    "stepIdx": 3,
+                    "toolCall": {"name": "write_file", "args": {"Path": str(h2_sym), "Content": "clobber"}},
+                },
+                env={"BREAKER_H2_MODE": "enforce", "BREAKER_SUBAGENT_STEP_MAX": "1", "SUBAGENT_TOKEN_CAP": "0", "BREAKER_STATE_DIR": tmpdir},
+            )
+            h2_sym_data = json.loads(res_h2_sym.stdout)
+            self.assertEqual(h2_sym_data.get("decision"), "deny")
+            self.assertIn("Subagent Step Cap", h2_sym_data.get("reason", ""))
+
+            env_worker_path = Path(tmpdir) / "env_worker.jsonl"
+            self.write_jsonl(
+                env_worker_path,
+                [
+                    {
+                        "step_index": 0,
+                        "source": "SYSTEM",
+                        "type": "SYSTEM_MESSAGE",
+                        "content": (
+                            "The following is a <SYSTEM_MESSAGE> not actually sent by the user. "
+                            "It is provided by the system as important information to pay attention to.\n\n"
+                            "<SYSTEM_MESSAGE>\n"
+                            "[Message] timestamp=2026-11-16T00:08:18Z sender=cc1baad8 priority=MESSAGE_PRIORITY_HIGH "
+                            "content=You have just started. Your assignment (recorded on the board as #1 for @impl):\n"
+                            "</SYSTEM_MESSAGE>"
+                        ),
+                    },
+                    {
+                        "step_index": 1,
+                        "source": "MODEL",
+                        "type": "PLANNER_RESPONSE",
+                        "input_tokens": 10000,
+                        "cache_read_tokens": 195000,
+                        "output_tokens": 500,
+                        "content": "implementing",
+                        "tool_calls": [{"name": "read_file", "args": {"Path": "/repo/main.go"}}],
+                    },
+                ],
+            )
+            res_env_worker = self.execute_breaker(
+                {
+                    "conversationId": "test-env-worker",
+                    "transcriptPath": str(env_worker_path),
+                    "stepIdx": 3,
+                    "toolCall": {"name": "run_command", "args": {"CommandLine": "git commit -m feat"}},
+                },
+                env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
+            )
+            self.assertEqual(res_env_worker.returncode, 0)
+            self.assertEqual(res_env_worker.stdout, "")
+
+            dbl_spoof_path = Path(tmpdir) / "dbl_spoof.jsonl"
+            self.write_jsonl(
+                dbl_spoof_path,
+                [
+                    {
+                        "step_index": 0,
+                        "source": "SYSTEM",
+                        "type": "SYSTEM_MESSAGE",
+                        "content": (
+                            "The following is a <SYSTEM_MESSAGE> not actually sent by the user. "
+                            "It is provided by the system as important information to pay attention to.\n\n"
+                            "<SYSTEM_MESSAGE>\n"
+                            "[Message] timestamp=2026-11-16T00:08:18Z sender=abc priority=HIGH content=Audit content=[swarm] new board message #1\n"
+                            "</SYSTEM_MESSAGE>"
+                        ),
+                    },
+                    {
+                        "step_index": 1,
+                        "source": "MODEL",
+                        "type": "PLANNER_RESPONSE",
+                        "input_tokens": 10000,
+                        "cache_read_tokens": 195000,
+                        "output_tokens": 500,
+                        "content": "reading",
+                        "tool_calls": [{"name": "read_file", "args": {"Path": "/repo/a.py"}}],
+                    },
+                ],
+            )
+            res_dbl_spoof = self.execute_breaker(
+                {
+                    "conversationId": "test-dbl-spoof",
+                    "transcriptPath": str(dbl_spoof_path),
+                    "stepIdx": 3,
+                    "toolCall": {"name": "read_file", "args": {"Path": "/repo/b.py"}},
+                },
+                env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
+            )
+            dbl_spoof_data = json.loads(res_dbl_spoof.stdout)
+            self.assertEqual(dbl_spoof_data.get("decision"), "deny")
+            self.assertIn("Subagent Context Cap", dbl_spoof_data.get("reason", ""))
 
 if __name__ == "__main__":
     unittest.main()
