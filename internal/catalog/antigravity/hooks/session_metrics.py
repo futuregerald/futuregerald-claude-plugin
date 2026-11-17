@@ -321,8 +321,8 @@ def process_transcripts(
         proposed_baton_warn = round_down_5k(0.75 * p10_compaction)
         proposed_baton_block = round_down_5k(0.92 * p10_compaction)
     else:
-        proposed_baton_warn = 200000
-        proposed_baton_block = 300000
+        proposed_baton_warn = 310000
+        proposed_baton_block = 350000
 
     warn_crossing_count = 0
     block_crossing_count = 0

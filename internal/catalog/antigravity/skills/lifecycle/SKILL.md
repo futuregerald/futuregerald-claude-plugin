@@ -32,7 +32,7 @@ Before starting Phase 0, create and maintain the session's `task.md` artifact (`
 - **Gate:** Task and constraints understood; `task.md` created; feature branch checked out.
 
 ### Phase 2: Trace
-- **Action:** Run `1–3` inline `git grep -n` entry-point lookups first. Keep `1–2` file traces inline in the Root Supervisor; for `3+`-file, cross-package, or unknown-blast-radius work, dispatch `invoke_subagent` (`TypeName: "planner"`, `Model: "inherit"`, `24.8k` floor; `SUBAGENT_TOKEN_CAP=200000`) to map the call chain both ways before editing:
+- **Action:** Run `1–3` inline `git grep -n` entry-point lookups first. Keep `1–2` file traces inline in the Root Supervisor; for `3+`-file, cross-package, or unknown-blast-radius work, dispatch `invoke_subagent` (`TypeName: "planner"`, `Model: "inherit"`, `24.8k` floor; `SUBAGENT_TOKEN_CAP=350000`) to map the call chain both ways before editing:
   - **Upward:** Every caller out to the controller, job, CLI command, rake task, or API endpoint, and what each caller expects.
   - **Downward:** Side effects, transactions, external calls, and what raises or returns errors.
   - **Invisible edges:** Grep for dynamic dispatch (`send`, `constantize`, serializers, callbacks, string-named jobs) and cross-package E2E suites where applicable.

@@ -630,7 +630,7 @@ func executeLiveBreakerScenarios(t *testing.T, hookShPath, sandboxHome, xdgConfi
 		t.Fatalf("expected empty stdout for low-token transcript, got %q", outLow)
 	}
 
-	tWarn := writeTranscript("conv-warn", 210000)
+	tWarn := writeTranscript("conv-warn", 315000)
 	outWarn1 := invokeHook(map[string]any{
 		"conversationId": "conv-warn",
 		"transcriptPath": tWarn,
@@ -643,7 +643,7 @@ func executeLiveBreakerScenarios(t *testing.T, hookShPath, sandboxHome, xdgConfi
 	if err := json.Unmarshal([]byte(outWarn1), &warnDecision); err != nil {
 		t.Fatalf("expected JSON deny on first warn call, got %q (err=%v)", outWarn1, err)
 	}
-	if warnDecision["decision"] != "deny" || !strings.Contains(warnDecision["reason"], "CIRCUIT BREAKER (Baton Warn): Context estimate 210000 >= 205000") {
+	if warnDecision["decision"] != "deny" || !strings.Contains(warnDecision["reason"], "CIRCUIT BREAKER (Baton Warn): Context estimate 315000 >= 310000") {
 		t.Fatalf("unexpected warn decision: %+v", warnDecision)
 	}
 	stateWarnFile := filepath.Join(sandboxHome, ".gemini", "state", "baton-conv-warn.json")
@@ -661,7 +661,7 @@ func executeLiveBreakerScenarios(t *testing.T, hookShPath, sandboxHome, xdgConfi
 		t.Fatalf("expected second call at warn threshold to pass through with empty stdout, got %q", outWarn2)
 	}
 
-	tBlock := writeTranscript("conv-block", 245000)
+	tBlock := writeTranscript("conv-block", 355000)
 	outBlock := invokeHook(map[string]any{
 		"conversationId": "conv-block",
 		"transcriptPath": tBlock,
@@ -674,7 +674,7 @@ func executeLiveBreakerScenarios(t *testing.T, hookShPath, sandboxHome, xdgConfi
 	if err := json.Unmarshal([]byte(outBlock), &blockDecision); err != nil {
 		t.Fatalf("expected JSON deny on block call, got %q (err=%v)", outBlock, err)
 	}
-	if blockDecision["decision"] != "deny" || !strings.Contains(blockDecision["reason"], "CIRCUIT BREAKER (Baton Block): Context estimate 245000 >= 235000") {
+	if blockDecision["decision"] != "deny" || !strings.Contains(blockDecision["reason"], "CIRCUIT BREAKER (Baton Block): Context estimate 355000 >= 350000") {
 		t.Fatalf("unexpected block decision: %+v", blockDecision)
 	}
 
@@ -708,7 +708,7 @@ func executeLiveBreakerScenarios(t *testing.T, hookShPath, sandboxHome, xdgConfi
 		t.Fatal(err)
 	}
 	tSub := filepath.Join(subDir, "transcript.jsonl")
-	subLines := "{\"type\":\"SYSTEM_MESSAGE\",\"content\":\"subagent assignment\"}\n{\"type\":\"PLANNER_RESPONSE\",\"input_tokens\":205000,\"output_tokens\":0}\n"
+	subLines := "{\"type\":\"SYSTEM_MESSAGE\",\"content\":\"subagent assignment\"}\n{\"type\":\"PLANNER_RESPONSE\",\"input_tokens\":355000,\"output_tokens\":0}\n"
 	if err := os.WriteFile(tSub, []byte(subLines), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -723,9 +723,9 @@ func executeLiveBreakerScenarios(t *testing.T, hookShPath, sandboxHome, xdgConfi
 	})
 	var subDecision map[string]string
 	if err := json.Unmarshal([]byte(outSubDeny), &subDecision); err != nil {
-		t.Fatalf("expected JSON deny on >=200k subagent run_command, got %q (err=%v)", outSubDeny, err)
+		t.Fatalf("expected JSON deny on >=350k subagent run_command, got %q (err=%v)", outSubDeny, err)
 	}
-	if subDecision["decision"] != "deny" || !strings.Contains(subDecision["reason"], "Subagent Context Cap") {
+	if subDecision["decision"] != "deny" || !strings.Contains(subDecision["reason"], "Subagent Context Cap") || !strings.Contains(subDecision["reason"], "355000 >= 350000") {
 		t.Fatalf("unexpected subagent cap decision: %+v", subDecision)
 	}
 
@@ -738,7 +738,7 @@ func executeLiveBreakerScenarios(t *testing.T, hookShPath, sandboxHome, xdgConfi
 		},
 	})
 	if outSubPlanAllow != "" {
-		t.Fatalf("expected PLAN.md write_file to pass through at >=200k subagent cap, got %q", outSubPlanAllow)
+		t.Fatalf("expected PLAN.md write_file to pass through at >=350k subagent cap, got %q", outSubPlanAllow)
 	}
 }
 

@@ -57,7 +57,7 @@ Board tools (`read_board`, `post_message`, `swarm_wait`) appear one turn *after*
 
 1. **`impl` (`gemini-4-carbon-medium`, `workspace: "share"`):**
    ```text
-   Read ~/.gemini/config/plugins/antigravity-subagents/agents/implementer.md, /tmp/plan-<project>-<stream>.md, /tmp/subagent-context-<project>-<stream>.md, and every - Doc: / - Skill (...): path listed in ## Turn-1 Parallel Read Manifest in 1 parallel Turn-1 batch (<185k peak-context guard).
+   Read ~/.gemini/config/plugins/antigravity-subagents/agents/implementer.md, /tmp/plan-<project>-<stream>.md, /tmp/subagent-context-<project>-<stream>.md, and every - Doc: / - Skill (...): path listed in ## Turn-1 Parallel Read Manifest in 1 parallel Turn-1 batch (<320k peak-context guard).
    1. Immediately append `SHARE_ROOT=$(pwd)` and `BRANCH=$(git rev-parse --abbrev-ref HEAD)` to /tmp/subagent-context-<project>-<stream>.md before editing files so your share checkout path is recorded even if context caps later. Execute all TDD tasks (RED -> GREEN -> REFACTOR) with zero code comments, batching edit_file across 4-8 distinct files per turn (1 contiguous edit_file per single file; no node -e / python3 -c source regex edits). Do NOT run version-bump scripts or E2E suites.
    2. Run 1 combined fast scoped verification gate (unit tests + lint/typecheck/wording filtered to /tmp/t.log; if a CLI fails twice, read Makefile/package.json/vitest.config.* immediately). Perform a self-simplification pass while keeping tests green.
    3. Stage and commit your changes on your share branch (`git rev-parse --abbrev-ref HEAD` and `git rev-parse HEAD`).
@@ -110,17 +110,17 @@ Once `@coordinator [green]` arrives for every stream in the phase:
 
 ### 5. Baton-Pass Mid-Swarm or Between Phases
 
-1. **Coordinator hits `205k` (`Baton Warn`) or `235k` (`Baton Block`):**
-   - At `>=235k`, `swarm_wait` is blocked while `read_board`, `post_message`, `swarm{action: "status"|"kill"}`, and `/tmp/*.md` reads remain allowed. Write `~/.gemini/handoffs/<project-key>/<YYYY-MM-DD-HHMMSS>-<slug>-ACTIVE_CONTEXT.md` first (see [`baton-pass`](../baton-pass/SKILL.md)) to unlock `+50k` tokens.
+1. **Coordinator hits `310k` (`Baton Warn`) or `350k` (`Baton Block`):**
+   - At `>=350k`, `swarm_wait` is blocked while `read_board`, `post_message`, `swarm{action: "status"|"kill"}`, and `/tmp/*.md` reads remain allowed. Write `~/.gemini/handoffs/<project-key>/<YYYY-MM-DD-HHMMSS>-<slug>-ACTIVE_CONTEXT.md` first (see [`baton-pass`](../baton-pass/SKILL.md)) to unlock `+50k` tokens.
    - Read `read_board` and `/tmp/subagent-context-<project>-<stream>.md` to obtain `SHARE_ROOT` and latest `SHA`. If `/tmp/subagent-context-<project>-<stream>.md` has `SHARE_ROOT` without a posted `<SHA>` yet, confirm `impl` is idle via `swarm{action: "status"}`, snapshot uncommitted edits in `<SHARE_ROOT>` if dirty (`git -C "<SHARE_ROOT>" status --porcelain`; if non-empty, `git -C "<SHARE_ROOT>" add -A && git -C "<SHARE_ROOT>" commit -m "wip: baton snapshot"`), and read `SHA=$(git -C "<SHARE_ROOT>" rev-parse HEAD)`. Fetch and verify **before** killing any `share` worker:
      ```bash
      git fetch "<SHARE_ROOT>" "<SHA>" && git rev-parse --verify "<SHA>^{commit}"
      ```
      Merge if `[green]` or anchor WIP via `git branch -f "baton/<stream>" "<SHA>"`.
    - Call `swarm{action: "kill"}` on **all** workers including `monitor` and any active/waiting `ops` (`ops-N`) worker, update `ACTIVE_CONTEXT.md` (`Execution Mode: swarm`), save Prism `session_save_handoff`, and print the Session B prompt. Session B starts with fresh worker names (`impl`, `code-rev`, `sec-rev`, `monitor`, `ops`).
-2. **Worker hits `235k` (`Swarm Worker Context Cap`):**
+2. **Worker hits `350k` (`Swarm Worker Context Cap`):**
    - The breaker instructs the worker to write `SHARE_ROOT=$(pwd)` and WIP state to `/tmp/subagent-context-<project>-<stream>.md` (unlocking `+25k` tokens), commit WIP in `SHARE_ROOT`, and post `@coordinator [blocked] context-cap SHARE_ROOT=<path> SHA=<sha>`.
-   - On wakeup, Coordinator runs `git fetch "<SHARE_ROOT>" "<SHA>" && git rev-parse --verify "<SHA>^{commit}"` first, kills the exhausted worker (`swarm{action: "kill"}`), and either spawns a `-2` continuation worker (`impl-2`, `code-rev-2`, etc.) if Coordinator context is `<205k` or executes `baton-pass` to Session B.
+   - On wakeup, Coordinator runs `git fetch "<SHARE_ROOT>" "<SHA>" && git rev-parse --verify "<SHA>^{commit}"` first, kills the exhausted worker (`swarm{action: "kill"}`), and either spawns a `-2` continuation worker (`impl-2`, `code-rev-2`, etc.) if Coordinator context is `<310k` or executes `baton-pass` to Session B.
 
 ## Do / Don't
 

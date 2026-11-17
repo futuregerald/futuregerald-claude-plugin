@@ -145,7 +145,7 @@ class TestReplayBreaker(unittest.TestCase):
         logs_dir = root / conv_id / ".system_generated" / "logs"
         t_path = logs_dir / "transcript.jsonl"
         t_full_path = logs_dir / "transcript_full.jsonl"
-        padding = "x" * 850000
+        padding = "x" * 1260000
         steps = [
             {"step_index": 0, "source": "USER_EXPLICIT", "type": "USER_INPUT", "content": "analyze system"},
             {
@@ -201,7 +201,7 @@ class TestReplayBreaker(unittest.TestCase):
                 "source": "MODEL",
                 "type": "PLANNER_RESPONSE",
                 "input_tokens": 20000,
-                "cache_read_tokens": 220000,
+                "cache_read_tokens": 335000,
                 "output_tokens": 500,
                 "content": "working",
                 "tool_calls": [{"name": "read_board", "args": {}}],
@@ -227,7 +227,7 @@ class TestReplayBreaker(unittest.TestCase):
         self.assertEqual(res["rules"]["BATON"]["main_triggers"], 0)
         self.assertEqual(res["longest_4_authorized_sessions"], [])
 
-    def test_subagent_200k_cap_counts_as_helper_block_in_replay(self):
+    def test_subagent_350k_cap_counts_as_helper_block_in_replay(self):
         root = Path(self.test_tmpdir) / "brain"
         conv_id = "test-subagent-cap-replay"
         logs_dir = root / conv_id / ".system_generated" / "logs"
@@ -240,7 +240,7 @@ class TestReplayBreaker(unittest.TestCase):
                 "source": "MODEL",
                 "type": "PLANNER_RESPONSE",
                 "input_tokens": 10000,
-                "cache_read_tokens": 185000,
+                "cache_read_tokens": 335000,
                 "output_tokens": 500,
                 "content": "reading under cap",
                 "tool_calls": [{"name": "read_file", "args": {"Path": "/repo/a.go"}}],
@@ -251,7 +251,7 @@ class TestReplayBreaker(unittest.TestCase):
                 "source": "MODEL",
                 "type": "PLANNER_RESPONSE",
                 "input_tokens": 10000,
-                "cache_read_tokens": 195000,
+                "cache_read_tokens": 345000,
                 "output_tokens": 500,
                 "content": "over cap read",
                 "tool_calls": [{"name": "read_file", "args": {"Path": "/repo/b.go"}}],

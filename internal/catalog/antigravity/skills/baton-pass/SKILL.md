@@ -5,7 +5,7 @@ description: >-
   context picks up the work — both with swarm (peer-pipeline-swarm / native
   swarm) and without swarm (invoke_subagent / inline). MANDATORY in Antigravity
   and Gemini when the breaker hook warns that the context estimate has reached
-  ~205k tokens (it blocks at ~235k, sized for 256k compaction on Carbon, Argon,
+  ~310k tokens (it blocks at ~350k, sized for 512k compaction on Carbon, Argon,
   Hydrogen, and Flash 3.8), before auto-compaction hits, or when asked to
   "pass the baton", "baton pass", "save active context", "snapshot context", or
   "continue from active context". Not a replacement for regular handoffs.
@@ -17,8 +17,8 @@ Writes a deterministic, high-signal `ACTIVE_CONTEXT.md` snapshot before context 
 
 ## When to Trigger
 
-1. **Circuit-breaker `BATON` warn (`~205k` estimated tokens) or block (`~235k` tokens):** Hand off at the next natural break (or immediately on block).
-2. **Swarm worker context cap (`@coordinator [blocked] context-cap`):** When a swarm worker hits `~235k` tokens and Coordinator is also near `205k+` (or between phases).
+1. **Circuit-breaker `BATON` warn (`~310k` estimated tokens) or block (`~350k` tokens):** Hand off at the next natural break (or immediately on block).
+2. **Swarm worker context cap (`@coordinator [blocked] context-cap`):** When a swarm worker hits `~350k` tokens and Coordinator is also near `310k+` (or between phases).
 3. **Explicit user request:** `"pass the baton"`, `"baton pass"`, `"save active context"`, `"snapshot context"`.
 4. **Resuming in Session B:** `"Ingest ~/.gemini/handoffs/<project-key>/<file> and continue from Pending Steps."`
 
@@ -66,15 +66,15 @@ Keep the file under 200 lines of dense, verifiable facts (no conversational fill
 
 ### Without Swarm (`subagent` / `inline`)
 
-1. If a standalone persistent sleeping `ops` worker (`ops`, `ops-2`, ...) was spawned on `gemini-4-hydrogen-high` (`workspace: "inherit"`) for mechanical scouting/test/build/CI work, read any final `/tmp/*.md` pointer it wrote and terminate it with `swarm{action: "kill", name: "ops"}` (`swarm{action: "status"|"kill"}` and `/tmp/*.md` reads remain exempt at `>=235k`).
-2. Read `/tmp/subagent-context-<project>-<stream>.md` if an `invoke_subagent` helper wrote findings or diffs there (`read_file` on `/tmp/*.md` remains exempt even at `>=235k`).
+1. If a standalone persistent sleeping `ops` worker (`ops`, `ops-2`, ...) was spawned on `gemini-4-hydrogen-high` (`workspace: "inherit"`) for mechanical scouting/test/build/CI work, read any final `/tmp/*.md` pointer it wrote and terminate it with `swarm{action: "kill", name: "ops"}` (`swarm{action: "status"|"kill"}` and `/tmp/*.md` reads remain exempt at `>=350k`).
+2. Read `/tmp/subagent-context-<project>-<stream>.md` if an `invoke_subagent` helper wrote findings or diffs there (`read_file` on `/tmp/*.md` remains exempt even at `>=350k`).
 3. Write `~/.gemini/handoffs/<project-key>/<YYYY-MM-DD-HHMMSS>-<slug>-ACTIVE_CONTEXT.md` with `Execution Mode: subagent` (or `inline`) and mirror to `<appDataDir>/brain/<conversation-id>/ACTIVE_CONTEXT.md`. Writing `ACTIVE_CONTEXT.md` unlocks `+50k` tokens for any final git status/commit cleanup in Session A.
 4. If Prism MCP is configured, call `session_save_handoff` with the current state and next steps.
 
 ### With Swarm (`peer-pipeline-swarm` / native `swarm`)
 
-1. **Unlock if at `>=235k` (`Baton Block`):** At `>=235k`, `swarm_wait` is blocked while `read_board`, `post_message`, `swarm{action: "status"|"kill"}`, and `/tmp/*.md` reads stay exempt. Write an initial `ACTIVE_CONTEXT.md` first to unlock `+50k` tokens for `git fetch` / branch anchoring.
-2. **Collect `SHARE_ROOT` & `SHA`:** Read `read_board` and `/tmp/subagent-context-<project>-<stream>.md` (`impl` records `SHARE_ROOT=$(pwd)` on startup; if a worker hit `235k`, it commits WIP using its `+25k` `/tmp/*.md` unlock and posts `@coordinator [blocked] context-cap SHARE_ROOT=<path> SHA=<sha>`).
+1. **Unlock if at `>=350k` (`Baton Block`):** At `>=350k`, `swarm_wait` is blocked while `read_board`, `post_message`, `swarm{action: "status"|"kill"}`, and `/tmp/*.md` reads stay exempt. Write an initial `ACTIVE_CONTEXT.md` first to unlock `+50k` tokens for `git fetch` / branch anchoring.
+2. **Collect `SHARE_ROOT` & `SHA`:** Read `read_board` and `/tmp/subagent-context-<project>-<stream>.md` (`impl` records `SHARE_ROOT=$(pwd)` on startup; if a worker hit `350k`, it commits WIP using its `+25k` `/tmp/*.md` unlock and posts `@coordinator [blocked] context-cap SHARE_ROOT=<path> SHA=<sha>`).
 3. **Fetch & verify `share` commits BEFORE `swarm{action: "kill"}`:** `kill` permanently deletes `workspace: "share"` directories. If `/tmp/subagent-context-<project>-<stream>.md` has `SHARE_ROOT` without a posted `<SHA>` yet, confirm `impl` is idle via `swarm{action: "status"}`, snapshot uncommitted edits in `<SHARE_ROOT>` if dirty (`git -C "<SHARE_ROOT>" status --porcelain`; if non-empty, `git -C "<SHARE_ROOT>" add -A && git -C "<SHARE_ROOT>" commit -m "wip: baton snapshot"`), and read `SHA=$(git -C "<SHARE_ROOT>" rev-parse HEAD)`. Always anchor commits into the Coordinator repo first:
    ```bash
    git fetch "<SHARE_ROOT>" "<SHA>" && git rev-parse --verify "<SHA>^{commit}"

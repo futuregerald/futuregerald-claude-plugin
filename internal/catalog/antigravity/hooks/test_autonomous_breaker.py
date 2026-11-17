@@ -1791,7 +1791,7 @@ class TestAutonomousBreaker(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             t_path = Path(tmpdir) / "transcript.jsonl"
             t_full_path = Path(tmpdir) / "transcript_full.jsonl"
-            padding = "a" * 815000
+            padding = "a" * 1235000
             steps = [
                 {"step_index": 0, "source": "USER_EXPLICIT", "type": "USER_INPUT", "content": "do task"},
                 {"step_index": 1, "source": "MODEL", "type": "PLANNER_RESPONSE", "content": padding, "tool_calls": [{"name": "run_command", "args": {"CommandLine": "ls"}}]},
@@ -1813,7 +1813,7 @@ class TestAutonomousBreaker(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             t_path = Path(tmpdir) / "transcript.jsonl"
             t_full_path = Path(tmpdir) / "transcript_full.jsonl"
-            padding = "a" * 820000
+            padding = "a" * 1248000
             steps = [
                 {"step_index": 0, "source": "USER_EXPLICIT", "type": "USER_INPUT", "content": "unauth question"},
                 {"step_index": 1, "source": "MODEL", "type": "PLANNER_RESPONSE", "content": padding, "tool_calls": [{"name": "run_command", "args": {"CommandLine": "echo 1"}}]},
@@ -1839,7 +1839,7 @@ class TestAutonomousBreaker(unittest.TestCase):
                 state_data = json.load(f)
             self.assertIsNotNone(state_data.get("warned_at_estimate"))
 
-            steps[1]["content"] = "a" * 840000
+            steps[1]["content"] = "a" * 1280000
             self.write_jsonl(t_path, steps)
             self.write_jsonl(t_full_path, steps)
 
@@ -1857,7 +1857,7 @@ class TestAutonomousBreaker(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             t_path = Path(tmpdir) / "transcript.jsonl"
             t_full_path = Path(tmpdir) / "transcript_full.jsonl"
-            padding = "a" * 945000
+            padding = "a" * 1420000
             steps = [
                 {"step_index": 0, "source": "USER_EXPLICIT", "type": "USER_INPUT", "content": "do work"},
                 {"step_index": 1, "source": "MODEL", "type": "PLANNER_RESPONSE", "content": padding, "tool_calls": [{"name": "run_command", "args": {"CommandLine": "ls"}}]},
@@ -1894,7 +1894,7 @@ class TestAutonomousBreaker(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             t_path = Path(tmpdir) / "transcript.jsonl"
             t_full_path = Path(tmpdir) / "transcript_full.jsonl"
-            padding = "a" * 945000
+            padding = "a" * 1420000
             steps = [
                 {"step_index": 0, "source": "USER_EXPLICIT", "type": "USER_INPUT", "content": "do work"},
                 {"step_index": 1, "source": "MODEL", "type": "PLANNER_RESPONSE", "content": padding, "tool_calls": [{"name": "run_command", "args": {"CommandLine": "ls"}}]},
@@ -1946,7 +1946,7 @@ class TestAutonomousBreaker(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             t_path = Path(tmpdir) / "transcript.jsonl"
             t_full_path = Path(tmpdir) / "transcript_full.jsonl"
-            padding = "a" * 945000
+            padding = "a" * 1420000
             steps = [
                 {"step_index": 0, "source": "USER_EXPLICIT", "type": "USER_INPUT", "content": "do work"},
                 {"step_index": 1, "source": "MODEL", "type": "PLANNER_RESPONSE", "content": padding, "tool_calls": [{"name": "run_command", "args": {"CommandLine": "ls"}}]},
@@ -2007,7 +2007,7 @@ class TestAutonomousBreaker(unittest.TestCase):
             t_full_path = Path(tmpdir) / "transcript_full.jsonl"
             steps = [
                 {"step_index": 0, "source": "USER_EXPLICIT", "type": "USER_INPUT", "content": "long task"},
-                {"step_index": 1, "source": "MODEL", "type": "PLANNER_RESPONSE", "content": "a" * 1400000, "tool_calls": []},
+                {"step_index": 1, "source": "MODEL", "type": "PLANNER_RESPONSE", "content": "a" * 1500000, "tool_calls": []},
                 {"step_index": 2, "source": "SYSTEM", "type": "CHECKPOINT", "content": "# Resuming from a compaction\n\nState summary..."},
                 {"step_index": 3, "source": "USER_EXPLICIT", "type": "USER_INPUT", "content": "continue"},
                 {"step_index": 4, "source": "MODEL", "type": "PLANNER_RESPONSE", "content": "small content", "tool_calls": []},
@@ -2031,7 +2031,7 @@ class TestAutonomousBreaker(unittest.TestCase):
             t_full_path = Path(tmpdir) / "transcript_full.jsonl"
             steps = [
                 {"step_index": 0, "source": "USER_EXPLICIT", "type": "USER_INPUT", "content": "long task"},
-                {"step_index": 1, "source": "MODEL", "type": "PLANNER_RESPONSE", "content": "a" * 945000, "tool_calls": []},
+                {"step_index": 1, "source": "MODEL", "type": "PLANNER_RESPONSE", "content": "a" * 1420000, "tool_calls": []},
                 {"step_index": 2, "source": "SYSTEM", "type": "CHECKPOINT", "content": "{{ CHECKPOINT 0 }}"},
                 {"step_index": 3, "source": "USER_EXPLICIT", "type": "USER_INPUT", "content": "continue"},
                 {"step_index": 4, "source": "MODEL", "type": "PLANNER_RESPONSE", "content": "small content", "tool_calls": []},
@@ -2057,7 +2057,7 @@ class TestAutonomousBreaker(unittest.TestCase):
             t_full_path = Path(tmpdir) / "transcript_full.jsonl"
             steps = [
                 {"step_index": 0, "source": "USER_EXPLICIT", "type": "USER_INPUT", "content": "long task"},
-                {"step_index": 1, "source": "MODEL", "type": "PLANNER_RESPONSE", "content": "a" * 945000, "tool_calls": []},
+                {"step_index": 1, "source": "MODEL", "type": "PLANNER_RESPONSE", "content": "a" * 1420000, "tool_calls": []},
                 {"step_index": 2, "source": "MODEL", "type": "GENERIC", "content": "# Resuming from a compaction in output"},
                 {"step_index": 3, "source": "USER_EXPLICIT", "type": "USER_INPUT", "content": "continue"},
                 {"step_index": 4, "source": "MODEL", "type": "PLANNER_RESPONSE", "content": "small content", "tool_calls": []},
@@ -2083,14 +2083,14 @@ class TestAutonomousBreaker(unittest.TestCase):
             t_full_path = Path(tmpdir) / "transcript_full.jsonl"
             steps = [
                 {"step_index": 0, "source": "USER_EXPLICIT", "type": "USER_INPUT", "content": "long task"},
-                {"step_index": 1, "source": "MODEL", "type": "PLANNER_RESPONSE", "content": "a" * 945000, "tool_calls": []},
+                {"step_index": 1, "source": "MODEL", "type": "PLANNER_RESPONSE", "content": "a" * 1420000, "tool_calls": []},
             ]
             self.write_jsonl(t_path, steps)
             self.write_jsonl(t_full_path, steps)
 
             other_state = Path(tmpdir) / "baton-other-conv.json"
             with open(other_state, "w") as f:
-                json.dump({"warned_at_estimate": 205000, "handoff_at_estimate": 236000, "segment": 0}, f)
+                json.dump({"warned_at_estimate": 310000, "handoff_at_estimate": 351000, "segment": 0}, f)
 
             payload = {
                 "conversationId": "current-conv",
@@ -2108,7 +2108,7 @@ class TestAutonomousBreaker(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             t_path = Path(tmpdir) / "transcript.jsonl"
             t_full_path = Path(tmpdir) / "transcript_full.jsonl"
-            padding = "a" * 820000
+            padding = "a" * 1248000
             steps = [
                 {"step_index": 0, "source": "USER_EXPLICIT", "type": "USER_INPUT", "content": "/goal do big task"},
                 {"step_index": 1, "source": "MODEL", "type": "PLANNER_RESPONSE", "content": padding, "tool_calls": [{"name": "run_command", "args": {"CommandLine": "echo 1"}}]},
@@ -2165,7 +2165,7 @@ class TestAutonomousBreaker(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             t_path = Path(tmpdir) / "transcript.jsonl"
             t_full_path = Path(tmpdir) / "transcript_full.jsonl"
-            padding = "a" * 780000
+            padding = "a" * 1360000
             steps = [
                 {"step_index": 0, "source": "SYSTEM", "type": "SYSTEM_MESSAGE", "content": "helper start"},
                 {"step_index": 1, "source": "MODEL", "type": "PLANNER_RESPONSE", "content": padding, "tool_calls": [{"name": "run_command", "args": {"CommandLine": "pytest test_1.py"}}]},
@@ -2183,7 +2183,7 @@ class TestAutonomousBreaker(unittest.TestCase):
             self.assertEqual(res.returncode, 0)
             self.assertEqual(res.stdout, "")
 
-            steps[1]["content"] = "a" * 820000
+            steps[1]["content"] = "a" * 1420000
             self.write_jsonl(t_path, steps)
             self.write_jsonl(t_full_path, steps)
             res_cap = self.execute_breaker(payload, env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir})
@@ -2235,7 +2235,7 @@ class TestAutonomousBreaker(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             t_path = Path(tmpdir) / "transcript.jsonl"
             t_full_path = Path(tmpdir) / "transcript_full.jsonl"
-            padding = "a" * 820000
+            padding = "a" * 1248000
             steps = [
                 {"step_index": 0, "source": "USER_EXPLICIT", "type": "USER_INPUT", "content": "unauth question"},
                 {"step_index": 1, "source": "MODEL", "type": "PLANNER_RESPONSE", "content": padding, "tool_calls": [{"name": "run_command", "args": {"CommandLine": "echo 1"}}]},
@@ -2715,11 +2715,11 @@ class TestAutonomousBreaker(unittest.TestCase):
             self.assertEqual(res.returncode, 0)
             self.assertEqual(res.stdout, "")
 
-    def test_baton_swarm_add_triggers_warn_at_205k_and_swarm_kill_exempt_at_235k(self):
+    def test_baton_swarm_add_triggers_warn_at_310k_and_swarm_kill_exempt_at_350k(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             t_path = Path(tmpdir) / "transcript.jsonl"
             t_full_path = Path(tmpdir) / "transcript_full.jsonl"
-            padding_warn = "a" * 830000
+            padding_warn = "a" * 1248000
             steps = [
                 {"step_index": 0, "source": "USER_EXPLICIT", "type": "USER_INPUT", "content": "/start run stream"},
                 {"step_index": 1, "source": "MODEL", "type": "PLANNER_RESPONSE", "content": padding_warn, "tool_calls": [{"name": "run_command", "args": {"CommandLine": "ls"}}]},
@@ -2739,7 +2739,7 @@ class TestAutonomousBreaker(unittest.TestCase):
             self.assertEqual(data_warn.get("decision"), "deny")
             self.assertIn("CIRCUIT BREAKER (Baton Warn)", data_warn.get("reason", ""))
 
-            steps[1]["content"] = "a" * 950000
+            steps[1]["content"] = "a" * 1420000
             self.write_jsonl(t_path, steps)
             self.write_jsonl(t_full_path, steps)
 
@@ -2834,7 +2834,7 @@ class TestAutonomousBreaker(unittest.TestCase):
             t_full_path = Path(tmpdir) / "transcript_full.jsonl"
             steps = [
                 {"step_index": 0, "source": "USER_EXPLICIT", "type": "USER_INPUT", "content": "review"},
-                {"step_index": 1, "source": "MODEL", "type": "PLANNER_RESPONSE", "content": "a" * 960000, "tool_calls": [
+                {"step_index": 1, "source": "MODEL", "type": "PLANNER_RESPONSE", "content": "a" * 1440000, "tool_calls": [
                     {"name": "view_file", "args": {"AbsolutePath": "/tmp/x.rb", "StartLine": 1, "EndLine": 800}}
                 ]},
             ]
@@ -2885,7 +2885,7 @@ class TestAutonomousBreaker(unittest.TestCase):
                     "source": "MODEL",
                     "type": "PLANNER_RESPONSE",
                     "input_tokens": 18000,
-                    "cache_read_tokens": 198000,
+                    "cache_read_tokens": 305000,
                     "output_tokens": 400,
                     "content": "checking",
                     "tool_calls": [{"name": "run_command", "args": {"CommandLine": "git status"}}],
@@ -2912,7 +2912,7 @@ class TestAutonomousBreaker(unittest.TestCase):
                 "source": "MODEL",
                 "type": "PLANNER_RESPONSE",
                 "input_tokens": 12000,
-                "cache_read_tokens": 225000,
+                "cache_read_tokens": 340000,
                 "output_tokens": 600,
                 "content": "still going",
                 "tool_calls": [{"name": "run_command", "args": {"CommandLine": "ls"}}],
@@ -2932,7 +2932,7 @@ class TestAutonomousBreaker(unittest.TestCase):
             self.assertEqual(data_block.get("decision"), "deny")
             self.assertIn("CIRCUIT BREAKER (Baton Block)", data_block.get("reason", ""))
 
-    def test_baton_swarm_worker_exempt_at_210k_no_preunlock_at_220k_capped_at_240k_and_unlocks_plus_25k(self):
+    def test_baton_swarm_worker_exempt_at_315k_no_preunlock_at_335k_capped_at_355k_and_unlocks_plus_25k(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             t_path = Path(tmpdir) / "transcript.jsonl"
             t_full_path = Path(tmpdir) / "transcript_full.jsonl"
@@ -2943,7 +2943,7 @@ class TestAutonomousBreaker(unittest.TestCase):
                     "source": "MODEL",
                     "type": "PLANNER_RESPONSE",
                     "input_tokens": 15000,
-                    "cache_read_tokens": 195000,
+                    "cache_read_tokens": 300000,
                     "output_tokens": 500,
                     "content": "reading board",
                     "tool_calls": [{"name": "read_board", "args": {}}],
@@ -2953,7 +2953,7 @@ class TestAutonomousBreaker(unittest.TestCase):
             self.write_jsonl(t_path, steps)
             self.write_jsonl(t_full_path, steps)
 
-            res_210k = self.execute_breaker(
+            res_315k = self.execute_breaker(
                 {
                     "conversationId": "test-worker-baton",
                     "transcriptPath": str(t_path),
@@ -2962,14 +2962,14 @@ class TestAutonomousBreaker(unittest.TestCase):
                 },
                 env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
             )
-            self.assertEqual(res_210k.returncode, 0)
-            self.assertEqual(res_210k.stdout, "")
+            self.assertEqual(res_315k.returncode, 0)
+            self.assertEqual(res_315k.stdout, "")
 
-            steps[1]["cache_read_tokens"] = 204500
+            steps[1]["cache_read_tokens"] = 320000
             self.write_jsonl(t_path, steps)
             self.write_jsonl(t_full_path, steps)
 
-            res_220k_ctx = self.execute_breaker(
+            res_335k_ctx = self.execute_breaker(
                 {
                     "conversationId": "test-worker-baton",
                     "transcriptPath": str(t_path),
@@ -2978,11 +2978,11 @@ class TestAutonomousBreaker(unittest.TestCase):
                 },
                 env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
             )
-            self.assertEqual(res_220k_ctx.returncode, 0)
-            self.assertEqual(res_220k_ctx.stdout, "")
+            self.assertEqual(res_335k_ctx.returncode, 0)
+            self.assertEqual(res_335k_ctx.stdout, "")
             self.assertFalse((Path(tmpdir) / "baton-test-worker-baton.json").exists())
 
-            steps[1]["cache_read_tokens"] = 224500
+            steps[1]["cache_read_tokens"] = 340000
             self.write_jsonl(t_path, steps)
             self.write_jsonl(t_full_path, steps)
 
@@ -3041,7 +3041,7 @@ class TestAutonomousBreaker(unittest.TestCase):
             self.assertEqual(res_unlock.returncode, 0)
             self.assertEqual(res_unlock.stdout, "")
 
-            steps[1]["cache_read_tokens"] = 240000
+            steps[1]["cache_read_tokens"] = 355000
             self.write_jsonl(t_path, steps)
             self.write_jsonl(t_full_path, steps)
 
@@ -3057,7 +3057,7 @@ class TestAutonomousBreaker(unittest.TestCase):
             self.assertEqual(res_commit.returncode, 0)
             self.assertEqual(res_commit.stdout, "")
 
-            steps[1]["cache_read_tokens"] = 252000
+            steps[1]["cache_read_tokens"] = 367000
             self.write_jsonl(t_path, steps)
             self.write_jsonl(t_full_path, steps)
 
@@ -3155,7 +3155,7 @@ class TestAutonomousBreaker(unittest.TestCase):
                     "source": "MODEL",
                     "type": "PLANNER_RESPONSE",
                     "input_tokens": 15000,
-                    "cache_read_tokens": 195000,
+                    "cache_read_tokens": 300000,
                     "output_tokens": 500,
                     "content": "spawning",
                     "tool_calls": [{"name": "read_file", "args": {"Path": "/tmp/plan.md"}}],
@@ -3184,7 +3184,7 @@ class TestAutonomousBreaker(unittest.TestCase):
                 "source": "MODEL",
                 "type": "PLANNER_RESPONSE",
                 "input_tokens": 15000,
-                "cache_read_tokens": 225000,
+                "cache_read_tokens": 340000,
                 "output_tokens": 500,
                 "content": "added worker",
                 "tool_calls": [{"name": "swarm", "args": {"action": "add", "name": "impl", "model": "gemini-4-argon-medium", "workspace": "share", "brief": "go"}}],
@@ -3266,7 +3266,7 @@ class TestAutonomousBreaker(unittest.TestCase):
                     "source": "MODEL",
                     "type": "PLANNER_RESPONSE",
                     "input_tokens": 15000,
-                    "cache_read_tokens": 195000,
+                    "cache_read_tokens": 300000,
                     "output_tokens": 500,
                     "content": "delegating",
                     "tool_calls": [{"name": "read_file", "args": {"Path": "/tmp/plan.md"}}],
@@ -3290,7 +3290,7 @@ class TestAutonomousBreaker(unittest.TestCase):
             self.assertIn("CIRCUIT BREAKER (Baton Warn)", warn_data.get("reason", ""))
             self.assertNotIn("with active swarm", warn_data.get("reason", ""))
 
-            steps[1]["cache_read_tokens"] = 225000
+            steps[1]["cache_read_tokens"] = 340000
             self.write_jsonl(t_path, steps)
             self.write_jsonl(t_full_path, steps)
 
@@ -3369,7 +3369,7 @@ class TestAutonomousBreaker(unittest.TestCase):
             self.assertEqual(res_early.returncode, 0)
             self.assertEqual(res_early.stdout, "")
 
-            coord_steps[1]["cache_read_tokens"] = 230000
+            coord_steps[1]["cache_read_tokens"] = 345000
             self.write_jsonl(t_path, coord_steps)
             self.write_jsonl(t_full_path, coord_steps)
 
@@ -3403,7 +3403,7 @@ class TestAutonomousBreaker(unittest.TestCase):
             self.assertEqual(res_baton_write.returncode, 0)
             self.assertEqual(res_baton_write.stdout, "")
 
-            coord_steps[1]["cache_read_tokens"] = 285000
+            coord_steps[1]["cache_read_tokens"] = 400000
             self.write_jsonl(t_path, coord_steps)
             self.write_jsonl(t_full_path, coord_steps)
 
@@ -3442,7 +3442,7 @@ class TestAutonomousBreaker(unittest.TestCase):
                     "source": "MODEL",
                     "type": "PLANNER_RESPONSE",
                     "input_tokens": 15000,
-                    "cache_read_tokens": 225000,
+                    "cache_read_tokens": 340000,
                     "output_tokens": 500,
                     "content": "auditing",
                     "tool_calls": [{"name": "read_board", "args": {}}],
@@ -3490,7 +3490,7 @@ class TestAutonomousBreaker(unittest.TestCase):
             self.assertEqual(h2_spoof_data.get("decision"), "deny")
             self.assertIn("Subagent Step Cap", h2_spoof_data.get("reason", ""))
 
-    def test_three_way_baton_partition_system_swarm_worker_and_200k_subagent_guard(self):
+    def test_three_way_baton_partition_system_swarm_worker_and_350k_subagent_guard(self):
         import autonomous_breaker
         self.assertFalse(autonomous_breaker._is_h2_handoff_path("src/handoff.py"))
         self.assertFalse(autonomous_breaker._is_h2_handoff_path("/repo/src/handoff.py"))
@@ -3510,7 +3510,7 @@ class TestAutonomousBreaker(unittest.TestCase):
                     "source": "MODEL",
                     "type": "PLANNER_RESPONSE",
                     "input_tokens": 10000,
-                    "cache_read_tokens": 195000,
+                    "cache_read_tokens": 305000,
                     "output_tokens": 500,
                     "content": "working",
                     "tool_calls": [{"name": "read_file", "args": {"Path": "/repo/main.go"}}],
@@ -3518,25 +3518,25 @@ class TestAutonomousBreaker(unittest.TestCase):
             ]
             self.write_jsonl(sys_worker_path, sys_worker_steps)
 
-            for ok_205k in (
+            for ok_315k in (
                 {"name": "run_command", "args": {"CommandLine": "git commit -m 'feat: ok'"}},
                 {"name": "edit_file", "args": {"Path": "/repo/main.go", "Target": "a", "Replacement": "b"}},
             ):
-                res_w205 = self.execute_breaker(
+                res_w315 = self.execute_breaker(
                     {
                         "conversationId": "test-sys-swarm-worker",
                         "transcriptPath": str(sys_worker_path),
                         "stepIdx": 3,
-                        "toolCall": ok_205k,
+                        "toolCall": ok_315k,
                     },
                     env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
                 )
-                self.assertEqual(res_w205.returncode, 0)
-                self.assertEqual(res_w205.stdout, "")
+                self.assertEqual(res_w315.returncode, 0)
+                self.assertEqual(res_w315.stdout, "")
 
-            sys_worker_steps[1]["cache_read_tokens"] = 230000
+            sys_worker_steps[1]["cache_read_tokens"] = 345000
             self.write_jsonl(sys_worker_path, sys_worker_steps)
-            res_w240_deny = self.execute_breaker(
+            res_w355_deny = self.execute_breaker(
                 {
                     "conversationId": "test-sys-swarm-worker",
                     "transcriptPath": str(sys_worker_path),
@@ -3545,12 +3545,12 @@ class TestAutonomousBreaker(unittest.TestCase):
                 },
                 env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
             )
-            self.assertEqual(res_w240_deny.returncode, 0)
-            w240_data = json.loads(res_w240_deny.stdout)
-            self.assertEqual(w240_data.get("decision"), "deny")
-            self.assertIn("Swarm Worker Context Cap", w240_data.get("reason", ""))
+            self.assertEqual(res_w355_deny.returncode, 0)
+            w355_data = json.loads(res_w355_deny.stdout)
+            self.assertEqual(w355_data.get("decision"), "deny")
+            self.assertIn("Swarm Worker Context Cap", w355_data.get("reason", ""))
 
-            res_w240_unlock = self.execute_breaker(
+            res_w355_unlock = self.execute_breaker(
                 {
                     "conversationId": "test-sys-swarm-worker",
                     "transcriptPath": str(sys_worker_path),
@@ -3559,10 +3559,10 @@ class TestAutonomousBreaker(unittest.TestCase):
                 },
                 env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
             )
-            self.assertEqual(res_w240_unlock.returncode, 0)
-            self.assertEqual(res_w240_unlock.stdout, "")
+            self.assertEqual(res_w355_unlock.returncode, 0)
+            self.assertEqual(res_w355_unlock.stdout, "")
 
-            res_w240_commit = self.execute_breaker(
+            res_w355_commit = self.execute_breaker(
                 {
                     "conversationId": "test-sys-swarm-worker",
                     "transcriptPath": str(sys_worker_path),
@@ -3571,8 +3571,8 @@ class TestAutonomousBreaker(unittest.TestCase):
                 },
                 env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
             )
-            self.assertEqual(res_w240_commit.returncode, 0)
-            self.assertEqual(res_w240_commit.stdout, "")
+            self.assertEqual(res_w355_commit.returncode, 0)
+            self.assertEqual(res_w355_commit.stdout, "")
 
             sub_path = Path(tmpdir) / "subagent_transcript.jsonl"
             sub_steps = [
@@ -3582,14 +3582,14 @@ class TestAutonomousBreaker(unittest.TestCase):
                     "source": "MODEL",
                     "type": "PLANNER_RESPONSE",
                     "input_tokens": 9000,
-                    "cache_read_tokens": 189500,
+                    "cache_read_tokens": 339500,
                     "output_tokens": 400,
                     "content": "planning",
                     "tool_calls": [{"name": "read_file", "args": {"Path": "/repo/pkg.go"}}],
                 },
             ]
             self.write_jsonl(sub_path, sub_steps)
-            res_sub_199k = self.execute_breaker(
+            res_sub_349k = self.execute_breaker(
                 {
                     "conversationId": "test-subagent-cap",
                     "transcriptPath": str(sub_path),
@@ -3598,10 +3598,10 @@ class TestAutonomousBreaker(unittest.TestCase):
                 },
                 env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
             )
-            self.assertEqual(res_sub_199k.returncode, 0)
-            self.assertEqual(res_sub_199k.stdout, "")
+            self.assertEqual(res_sub_349k.returncode, 0)
+            self.assertEqual(res_sub_349k.stdout, "")
 
-            sub_steps[1]["cache_read_tokens"] = 196000
+            sub_steps[1]["cache_read_tokens"] = 346000
             self.write_jsonl(sub_path, sub_steps)
 
             victim_py = Path(tmpdir) / "app.py"
@@ -3735,7 +3735,7 @@ class TestAutonomousBreaker(unittest.TestCase):
                     "source": "MODEL",
                     "type": "PLANNER_RESPONSE",
                     "input_tokens": 15000,
-                    "cache_read_tokens": 195000,
+                    "cache_read_tokens": 300000,
                     "output_tokens": 500,
                     "content": "checking",
                     "tool_calls": [{"name": "run_command", "args": {"CommandLine": "pwd"}}],
@@ -3757,7 +3757,7 @@ class TestAutonomousBreaker(unittest.TestCase):
             self.assertEqual(warn_data.get("decision"), "deny")
             self.assertIn("Baton Warn", warn_data.get("reason", ""))
 
-            coord_steps[2]["cache_read_tokens"] = 225000
+            coord_steps[2]["cache_read_tokens"] = 340000
             self.write_jsonl(coord_path, coord_steps)
 
             secret_go = Path(tmpdir) / "secret.go"
@@ -3806,7 +3806,7 @@ class TestAutonomousBreaker(unittest.TestCase):
                         "source": "MODEL",
                         "type": "PLANNER_RESPONSE",
                         "input_tokens": 10000,
-                        "cache_read_tokens": 195000,
+                        "cache_read_tokens": 345000,
                         "output_tokens": 500,
                         "content": "reading",
                         "tool_calls": [{"name": "read_file", "args": {"Path": "/repo/a.py"}}],
@@ -3863,7 +3863,7 @@ class TestAutonomousBreaker(unittest.TestCase):
                         "source": "MODEL",
                         "type": "PLANNER_RESPONSE",
                         "input_tokens": 10000,
-                        "cache_read_tokens": 195000,
+                        "cache_read_tokens": 305000,
                         "output_tokens": 500,
                         "content": "implementing",
                         "tool_calls": [{"name": "read_file", "args": {"Path": "/repo/main.go"}}],
@@ -3903,7 +3903,7 @@ class TestAutonomousBreaker(unittest.TestCase):
                         "source": "MODEL",
                         "type": "PLANNER_RESPONSE",
                         "input_tokens": 10000,
-                        "cache_read_tokens": 195000,
+                        "cache_read_tokens": 345000,
                         "output_tokens": 500,
                         "content": "reading",
                         "tool_calls": [{"name": "read_file", "args": {"Path": "/repo/a.py"}}],
