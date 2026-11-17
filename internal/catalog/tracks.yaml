@@ -12,7 +12,7 @@ tracks:
     also installs peer-pipeline-swarm (parallel implementer and review subagents), start-small (/start-small
     lightweight Argon swarm workflow), optional sleeping Hydrogen (0.2x) ops routing, baton-pass, and
     circuit-breaker hooks (which stop repetitive tool loops and save an ACTIVE_CONTEXT.md handoff before
-    256k token compaction).
+    512k token compaction).
   install_agents: true
   install_hooks: true
   lightweight_config: false
@@ -584,8 +584,8 @@ skills:
   category: Antigravity Exclusives
   slash_command: /baton-pass
   short: Deterministic ACTIVE_CONTEXT.md snapshot and swarm/ops wind-down before Antigravity context compaction.
-  long: Antigravity-exclusive context handoff skill triggered when the circuit-breaker hook warns at ~205k
-    tokens (before the ~235k block), anchoring share-workspace commits, terminating active/sleeping swarm
+  long: Antigravity-exclusive context handoff skill triggered when the circuit-breaker hook warns at ~310k
+    tokens (before the ~350k block on the 512k compaction window), anchoring share-workspace commits, terminating active/sleeping swarm
     and ops workers, and writing an ACTIVE_CONTEXT.md snapshot so a fresh session resumes with zero re-reading.
   starter_prompt: /baton-pass Save an ACTIVE_CONTEXT.md snapshot so I can continue in a fresh session
   antigravity_only: true

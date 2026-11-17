@@ -316,5 +316,31 @@ class TestSessionMetrics(unittest.TestCase):
         res_swarm = analyze_session(os.path.join(logs_dir, "transcript.jsonl"))
         self.assertEqual(res_swarm["turns"][0]["code_edits_by_main"], 3)
 
+    def test_zero_compaction_fallback_proposes_310k_warn_and_350k_block(self):
+        logs_dir = self._create_conv_dir("no-compaction-conv")
+        steps = [
+            {"step_index": 0, "type": "USER_INPUT", "content": "do work", "created_at": "2026-10-21T12:00:00Z"},
+            {
+                "step_index": 1,
+                "type": "PLANNER_RESPONSE",
+                "input_tokens": 20000,
+                "cache_read_tokens": 300000,
+                "output_tokens": 500,
+                "tool_calls": [{"name": "run_command", "args": {"CommandLine": "ls"}}],
+                "created_at": "2026-10-21T12:00:05Z",
+            },
+        ]
+        with open(os.path.join(logs_dir, "transcript.jsonl"), "w") as f:
+            for s in steps:
+                f.write(json.dumps(s) + "\n")
+
+        res = process_transcripts(root=self.tmpdir, last_n=10)
+        ctx = res["summary"]["context_estimates"]
+        self.assertEqual(ctx["segment_estimate_at_compaction"]["p10"], 0)
+        self.assertEqual(ctx["proposed_baton_warn_tokens"], 310000)
+        self.assertEqual(ctx["proposed_baton_block_tokens"], 350000)
+        self.assertEqual(ctx["sessions_crossing_warn_count"], 1)
+        self.assertEqual(ctx["sessions_crossing_block_count"], 0)
+
 if __name__ == "__main__":
     unittest.main()

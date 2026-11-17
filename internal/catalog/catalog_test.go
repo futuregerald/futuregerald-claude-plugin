@@ -637,8 +637,72 @@ func TestAntigravityThinSupervisorPlannerAndManifestCatalogInvariants(t *testing
 	if err != nil {
 		t.Fatalf("reading autonomous_breaker.py: %v", err)
 	}
-	if !strings.Contains(string(breakerBytes), "SUBAGENT_TOKEN_CAP") {
-		t.Errorf("autonomous_breaker.py missing SUBAGENT_TOKEN_CAP")
+	breakerStr := string(breakerBytes)
+	for _, needle := range []string{
+		`"BATON_BLOCK_TOKENS", 350000`,
+		`"BATON_WARN_TOKENS", 310000`,
+		`"SUBAGENT_TOKEN_CAP", 350000`,
+	} {
+		if !strings.Contains(breakerStr, needle) {
+			t.Errorf("autonomous_breaker.py missing %q", needle)
+		}
+	}
+
+	staleThresholds := []string{
+		"256k",
+		"205k",
+		"235k",
+		"SUBAGENT_TOKEN_CAP=200000",
+		"200k hard cap",
+		"`200k` hard cap",
+		"200k SUBAGENT_TOKEN_CAP",
+		"`200k` `SUBAGENT_TOKEN_CAP`",
+		"<185k",
+	}
+	checkNoStaleThresholds := func(p string) {
+		b, rErr := fs.ReadFile(FS, p)
+		if rErr != nil {
+			t.Fatalf("reading %s: %v", p, rErr)
+		}
+		s := string(b)
+		for _, stale := range staleThresholds {
+			if strings.Contains(s, stale) {
+				t.Errorf("%s still contains stale threshold %q", p, stale)
+			}
+		}
+	}
+	if wErr := fs.WalkDir(FS, "antigravity", func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() || (!strings.HasSuffix(p, ".md") && !strings.HasSuffix(p, ".py")) {
+			return nil
+		}
+		checkNoStaleThresholds(p)
+		return nil
+	}); wErr != nil {
+		t.Fatalf("walking antigravity FS: %v", wErr)
+	}
+	checkNoStaleThresholds("tracks.yaml")
+
+	for _, requiredPath := range []string{
+		"antigravity/skills/baton-pass/SKILL.md",
+		"antigravity/skills/antigravity-orchestration/SKILL.md",
+		"antigravity/skills/future-model-router/references/model-map.md",
+		"antigravity/GEMINI.md",
+		"antigravity/templates/GEMINI-BASE.md",
+		"tracks.yaml",
+	} {
+		b, rErr := fs.ReadFile(FS, requiredPath)
+		if rErr != nil {
+			t.Fatalf("reading %s: %v", requiredPath, rErr)
+		}
+		s := string(b)
+		for _, needle := range []string{"512k", "310k", "350k"} {
+			if !strings.Contains(s, needle) {
+				t.Errorf("%s missing %q", requiredPath, needle)
+			}
+		}
 	}
 
 	hookEntries, err := fs.ReadDir(FS, "antigravity/hooks")

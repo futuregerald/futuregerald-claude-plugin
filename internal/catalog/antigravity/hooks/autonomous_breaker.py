@@ -516,9 +516,9 @@ def _run_breaker(payload, stop_on_enforce=True, collector=None):
     current_segment = len(comp_indices)
     estimate = context_estimate_tokens(full_lines_bytes, comp_indices, steps=steps)
     baton_state = load_baton_state(conv_id, current_segment, state_dir=state_dir)
-    baton_block_tokens = _parse_env_int("BATON_BLOCK_TOKENS", 235000)
-    baton_warn_tokens = _parse_env_int("BATON_WARN_TOKENS", 205000)
-    subagent_token_cap = _parse_env_int("SUBAGENT_TOKEN_CAP", 200000)
+    baton_block_tokens = _parse_env_int("BATON_BLOCK_TOKENS", 350000)
+    baton_warn_tokens = _parse_env_int("BATON_WARN_TOKENS", 310000)
+    subagent_token_cap = _parse_env_int("SUBAGENT_TOKEN_CAP", 350000)
 
     if is_swarm_worker:
         if baton_block_tokens > 0 and estimate >= baton_block_tokens:
