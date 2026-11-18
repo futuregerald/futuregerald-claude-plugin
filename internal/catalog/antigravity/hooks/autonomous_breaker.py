@@ -170,6 +170,20 @@ def _is_h2_handoff_path(raw_path: str) -> bool:
         return True
     return False
 
+def _is_subagent_unlock_md_path(raw_path: str) -> bool:
+    ok, low, expanded = _is_safe_leaf_md_path(raw_path)
+    if not ok:
+        return False
+    if re.search(r"(^|/)docs/plans/[^/]+\.md$", low):
+        return False
+    if _is_temp_or_brain_md_path(raw_path):
+        return True
+    if _is_active_context_md_path(raw_path):
+        if expanded and os.path.islink(os.path.dirname(expanded)):
+            return False
+        return True
+    return False
+
 def _is_subagent_wrapup_md_path(raw_path: str) -> bool:
     ok, low, expanded = _is_safe_leaf_md_path(raw_path)
     if not ok:
@@ -518,6 +532,7 @@ def _run_breaker(payload, stop_on_enforce=True, collector=None):
     baton_state = load_baton_state(conv_id, current_segment, state_dir=state_dir)
     baton_block_tokens = _parse_env_int("BATON_BLOCK_TOKENS", 350000)
     baton_warn_tokens = _parse_env_int("BATON_WARN_TOKENS", 310000)
+    baton_hard_ceiling_tokens = _parse_env_int("BATON_HARD_CEILING_TOKENS", 450000)
     subagent_token_cap = _parse_env_int("SUBAGENT_TOKEN_CAP", 350000)
 
     if is_swarm_worker:
@@ -562,22 +577,52 @@ def _run_breaker(payload, stop_on_enforce=True, collector=None):
                     check_and_handle_trigger("BATON", target, reason, tool_name, step_idx, conv_id, is_subagent, collector=collector, stop_on_enforce=stop_on_enforce)
     elif is_subagent:
         if subagent_token_cap > 0 and estimate >= subagent_token_cap:
+            if (
+                tool_name in ("write_file", "write_to_file", "edit_file", "replace_file_content")
+                and _all_tool_paths_match(tool_args, _is_subagent_unlock_md_path)
+            ):
+                if baton_state.get("handoff_at_estimate") is None:
+                    baton_state["handoff_at_estimate"] = estimate
+                    save_baton_state(conv_id, baton_state, state_dir=state_dir)
+                if stop_on_enforce:
+                    if passthrough_out:
+                        sys.stdout.write(passthrough_out)
+                    sys.exit(0)
+                return collector or []
+
+            handoff_at_estimate = baton_state.get("handoff_at_estimate")
+            is_subagent_unlocked = (handoff_at_estimate is not None and estimate <= handoff_at_estimate + 25000)
             is_subagent_wrapup_write = (
                 tool_name in ("write_file", "write_to_file", "edit_file", "replace_file_content")
                 and _all_tool_paths_match(tool_args, _is_subagent_wrapup_md_path)
             )
+            is_subagent_context_read = (
+                tool_name in ("read_file", "view_file")
+                and _all_tool_paths_match(tool_args, _is_subagent_unlock_md_path)
+            )
             is_subagent_exempt = (
                 tool_name in ("send_message", "post_message", "read_board", "swarm_wait")
+                or in_c_name in ("send_message", "post_message", "read_board", "swarm_wait")
+                or (in_c_name == "swarm" and in_c_args.get("action") in ("status", "kill"))
                 or (tool_name == "manage_task" and in_c_args.get("Action") in ("kill", "list", "status"))
                 or is_subagent_wrapup_write
+                or is_subagent_context_read
             )
-            if not is_subagent_exempt:
+            if not is_subagent_unlocked and not is_subagent_exempt:
                 target = f"subagent_estimate:{estimate}/{subagent_token_cap}"
-                reason = (
-                    f"CIRCUIT BREAKER (Subagent Context Cap): Context estimate {estimate} >= {subagent_token_cap} in subagent helper. "
-                    "Stop reading files, running commands, or editing code. Immediately write your plan (docs/plans/*.md or PLAN.md) "
-                    "or 5-section handoff (/tmp/*.md) using write_file / edit_file and finish your turn (calling send_message only if available)."
-                )
+                if handoff_at_estimate is None:
+                    reason = (
+                        f"CIRCUIT BREAKER (Subagent Context Cap): Context estimate {estimate} >= {subagent_token_cap} in subagent helper. "
+                        "Stop reading codebase files, running commands, or editing code. Write ACTIVE_CONTEXT.md or /tmp/*.md "
+                        "using write_file / edit_file (unlocks +25k tokens to git fetch/verify any share-workspace SHA and swarm kill child workers), "
+                        "or write PLAN.md / docs/plans/*.md, then finish via send_message (returning BATON_CONTINUE: <path> if work remains)."
+                    )
+                else:
+                    reason = (
+                        f"CIRCUIT BREAKER (Subagent Context Cap): Context estimate {estimate} exceeds the +25k cleanup unlock window "
+                        f"(handoff at {handoff_at_estimate}). Immediately swarm kill any remaining child workers and finish via "
+                        "send_message (returning BATON_CONTINUE: <path> if work remains) without further commands or edits."
+                    )
                 check_and_handle_trigger("BATON", target, reason, tool_name, step_idx, conv_id, is_subagent, collector=collector, stop_on_enforce=stop_on_enforce)
     elif len(steps) > 0:
         is_active_context_path = _all_tool_paths_match(tool_args, _is_active_context_md_path)
@@ -605,19 +650,39 @@ def _run_breaker(payload, stop_on_enforce=True, collector=None):
             or in_c_name in ("read_board", "post_message")
         )
         is_baton_exempt_call = (is_prism_call or is_active_context_read or is_context_md_read or is_swarm_cleanup)
+        is_delegation_spawn = (tool_name == "invoke_subagent" or (in_c_name == "swarm" and in_c_args.get("action") == "add"))
+        at_hard_ceiling = (
+            baton_block_tokens > 0
+            and baton_hard_ceiling_tokens > 0
+            and estimate >= max(baton_block_tokens, baton_hard_ceiling_tokens)
+        )
 
-        if baton_block_tokens > 0 and estimate >= baton_block_tokens and not is_unlocked and not is_baton_exempt_call:
+        if at_hard_ceiling and ((not is_unlocked and not is_baton_exempt_call) or is_delegation_spawn):
+            target = f"estimate:{estimate}/{baton_hard_ceiling_tokens}"
+            reason = (
+                f"CIRCUIT BREAKER (Baton Block): Context estimate {estimate} >= {baton_hard_ceiling_tokens} "
+                "(approaching 512k compaction ceiling). Finalize ACTIVE_CONTEXT.md (unlocks +50k cleanup tokens to git fetch/verify "
+                "any share-workspace SHA before swarm kill), kill all Root-owned swarm workers, save Prism handoff, and emit the manual "
+                "'Ingest ~/.gemini/handoffs/...-ACTIVE_CONTEXT.md and continue from Pending Steps.' prompt for a fresh chat."
+            )
+            check_and_handle_trigger("BATON", target, reason, tool_name, step_idx, conv_id, is_subagent, collector=collector, stop_on_enforce=stop_on_enforce)
+        elif baton_block_tokens > 0 and estimate >= baton_block_tokens and not is_unlocked and not is_baton_exempt_call:
             target = f"estimate:{estimate}/{baton_block_tokens}"
             if has_coordinator_swarm_add:
                 reason = (
                     f"CIRCUIT BREAKER (Baton Block): Context estimate {estimate} >= {baton_block_tokens}. "
                     "Write ACTIVE_CONTEXT.md first (unlocks +50k tokens to git fetch/verify any share-workspace SHA before swarm kill), "
-                    "save Prism handoff, and kill all swarm workers."
+                    "kill all Root-owned swarm workers, save Prism handoff, and immediately spawn "
+                    "invoke_subagent(TypeName=\"self\", Model=\"inherit\") in this SAME chat to ingest ACTIVE_CONTEXT.md "
+                    f"and finish Pending Steps (only ask the user to open a new chat if estimate >= {baton_hard_ceiling_tokens} or explicitly requested)."
                 )
             else:
                 reason = (
                     f"CIRCUIT BREAKER (Baton Block): Context estimate {estimate} >= {baton_block_tokens}. "
-                    "Only ACTIVE_CONTEXT.md handoff and Prism saves are allowed (plus /tmp/*.md context reads). Hand off now."
+                    "Write ACTIVE_CONTEXT.md first (unlocks +50k tokens; only ACTIVE_CONTEXT.md, /tmp/*.md reads, swarm status/kill, "
+                    "and Prism saves are exempt before unlock), then immediately spawn invoke_subagent(TypeName=\"self\", Model=\"inherit\") "
+                    "in this SAME chat to ingest ACTIVE_CONTEXT.md and finish Pending Steps (only ask the user to open a new chat "
+                    f"if estimate >= {baton_hard_ceiling_tokens} or explicitly requested)."
                 )
             check_and_handle_trigger("BATON", target, reason, tool_name, step_idx, conv_id, is_subagent, collector=collector, stop_on_enforce=stop_on_enforce)
 
@@ -630,18 +695,25 @@ def _run_breaker(payload, stop_on_enforce=True, collector=None):
             elif steps and steps[-1].get("type") == "SYSTEM_MESSAGE":
                 prev_is_sys = True
 
-            is_delegation_spawn = (tool_name == "invoke_subagent" or (in_c_name == "swarm" and in_c_args.get("action") == "add"))
             trigger_warn = (not is_auth) or (is_delegation_spawn or prev_is_sys or estimate >= baton_warn_tokens + 10000)
             if trigger_warn:
                 target = f"estimate:{estimate}/{baton_warn_tokens}"
                 if has_coordinator_swarm_add:
                     reason = (
                         f"CIRCUIT BREAKER (Baton Warn): Context estimate {estimate} >= {baton_warn_tokens} with active swarm. "
-                        "At the next natural break, write ACTIVE_CONTEXT.md, git fetch/verify any share-workspace SHA before swarm kill, "
-                        "kill all swarm workers, and hand off via baton-pass."
+                        "Write ACTIVE_CONTEXT.md (unlocks +50k tokens), git fetch/verify any share-workspace SHA before swarm kill, "
+                        "kill all Root-owned swarm workers, and immediately spawn invoke_subagent(TypeName=\"self\", Model=\"inherit\") "
+                        "in this SAME chat to ingest ACTIVE_CONTEXT.md and finish Pending Steps (only ask the user to open a new chat "
+                        f"if estimate >= {baton_hard_ceiling_tokens} or explicitly requested)."
                     )
                 else:
-                    reason = f"CIRCUIT BREAKER (Baton Warn): Context estimate {estimate} >= {baton_warn_tokens}. Hand off at the next natural break using baton-pass."
+                    reason = (
+                        f"CIRCUIT BREAKER (Baton Warn): Context estimate {estimate} >= {baton_warn_tokens}. "
+                        "Write ACTIVE_CONTEXT.md (unlocks +50k tokens), anchor/kill any Root-owned swarm workers, and immediately "
+                        "spawn invoke_subagent(TypeName=\"self\", Model=\"inherit\") in this SAME chat to ingest ACTIVE_CONTEXT.md "
+                        f"and finish Pending Steps (only ask the user to open a new chat if estimate >= {baton_hard_ceiling_tokens} "
+                        "or explicitly requested)."
+                    )
                 mode = rule_mode("BATON")
                 if mode in ("enforce", "log"):
                     baton_state["warned_at_estimate"] = estimate

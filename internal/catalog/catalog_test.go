@@ -641,10 +641,33 @@ func TestAntigravityThinSupervisorPlannerAndManifestCatalogInvariants(t *testing
 	for _, needle := range []string{
 		`"BATON_BLOCK_TOKENS", 350000`,
 		`"BATON_WARN_TOKENS", 310000`,
+		`"BATON_HARD_CEILING_TOKENS", 450000`,
 		`"SUBAGENT_TOKEN_CAP", 350000`,
+		`BATON_CONTINUE:`,
+		`invoke_subagent(TypeName=\"self\", Model=\"inherit\")`,
 	} {
 		if !strings.Contains(breakerStr, needle) {
 			t.Errorf("autonomous_breaker.py missing %q", needle)
+		}
+	}
+
+	for _, childOrchPath := range []string{
+		"antigravity/GEMINI.md",
+		"antigravity/templates/GEMINI-BASE.md",
+		"antigravity/skills/baton-pass/SKILL.md",
+		"antigravity/skills/start/SKILL.md",
+		"antigravity/skills/start-small/SKILL.md",
+		"antigravity/skills/antigravity-orchestration/SKILL.md",
+	} {
+		b, rErr := fs.ReadFile(FS, childOrchPath)
+		if rErr != nil {
+			t.Fatalf("reading %s: %v", childOrchPath, rErr)
+		}
+		s := string(b)
+		for _, needle := range []string{"Child Orchestrator", "BATON_CONTINUE"} {
+			if !strings.Contains(s, needle) {
+				t.Errorf("%s missing %q", childOrchPath, needle)
+			}
 		}
 	}
 
