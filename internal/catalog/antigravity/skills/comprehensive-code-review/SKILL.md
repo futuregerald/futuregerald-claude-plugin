@@ -20,11 +20,11 @@ Because reviewers are strictly read-only (`tools: [read_file]`) and never run `g
 
 ## Dispatching the Parallel Reviewers
 
-Choose the dispatch mode matching your session (`GEMINI.md` §0.9):
+Choose the dispatch mode matching your session (`GEMINI.md` §0.9). **`gemini-4-carbon-high` is the SOLE default adversarial reviewer — NEVER spawn `claude-opus-5-5-high` (`claude-opus-5-5-*`) unless the user explicitly asks for an Opus review in chat:**
 
-### 1. Inside `/start` / `peer-pipeline-swarm`
+### 1. Inside `/start` / `/start-small` / `peer-pipeline-swarm`
 
-`code-rev` (`claude-opus-5-5-high`, `45.0k` floor) and `sec-rev` (`gemini-4-carbon-high`, `29.3k` floor) are already spawned in the pipeline and review `@impl`'s committed `share` branch directly against the Acceptance Criteria, Brief, and Approved UI Design. See [`peer-pipeline-swarm`](../peer-pipeline-swarm/SKILL.md) (when installed).
+`code-rev` (`gemini-4-carbon-high`, `29.3k` floor) and `sec-rev` (`gemini-4-carbon-high`, `29.3k` floor) are already spawned in the pipeline (`~117k` 4-worker boot floor) and review `@impl`'s committed `share` branch directly against the Acceptance Criteria, Brief, and Approved UI Design. See [`peer-pipeline-swarm`](../peer-pipeline-swarm/SKILL.md) (when installed).
 
 ### 2. Standalone Session Where UI Is Not `Carbon High` (Default `Carbon Medium` or `Argon` — Pre-PR Review)
 

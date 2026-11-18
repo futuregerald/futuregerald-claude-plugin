@@ -649,18 +649,30 @@ def _run_breaker(payload, stop_on_enforce=True, collector=None):
             (in_c_name == "swarm" and in_c_args.get("action") in ("kill", "status"))
             or in_c_name in ("read_board", "post_message")
         )
-        is_baton_exempt_call = (is_prism_call or is_active_context_read or is_context_md_read or is_swarm_cleanup)
         is_delegation_spawn = (tool_name == "invoke_subagent" or (in_c_name == "swarm" and in_c_args.get("action") == "add"))
+        effective_hard_ceiling = max(baton_block_tokens, baton_hard_ceiling_tokens)
         at_hard_ceiling = (
             baton_block_tokens > 0
             and baton_hard_ceiling_tokens > 0
-            and estimate >= max(baton_block_tokens, baton_hard_ceiling_tokens)
+            and estimate >= effective_hard_ceiling
+        )
+        is_child_message_relay = (
+            (tool_name == "send_message" or in_c_name == "send_message")
+            and baton_hard_ceiling_tokens > 0
+            and not at_hard_ceiling
+        )
+        is_baton_exempt_call = (
+            is_prism_call
+            or is_active_context_read
+            or is_context_md_read
+            or is_swarm_cleanup
+            or is_child_message_relay
         )
 
         if at_hard_ceiling and ((not is_unlocked and not is_baton_exempt_call) or is_delegation_spawn):
-            target = f"estimate:{estimate}/{baton_hard_ceiling_tokens}"
+            target = f"estimate:{estimate}/{effective_hard_ceiling}"
             reason = (
-                f"CIRCUIT BREAKER (Baton Block): Context estimate {estimate} >= {baton_hard_ceiling_tokens} "
+                f"CIRCUIT BREAKER (Baton Block): Context estimate {estimate} >= {effective_hard_ceiling} "
                 "(approaching 512k compaction ceiling). Finalize ACTIVE_CONTEXT.md (unlocks +50k cleanup tokens to git fetch/verify "
                 "any share-workspace SHA before swarm kill), kill all Root-owned swarm workers, save Prism handoff, and emit the manual "
                 "'Ingest ~/.gemini/handoffs/...-ACTIVE_CONTEXT.md and continue from Pending Steps.' prompt for a fresh chat."
@@ -679,7 +691,7 @@ def _run_breaker(payload, stop_on_enforce=True, collector=None):
             else:
                 reason = (
                     f"CIRCUIT BREAKER (Baton Block): Context estimate {estimate} >= {baton_block_tokens}. "
-                    "Write ACTIVE_CONTEXT.md first (unlocks +50k tokens; only ACTIVE_CONTEXT.md, /tmp/*.md reads, swarm status/kill, "
+                    "Write ACTIVE_CONTEXT.md first (unlocks +50k tokens; only ACTIVE_CONTEXT.md, /tmp/*.md reads, send_message, swarm status/kill, "
                     "and Prism saves are exempt before unlock), then immediately spawn invoke_subagent(TypeName=\"self\", Model=\"inherit\") "
                     "in this SAME chat to ingest ACTIVE_CONTEXT.md and finish Pending Steps (only ask the user to open a new chat "
                     f"if estimate >= {baton_hard_ceiling_tokens} or explicitly requested)."
