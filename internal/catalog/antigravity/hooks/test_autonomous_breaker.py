@@ -4208,5 +4208,162 @@ class TestAutonomousBreaker(unittest.TestCase):
                 self.assertIn("450000", spawn_blk_data.get("reason", ""))
                 self.assertIn("Ingest", spawn_blk_data.get("reason", ""))
 
+    def test_root_send_message_allowed_below_450k_blocked_at_450k_and_subagent_always_allowed(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root_path = Path(tmpdir) / "root_send_msg.jsonl"
+            root_steps = [
+                {"step_index": 0, "source": "USER_EXPLICIT", "type": "USER_INPUT", "content": "also update the PR title"},
+                {
+                    "step_index": 1,
+                    "source": "MODEL",
+                    "type": "PLANNER_RESPONSE",
+                    "input_tokens": 15000,
+                    "cache_read_tokens": 305000,
+                    "output_tokens": 500,
+                    "content": "relaying to child orchestrator",
+                    "tool_calls": [{"name": "read_file", "args": {"Path": "/tmp/plan.md"}}],
+                },
+            ]
+            self.write_jsonl(root_path, root_steps)
+
+            res_warn_exempt = self.execute_breaker(
+                {
+                    "conversationId": "test-root-send-msg",
+                    "transcriptPath": str(root_path),
+                    "stepIdx": 3,
+                    "toolCall": {"name": "send_message", "args": {"Recipient": "child-conv-1", "Message": "update PR title"}},
+                },
+                env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
+            )
+            self.assertEqual(res_warn_exempt.returncode, 0)
+            self.assertEqual(res_warn_exempt.stdout, "")
+
+            res_warn_still_fires = self.execute_breaker(
+                {
+                    "conversationId": "test-root-send-msg",
+                    "transcriptPath": str(root_path),
+                    "stepIdx": 3,
+                    "toolCall": {"name": "run_command", "args": {"CommandLine": "git status"}},
+                },
+                env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
+            )
+            self.assertIn("Baton Warn", json.loads(res_warn_still_fires.stdout).get("reason", ""))
+
+            for mid_cache_tokens in (345000, 430000):
+                root_steps[1]["cache_read_tokens"] = mid_cache_tokens
+                self.write_jsonl(root_path, root_steps)
+                res_mid_ok = self.execute_breaker(
+                    {
+                        "conversationId": "test-root-send-msg",
+                        "transcriptPath": str(root_path),
+                        "stepIdx": 4,
+                        "toolCall": {"name": "send_message", "args": {"Recipient": "child-conv-1", "Message": "mid-flight instruction"}},
+                    },
+                    env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
+                )
+                self.assertEqual(res_mid_ok.returncode, 0)
+                self.assertEqual(res_mid_ok.stdout, "", f"expected Root send_message allowed at cache={mid_cache_tokens}")
+
+            res_no_hard_ceil = self.execute_breaker(
+                {
+                    "conversationId": "test-root-send-msg-no-ceil",
+                    "transcriptPath": str(root_path),
+                    "stepIdx": 4,
+                    "toolCall": {"name": "send_message", "args": {"Recipient": "child-conv-1", "Message": "disabled hard ceiling"}},
+                },
+                env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir, "BATON_HARD_CEILING_TOKENS": "0"},
+            )
+            self.assertEqual(json.loads(res_no_hard_ceil.stdout).get("decision"), "deny")
+
+            res_mid_cmd_blk = self.execute_breaker(
+                {
+                    "conversationId": "test-root-send-msg",
+                    "transcriptPath": str(root_path),
+                    "stepIdx": 5,
+                    "toolCall": {"name": "run_command", "args": {"CommandLine": "git status"}},
+                },
+                env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
+            )
+            self.assertEqual(json.loads(res_mid_cmd_blk.stdout).get("decision"), "deny")
+
+            root_steps[1]["cache_read_tokens"] = 440000
+            self.write_jsonl(root_path, root_steps)
+            res_at_450k = self.execute_breaker(
+                {
+                    "conversationId": "test-root-send-msg",
+                    "transcriptPath": str(root_path),
+                    "stepIdx": 6,
+                    "toolCall": {"name": "send_message", "args": {"Recipient": "child-conv-1", "Message": "past hard ceiling"}},
+                },
+                env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
+            )
+            self.assertEqual(res_at_450k.returncode, 0)
+            ceil_data = json.loads(res_at_450k.stdout)
+            self.assertEqual(ceil_data.get("decision"), "deny")
+            self.assertIn("450000", ceil_data.get("reason", ""))
+
+            sub_path = Path(tmpdir) / "sub_send_msg_460k.jsonl"
+            self.write_jsonl(
+                sub_path,
+                [
+                    {"step_index": 0, "source": "SYSTEM", "type": "SYSTEM_MESSAGE", "content": "Child Orchestrator"},
+                    {
+                        "step_index": 1,
+                        "source": "MODEL",
+                        "type": "PLANNER_RESPONSE",
+                        "input_tokens": 15000,
+                        "cache_read_tokens": 450000,
+                        "output_tokens": 500,
+                        "content": "returning summary",
+                        "tool_calls": [{"name": "read_file", "args": {"Path": "/tmp/plan.md"}}],
+                    },
+                ],
+            )
+            res_sub_460k = self.execute_breaker(
+                {
+                    "conversationId": "test-sub-send-msg-460k",
+                    "transcriptPath": str(sub_path),
+                    "stepIdx": 3,
+                    "toolCall": {"name": "send_message", "args": {"Recipient": "parent", "Message": "BATON_CONTINUE: /tmp/ctx.md"}},
+                },
+                env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
+            )
+            self.assertEqual(res_sub_460k.returncode, 0)
+            self.assertEqual(res_sub_460k.stdout, "")
+
+            worker_path = Path(tmpdir) / "worker_send_msg_460k.jsonl"
+            self.write_jsonl(
+                worker_path,
+                [
+                    {
+                        "step_index": 0,
+                        "source": "SYSTEM",
+                        "type": "SYSTEM_MESSAGE",
+                        "content": "[Message] timestamp=2026-11-18T00:00:00Z sender=coord priority=HIGH content=You have just started. Your assignment (recorded on the board as #1 for @impl):",
+                    },
+                    {
+                        "step_index": 1,
+                        "source": "MODEL",
+                        "type": "PLANNER_RESPONSE",
+                        "input_tokens": 15000,
+                        "cache_read_tokens": 450000,
+                        "output_tokens": 500,
+                        "content": "reporting",
+                        "tool_calls": [{"name": "read_board", "args": {"since": 0}}],
+                    },
+                ],
+            )
+            res_worker_460k = self.execute_breaker(
+                {
+                    "conversationId": "test-worker-send-msg-460k",
+                    "transcriptPath": str(worker_path),
+                    "stepIdx": 3,
+                    "toolCall": {"name": "send_message", "args": {"Recipient": "parent", "Message": "done"}},
+                },
+                env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
+            )
+            self.assertEqual(res_worker_460k.returncode, 0)
+            self.assertEqual(res_worker_460k.stdout, "")
+
 if __name__ == "__main__":
     unittest.main()

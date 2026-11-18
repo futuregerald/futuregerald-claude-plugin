@@ -750,4 +750,81 @@ func TestAntigravityThinSupervisorPlannerAndManifestCatalogInvariants(t *testing
 			}
 		}
 	}
+
+	if !strings.Contains(breakerStr, `tool_name == "send_message"`) || !strings.Contains(breakerStr, `not at_hard_ceiling`) {
+		t.Errorf("autonomous_breaker.py missing Root send_message <450k baton exemption")
+	}
+}
+
+func TestAntigravityCarbonHighSoleDefaultReviewerInvariants(t *testing.T) {
+	t.Parallel()
+
+	forbiddenDefaultOpusPhrases := []string{
+		"Opus 5.5 High",
+		"~133k",
+		"fallback: `claude-opus-5-5-high`",
+		"fallback `claude-opus-5-5-high`",
+		"preserving weekly Anthropic Opus quota",
+		"preserving weekly Opus quota",
+		"saves weekly Opus quota",
+		"without spending weekly Anthropic `Opus` quota",
+		"cross-family high-deliberation",
+		"`code-rev`: `claude-opus-5-5-high`",
+		"`code-rev` (`claude-opus-5-5-high`",
+		"`claude-opus-5-5-high` `code-rev`",
+		"`claude-opus-5-5-high` (`code-rev`)",
+		"`sec-rev` → `claude-opus-5-5-high`",
+	}
+
+	checkNoDefaultOpus := func(p string) {
+		b, err := fs.ReadFile(FS, p)
+		if err != nil {
+			t.Fatalf("reading %s: %v", p, err)
+		}
+		s := string(b)
+		for _, bad := range forbiddenDefaultOpusPhrases {
+			if strings.Contains(s, bad) {
+				t.Errorf("%s still contains default-Opus reviewer phrase %q", p, bad)
+			}
+		}
+	}
+
+	if err := fs.WalkDir(FS, "antigravity", func(p string, d fs.DirEntry, wErr error) error {
+		if wErr != nil {
+			return wErr
+		}
+		if d.IsDir() || !strings.HasSuffix(p, ".md") {
+			return nil
+		}
+		checkNoDefaultOpus(p)
+		return nil
+	}); err != nil {
+		t.Fatalf("walking antigravity markdown: %v", err)
+	}
+	checkNoDefaultOpus("tracks.yaml")
+
+	for _, mustExplicitOptInPath := range []string{
+		"antigravity/GEMINI.md",
+		"antigravity/templates/GEMINI-BASE.md",
+		"antigravity/skills/peer-pipeline-swarm/SKILL.md",
+		"antigravity/skills/start/SKILL.md",
+		"antigravity/skills/lifecycle/SKILL.md",
+		"antigravity/skills/antigravity-orchestration/SKILL.md",
+		"antigravity/skills/comprehensive-code-review/SKILL.md",
+		"antigravity/skills/future-model-router/SKILL.md",
+		"antigravity/skills/future-model-router/references/model-map.md",
+	} {
+		b, err := fs.ReadFile(FS, mustExplicitOptInPath)
+		if err != nil {
+			t.Fatalf("reading %s: %v", mustExplicitOptInPath, err)
+		}
+		s := string(b)
+		if !strings.Contains(s, "gemini-4-carbon-high") {
+			t.Errorf("%s missing gemini-4-carbon-high default reviewer", mustExplicitOptInPath)
+		}
+		low := strings.ToLower(s)
+		if !strings.Contains(low, "explicitly") || !strings.Contains(low, "opus") {
+			t.Errorf("%s missing explicit opt-in guard for Opus reviews", mustExplicitOptInPath)
+		}
+	}
 }
