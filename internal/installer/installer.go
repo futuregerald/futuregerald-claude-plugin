@@ -663,6 +663,29 @@ type GlobalAssetOptions struct {
 	Env               platform.Env
 }
 
+func (i *Installer) InstallClaudePrismHook(claudeHome string) ([]string, error) {
+	if claudeHome == "" {
+		return nil, nil
+	}
+	if info, err := os.Lstat(claudeHome); err == nil && info.Mode()&os.ModeSymlink != 0 {
+		return nil, fmt.Errorf("refusing to modify symlinked claude home directory %s", claudeHome)
+	}
+	data, err := fs.ReadFile(i.fsys, "antigravity/hooks/prism_memory_hook.py")
+	if err != nil {
+		return nil, nil
+	}
+	hooksDir := filepath.Join(claudeHome, "hooks")
+	if info, err := os.Lstat(hooksDir); err == nil && info.Mode()&os.ModeSymlink != 0 {
+		return nil, fmt.Errorf("refusing to modify symlinked hooks directory %s", hooksDir)
+	}
+	targetPath := filepath.Join(hooksDir, "prism_memory_hook.py")
+	res, err := i.writeFileWithRoot(hooksDir, targetPath, data, 0755)
+	if err != nil {
+		return nil, err
+	}
+	return []string{res}, nil
+}
+
 func (i *Installer) InstallGlobalHarnessAssets(geminiHome, harness string) ([]string, error) {
 	res, _, _, err := i.InstallGlobalHarnessAssetsWithOptions(geminiHome, harness, GlobalAssetOptions{
 		InstallHooks: true,
@@ -1140,6 +1163,17 @@ func (i *Installer) ExecutePlan(plan InstallPlan) (*InstallResult, error) {
 			}
 		}
 	}
+	if scope == "global" && plan.Harness == HarnessClaude && mode == "full" {
+		if sim, hErr := dryInst.InstallClaudePrismHook(paths.RootDir); hErr == nil {
+			for _, line := range sim {
+				for _, pfx := range []string{"WOULD CREATE: ", "WOULD OVERWRITE: "} {
+					if strings.HasPrefix(line, pfx) {
+						addPlanned(strings.TrimPrefix(line, pfx))
+					}
+				}
+			}
+		}
+	}
 	if scope == "global" && plan.Harness == HarnessAntigravity && (mode == "full" || (mode == "config-only" && cfgMode != ConfigModeSkip)) {
 		if sim, _, _, gErr := dryInst.InstallGlobalHarnessAssetsWithOptions(paths.GeminiHome, plan.Harness, GlobalAssetOptions{
 			LightweightConfig: track.LightweightConfig,
@@ -1227,6 +1261,13 @@ func (i *Installer) ExecutePlan(plan InstallPlan) (*InstallResult, error) {
 		}
 	}
 
+	if scope == "global" && plan.Harness == HarnessClaude && mode == "full" {
+		res, hErr := execInst.InstallClaudePrismHook(paths.RootDir)
+		if hErr != nil {
+			return nil, hErr
+		}
+		recordActions(res)
+	}
 	if scope == "global" && plan.Harness == HarnessAntigravity && (mode == "full" || (mode == "config-only" && cfgMode != ConfigModeSkip)) {
 		cfgInst := execInst
 		if (plan.ForceConfig || cfgMode == ConfigModeMerge) && !execInst.options.Force {

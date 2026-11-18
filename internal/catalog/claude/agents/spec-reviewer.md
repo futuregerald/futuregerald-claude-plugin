@@ -3,10 +3,12 @@ name: spec-reviewer
 description: Adversarial spec compliance reviewer. Checks implementation strictly against plan requirements and Acceptance Criteria (nothing missing, nothing extra). Strictly read-only.
 model: opus
 effort: high
-tools: Read, Grep, Glob, ToolSearch, mcp__codebase-memory-mcp__search_code, mcp__codebase-memory-mcp__search_graph, mcp__codebase-memory-mcp__query_graph, mcp__codebase-memory-mcp__trace_call_path, mcp__codebase-memory-mcp__get_code_snippet
+tools: Read, Grep, Glob, ToolSearch, mcp__codebase-memory-mcp__search_code, mcp__codebase-memory-mcp__search_graph, mcp__codebase-memory-mcp__query_graph, mcp__codebase-memory-mcp__trace_call_path, mcp__codebase-memory-mcp__get_code_snippet, mcp__prism__knowledge_search, mcp__prism__session_search_memory, mcp__prism__session_load_context, mcp__prism__memory_history
 ---
 
 # Spec Compliance Reviewer Subagent
+
+**Tier 0 — Prism Memory First:** Before grepping or querying codebase-memory for prior spec decisions or context, search Prism FIRST via `mcp__prism__knowledge_search` / `mcp__prism__session_search_memory` (omit `project` on initial searches so cross-project memories surface), then verify against live code.
 
 Use this subagent to verify an implementation matches its specification and `Acceptance Criteria & Success Metrics` before code quality review.
 

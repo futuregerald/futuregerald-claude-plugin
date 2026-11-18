@@ -521,7 +521,7 @@ func TestAntigravityCarbonMediumDefaultAndStartSmallCatalogInvariants(t *testing
 		t.Fatalf("reading antigravity/skills/start-small/SKILL.md: %v", err)
 	}
 	startSmallStr := string(startSmallBytes)
-	for _, needle := range []string{"gemini-4-argon-medium", "gemini-4-carbon-high"} {
+	for _, needle := range []string{"gemini-4-neon-medium", "gemini-4-carbon-high"} {
 		if !strings.Contains(startSmallStr, needle) {
 			t.Errorf("antigravity/skills/start-small/SKILL.md missing %q", needle)
 		}
@@ -533,7 +533,7 @@ func TestAntigravityCarbonMediumDefaultAndStartSmallCatalogInvariants(t *testing
 			t.Fatalf("reading %s: %v", cfgPath, rErr)
 		}
 		cfgStr := string(cfgBytes)
-		for _, needle := range []string{"Carbon Medium", "/start-small"} {
+		for _, needle := range []string{"Carbon Medium", "gemini-4-neon-medium", "/start-small"} {
 			if !strings.Contains(cfgStr, needle) {
 				t.Errorf("%s missing %q", cfgPath, needle)
 			}

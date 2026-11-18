@@ -16,9 +16,8 @@ The per-turn habits live in `~/.gemini/GEMINI.md` (§0.9) and project `GEMINI.md
 
 ## Core Findings
 
-1. **Carbon Medium (`2×`) vs. Argon Medium (`1×`) on End-to-End `/start` + `peer-pipeline-swarm`:**
-   - Across our controlled 24-assertion zero-knowledge browser-extension M2 benchmark, **`gemini-4-carbon-medium`** (Coordinator + `impl`) beat **`gemini-4-argon-medium`** `24/24 (100%)` vs `20/24 (83.3%)` and won `2–0` blind (`94 vs 54` Carbon judge; `84 vs 66` historical blind judge), while `Carbon Implementer` finished `2.8m` faster (`53.1m` vs `55.9m`) in `13.5%` fewer turns and cut downstream reviewer rework by `-24.1%`. Meanwhile, `Argon Medium` remains the minimum `1×` coding floor (`96.4%` vs `82.1%` and `5.9×` fewer input tokens than `Model: "flash"`).
-   - **Rule:** Keep **`Carbon Medium`** as the default Coordinator and `/start` `impl` (`gemini-4-carbon-medium`) for feature work, architecture, and complex debugging; invoke **`/start-small`** (`impl: gemini-4-argon-medium` + `gemini-4-carbon-high` reviewers) for smaller, well-bounded changes without switching the UI dropdown; use **`Hydrogen`** (`0.2×`) for non-code EM/Jira/meeting/ops tasks; and reserve `Model: "flash"` strictly for `<50` LOC single-file mechanical boilerplate.
+1. **Gemini 4 Neon (Medium) (`gemini-4-neon-medium`) Default Implementer + Carbon Medium Coordinator:**
+   - **Rule:** Pin the default Antigravity Phase 4 TDD implementer (`impl` in `/start`, `/start-small`, and `peer-pipeline-swarm`) to **`gemini-4-neon-medium`**, while keeping **`Carbon Medium`** as the default Coordinator UI model for planning, architecture, and complex debugging; use **`Hydrogen`** (`0.2×`) for non-code EM/Jira/meeting/ops tasks; and reserve `Model: "flash"` strictly for `<50` LOC single-file mechanical boilerplate.
 
 2. **Never pass `Model: "pro"` on Argon or Carbon sessions:**
    - `invoke_subagent` only accepts `Model: "inherit" | "pro" | "flash" | "flash_lite"`. Passing `"pro"` routes to the legacy Gemini 3.1 Pro slot (`20/28` pass rate and `2.1×` more tokens), whereas `"inherit"` copies the active UI model (**Carbon** or **Argon**).
@@ -67,9 +66,9 @@ Is this a code change?
         ├── Trivial (<5 turns, <=2 files already in context)?
         │   └── Implement inline + invoke_subagent(TypeName: "code-quality-reviewer" & "security-reviewer", Model: "inherit", 22.7k floor each)
         ├── Small/bounded change (/start-small, >=3 files)?
-        │   └── Peer-Pipeline Swarm (~117k 4-worker floor): impl (gemini-4-argon-medium, share) + code-rev & sec-rev (gemini-4-carbon-high) + monitor (gemini-4-hydrogen-low)
+        │   └── Peer-Pipeline Swarm (~117k 4-worker floor): impl (gemini-4-neon-medium, share) + code-rev & sec-rev (gemini-4-carbon-high) + monitor (gemini-4-hydrogen-low)
         ├── Standard feature / debugging (/start, /begin, /peer-pipeline-swarm)?
-        │   └── Peer-Pipeline Swarm (~117k 4-worker floor): impl (gemini-4-carbon-medium, share) + code-rev & sec-rev/sql-rev (gemini-4-carbon-high) + monitor (gemini-4-hydrogen-low)
+        │   └── Peer-Pipeline Swarm (~117k 4-worker floor): impl (gemini-4-neon-medium, share) + code-rev & sec-rev/sql-rev (gemini-4-carbon-high) + monitor (gemini-4-hydrogen-low)
         └── Step-by-step Subagent-Driven (or Gemini CLI)?
             └── invoke_subagent(TypeName: "implementer", Model: "inherit", 24.8k floor) + parallel code-quality-reviewer & security-reviewer (22.7k floor each)
 ```

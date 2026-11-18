@@ -105,8 +105,14 @@ When you spike: use a scratch or temp directory, never the working tree. Write d
 
 **Branch on the question before picking a tool.**
 
+- **Prior info, memories, decisions, or bug history (Tier 0 — Prism FIRST)** → Search Prism FIRST (`mcp__prism__knowledge_search` / `mcp__prism__session_search_memory`) **without** a `project` filter so cross-project memories surface before grepping, reading codebase-memory, or searching the web; then verify against live code.
 - **Existence and shape** ("does X exist", "where is it defined") → graph and index tools first (`search_graph`, `query_graph`, `get_architecture`), then indexed code search, then Grep/Read.
 - **Reachability** ("who calls this", "is this dead", "what breaks if I change it") → **grep first.** A call graph cannot see reflection, interface dispatch, registry maps, config-driven wiring, `send`/`constantize`, or handler names held as strings. A zero-caller answer from the graph is a prompt to grep, never a conclusion.
+
+### Prism Memory (Search-First & Auto-Save)
+
+- **Project Key Convention:** Use `<repo-basename>` (parent basename of `git rev-parse --path-format=absolute --git-common-dir`, lowercased; fallback `"dev"`) for `mcp__prism__session_load_context` (`level="standard"` on Turn 1 for engineering/debugging/resuming tasks) and all writes.
+- **Auto-Save:** Save completed work via `mcp__prism__session_save_ledger`, remaining WIP via `mcp__prism__session_save_handoff`, and non-trivial learnings/corrections via `mcp__prism__session_save_experience`.
 
 A row from the graph proves a symbol exists at that `file:line`; its absence proves nothing. Any negative or exhaustive claim ("nothing else calls this") must name the scopes it checked. If the index offers a coverage check, run it on every path you cite.
 

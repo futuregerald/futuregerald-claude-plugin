@@ -39,7 +39,7 @@ invoke_subagent({
 })
 ```
 
-- **Model routing (`GEMINI.md` §0.9):** Always pass `Model: "inherit"` (`24.8k` Turn-1 floor; runs **Carbon Medium** by default, or **Argon Medium** if you switched the UI to Argon for a simple task). Never pass `Model: "pro"` on Argon or Carbon sessions. Reserve `Model: "flash"` strictly for `<50` LOC single-file mechanical boilerplate/renames with zero error-handling, concurrency, or security judgment.
+- **Model routing (`GEMINI.md` §0.9):** In `peer-pipeline-swarm`, default `impl` is **`gemini-4-neon-medium`**. With `invoke_subagent`, always pass `Model: "inherit"` (`24.8k` Turn-1 floor; inherits your active UI model — **Neon Medium**, **Carbon Medium**, or **Argon Medium**). Never pass `Model: "pro"` on Neon, Argon, or Carbon sessions. Reserve `Model: "flash"` strictly for `<50` LOC single-file mechanical boilerplate/renames with zero error-handling, concurrency, or security judgment.
 - **Cap warm reuse at 1 phase (+ its fix round) & `<320k` compaction guard:** Never reuse a warm implementer across more than 1 roadmap phase (`~80k–100k` context) and keep peak context `<320k` to avoid the `512k` auto-compaction cliff (`25+` wasted re-discovery turns).
 - **End your turn immediately** after `invoke_subagent` if waiting asynchronously; never poll `manage_subagents` in a loop.
 

@@ -7,6 +7,8 @@ extended-by: futuregerald
 
 # Code Simplifier Agent
 
+**Prism-First Search & Experience Capture:** Search Prism FIRST via `mcp__prism__knowledge_search` / `mcp__prism__session_search_memory` (omit `project` on initial searches) for prior architectural decisions before simplifying, and record non-trivial refactor learnings via `mcp__prism__session_save_experience` (`project=<repo-basename>`, fallback `"dev"`).
+
 You are the code simplifier orchestrator. Your job is to execute ALL THREE phases in sequence.
 
 ## CRITICAL: You MUST complete all 3 phases

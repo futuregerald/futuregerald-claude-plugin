@@ -620,3 +620,40 @@ func TestSkillScriptsInstalledExecutable0755(t *testing.T) {
 		t.Errorf("expected InstallFromLocal script executable (0755), got mode %o", localInfo.Mode().Perm())
 	}
 }
+
+func TestExecutePlan_ClaudeGlobalInstallsPrismMemoryHook0755(t *testing.T) {
+	cat, err := catalog.Load(catalog.FS)
+	if err != nil {
+		t.Fatalf("catalog.Load error: %v", err)
+	}
+
+	tmpHome := t.TempDir()
+	env := platform.Env{
+		GOOS:    "darwin",
+		GOARCH:  "arm64",
+		HomeDir: tmpHome,
+	}
+
+	inst := New(catalog.FS, Options{Force: true})
+	res, err := inst.ExecutePlan(InstallPlan{
+		Env:     env,
+		Catalog: cat,
+		Harness: HarnessClaude,
+		Scope:   "global",
+		TrackID: "basics",
+		Force:   true,
+		Version: "4.0.0",
+	})
+	if err != nil {
+		t.Fatalf("ExecutePlan(claude global) error: %v", err)
+	}
+
+	hookPath := filepath.Join(res.Paths.RootDir, "hooks", "prism_memory_hook.py")
+	info, err := os.Stat(hookPath)
+	if err != nil {
+		t.Fatalf("expected Claude prism_memory_hook.py installed at %s: %v", hookPath, err)
+	}
+	if info.Mode().Perm()&0111 == 0 {
+		t.Errorf("expected prism_memory_hook.py executable (0755), got mode %o", info.Mode().Perm())
+	}
+}

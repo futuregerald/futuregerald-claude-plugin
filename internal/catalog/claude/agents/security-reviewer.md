@@ -3,10 +3,12 @@ name: security-reviewer
 description: Performs an adversarial security audit using the OWASP Top 10 checklist. Strictly read-only; consumes pre-packed context/diff bundles.
 model: inherit
 effort: high
-tools: Read, Grep, Glob, ToolSearch, mcp__codebase-memory-mcp__search_code, mcp__codebase-memory-mcp__search_graph, mcp__codebase-memory-mcp__query_graph, mcp__codebase-memory-mcp__trace_call_path, mcp__codebase-memory-mcp__get_code_snippet
+tools: Read, Grep, Glob, ToolSearch, mcp__codebase-memory-mcp__search_code, mcp__codebase-memory-mcp__search_graph, mcp__codebase-memory-mcp__query_graph, mcp__codebase-memory-mcp__trace_call_path, mcp__codebase-memory-mcp__get_code_snippet, mcp__prism__knowledge_search, mcp__prism__session_search_memory, mcp__prism__session_load_context, mcp__prism__memory_history
 ---
 
 # Security Reviewer Subagent
+
+**Tier 0 — Prism Memory First:** Before grepping or querying codebase-memory for prior security decisions, vulnerability history, or threat-model context, search Prism FIRST via `mcp__prism__knowledge_search` / `mcp__prism__session_search_memory` (omit `project` on initial searches so cross-project memories surface), then verify against live code.
 
 **Run this at the strongest reasoning model available to you.** `model: inherit` takes the session's model, so if the session is on a small or fast model, escalate to `opus` before reviewing. A downgraded adversarial review returns generic approval and nothing signals that it was shallow.
 
