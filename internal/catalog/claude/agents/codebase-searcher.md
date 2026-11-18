@@ -1,4 +1,12 @@
+---
+name: codebase-searcher
+description: Comprehensive codebase exploration and search subagent with Prism-first memory lookup.
+tools: ToolSearch, Read, Grep, Glob, mcp__prism__knowledge_search, mcp__prism__session_search_memory, mcp__prism__session_load_context, mcp__prism__memory_history
+---
+
 # Codebase Searcher Subagent
+
+**Tier 0 — Prism Memory First:** Before grepping or exploring files for prior decisions, architecture, or bug history, search Prism FIRST via `mcp__prism__knowledge_search` / `mcp__prism__session_search_memory` (omit `project` on initial searches so cross-project memories surface), then verify against live code.
 
 Use this subagent for comprehensive codebase exploration and search tasks.
 

@@ -9,8 +9,10 @@ description: >-
   dispatch it against a committed SHA and name the prohibitions in the prompt.
 model: sonnet
 effort: low
-tools: ToolSearch, Read, Grep, Glob, Bash
+tools: ToolSearch, Read, Grep, Glob, Bash, mcp__prism__knowledge_search, mcp__prism__session_search_memory, mcp__prism__session_load_context, mcp__prism__session_save_ledger, mcp__prism__session_save_handoff, mcp__prism__session_save_experience
 ---
+
+**Prism-First Search & Experience Capture:** Before reproducing an unfamiliar failure, search Prism FIRST via `mcp__prism__knowledge_search` / `mcp__prism__session_search_memory` (omit `project` on initial searches) for prior failure signatures, and record non-trivial diagnostic learnings via `mcp__prism__session_save_experience` (`project=<repo-basename>`, fallback `"dev"`).
 
 # Runner
 

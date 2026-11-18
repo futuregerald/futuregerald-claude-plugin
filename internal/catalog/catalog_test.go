@@ -521,7 +521,7 @@ func TestAntigravityCarbonMediumDefaultAndStartSmallCatalogInvariants(t *testing
 		t.Fatalf("reading antigravity/skills/start-small/SKILL.md: %v", err)
 	}
 	startSmallStr := string(startSmallBytes)
-	for _, needle := range []string{"gemini-4-argon-medium", "gemini-4-carbon-high"} {
+	for _, needle := range []string{"gemini-4-neon-medium", "gemini-4-neon-xhigh"} {
 		if !strings.Contains(startSmallStr, needle) {
 			t.Errorf("antigravity/skills/start-small/SKILL.md missing %q", needle)
 		}
@@ -533,7 +533,7 @@ func TestAntigravityCarbonMediumDefaultAndStartSmallCatalogInvariants(t *testing
 			t.Fatalf("reading %s: %v", cfgPath, rErr)
 		}
 		cfgStr := string(cfgBytes)
-		for _, needle := range []string{"Carbon Medium", "/start-small"} {
+		for _, needle := range []string{"Neon High", "gemini-4-neon-high", "gemini-4-neon-medium", "gemini-4-neon-xhigh", "/start-small"} {
 			if !strings.Contains(cfgStr, needle) {
 				t.Errorf("%s missing %q", cfgPath, needle)
 			}
@@ -819,8 +819,8 @@ func TestAntigravityCarbonHighSoleDefaultReviewerInvariants(t *testing.T) {
 			t.Fatalf("reading %s: %v", mustExplicitOptInPath, err)
 		}
 		s := string(b)
-		if !strings.Contains(s, "gemini-4-carbon-high") {
-			t.Errorf("%s missing gemini-4-carbon-high default reviewer", mustExplicitOptInPath)
+		if !strings.Contains(s, "gemini-4-neon-xhigh") {
+			t.Errorf("%s missing gemini-4-neon-xhigh default reviewer", mustExplicitOptInPath)
 		}
 		low := strings.ToLower(s)
 		if !strings.Contains(low, "explicitly") || !strings.Contains(low, "opus") {

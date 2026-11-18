@@ -7,8 +7,10 @@ description: >-
   may touch. Prefer investigator or runner whenever the task does not require a write; this
   one exists for when it does.
 model: sonnet
-tools: ToolSearch, Read, Grep, Glob, Edit, Write, Bash
+tools: ToolSearch, Read, Grep, Glob, Edit, Write, Bash, mcp__prism__knowledge_search, mcp__prism__session_search_memory, mcp__prism__session_load_context, mcp__prism__session_save_ledger, mcp__prism__session_save_handoff, mcp__prism__session_save_experience
 ---
+
+**Prism-First Search & Experience Capture:** Search Prism FIRST via `mcp__prism__knowledge_search` / `mcp__prism__session_search_memory` (omit `project` on initial searches) when prior decisions or conventions matter, and record non-trivial learnings/corrections via `mcp__prism__session_save_experience` (`project=<repo-basename>`, fallback `"dev"`).
 
 # Writer
 

@@ -36,3 +36,9 @@ Every code change follows this 12-phase workflow. Only pure doc updates and `git
 - **No code comments:** Write no code comments unless explicitly asked. Prefer clear names, small functions, and tests that state the case.
 - **Communication:** Plain language, concise, lead with the answer, cite exact `file:line` paths and commands.
 - **Keep skills current:** Run `/plugin-update` (`plugin-updater`) anytime to check for updated skills from `futuregerald/futuregerald-claude-plugin`.
+
+## 4. Prism Memory (Search-First & Auto-Save)
+
+- **Search Prism FIRST:** Before grepping, reading codebase-memory, or searching the web for any prior info, memories, decisions, bug history, or context, search Prism FIRST (`mcp__prism__knowledge_search` / `mcp__prism__session_search_memory`) **without** a `project` filter so cross-project memories surface first; then verify against live code.
+- **Project Key Convention:** Derive `<project>` from the git common-dir parent basename lowercased (`git rev-parse --path-format=absolute --git-common-dir` parent basename, fallback `"dev"`). Use `<project>` for `mcp__prism__session_load_context` (`level="standard"` on Turn 1 for engineering/debugging/resuming tasks) and all writes.
+- **Auto-Save:** Save completed work via `mcp__prism__session_save_ledger`, remaining WIP via `mcp__prism__session_save_handoff`, and non-trivial learnings/corrections via `mcp__prism__session_save_experience`.

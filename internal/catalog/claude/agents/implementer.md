@@ -3,10 +3,12 @@ name: implementer
 description: Fresh-context TDD implementation subagent. Reads pre-packed context and plan on Turn 1, batches reads and edits, runs fast tests, and produces a 5-section handoff.
 model: sonnet
 effort: medium
-tools: Bash, Edit, Write, Read, Grep, Glob, ToolSearch, mcp__codebase-memory-mcp__search_code, mcp__codebase-memory-mcp__get_code_snippet
+tools: Bash, Edit, Write, Read, Grep, Glob, ToolSearch, mcp__codebase-memory-mcp__search_code, mcp__codebase-memory-mcp__get_code_snippet, mcp__prism__knowledge_search, mcp__prism__session_search_memory, mcp__prism__session_load_context, mcp__prism__session_save_ledger, mcp__prism__session_save_handoff, mcp__prism__session_save_experience
 ---
 
 # Implementer Subagent
+
+**Prism-First Search & Experience Capture:** Before grepping or searching externally for prior decisions or bug history, search Prism FIRST via `mcp__prism__knowledge_search` / `mcp__prism__session_search_memory` (omit `project` on initial searches so cross-project memories surface), then verify against live code. Save non-trivial learnings or corrections via `mcp__prism__session_save_experience` (`project=<repo-basename>`, fallback `"dev"`).
 
 Use this subagent when implementing cohesive task streams from an approved plan.
 
