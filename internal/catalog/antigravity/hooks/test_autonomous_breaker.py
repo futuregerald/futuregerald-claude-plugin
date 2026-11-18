@@ -1876,7 +1876,7 @@ class TestAutonomousBreaker(unittest.TestCase):
             data_cmd = json.loads(res_cmd.stdout)
             self.assertEqual(data_cmd.get("decision"), "deny")
             self.assertIn("CIRCUIT BREAKER (Baton Block)", data_cmd.get("reason", ""))
-            self.assertIn("Only ACTIVE_CONTEXT.md handoff and Prism saves are allowed", data_cmd.get("reason", ""))
+            self.assertIn('invoke_subagent(TypeName="self", Model="inherit")', data_cmd.get("reason", ""))
 
             payload_sub = {
                 "conversationId": "test-baton-block",
@@ -3323,7 +3323,7 @@ class TestAutonomousBreaker(unittest.TestCase):
                 denied_data = json.loads(res_denied.stdout)
                 self.assertEqual(denied_data.get("decision"), "deny")
                 self.assertIn("CIRCUIT BREAKER (Baton Block)", denied_data.get("reason", ""))
-                self.assertIn("Only ACTIVE_CONTEXT.md handoff and Prism saves are allowed", denied_data.get("reason", ""))
+                self.assertIn('invoke_subagent(TypeName="self", Model="inherit")', denied_data.get("reason", ""))
                 self.assertNotIn("Warn", denied_data.get("reason", ""))
 
     def test_phase8_review_fixes_ratchet_conflicting_paths_drive_rel_and_private_tmp(self):
@@ -3675,7 +3675,7 @@ class TestAutonomousBreaker(unittest.TestCase):
             log_path = Path(tmpdir) / "baton_log.jsonl"
             res_log_mode = self.execute_breaker(
                 {
-                    "conversationId": "test-subagent-cap",
+                    "conversationId": "test-subagent-cap-log",
                     "transcriptPath": str(sub_path),
                     "stepIdx": 7,
                     "toolCall": {"name": "read_file", "args": {"Path": "/repo/other.go"}},
@@ -3922,6 +3922,291 @@ class TestAutonomousBreaker(unittest.TestCase):
             dbl_spoof_data = json.loads(res_dbl_spoof.stdout)
             self.assertEqual(dbl_spoof_data.get("decision"), "deny")
             self.assertIn("Subagent Context Cap", dbl_spoof_data.get("reason", ""))
+
+    def test_subagent_child_orchestrator_active_context_unlocks_plus_25k_and_exempts_swarm_kill_and_context_reads(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            sub_path = Path(tmpdir) / "child_orchestrator.jsonl"
+            sub_steps = [
+                {"step_index": 0, "source": "SYSTEM", "type": "SYSTEM_MESSAGE", "content": "Child Orchestrator Phases 3.5-12"},
+                {
+                    "step_index": 1,
+                    "source": "MODEL",
+                    "type": "PLANNER_RESPONSE",
+                    "input_tokens": 10000,
+                    "cache_read_tokens": 345000,
+                    "output_tokens": 500,
+                    "content": "orchestrating swarm",
+                    "tool_calls": [{"name": "swarm", "args": {"action": "add", "name": "impl", "model": "gemini-4-carbon-medium", "workspace": "share", "brief": "go"}}],
+                },
+            ]
+            self.write_jsonl(sub_path, sub_steps)
+
+            for blocked_before_unlock in (
+                {"name": "run_command", "args": {"CommandLine": "git fetch '/tmp/share' 'abc1234'"}},
+                {"name": "read_file", "args": {"Path": "/repo/internal/service.go"}},
+                {"name": "swarm", "args": {"action": "add", "name": "impl-2", "model": "gemini-4-carbon-medium", "brief": "more"}},
+            ):
+                res_blk = self.execute_breaker(
+                    {
+                        "conversationId": "test-child-orch-cap",
+                        "transcriptPath": str(sub_path),
+                        "stepIdx": 3,
+                        "toolCall": blocked_before_unlock,
+                    },
+                    env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
+                )
+                self.assertEqual(res_blk.returncode, 0)
+                blk_data = json.loads(res_blk.stdout)
+                self.assertEqual(blk_data.get("decision"), "deny", f"expected deny for {blocked_before_unlock}")
+                self.assertIn("CIRCUIT BREAKER (Subagent Context Cap)", blk_data.get("reason", ""))
+                self.assertIn("ACTIVE_CONTEXT.md", blk_data.get("reason", ""))
+                self.assertIn("+25k", blk_data.get("reason", ""))
+                self.assertIn("BATON_CONTINUE:", blk_data.get("reason", ""))
+
+            for exempt_before_unlock in (
+                {"name": "swarm", "args": {"action": "status"}},
+                {"name": "swarm", "args": {"action": "kill", "name": "impl"}},
+                {"name": "read_board", "args": {"since": 0}},
+                {"name": "post_message", "args": {"content": "[done] winding down"}},
+                {"name": "swarm_wait", "args": {"since": 0}},
+                {"name": "manage_task", "args": {"Action": "kill", "TaskId": "t1"}},
+                {"name": "read_file", "args": {"Path": "/tmp/subagent-context-proj.md"}},
+                {"name": "read_file", "args": {"Path": "~/.gemini/handoffs/proj/2026-11-18-ACTIVE_CONTEXT.md"}},
+                {"name": "send_message", "args": {"Recipient": "parent", "Message": "BATON_CONTINUE: ~/.gemini/handoffs/proj/2026-11-18-ACTIVE_CONTEXT.md"}},
+            ):
+                res_ex = self.execute_breaker(
+                    {
+                        "conversationId": "test-child-orch-cap",
+                        "transcriptPath": str(sub_path),
+                        "stepIdx": 4,
+                        "toolCall": exempt_before_unlock,
+                    },
+                    env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir, "BREAKER_DUP_MODE": "off"},
+                )
+                self.assertEqual(res_ex.returncode, 0)
+                self.assertEqual(res_ex.stdout, "", f"expected exempt allow for {exempt_before_unlock}")
+
+            res_unlock_write = self.execute_breaker(
+                {
+                    "conversationId": "test-child-orch-cap",
+                    "transcriptPath": str(sub_path),
+                    "stepIdx": 5,
+                    "toolCall": {"name": "write_file", "args": {"Path": "~/.gemini/handoffs/proj/2026-11-18-ACTIVE_CONTEXT.md", "Content": "Active Context"}},
+                },
+                env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
+            )
+            self.assertEqual(res_unlock_write.returncode, 0)
+            self.assertEqual(res_unlock_write.stdout, "")
+
+            sub_steps[1]["cache_read_tokens"] = 360000
+            self.write_jsonl(sub_path, sub_steps)
+
+            res_git_fetch = self.execute_breaker(
+                {
+                    "conversationId": "test-child-orch-cap",
+                    "transcriptPath": str(sub_path),
+                    "stepIdx": 6,
+                    "toolCall": {"name": "run_command", "args": {"CommandLine": "git fetch '/tmp/share' 'abc1234' && git branch -f baton/stream abc1234"}},
+                },
+                env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
+            )
+            self.assertEqual(res_git_fetch.returncode, 0)
+            self.assertEqual(res_git_fetch.stdout, "")
+
+            sub_steps[1]["cache_read_tokens"] = 375000
+            self.write_jsonl(sub_path, sub_steps)
+
+            res_second_write = self.execute_breaker(
+                {
+                    "conversationId": "test-child-orch-cap",
+                    "transcriptPath": str(sub_path),
+                    "stepIdx": 7,
+                    "toolCall": {"name": "write_file", "args": {"Path": "~/.gemini/handoffs/proj/2026-11-18-ACTIVE_CONTEXT.md", "Content": "Anchored"}},
+                },
+                env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
+            )
+            self.assertEqual(res_second_write.returncode, 0)
+            self.assertEqual(res_second_write.stdout, "")
+
+            res_exceeded = self.execute_breaker(
+                {
+                    "conversationId": "test-child-orch-cap",
+                    "transcriptPath": str(sub_path),
+                    "stepIdx": 8,
+                    "toolCall": {"name": "run_command", "args": {"CommandLine": "git status"}},
+                },
+                env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
+            )
+            self.assertEqual(res_exceeded.returncode, 0)
+            exceeded_data = json.loads(res_exceeded.stdout)
+            self.assertEqual(exceeded_data.get("decision"), "deny")
+            self.assertIn("exceeds the +25k", exceeded_data.get("reason", ""))
+            self.assertIn("BATON_CONTINUE:", exceeded_data.get("reason", ""))
+
+            res_kill_after = self.execute_breaker(
+                {
+                    "conversationId": "test-child-orch-cap",
+                    "transcriptPath": str(sub_path),
+                    "stepIdx": 9,
+                    "toolCall": {"name": "swarm", "args": {"action": "kill", "name": "monitor"}},
+                },
+                env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
+            )
+            self.assertEqual(res_kill_after.returncode, 0)
+            self.assertEqual(res_kill_after.stdout, "")
+
+    def test_root_310k_warn_and_350k_block_coach_same_chat_self_child_orchestrator(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            t_path = Path(tmpdir) / "root_auto_child.jsonl"
+            steps = [
+                {"step_index": 0, "source": "USER_EXPLICIT", "type": "USER_INPUT", "content": "/start build feature"},
+                {
+                    "step_index": 1,
+                    "source": "MODEL",
+                    "type": "PLANNER_RESPONSE",
+                    "input_tokens": 15000,
+                    "cache_read_tokens": 300000,
+                    "output_tokens": 500,
+                    "content": "delegating",
+                    "tool_calls": [{"name": "read_file", "args": {"Path": "/tmp/plan.md"}}],
+                },
+            ]
+            self.write_jsonl(t_path, steps)
+
+            res_warn = self.execute_breaker(
+                {
+                    "conversationId": "test-root-same-chat-relay",
+                    "transcriptPath": str(t_path),
+                    "stepIdx": 3,
+                    "toolCall": {"name": "invoke_subagent", "args": {"TypeName": "self", "Role": "Child Orchestrator", "Model": "inherit", "Prompt": "run"}},
+                },
+                env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
+            )
+            warn_data = json.loads(res_warn.stdout)
+            self.assertEqual(warn_data.get("decision"), "deny")
+            self.assertIn("CIRCUIT BREAKER (Baton Warn)", warn_data.get("reason", ""))
+            self.assertIn('invoke_subagent(TypeName="self", Model="inherit")', warn_data.get("reason", ""))
+            self.assertIn("SAME chat", warn_data.get("reason", ""))
+            self.assertIn("450000", warn_data.get("reason", ""))
+
+            steps[1]["cache_read_tokens"] = 345000
+            self.write_jsonl(t_path, steps)
+
+            res_block = self.execute_breaker(
+                {
+                    "conversationId": "test-root-same-chat-relay",
+                    "transcriptPath": str(t_path),
+                    "stepIdx": 4,
+                    "toolCall": {"name": "invoke_subagent", "args": {"TypeName": "self", "Role": "Child Orchestrator", "Model": "inherit", "Prompt": "run"}},
+                },
+                env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
+            )
+            block_data = json.loads(res_block.stdout)
+            self.assertEqual(block_data.get("decision"), "deny")
+            self.assertIn("CIRCUIT BREAKER (Baton Block)", block_data.get("reason", ""))
+            self.assertIn('invoke_subagent(TypeName="self", Model="inherit")', block_data.get("reason", ""))
+            self.assertIn("SAME chat", block_data.get("reason", ""))
+
+            res_write = self.execute_breaker(
+                {
+                    "conversationId": "test-root-same-chat-relay",
+                    "transcriptPath": str(t_path),
+                    "stepIdx": 5,
+                    "toolCall": {"name": "write_file", "args": {"Path": "~/.gemini/handoffs/proj/2026-11-18-ACTIVE_CONTEXT.md", "Content": "snapshot"}},
+                },
+                env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
+            )
+            self.assertEqual(res_write.returncode, 0)
+            self.assertEqual(res_write.stdout, "")
+
+            res_spawn_after_unlock = self.execute_breaker(
+                {
+                    "conversationId": "test-root-same-chat-relay",
+                    "transcriptPath": str(t_path),
+                    "stepIdx": 6,
+                    "toolCall": {"name": "invoke_subagent", "args": {"TypeName": "self", "Role": "Child Orchestrator", "Model": "inherit", "Prompt": "Ingest ACTIVE_CONTEXT.md"}},
+                },
+                env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
+            )
+            self.assertEqual(res_spawn_after_unlock.returncode, 0)
+            self.assertEqual(res_spawn_after_unlock.stdout, "")
+
+    def test_root_450k_hard_ceiling_coaches_manual_new_chat_and_blocks_subagent_spawn_even_when_unlocked(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            t_path = Path(tmpdir) / "root_450k_ceiling.jsonl"
+            steps = [
+                {"step_index": 0, "source": "USER_EXPLICIT", "type": "USER_INPUT", "content": "/start build fifth feature"},
+                {
+                    "step_index": 1,
+                    "source": "MODEL",
+                    "type": "PLANNER_RESPONSE",
+                    "input_tokens": 15000,
+                    "cache_read_tokens": 440000,
+                    "output_tokens": 500,
+                    "content": "near ceiling",
+                    "tool_calls": [{"name": "read_file", "args": {"Path": "/tmp/plan.md"}}],
+                },
+            ]
+            self.write_jsonl(t_path, steps)
+
+            res_ceil = self.execute_breaker(
+                {
+                    "conversationId": "test-root-450k",
+                    "transcriptPath": str(t_path),
+                    "stepIdx": 3,
+                    "toolCall": {"name": "run_command", "args": {"CommandLine": "git status"}},
+                },
+                env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
+            )
+            ceil_data = json.loads(res_ceil.stdout)
+            self.assertEqual(ceil_data.get("decision"), "deny")
+            self.assertIn("CIRCUIT BREAKER (Baton Block)", ceil_data.get("reason", ""))
+            self.assertIn("450000", ceil_data.get("reason", ""))
+            self.assertIn("512k", ceil_data.get("reason", ""))
+            self.assertIn("Ingest", ceil_data.get("reason", ""))
+            self.assertNotIn("SAME chat", ceil_data.get("reason", ""))
+
+            res_write = self.execute_breaker(
+                {
+                    "conversationId": "test-root-450k",
+                    "transcriptPath": str(t_path),
+                    "stepIdx": 4,
+                    "toolCall": {"name": "write_file", "args": {"Path": "~/.gemini/handoffs/proj/2026-11-18-ACTIVE_CONTEXT.md", "Content": "final snapshot"}},
+                },
+                env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
+            )
+            self.assertEqual(res_write.returncode, 0)
+            self.assertEqual(res_write.stdout, "")
+
+            res_cleanup_cmd = self.execute_breaker(
+                {
+                    "conversationId": "test-root-450k",
+                    "transcriptPath": str(t_path),
+                    "stepIdx": 5,
+                    "toolCall": {"name": "run_command", "args": {"CommandLine": "git status --short"}},
+                },
+                env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
+            )
+            self.assertEqual(res_cleanup_cmd.returncode, 0)
+            self.assertEqual(res_cleanup_cmd.stdout, "")
+
+            for denied_spawn_at_450k in (
+                {"name": "invoke_subagent", "args": {"TypeName": "self", "Role": "Child Orchestrator", "Model": "inherit", "Prompt": "continue"}},
+                {"name": "swarm", "args": {"action": "add", "name": "impl", "model": "gemini-4-carbon-medium", "brief": "go"}},
+            ):
+                res_spawn_blk = self.execute_breaker(
+                    {
+                        "conversationId": "test-root-450k",
+                        "transcriptPath": str(t_path),
+                        "stepIdx": 6,
+                        "toolCall": denied_spawn_at_450k,
+                    },
+                    env={"BREAKER_BATON_MODE": "enforce", "BREAKER_STATE_DIR": tmpdir},
+                )
+                spawn_blk_data = json.loads(res_spawn_blk.stdout)
+                self.assertEqual(spawn_blk_data.get("decision"), "deny")
+                self.assertIn("450000", spawn_blk_data.get("reason", ""))
+                self.assertIn("Ingest", spawn_blk_data.get("reason", ""))
 
 if __name__ == "__main__":
     unittest.main()
