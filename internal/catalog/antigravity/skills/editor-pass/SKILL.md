@@ -38,9 +38,9 @@ invoke_subagent({
 })
 ```
 
-### Option B: Major User-Facing Launch When UI Is Not `Carbon High` (Default `Carbon Medium` or `Argon`)
+### Option B: Major User-Facing Launch When UI Is Not `Neon XHigh` (Default `Neon High` or `Neon Medium`)
 
-Spawn a one-shot `gemini-4-carbon-high` `swarm` worker (`name: "editor-rev"`, `workspace: "inherit"`, no `monitor`, read-only by brief reading `~/.gemini/config/plugins/antigravity-subagents/agents/editor-pass-reviewer.md` and `/tmp/subagent-context-<project>-editor.md`, posting once to `@coordinator`, then immediately killed via `swarm{action: "kill", name: "editor-rev"}`).
+Spawn a one-shot `gemini-4-neon-xhigh` `swarm` worker (`name: "editor-rev"`, `workspace: "inherit"`, no `monitor`, read-only by brief reading `~/.gemini/config/plugins/antigravity-subagents/agents/editor-pass-reviewer.md` and `/tmp/subagent-context-<project>-editor.md`, posting once to `@coordinator`, then immediately killed via `swarm{action: "kill", name: "editor-rev"}`).
 
 ## Applying the Crit Sheet
 
