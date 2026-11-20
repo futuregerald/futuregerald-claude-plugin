@@ -52,6 +52,12 @@ Epic progress below covers the whole epic, not just this week.
 
 ---
 
+## 03d. Compared with the team
+
+{{TEAM_COMPARISON}}
+
+---
+
 ## 04. Talking Points
 
 {{TALKING_POINTS}}

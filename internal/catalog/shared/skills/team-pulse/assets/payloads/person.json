@@ -72,7 +72,31 @@
       "Growth goals for next quarter."
     ],
     "questions": "What blocks the schema freeze?",
-    "person_url": "https://people.example.com/jmarlow"
+    "person_url": "https://people.example.com/jmarlow",
+    "team_comparison": {
+      "status": "collected",
+      "team": "platform",
+      "repos": ["example/api", "example/web"],
+      "members": [
+        {"name": "Jules Marlow", "handle": "jmarlow", "url": "https://code.example.com/jmarlow", "subject": true},
+        {"name": "Kit Okafor", "handle": "kokafor", "url": "https://code.example.com/kokafor"},
+        {"name": "Ren Ito", "handle": "rito", "url": "https://code.example.com/rito"}
+      ],
+      "windows": [
+        {
+          "label": "Last 90 days",
+          "start": "2026-07-15",
+          "end": "2026-10-12",
+          "rows": [
+            {"metric": "Merged PRs", "values": ["21", "34", "18"], "urls": ["https://code.example.com/search?q=jmarlow", "https://code.example.com/search?q=kokafor", "https://code.example.com/search?q=rito"]},
+            {"metric": "Jira tickets done", "values": ["17", "not measured (jira error)", "15"]},
+            {"metric": "Median PR size (lines)", "values": ["240", "110", "180"]}
+          ]
+        }
+      ],
+      "read": "Jules merges fewer, larger PRs than Kit over the same window. That is context for a conversation about slicing, not a ranking.",
+      "caveats": "Last 90 days: 2026-07-15 to 2026-10-12. Repos: example/api, example/web. Bots excluded from first review. PR and ticket counts reflect how work is sliced, not its value. Kit Okafor: Jira tickets done (Last 90 days) not measured (jira error)."
+    }
   },
   "epics": [
     {

@@ -411,3 +411,40 @@ def test_epic_reports_use_the_epic_key_file_name():
     assert "`pulse-<epic-key>-<END_DATE>.md` for an epic" in format_text
     for text in (skill_text, format_text):
         assert not re.search(r"is written \(`team-pulse-<END_DATE>\.md`, ready", text)
+
+
+def test_one_on_one_runs_the_team_comparison_command():
+    comparison = _between(read(SKILL_MD), "### 1:1 team comparison", "### Batching vs Fan-Out")
+    assert "pulsed query team-comparison" in comparison
+    assert "--excluded-resolutions" in comparison
+    one_on_one_row = next(l for l in read(SKILL_MD).splitlines() if l.startswith('| "prep me for 1:1 with <person>"'))
+    assert "team comparison" in one_on_one_row
+
+
+def test_step_4_copies_the_team_comparison_verbatim():
+    step4 = _step_4()
+    assert "one_on_one.team_comparison" in step4
+    assert "verbatim" in step4
+    assert "never a ranking" in step4
+    assert "not_collected" in step4
+
+
+def test_payload_reference_maps_the_team_comparison():
+    rows = [l for l in read(PAYLOAD_MD).splitlines() if "one_on_one.team_comparison" in l]
+    assert rows and any("pulsed query team-comparison" in l and "read" in l for l in rows)
+
+
+def test_person_example_carries_a_collected_comparison():
+    import json
+
+    payload = json.loads(read(SKILL / "assets" / "payloads" / "person.json"))
+    comparison = payload["one_on_one"]["team_comparison"]
+    assert comparison["status"] == "collected"
+    assert comparison["members"][0]["subject"] is True
+    assert comparison["members"][0]["name"] == payload["subject"]
+    assert comparison["read"] and comparison["caveats"]
+
+
+def test_reviews_given_row_never_estimates_a_teammate():
+    row = next(l for l in read(SKILL / "references" / "report-format.md").splitlines() if l.startswith("| `{{REVIEWS_GIVEN_VALUE}}`"))
+    assert "pulsed query team-comparison" in row and "never estimate" in row
