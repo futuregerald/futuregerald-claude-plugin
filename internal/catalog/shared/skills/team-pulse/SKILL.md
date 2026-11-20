@@ -281,6 +281,8 @@ pulsed query team-comparison --person <github-handle> --to {END_DATE} \
   --excluded-resolutions "Won't Do,Declined,Duplicate" --json > .updates/team_comparison.json
 ```
 
+The resolutions shown are one site's values, not a default: pass the team config's own line.
+
 It covers the 90 days to `{END_DATE}` plus a 30-day trend, always exits 0 with valid JSON, and
 reports `"status": "not_collected"` with a reason when `gh`, `acli`, the registry or the team's
 repos are missing. It exits 2 only on bad flags, or with "pass --team" when the person is on
@@ -501,6 +503,9 @@ Follow the format in [references/report-format.md](references/report-format.md).
    sentences of context for the conversation, never a ranking. Never invent, round or edit a number,
    and never call anyone the lowest or highest without saying that PR and ticket counts reflect how
    work is sliced. When it is `not_collected`, copy it as it is and give the reason in chat.
+   If submit says `members[0] must match the report subject`, the registry and the team config
+   spell the person differently: set the payload's `subject` to `members[0].name`, and change
+   nothing in the comparison.
 4. Run `pulsed report submit .updates/payload.json`; it prints the report id. On exit 2 the payload
    is invalid: fix every error path it lists and resubmit, never stripping content to pass. On exit 3
    or any other failure, stop and show the error.
