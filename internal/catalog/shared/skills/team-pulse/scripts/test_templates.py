@@ -19,6 +19,7 @@ MD_SECTIONS = [
     "02. Epics",
     "02b. Work Breakdown by Epic",
     "03. Open PRs",
+    "03d. Compared with the team",
     "04. Talking Points",
     "05. Bottom Line",
 ]
@@ -28,6 +29,7 @@ HTML_SECTIONS = [
     "Epics",
     "Work Breakdown by Epic",
     "Open PRs",
+    "Compared with the team",
     "Talking Points",
 ]
 SCORECARD_ROWS = [
