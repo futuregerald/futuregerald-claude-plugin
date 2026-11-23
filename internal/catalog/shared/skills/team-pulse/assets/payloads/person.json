@@ -73,6 +73,33 @@
     ],
     "questions": "What blocks the schema freeze?",
     "person_url": "https://people.example.com/jmarlow",
+    "other_work": {
+      "status": "collected",
+      "epics_excluded": ["LAN-2"],
+      "stale_days": 30,
+      "items": [
+        {
+          "key": "LAN-40",
+          "url": "https://tracker.example.com/browse/LAN-40",
+          "title": "Fix the export retry",
+          "type": "Bug",
+          "status": "In Progress",
+          "prs": [
+            {"repo": "example/api", "number": 310, "url": "https://code.example.com/example/api/pull/310", "state": "OPEN", "title": "LAN-40 retry exports"}
+          ]
+        },
+        {
+          "key": "OPS-41",
+          "url": "https://tracker.example.com/browse/OPS-41",
+          "title": "Rotate the signing keys",
+          "type": "Task",
+          "status": "To Do",
+          "stale": true
+        }
+      ],
+      "note": "Two items sit outside the importer epic; the key rotation has not moved in a month and needs an owner or a close.",
+      "caveats": "Open means the Jira status category is not Done, read live. Items in or directly under the report's epics are left out; sub-tasks of stories under those epics may still appear. Stale means not updated since 2026-09-12. PRs are Jules Marlow's PRs updated since 2026-07-15 in example/api, example/web whose title or branch names the key; PRs in other teams' repos are not searched."
+    },
     "team_comparison": {
       "status": "collected",
       "team": "platform",

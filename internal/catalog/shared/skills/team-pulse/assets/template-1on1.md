@@ -42,6 +42,12 @@ Epic progress below covers the whole epic, not just this week.
 
 ---
 
+## 02c. Other work assigned
+
+{{OTHER_WORK}}
+
+---
+
 ## 03. Open PRs
 
 | PR | Opened | Merged | Title | Age | Status | Action |
