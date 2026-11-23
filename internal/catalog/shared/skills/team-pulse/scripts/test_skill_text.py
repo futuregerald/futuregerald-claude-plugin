@@ -448,3 +448,34 @@ def test_person_example_carries_a_collected_comparison():
 def test_reviews_given_row_never_estimates_a_teammate():
     row = next(l for l in read(SKILL / "references" / "report-format.md").splitlines() if l.startswith("| `{{REVIEWS_GIVEN_VALUE}}`"))
     assert "pulsed query team-comparison" in row and "never estimate" in row
+
+
+def test_one_on_one_runs_the_other_work_command():
+    other = _between(read(SKILL_MD), "### 1:1 other work", "### Batching vs Fan-Out")
+    assert "pulsed query other-work" in other
+    assert "--epics" in other
+    one_on_one_row = next(l for l in read(SKILL_MD).splitlines() if l.startswith('| "prep me for 1:1 with <person>"'))
+    assert "other work" in one_on_one_row
+
+
+def test_step_4_copies_other_work_verbatim_and_writes_only_the_note():
+    step4 = _step_4()
+    assert "one_on_one.other_work" in step4
+    assert "only `note`" in step4
+    assert "epics_excluded" in step4
+
+
+def test_payload_reference_maps_other_work():
+    rows = [l for l in read(PAYLOAD_MD).splitlines() if "one_on_one.other_work" in l]
+    assert rows and any("pulsed query other-work" in l and "note" in l for l in rows)
+
+
+def test_person_example_carries_collected_other_work():
+    import json
+
+    payload = json.loads(read(SKILL / "assets" / "payloads" / "person.json"))
+    other = payload["one_on_one"]["other_work"]
+    assert other["status"] == "collected"
+    assert other["items"] and other["note"] and other["caveats"]
+    epic_keys = sorted(e["key"] for e in payload["epics"])
+    assert sorted(other["epics_excluded"]) == epic_keys

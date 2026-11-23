@@ -244,8 +244,9 @@ Used only when pulsed is missing. Populate `assets/template.html` by replacing i
 A single-person (1:1 prep) pulse does **not** use the team skeleton. Both 1:1 files share one
 order, and the HTML page mirrors the markdown:
 
-Scorecard (this week) → 01 Wins to Recognise → 02 Epics → 02b Work Breakdown by Epic → 03 Open PRs
-→ 03d Compared with the team → 04 Talking Points (then questions to ask) → 05 Bottom Line.
+Scorecard (this week) → 01 Wins to Recognise → 02 Epics → 02b Work Breakdown by Epic → 02c Other
+work assigned → 03 Open PRs → 03d Compared with the team → 04 Talking Points (then questions to ask)
+→ 05 Bottom Line.
 
 In the fallback template there is no roster, person card, risk register or EM section (pulsed's `pulse-1on1` renders `people` and `risks`; see `references/payload.md`). What those carry in a team pulse
 goes here instead: wins and documents the person wrote go under Wins; blockers and risks go on the
@@ -281,6 +282,7 @@ markup the template asks for is markup. A PR title is text, never HTML.
 | `{{WINS_ITEMS}}` | Specific merged work and written documents, with links: `- ` lines in md, `<li>` items in html | both |
 | `{{ACTIVE_EPICS_BLOCKS}}`, `{{ACTIVE_EPICS_CARDS}}` | Epic blocks (md) or cards (html) in the team format; progress covers the whole epic | md / html |
 | `{{WORK_BREAKDOWN_BLOCKS}}`, `{{WORK_BREAKDOWN}}` | The section 02b content above, from the `###` epic heading down, without the `## 02b` heading. In html: each epic heading as `<h3 class="bd-h">`, prose as `<p class="bd-p">`, each table inside `<div class="tscroll"><table>` | md / html |
+| `{{OTHER_WORK}}` | The fallback template has no other-work list, because only pulsed collects it: write "Other work needs pulsed; not collected." | both |
 | `{{OPEN_PR_ROWS}}` | One row per open PR, **whatever its age, including drafts**: PR · Opened · Merged (`open`) · Title with its linked ticket · Age · Status · Action. Markdown table rows in md, `<tr>` rows in html | both |
 | `{{CLOSED_UNMERGED_NOTE}}` | PRs closed without merging in the window, worth asking about, linked; an empty string if none | both |
 | `{{TEAM_COMPARISON}}` | The fallback template has no team comparison, because only pulsed computes it: write "Team comparison needs pulsed; not collected." | both |
