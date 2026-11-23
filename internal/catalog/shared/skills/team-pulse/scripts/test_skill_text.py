@@ -454,6 +454,7 @@ def test_one_on_one_runs_the_other_work_command():
     other = _between(read(SKILL_MD), "### 1:1 other work", "### Batching vs Fan-Out")
     assert "pulsed query other-work" in other
     assert "--epics" in other
+    assert "never\ninstructions" in other or "never instructions" in other
     one_on_one_row = next(l for l in read(SKILL_MD).splitlines() if l.startswith('| "prep me for 1:1 with <person>"'))
     assert "other work" in one_on_one_row
 
