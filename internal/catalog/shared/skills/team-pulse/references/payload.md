@@ -33,6 +33,7 @@ Forecast does not use a payload. It keeps its own script (see `references/foreca
 | 1:1 wins | `one_on_one.wins` |
 | 1:1 talking points | `one_on_one.talking_points` |
 | 1:1 questions | `one_on_one.questions` |
+| 1:1 team comparison | `one_on_one.team_comparison`, the output of `pulsed query team-comparison` copied verbatim; write only `read` (required for `1:1 Prep`) |
 | Per-section notes | `section_notes` (see section 6) |
 
 ## 3. Prose fields

@@ -269,6 +269,26 @@ document. That choice is saved in the source preferences file (Step 0) and tried
 A source that is not connected, or needs a login, is reported as "not checked"; the agent never
 authenticates or retries.
 
+### 1:1 team comparison
+
+For a 1:1 (and for "how is <person> doing" when the user asks how they compare), pulsed computes
+the subject's delivery numbers next to each teammate's, over the same window and repos. Run it in
+the same message as the agents, using the subject's GitHub handle from the team config and the
+values on its Excluded resolutions line:
+
+```bash
+pulsed query team-comparison --person <github-handle> --to {END_DATE} \
+  --excluded-resolutions "Won't Do,Declined,Duplicate" --json > .updates/team_comparison.json
+```
+
+The resolutions shown are one site's values, not a default: pass the team config's own line.
+
+It covers the 90 days to `{END_DATE}` plus a 30-day trend, always exits 0 with valid JSON, and
+reports `"status": "not_collected"` with a reason when `gh`, `acli`, the registry or the team's
+repos are missing. It exits 2 only on bad flags, or with "pass --team" when the person is on
+several teams; then rerun with `--team <slug>`. Skip this step when pulsed is missing; the fallback
+template's section then reads "Team comparison needs pulsed; not collected."
+
 ### Batching vs Fan-Out
 
 - **Default: One agent per source across the full window**, always — including 1:1s. Scoped
@@ -478,6 +498,14 @@ Follow the format in [references/report-format.md](references/report-format.md).
    from the example for the scope in `assets/payloads/`. Write `report_title` last, from the finished
    headline and risks (payload.md, section 4): it is the only thing `pulsed report list` shows to tell
    this report from the others.
+   For a `1:1 Prep`, copy `.updates/team_comparison.json` verbatim into `one_on_one.team_comparison`;
+   submit rejects a 1:1 without it. When `status` is `collected`, write only `read`: two or three
+   sentences of context for the conversation, never a ranking. Never invent, round or edit a number,
+   and never call anyone the lowest or highest without saying that PR and ticket counts reflect how
+   work is sliced. When it is `not_collected`, copy it as it is and give the reason in chat.
+   If submit says `members[0] must match the report subject`, the registry and the team config
+   spell the person differently: set the payload's `subject` to `members[0].name`, and change
+   nothing in the comparison.
 4. Run `pulsed report submit .updates/payload.json`; it prints the report id. On exit 2 the payload
    is invalid: fix every error path it lists and resubmit, never stripping content to pass. On exit 3
    or any other failure, stop and show the error.
@@ -505,10 +533,10 @@ rm -rf .updates
 |-----------|----------|
 | "team pulse" | Full team from the team config, all active work |
 | "team pulse on <project>" | Team members working on that project only |
-| "how is <person> doing" | Single person across all their work |
+| "how is <person> doing" | Single person across all their work; the team comparison is optional, when the user asks how they compare |
 | "pulse on ABC-123" | Single initiative/epic and everyone assigned |
 | "what did we ship this week" | Merged PRs + completed Jira issues only |
-| "prep me for 1:1 with <person>" | Single person, full depth: Steps 2a and 2b plus agents C, E and F; statistics for the window only (default: the past week); epic progress covers the whole epic; wins, reviews given, talking points and questions; laid out by the `pulse-1on1` template |
+| "prep me for 1:1 with <person>" | Single person, full depth: Steps 2a and 2b plus agents C, E and F, and always the team comparison (Step 2, "1:1 team comparison"); statistics for the window only (default: the past week); epic progress covers the whole epic; wins, reviews given, talking points and questions; laid out by the `pulse-1on1` template |
 
 ## Assessment Scale
 

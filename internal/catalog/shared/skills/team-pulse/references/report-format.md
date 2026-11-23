@@ -245,7 +245,7 @@ A single-person (1:1 prep) pulse does **not** use the team skeleton. Both 1:1 fi
 order, and the HTML page mirrors the markdown:
 
 Scorecard (this week) → 01 Wins to Recognise → 02 Epics → 02b Work Breakdown by Epic → 03 Open PRs
-→ 04 Talking Points (then questions to ask) → 05 Bottom Line.
+→ 03d Compared with the team → 04 Talking Points (then questions to ask) → 05 Bottom Line.
 
 In the fallback template there is no roster, person card, risk register or EM section (pulsed's `pulse-1on1` renders `people` and `risks`; see `references/payload.md`). What those carry in a team pulse
 goes here instead: wins and documents the person wrote go under Wins; blockers and risks go on the
@@ -275,7 +275,7 @@ markup the template asks for is markup. A PR title is text, never HTML.
 | `{{PRS_WEEK_VALUE}}`, `{{PRS_WEEK_CONTEXT}}` | `[N merged](search) · [N opened](search)`, and the window | md |
 | `{{OPEN_PRS_VALUE}}`, `{{OPEN_PRS_CONTEXT}}` | `[N open](search)`; oldest, unreviewed, and any old drafts, each linked | md |
 | `{{TICKETS_DONE_VALUE}}`, `{{TICKETS_DONE_CONTEXT}}` | `[N done](query)`, and which epics | md |
-| `{{REVIEWS_GIVEN_VALUE}}`, `{{REVIEWS_GIVEN_CONTEXT}}` | `[N reviews](search)`, and whose work they concentrate on (Agent E's digest). Compare with teammates only when a digest holds their counts; never estimate one | md |
+| `{{REVIEWS_GIVEN_VALUE}}`, `{{REVIEWS_GIVEN_CONTEXT}}` | `[N reviews](search)`, and whose work they concentrate on (Agent E's digest). Comparisons with teammates come only from `pulsed query team-comparison`, in section 03d; never estimate one | md |
 | `{{METRIC_TILES}}` | The same five scorecard rows as five `.tile` divs, in the same order | html |
 | `{{HEADLINE}}` | One sentence: the state, and the things to cover | both |
 | `{{WINS_ITEMS}}` | Specific merged work and written documents, with links: `- ` lines in md, `<li>` items in html | both |
@@ -283,6 +283,7 @@ markup the template asks for is markup. A PR title is text, never HTML.
 | `{{WORK_BREAKDOWN_BLOCKS}}`, `{{WORK_BREAKDOWN}}` | The section 02b content above, from the `###` epic heading down, without the `## 02b` heading. In html: each epic heading as `<h3 class="bd-h">`, prose as `<p class="bd-p">`, each table inside `<div class="tscroll"><table>` | md / html |
 | `{{OPEN_PR_ROWS}}` | One row per open PR, **whatever its age, including drafts**: PR · Opened · Merged (`open`) · Title with its linked ticket · Age · Status · Action. Markdown table rows in md, `<tr>` rows in html | both |
 | `{{CLOSED_UNMERGED_NOTE}}` | PRs closed without merging in the window, worth asking about, linked; an empty string if none | both |
+| `{{TEAM_COMPARISON}}` | The fallback template has no team comparison, because only pulsed computes it: write "Team comparison needs pulsed; not collected." | both |
 | `{{TALKING_POINTS}}` | Numbered points, each tied to linked evidence: `1. ` lines in md, `<li>` items in html | both |
 | `{{QUESTIONS_TO_ASK}}` | Two to four open questions, in one paragraph | both |
 | `{{BOTTOM_LINE}}` | Two or three sentences: the overall read and the actions | both |
