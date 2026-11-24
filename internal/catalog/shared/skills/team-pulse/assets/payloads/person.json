@@ -35,13 +35,6 @@
     "people": "Self-assessment was not collected.",
     "risks": "Ordered by urgency."
   },
-  "tiles": [
-    {
-      "label": "This week",
-      "value": "2 PRs merged",
-      "context": "One large; 3 tickets done and 4 reviews given"
-    }
-  ],
   "work_breakdown_title": "What Jules worked on, by epic",
   "one_on_one": {
     "person_name": "Jules Marlow",

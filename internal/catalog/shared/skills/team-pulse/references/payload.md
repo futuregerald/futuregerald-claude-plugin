@@ -20,7 +20,7 @@ Forecast does not use a payload. It keeps its own script (see `references/foreca
 | Report title, shown by `pulsed report list` | `report_title` (required, see section 4) |
 | Headline | `headline` |
 | Bottom line bullets | `bottom_line` |
-| Executive Scorecard tiles | `tiles` (`label`, `value`, `context`, `severity`) |
+| Executive Scorecard tiles | `tiles` (`label`, `value`, `context`, `severity`). Never in a 1:1: `tiles` replaces the four `one_on_one` stat cards and leaves Overall alone in its row |
 | Strategic context | `strategic_context` |
 | 02 epic cards | `epics` (`summary`, `why`, `activity`, `done`, `total`, `split`) |
 | What's Left, per epic | `epics[].whats_left` |
