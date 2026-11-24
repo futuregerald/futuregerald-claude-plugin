@@ -146,7 +146,7 @@ Plans specify **interfaces, cases, and gates — never function bodies**. A plan
 
 ## Plan Review Gate (Mandatory Before Execution)
 
-Before handing the plan off for implementation — and before asking the user how they want to execute it — run the **`plan-review`** skill (`gemini-4-carbon-high` one-shot `swarm` worker `plan-rev` on Argon UI sessions, or `invoke_subagent` `TypeName: "plan-reviewer"`, `Model: "inherit"` when UI is on Carbon or on Gemini CLI).
+Before handing the plan off for implementation — and before asking the user how they want to execute it — run the **`plan-review`** skill (`gemini-4-neon-xhigh` one-shot `swarm` worker `plan-rev` when UI is not on `Neon XHigh`, or `invoke_subagent` `TypeName: "plan-reviewer"`, `Model: "inherit"` when UI is on `Neon XHigh` or on Gemini CLI).
 
 1. Run `plan-review` against the plan file you just wrote.
 2. Address every CRITICAL and IMPORTANT finding in the plan file directly. Do **not** re-run `plan-review` after fixing (one pass only).
@@ -162,7 +162,7 @@ When stopping for approval, offer the execution choice:
 
 **"Plan complete, reviewed, and saved to `docs/plans/<filename>.md`. Ready to proceed once you approve — or let me know if you want any adjustments:**
 
-**1. Peer-Pipeline Swarm (`/start` default, or `/start-small` for bounded changes)** - Spawns an isolated `gemini-4-carbon-medium` share-workspace implementer + `gemini-4-carbon-high` peer reviewers (`code-rev` + `sec-rev`; `~117k` 4-worker floor — never `claude-opus-5-5-high` unless explicitly requested by the user) + `gemini-4-hydrogen-low` stall monitor for hands-off Phases 4–9 (or `gemini-4-argon-medium` `impl` + `gemini-4-carbon-high` reviewers under `/start-small`)
+**1. Peer-Pipeline Swarm (`/start` default, or `/start-small` for bounded changes)** - Spawns an isolated `gemini-4-neon-high` share-workspace implementer + `gemini-4-neon-xhigh` peer reviewers (`code-rev` + `sec-rev`; `~117k` 4-worker floor — never `claude-opus-5-5-high` unless explicitly requested by the user) + `gemini-4-hydrogen-low` stall monitor for hands-off Phases 4–9 (or `gemini-4-neon-medium` `impl` + `gemini-4-neon-xhigh` reviewers under `/start-small`)
 
 **2. Subagent-Driven (`subagent-driven-development`)** - Dispatches fresh `invoke_subagent` (`TypeName: "implementer"`, `Model: "inherit"`) per task/phase with Coordinator gates between tasks
 

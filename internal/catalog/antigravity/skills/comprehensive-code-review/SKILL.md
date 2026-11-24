@@ -20,28 +20,28 @@ Because reviewers are strictly read-only (`tools: [read_file]`) and never run `g
 
 ## Dispatching the Parallel Reviewers
 
-Choose the dispatch mode matching your session (`GEMINI.md` §0.9). **`gemini-4-carbon-high` is the SOLE default adversarial reviewer — NEVER spawn `claude-opus-5-5-high` (`claude-opus-5-5-*`) unless the user explicitly asks for an Opus review in chat:**
+Choose the dispatch mode matching your session (`GEMINI.md` §0.9). **`gemini-4-neon-xhigh` (`Neon XHigh`) is the SOLE default adversarial reviewer — NEVER spawn `claude-opus-5-5-high` (`claude-opus-5-5-*`) unless the user explicitly asks for an Opus review in chat:**
 
 ### 1. Inside `/start` / `/start-small` / `peer-pipeline-swarm`
 
-`code-rev` (`gemini-4-carbon-high`, `29.3k` floor) and `sec-rev` (`gemini-4-carbon-high`, `29.3k` floor) are already spawned in the pipeline (`~117k` 4-worker boot floor) and review `@impl`'s committed `share` branch directly against the Acceptance Criteria, Brief, and Approved UI Design. See [`peer-pipeline-swarm`](../peer-pipeline-swarm/SKILL.md) (when installed).
+`code-rev` (`gemini-4-neon-xhigh`, `29.3k` floor) and `sec-rev` (`gemini-4-neon-xhigh`, `29.3k` floor) are already spawned in the pipeline (`~117k` 4-worker boot floor) and review `@impl`'s committed `share` branch directly against the Acceptance Criteria, Brief, and Approved UI Design. See [`peer-pipeline-swarm`](../peer-pipeline-swarm/SKILL.md) (when installed).
 
-### 2. Standalone Session Where UI Is Not `Carbon High` (Default `Carbon Medium` or `Argon` — Pre-PR Review)
+### 2. Standalone Session Where UI Is Not `Neon XHigh` (Default `Neon High` or `Neon Medium` — Pre-PR Review)
 
-Stage or checkpoint uncommitted edits first, then spawn two one-shot `gemini-4-carbon-high` `swarm` workers (`29.3k` Turn-1 floor each) in a **single turn** (no `monitor` or `narrator`) so reviewers run at `Carbon High` rather than downgrading to `Medium` via `Model: "inherit"`:
+Stage or checkpoint uncommitted edits first, then spawn two one-shot `gemini-4-neon-xhigh` `swarm` workers (`29.3k` Turn-1 floor each) in a **single turn** (no `monitor` or `narrator`) so reviewers run at `Neon XHigh` rather than downgrading via `Model: "inherit"`:
 
 ```text
 swarm({
   action: "add",
   name: "code-rev",
-  model: "gemini-4-carbon-high",
+  model: "gemini-4-neon-xhigh",
   workspace: "inherit",
   brief: "On Turn 1, read ~/.gemini/config/plugins/antigravity-subagents/agents/code-quality-reviewer.md and all indexed chunks of /tmp/subagent-context-<project>-<stream>.md (`1-700`, `701-1400`, ... when >750 lines) plus the referenced Point-of-View Brief, PRD/Decisions, and Approved UI Design files in 1 parallel read_file batch. On follow-up verification turns, batch 5-10 read_file calls per turn in 400-800 line chunks (+-40 lines around narrow call sites; zero serial 1-file tail reads). STRICTLY READ-ONLY: use ONLY read_file and post_message. NEVER call run_command, edit_file, write_file, or swarm, and never mutate git or files. Verify every row of the Acceptance Criteria & Success Metrics table against the actual mounted/wired runtime code (flagging unwired test-only helpers, missing phone/tablet header or nav parity, missing animations, or truncated SVG/assets as CRITICAL), then audit logic, callers, and conventions. Post your Acceptance Criteria Audit table, CRITICAL / IMPORTANT / MINOR findings, and Verdict once to @coordinator."
 })
 swarm({
   action: "add",
   name: "sec-rev",
-  model: "gemini-4-carbon-high",
+  model: "gemini-4-neon-xhigh",
   workspace: "inherit",
   brief: "On Turn 1, read ~/.gemini/config/plugins/antigravity-subagents/agents/security-reviewer.md and all indexed chunks of /tmp/subagent-context-<project>-<stream>.md (`1-700`, `701-1400`, ... when >750 lines) in 1 parallel read_file batch. On follow-up verification turns, batch 5-10 read_file calls per turn in 400-800 line chunks (+-40 lines around narrow call sites; zero serial 1-file tail reads). STRICTLY READ-ONLY: use ONLY read_file and post_message. NEVER call run_command, edit_file, write_file, or swarm, and never mutate git or files. Audit the diff for OWASP Top 10, auth/authz, injection, SSRF, path/symlink traversal, secrets, and race conditions. Post your CRITICAL / IMPORTANT / MINOR findings and Verdict once to @coordinator."
 })
@@ -49,7 +49,7 @@ swarm({
 
 End your turn immediately; once both have posted (`swarm_wait{since: N}` if needed), read the board and **immediately `swarm{action: "kill"}` both workers** (suffix `-2`, `-3` on later streams).
 
-### 3. `Carbon High` UI Session, Small Change, or Gemini CLI
+### 3. `Neon XHigh` UI Session, Small Change, or Gemini CLI
 
 Dispatch both harness-enforced read-only subagents (`tools: [read_file]`, `22.7k` Turn-1 floor each) in parallel in one turn:
 

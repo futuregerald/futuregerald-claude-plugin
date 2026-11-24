@@ -556,27 +556,27 @@ skills:
   category: Antigravity Exclusives
   slash_command: /antigravity-orchestration
   short: Antigravity session orchestration, role routing table, sleeping Hydrogen ops worker, and search hierarchy.
-  long: Antigravity-exclusive reference covering Carbon Medium default routing, /start-small Argon Medium
+  long: Antigravity-exclusive reference covering Neon High default routing, /start-small Neon Medium
     swarm routing, optional sleeping Hydrogen (0.2x) ops worker (cum_turns=<N> rotation for heavy tests,
-    builds, CI, and wide caller sweeps), Carbon High sole-default adversarial reviews, observed Turn-1
+    builds, CI, and wide caller sweeps), Neon XHigh sole-default adversarial reviews, observed Turn-1
     schema floors, Prism memory hooks, and workflow trigger tables.
   starter_prompt: /antigravity-orchestration Check the model routing rules for Phase 4 and Phase 8
   antigravity_only: true
 - name: start-small
   category: Antigravity Exclusives
   slash_command: /start-small
-  short: Lightweight Antigravity 12-phase workflow using Argon Medium swarm implementation and Carbon High reviews.
+  short: Lightweight Antigravity 12-phase workflow using Neon Medium swarm implementation and Neon XHigh reviews.
   long: Antigravity-exclusive 12-phase workflow tuned for smaller, well-bounded code changes and bug fixes
-    directly inside a Carbon Medium session—running an Argon Medium (1x) share implementer with Carbon High
-    peer reviewers (saving Carbon 2x implementer spend on bounded changes) or an inline fast-path for <=2-file micro-fixes.
+    directly inside a Neon High session—running a Neon Medium share implementer with Neon XHigh
+    peer reviewers or an inline fast-path for <=2-file micro-fixes.
   starter_prompt: /start-small Fix the pagination off-by-one bug in the activity feed
   antigravity_only: true
 - name: peer-pipeline-swarm
   category: Antigravity Exclusives
   slash_command: /peer-pipeline-swarm
-  short: Antigravity Phases 4–9 peer-to-peer TDD implementation and Carbon High review swarm.
+  short: Antigravity Phases 4–9 peer-to-peer TDD implementation and Neon XHigh review swarm.
   long: Antigravity-exclusive swarm workflow that spawns an isolated share-workspace TDD implementer paired
-    with Gemini 4 Carbon High code/security reviewers and a lightweight Hydrogen Low stall monitor so build,
+    with Gemini 4 Neon XHigh code/security reviewers and a lightweight Hydrogen Low stall monitor so build,
     test, and review rounds resolve peer-to-peer.
   starter_prompt: /peer-pipeline-swarm Run Phases 4-9 in a peer-pipeline swarm
   antigravity_only: true

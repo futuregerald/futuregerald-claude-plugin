@@ -22,15 +22,15 @@ One fresh-context adversarial pass over an implementation plan before any code i
 
 Never review a plan in the same context that wrote it. Choose the dispatch mode matching your active session (`GEMINI.md` §0.9):
 
-### Option A: Antigravity Default (`Carbon Medium` or `Argon` UI — Non-Trivial Plans)
+### Option A: Antigravity Default (`Neon High` or `Neon Medium` UI — Non-Trivial Plans)
 
-Whenever the UI is not already set to **`Carbon High`**, spawn a one-shot **`gemini-4-carbon-high`** `swarm` worker (`29.3k` Turn-1 floor, `workspace: "inherit"`, **no `monitor` or `narrator`**) so the plan gets full `Carbon High` deliberation rather than downgrading to `Medium` via `Model: "inherit"`:
+Whenever the UI is not already set to **`Neon XHigh`**, spawn a one-shot **`gemini-4-neon-xhigh`** `swarm` worker (`29.3k` Turn-1 floor, `workspace: "inherit"`, **no `monitor` or `narrator`**) so the plan gets full `Neon XHigh` deliberation rather than downgrading via `Model: "inherit"`:
 
 ```text
 swarm({
   action: "add",
   name: "plan-rev",
-  model: "gemini-4-carbon-high",
+  model: "gemini-4-neon-xhigh",
   workspace: "inherit",
   brief: "On Turn 1, read ~/.gemini/config/plugins/antigravity-subagents/agents/plan-reviewer.md, the plan at <plan-path>, referenced brief/PRD/design-demos files, and all indexed chunks of /tmp/subagent-context-<project>-<stream>.md (if present) in 1 parallel read_file batch; on follow-up turns, batch 5-10 read_file calls per turn in 400-800 line chunks (+-40 lines around narrow call sites; zero 1-file tail reads). STRICTLY READ-ONLY: use ONLY read_file and post_message. NEVER call run_command, edit_file, write_file, or swarm, and never run spikes or mutate git/files. Verify that every Product/Brief/Design goal and phase commitment is captured in the plan's Acceptance Criteria & Success Metrics table with a wired runtime entry point, and verify every premise, file path, contract, and Affected Callers entry against the repo using read_file. Post your structured CRITICAL / IMPORTANT / MINOR findings and Verdict once to @coordinator."
 })
@@ -39,7 +39,7 @@ swarm({
 - **End your turn immediately** after `swarm{action: "add"}`.
 - On wakeup, call `read_board`, then **immediately terminate** the worker with `swarm{action: "kill", name: "plan-rev"}` (use `plan-rev-2`, `plan-rev-3` on subsequent plans in the same conversation, because killed worker names cannot be reused).
 
-### Option B: Antigravity `Carbon High` UI Session, Small/Routine Plan, or Gemini CLI
+### Option B: Antigravity `Neon XHigh` UI Session, Small/Routine Plan, or Gemini CLI
 
 Dispatch the harness-enforced read-only `plan-reviewer` subagent (`tools: [read_file]`, `22.7k` Turn-1 floor, **zero `run_command`**):
 
@@ -52,7 +52,7 @@ invoke_subagent({
 })
 ```
 
-*(Never pass `Model: "pro"` on Argon or Carbon sessions.)*
+*(Never pass `Model: "pro"` on Neon, Argon, or Carbon sessions.)*
 
 ## After the Reviewer Returns
 

@@ -8,10 +8,12 @@ description: >-
   check claims against the graph rather than guessing.
 model: inherit
 effort: high
-tools: ToolSearch, Read, Grep, Glob, mcp__codebase-memory-mcp__search_code, mcp__codebase-memory-mcp__search_graph, mcp__codebase-memory-mcp__query_graph, mcp__codebase-memory-mcp__get_code_snippet, mcp__codebase-memory-mcp__check_index_coverage
+tools: ToolSearch, Read, Grep, Glob, mcp__codebase-memory-mcp__search_code, mcp__codebase-memory-mcp__search_graph, mcp__codebase-memory-mcp__query_graph, mcp__codebase-memory-mcp__get_code_snippet, mcp__codebase-memory-mcp__check_index_coverage, mcp__prism__knowledge_search, mcp__prism__session_search_memory, mcp__prism__session_load_context, mcp__prism__memory_history
 ---
 
 # Reviewer
+
+**Tier 0 — Prism Memory First:** Before grepping or querying codebase-memory for prior decisions, bug history, or context, search Prism FIRST via `mcp__prism__knowledge_search` / `mcp__prism__session_search_memory` (omit `project` on initial searches so cross-project memories surface), then verify against live code.
 
 **Run this at the strongest reasoning model available to you.** `model: inherit` takes the session's model, so this is a request rather than a guarantee — if the session is on a small or fast model, escalate before reviewing. A downgraded adversarial review is the failure mode that matters here: it returns generic approval and nothing signals that it was shallow.
 

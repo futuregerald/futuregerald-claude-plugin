@@ -213,5 +213,34 @@
       }
     ],
     "enabled": true
+  },
+  "prism-memory": {
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "python3 ~/.gemini/config/hooks/prism_memory_hook.py --dialect agy --event PostToolUse",
+            "timeout": 5,
+            "type": "command"
+          }
+        ],
+        "matcher": "edit_file|replace_file_content|write_file|write_to_file|call_mcp_tool"
+      }
+    ],
+    "SessionStart": [
+      {
+        "command": "python3 ~/.gemini/config/hooks/prism_memory_hook.py --dialect agy --event SessionStart",
+        "timeout": 5,
+        "type": "command"
+      }
+    ],
+    "Stop": [
+      {
+        "command": "python3 ~/.gemini/config/hooks/prism_memory_hook.py --dialect agy --event Stop",
+        "timeout": 10,
+        "type": "command"
+      }
+    ],
+    "enabled": true
   }
 }
