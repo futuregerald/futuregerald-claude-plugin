@@ -252,7 +252,11 @@ def blocks(md):
                     i += 1
                     continue
                 # a wrapped continuation line belongs to the item above it
-                if lines[i].strip() and collected and lines[i][:1] in (" ", "\t"):
+                continues_item = lines[i][:1] in (" ", "\t") or not (
+                    BLOCK_START.match(lines[i].strip())
+                    or lines[i].strip() in ("---", "***", "___")
+                )
+                if lines[i].strip() and collected and continues_item:
                     ind, ordered, text = collected[-1]
                     collected[-1] = (ind, ordered, text + " " + lines[i].strip())
                     i += 1
