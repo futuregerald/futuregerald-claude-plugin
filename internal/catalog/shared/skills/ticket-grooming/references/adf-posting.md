@@ -9,17 +9,22 @@ How to post triaging notes to Jira. One procedure, two modes, no shortcuts.
   details block is — and it cannot express an `expand` node at all. Both modes go through
   `scripts/md2adf.py` and post ADF via `acli --body-file`.
 - **NEVER use HTML `<details>` or `<summary>` tags.** Jira renders them as raw text.
+- **NEVER put a line break inside a `text` node outside a `codeBlock`.** Jira renders every `\n`
+  as a hard line break, so notes wrapped at 70-80 columns post with sentences cut in half.
+  `md2adf.py` joins wrapped lines in paragraphs and list items, so use it. When hand-building ADF,
+  write each paragraph and each list item as one unbroken string.
 - **NEVER omit `contentFormat` on an MCP call**, if you are posting something other than these
   notes. Omitting it defaults to ADF and renders markdown as broken plain text.
 
 ## The two modes
 
-Both take the same two-block `notes.md`. They differ by one flag:
+Both take the same two-block `notes.md`, run from inside `{SCRATCHPAD}/{TICKET_KEY}/`. They differ
+by one flag:
 
 | Mode | Command | Result |
 |---|---|---|
-| Short (default) | `md2adf.py notes.md --title "Full Investigation Details"` | Details collapsed behind an expand node |
-| Full (`--full`) | `md2adf.py notes.md --no-expand` | Details inline after a rule; no expand node |
+| Short (default) | `md2adf.py --title "Full Investigation Details" > notes.adf.json` | Details collapsed behind an expand node |
+| Full (`--full`) | `md2adf.py --no-expand > notes.adf.json` | Details inline after a rule; no expand node |
 
 GitHub is the exception: it renders Markdown correctly, including the link form Jira strips, so
 `gh issue comment` posts `notes.md` as-is.
@@ -35,11 +40,12 @@ document, including the `expand` node and the `code`+`link` mark combination bel
 ADF is for the cases the converter does not cover — reach for the skeleton then, not by default.
 
 ```
-python3 {SKILL_DIR}/scripts/md2adf.py {SCRATCHPAD}/{TICKET_KEY}/notes.md --title "Full Investigation Details"
+cd {SCRATCHPAD}/{TICKET_KEY} && python3 {SKILL_DIR}/scripts/md2adf.py --title "Full Investigation Details" > notes.adf.json
 ```
 
 Validate the result before posting: assert it is a doc at version 1 containing exactly one `expand`
-node. `jq -e .` alone only proves the file is JSON, not that it is ADF.
+node, and that no `text` node outside a `codeBlock` contains `\n`. `jq -e .` alone only proves the
+file is JSON, not that it is ADF.
 
 ---
 
